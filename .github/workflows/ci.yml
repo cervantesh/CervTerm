@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test ./...
+      - name: GLFW compile check
+        run: go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -run '^$' -count=0
+      - name: Build Windows artifact
+        run: |
+          mkdir dist
+          go build -tags glfw -o dist/cervterm.exe ./cmd/cervterm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cervterm-windows
+          path: dist/cervterm.exe

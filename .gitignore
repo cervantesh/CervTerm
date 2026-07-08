@@ -1,0 +1,23 @@
+# Build artifacts
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Local/editor files
+.DS_Store
+Thumbs.db
+*.log
+
+# Pi/RPIV local planning artifacts
+.rpiv/
+
+# Test/temp output
+coverage.out
+/tmp/
+
+# Editor/tool temp files
+.tmp-*
+**/.tmp-*
