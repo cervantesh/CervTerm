@@ -20,6 +20,7 @@ type finding struct {
 
 var requiredDocs = []string{
 	"docs/maturity-improvement-plan.md",
+	"docs/maturity-improvement-review.md",
 	"docs/project-maturity-analysis.md",
 	"docs/release-stabilization-plan.md",
 	"docs/release-trust.md",
