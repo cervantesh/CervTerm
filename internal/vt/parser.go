@@ -16,8 +16,8 @@ type Parser struct {
 	csiGT      bool
 	csiInter   byte
 
-	osc    [512]byte
-	oscLen int
+	osc          []byte
+	oscTruncated bool
 
 	utf8Buf [utf8.UTFMax]byte
 	utf8Len int

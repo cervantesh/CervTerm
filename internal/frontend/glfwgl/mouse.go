@@ -56,7 +56,7 @@ func (a *App) sendMouseMove(x, y float64) bool {
 		if !mode.AnyEventTracking {
 			return false
 		}
-		button = input.MouseButton(3)
+		button = input.MouseNone
 		mods = input.ModNone
 	}
 	point := a.pointFromPixels(float32(x), float32(y))

@@ -50,6 +50,7 @@ type App struct {
 	lastStats        time.Time
 	lastTitle        string
 	blinkStart       time.Time
+	pendingReplies   [][]byte
 
 	selecting         bool
 	selectionActive   bool
@@ -81,10 +82,11 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 		paddingY:   float32(cfg.Window.PaddingY),
 		blinkStart: time.Now(),
 	}
+	// Replies queue up and flush after Advance returns so the PTY write never
+	// happens while a.mu is held (a blocked write must not stall the drain
+	// loop mid-parse). All access is main-thread only.
 	app.parser.Reply = func(b []byte) {
-		if app.pty != nil {
-			_, _ = app.pty.Write(b)
-		}
+		app.pendingReplies = append(app.pendingReplies, b)
 	}
 	if cfg.Clipboard.OSC52 == "write" {
 		app.parser.SetClipboard = func(s string) {
@@ -420,6 +422,22 @@ func (a *App) Notify(msg string) {
 	a.noticeUntil = time.Now().Add(4 * time.Second)
 }
 
+// flushReplies sends queued parser replies to the PTY outside a.mu. Main
+// thread only.
+func (a *App) flushReplies() {
+	if len(a.pendingReplies) == 0 {
+		return
+	}
+	replies := a.pendingReplies
+	a.pendingReplies = nil
+	if a.pty == nil {
+		return
+	}
+	for _, b := range replies {
+		_, _ = a.pty.Write(b)
+	}
+}
+
 func (a *App) drainIncoming() {
 	for {
 		select {
@@ -427,6 +445,7 @@ func (a *App) drainIncoming() {
 			a.mu.Lock()
 			a.parser.Advance(a.term, data)
 			a.mu.Unlock()
+			a.flushReplies()
 			a.meter.AddBytes(len(data))
 		default:
 			return

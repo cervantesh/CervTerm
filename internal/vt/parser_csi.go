@@ -7,6 +7,11 @@ import (
 )
 
 func (p *Parser) dispatchCSI(t *core.Terminal, action byte) {
+	// `>`-prefixed sequences other than DA2 (e.g. XTMODKEYS `CSI > 4;2 m`)
+	// must not fall through to the plain dispatch table.
+	if p.csiGT && action != 'c' {
+		return
+	}
 	switch action {
 	case '@':
 		t.InsertChars(p.param(0, 1))

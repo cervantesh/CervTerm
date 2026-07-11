@@ -169,10 +169,10 @@ func (a *App) drawCluster(cluster string, cellSpan int, x, y float32, c color.RG
 	return ok
 }
 
-func (a *App) cursorBlinkOn() bool {
-	if !a.cfg.Cursor.Blink {
-		return true
-	}
+// cursorBlinkPhase is the raw time-based blink phase, independent of whether
+// the config enables blinking — DECSCUSR blink styles must animate even when
+// the configured cursor is steady.
+func (a *App) cursorBlinkPhase() bool {
 	interval := a.cfg.Cursor.BlinkIntervalMS
 	if interval <= 0 {
 		interval = 1000
@@ -192,7 +192,7 @@ func (a *App) drawCursor(x, y float32, c color.RGBA) {
 	case 5, 6:
 		shape, blink = "beam", a.snap.CursorStyle == 5
 	}
-	if blink && !a.cursorBlinkOn() {
+	if blink && !a.cursorBlinkPhase() {
 		return
 	}
 	switch shape {
