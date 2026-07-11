@@ -95,22 +95,38 @@ func (a *App) draw() {
 			if cell.Attr.Bold {
 				fg = brighten(fg)
 			}
+			if cell.Attr.Dim {
+				fg = dim(fg)
+			}
+			skew := float32(0)
+			if cell.Attr.Italic {
+				skew = 0.2 * a.cellH
+			}
 			if cluster, ok := collectRenderCluster(a.snap.Cells, a.snap.Cols, r, c); ok {
-				if a.drawCluster(cluster.Text, cluster.CellSpan, x, y, fg, 1) {
+				if a.drawCluster(cluster.Text, cluster.CellSpan, x, y, fg, 1, skew) {
+					if cell.Attr.Bold {
+						a.drawCluster(cluster.Text, cluster.CellSpan, x+1, y, fg, 1, skew)
+					}
 					drawTextDecorations(x, y, a.cellW*float32(cluster.CellSpan), a.cellH, fg, cell.Attr)
 					skipGlyphUntil = c + cluster.CellSpan
 					continue
 				}
 			}
-			a.drawRune(cell.Rune, x, y, fg, 1)
+			a.drawRune(cell.Rune, x, y, fg, 1, skew)
+			if cell.Attr.Bold {
+				a.drawRune(cell.Rune, x+1, y, fg, 1, skew)
+			}
 			for _, combining := range cell.Combining {
-				a.drawRune(combining, x, y, fg, 1)
+				a.drawRune(combining, x, y, fg, 1, skew)
+				if cell.Attr.Bold {
+					a.drawRune(combining, x+1, y, fg, 1, skew)
+				}
 			}
 			drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)
 		}
 	}
 
-	if a.snap.CursorVisible && a.cursorBlinkOn() {
+	if a.snap.CursorVisible {
 		cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
 		x := a.paddingX + float32(cursorCol)*a.cellW
 		y := a.paddingY + float32(cursorRow)*a.cellH
@@ -129,26 +145,26 @@ func drawTextDecorations(x, y, w, h float32, c color.RGBA, attr core.Attr) {
 
 func (a *App) drawString(s string, x, y float32, c color.RGBA, scale float32) {
 	for _, r := range s {
-		a.drawRune(r, x, y, c, scale)
+		a.drawRune(r, x, y, c, scale, 0)
 		x += a.cellW * scale
 	}
 }
 
-func (a *App) drawRune(r rune, x, y float32, c color.RGBA, scale float32) {
+func (a *App) drawRune(r rune, x, y float32, c color.RGBA, scale, skew float32) {
 	gl.Enable(gl.TEXTURE_2D)
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	glColor(c)
-	a.atlas.drawRune(r, x, y, scale)
+	a.atlas.drawRune(r, x, y, scale, skew)
 	gl.Disable(gl.TEXTURE_2D)
 }
 
-func (a *App) drawCluster(cluster string, cellSpan int, x, y float32, c color.RGBA, scale float32) bool {
+func (a *App) drawCluster(cluster string, cellSpan int, x, y float32, c color.RGBA, scale, skew float32) bool {
 	gl.Enable(gl.TEXTURE_2D)
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	glColor(c)
-	ok := a.atlas.drawCluster(cluster, cellSpan, x, y, scale)
+	ok := a.atlas.drawCluster(cluster, cellSpan, x, y, scale, skew)
 	gl.Disable(gl.TEXTURE_2D)
 	return ok
 }
@@ -167,7 +183,19 @@ func (a *App) cursorBlinkOn() bool {
 
 func (a *App) drawCursor(x, y float32, c color.RGBA) {
 	thickness := cursorThicknessPixels(a.cfg.Cursor.Thickness, a.cellW, a.cellH)
-	switch a.cfg.Cursor.Shape {
+	shape, blink := a.cfg.Cursor.Shape, a.cfg.Cursor.Blink
+	switch a.snap.CursorStyle {
+	case 1, 2:
+		shape, blink = "block", a.snap.CursorStyle == 1
+	case 3, 4:
+		shape, blink = "underline", a.snap.CursorStyle == 3
+	case 5, 6:
+		shape, blink = "beam", a.snap.CursorStyle == 5
+	}
+	if blink && !a.cursorBlinkOn() {
+		return
+	}
+	switch shape {
 	case "block":
 		fillRect(x, y, a.cellW, a.cellH, c)
 	case "beam":
@@ -231,4 +259,8 @@ func themeColor(c cervtermtheme.Color) color.RGBA { return color.RGBA{c.R, c.G, 
 func rgb(c core.RGB) color.RGBA { return color.RGBA{c.R, c.G, c.B, 0xFF} }
 func brighten(c color.RGBA) color.RGBA {
 	return color.RGBA{min(255, c.R+28), min(255, c.G+28), min(255, c.B+28), c.A}
+}
+
+func dim(c color.RGBA) color.RGBA {
+	return color.RGBA{uint8(float32(c.R) * 0.55), uint8(float32(c.G) * 0.55), uint8(float32(c.B) * 0.55), c.A}
 }

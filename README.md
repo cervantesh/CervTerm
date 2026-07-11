@@ -117,6 +117,7 @@ Runtime diagnostics are written to stderr and to a local log file by default. Ov
 
 ## Known limitations
 
+- Bold and italic rendering in the GLFW frontend are synthesized (1px double draw for bold, quad shear for italic); real font variants remain future work.
 - DirectWrite shaping is implemented on Windows with Arabic/Indic/emoji smoke coverage; broader real-world fixture coverage is still growing.
 - SVG text rasterization has basic layout support; real font selection/outline text remains future work.
 - More redistributable color-font fixture subsets are needed for broad cross-platform emoji validation.
