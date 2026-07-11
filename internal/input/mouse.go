@@ -10,6 +10,8 @@ const (
 	MouseRight
 	MouseWheelUp
 	MouseWheelDown
+	// MouseNone reports motion with no button held (any-event tracking).
+	MouseNone
 )
 
 type MouseAction int

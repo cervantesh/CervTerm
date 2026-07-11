@@ -1,6 +1,8 @@
 package vt
 
 import (
+	"bytes"
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -99,5 +101,25 @@ func TestParserOSC52AndOSC7(t *testing.T) {
 	p.Advance(term, []byte("\x1b]7;file://host/tmp\x07"))
 	if term.WorkingDirectoryURL() != "file://host/tmp" {
 		t.Fatalf("cwd = %q", term.WorkingDirectoryURL())
+	}
+}
+
+func TestParserOSC52LargePayload(t *testing.T) {
+	term := core.NewTerminal(8, 1)
+	var got string
+	p := Parser{SetClipboard: func(s string) { got = s }}
+	// A screenful of clipboard text easily exceeds the old 512-byte OSC cap.
+	text := strings.Repeat("0123456789abcdef", 256) // 4 KiB
+	payload := base64.StdEncoding.EncodeToString([]byte(text))
+	p.Advance(term, []byte("\x1b]52;c;"+payload+"\x07"))
+	if got != text {
+		t.Fatalf("large clipboard write truncated: got %d bytes, want %d", len(got), len(text))
+	}
+	// Payloads beyond the cap are dropped whole rather than half-decoded.
+	huge := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{'x'}, 128*1024))
+	got = ""
+	p.Advance(term, []byte("\x1b]52;c;"+huge+"\x07"))
+	if got != "" {
+		t.Fatalf("over-cap payload should be dropped, got %d bytes", len(got))
 	}
 }

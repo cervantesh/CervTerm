@@ -7,20 +7,29 @@ import (
 	"cervterm/internal/core"
 )
 
+// maxOSCLen bounds OSC accumulation; OSC 52 clipboard payloads are routinely
+// multiple kilobytes of base64, so the cap must be generous.
+const maxOSCLen = 64 * 1024
+
 func (p *Parser) resetOSC() {
-	p.oscLen = 0
+	p.osc = p.osc[:0]
+	p.oscTruncated = false
 }
 
 func (p *Parser) appendOSC(b byte) {
-	if p.oscLen >= len(p.osc) {
+	if len(p.osc) >= maxOSCLen {
+		p.oscTruncated = true
 		return
 	}
-	p.osc[p.oscLen] = b
-	p.oscLen++
+	p.osc = append(p.osc, b)
 }
 
 func (p *Parser) dispatchOSC(t *core.Terminal) {
-	payload := string(p.osc[:p.oscLen])
+	if p.oscTruncated {
+		// A truncated string must be dropped whole, never half-decoded.
+		return
+	}
+	payload := string(p.osc)
 	code, rest, ok := strings.Cut(payload, ";")
 	if !ok {
 		return
