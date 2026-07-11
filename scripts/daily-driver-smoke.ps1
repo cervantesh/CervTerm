@@ -48,7 +48,7 @@ function New-PowerShellScriptArgs {
     "@echo off",
     "$powershellExe -NoProfile -ExecutionPolicy Bypass -File $ps1Path"
   ) | Set-Content -Encoding ASCII $cmdPath
-  return @("/C", $cmdPath)
+  return @("/C", (Resolve-Path $cmdPath).Path)
 }
 function Invoke-Capture {
   param(
@@ -129,6 +129,7 @@ $moreExe = Join-Path $env:SystemRoot "System32/more.com"
 if (-not (Test-Path $moreExe)) { throw "more.com is required for pager smoke: $moreExe" }
 $pagerInput = Join-Path $WorkDir "pager-input.txt"
 @("CERVTERM_PAGER_START") + (1..80 | ForEach-Object { "pager-line-{0:D3} abcdefghijklmnopqrstuvwxyz" -f $_ }) + @("CERVTERM_PAGER_END") | Set-Content -Encoding ASCII $pagerInput
+$pagerInput = (Resolve-Path $pagerInput).Path
 Invoke-Capture `
   -Name "pager-more" `
   -Program "cmd.exe" `
