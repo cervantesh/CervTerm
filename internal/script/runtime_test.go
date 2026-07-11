@@ -13,10 +13,23 @@ import (
 type fakeHost struct {
 	writes  []string
 	notices []string
+	cols    int
+	rows    int
+	curRow  int
+	curCol  int
+	title   string
+	lines   map[int]string
 }
 
 func (h *fakeHost) WriteInput(data string) { h.writes = append(h.writes, data) }
 func (h *fakeHost) Notify(message string)  { h.notices = append(h.notices, message) }
+func (h *fakeHost) Size() (int, int)       { return h.cols, h.rows }
+func (h *fakeHost) Cursor() (int, int)     { return h.curRow, h.curCol }
+func (h *fakeHost) Title() string          { return h.title }
+func (h *fakeHost) Line(row int) (string, bool) {
+	text, ok := h.lines[row]
+	return text, ok
+}
 
 func TestLoadAndDispatch(t *testing.T) {
 	path := writeScriptConfig(t, `local cervterm = require("cervterm")
@@ -233,6 +246,33 @@ func TestEventTimeoutDoesNotPoisonRuntime(t *testing.T) {
 	}
 	if strings.Join(host.writes, "") != "ok" {
 		t.Fatalf("writes = %q", host.writes)
+	}
+}
+
+func TestTermReadState(t *testing.T) {
+	path := writeScriptConfig(t, `return {
+  keys = {
+    { key = "r", action = function(term)
+        local cols, rows = term:size()
+        local crow, ccol = term:cursor()
+        term:notify(string.format("%dx%d @%d,%d t=%s l=%s l0=%s",
+          cols, rows, crow, ccol, term:title(), tostring(term:line(1)), tostring(term:line(99))))
+      end },
+  },
+}`)
+	_, rt, err := Load(path, config.Defaults())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer rt.Close()
+	host := &fakeHost{cols: 80, rows: 24, curRow: 2, curCol: 5, title: "sh", lines: map[int]string{0: "hello"}}
+	if err := rt.Dispatch(0, host); err != nil {
+		t.Fatalf("Dispatch failed: %v", err)
+	}
+	// cursor is reported 1-based (3,6); term:line(1) maps to host row 0; out-of-range is nil.
+	want := "80x24 @3,6 t=sh l=hello l0=nil"
+	if got := strings.Join(host.notices, ""); got != want {
+		t.Fatalf("notice = %q, want %q", got, want)
 	}
 }
 
