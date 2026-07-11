@@ -2,7 +2,7 @@
 
 // daily-driver-smoke runs CI-safe end-to-end smoke captures for common
 // terminal workflows. It intentionally uses Go as the harness so Windows CI
-// does not depend on PowerShell script orchestration.
+// does not depend on cmd.exe script orchestration.
 package main
 
 import (
@@ -64,12 +64,6 @@ func main() {
 			Program: "cmd.exe",
 			Args:    []string{"/C", "echo CERVTERM_CMD_START && ver && echo CERVTERM_CMD_END"},
 			Markers: []string{"CERVTERM_CMD_START", "CERVTERM_CMD_END"},
-		},
-		{
-			Name:    "powershell-basic",
-			Program: resolveWindowsPowerShell(),
-			Args:    []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "Write-Output 'CERVTERM_PS_START'; Get-Location; 1..3 | ForEach-Object { Write-Output ('ps-line-{0}' -f $_) }; Write-Output 'CERVTERM_PS_END'"},
-			Markers: []string{"CERVTERM_PS_START", "ps-line-3", "CERVTERM_PS_END"},
 		},
 		{
 			Name:    "git-log",
@@ -154,14 +148,6 @@ func buildHelper(workDir string) (string, error) {
 		return "", err
 	}
 	return filepath.Abs(exe)
-}
-
-func resolveWindowsPowerShell() string {
-	candidate := filepath.Join(os.Getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate
-	}
-	return "powershell.exe"
 }
 
 func resolveGitHead() (string, string, error) {

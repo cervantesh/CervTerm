@@ -4,12 +4,16 @@ on:
   push:
   pull_request:
 
+
 jobs:
   test:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: cmd
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Maturity gates
@@ -25,14 +29,14 @@ jobs:
       - name: Generate Windows resources
         run: |
           go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-windows-resource.ps1 -Arch amd64
+          go run ./scripts/generate-windows-resource.go -arch amd64
       - name: Build Windows beta zip
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-beta.ps1 -Version 0.1.0-ci -OutDir dist
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version 0.1.0-ci -OutDir dist -WindowsZip dist\cervterm-0.1.0-ci-windows.zip
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-installed-package.ps1 -ZipPath dist\cervterm-0.1.0-ci-windows.zip -ExpectedVersion 0.1.0-ci
+          go run ./scripts/package-beta.go -version 0.1.0-ci -outdir dist
+          go run ./scripts/release-preflight.go -version 0.1.0-ci -outdir dist -windows-zip dist\cervterm-0.1.0-ci-windows.zip
+          go run ./scripts/smoke-installed-package.go -zip dist\cervterm-0.1.0-ci-windows.zip -expected-version 0.1.0-ci
           go run ./scripts/daily-driver-smoke.go -cervterm dist\cervterm-0.1.0-ci-windows\cervterm.exe -workdir dist\daily-driver-smoke
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cervterm-windows-zip
           path: |
@@ -43,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Maturity gates
@@ -64,7 +68,7 @@ jobs:
           cp README.md CHANGELOG.md SUPPORT.md dist/cervterm-linux-headless/
           cp -R docs dist/cervterm-linux-headless/docs
           python -m zipfile -c dist/cervterm-linux-headless.zip dist/cervterm-linux-headless
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cervterm-linux-headless-zip
           path: dist/cervterm-linux-headless.zip

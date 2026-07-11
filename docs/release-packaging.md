@@ -19,16 +19,16 @@ The repository carries packaging metadata under `packaging/windows/` and source 
 
 1. Generate `cmd/cervterm/resource_windows_amd64.syso` with `goversioninfo` so `cervterm.ico`, `cervterm.manifest`, and version metadata are embedded in `cervterm.exe`:
 
-   ```powershell
+   ```cmd
    go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
-   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-windows-resource.ps1 -Arch amd64
+   go run ./scripts/generate-windows-resource.go -arch amd64
    # or: go generate ./cmd/cervterm
    ```
 
 2. Publish tagged releases with `.github/workflows/release.yml` by pushing a `v*` tag; the workflow builds Windows and Linux headless zips and uploads them to the GitHub release.
 3. Publish a portable winget package after a release is published by filling in the templates under `packaging/winget/` with the tag version and Windows zip SHA256.
 4. Promote the WiX v4 template under `packaging/wix/` into CI when per-machine/per-user policy, config installation behavior, PATH/shortcut choices, and MSI signing policy are finalized.
-5. Configure Authenticode signing secrets when a code-signing certificate exists. The release workflow already calls `scripts/sign-windows-exe.ps1` before zipping when `WINDOWS_CODESIGN_PFX_BASE64` and `WINDOWS_CODESIGN_PASSWORD` are configured; otherwise it skips signing and still publishes SHA256 checksums plus GitHub build provenance attestations.
+5. Configure Authenticode signing secrets when a code-signing certificate exists. The release workflow already calls `scripts/sign-windows-exe.go` before zipping when `WINDOWS_CODESIGN_PFX_BASE64` and `WINDOWS_CODESIGN_PASSWORD` are configured; otherwise it skips signing and still publishes SHA256 checksums plus GitHub build provenance attestations.
 
 ## Tagged release workflow
 
@@ -42,11 +42,11 @@ For the release trust model, checksum verification, provenance, and unsigned bet
 
 Run the local preflight before cutting or publishing a release:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version <tag> -OutDir dist
+```cmd
+go run ./scripts/release-preflight.go -version <tag> -outdir dist
 ```
 
-By default, Authenticode signing and MSI/WiX publishing are treated as intentionally deferred because the free beta release path is the portable zip plus SHA256 checksums and GitHub attestations. The Windows release workflow runs this non-strict preflight after creating the zip. Add `-RequireSigning`, `-RequireVttest`, and/or `-RequireWix` only when preparing a stricter local gate that must fail until those optional dependencies are present.
+By default, Authenticode signing and MSI/WiX publishing are treated as intentionally deferred because the free beta release path is the portable zip plus SHA256 checksums and GitHub attestations. The Windows release workflow runs this non-strict preflight after creating the zip. Add `-require-signing`, `-require-vttest`, and/or `-require-wix` only when preparing a stricter local gate that must fail until those optional dependencies are present.
 
 ## Deferred Authenticode signing
 
@@ -70,10 +70,10 @@ The workflow decodes the PFX into the runner temp directory, runs `signtool sign
 ```sh
 go test ./...
 go test -tags glfw ./internal/fontglyph ./internal/frontend/glfwgl ./cmd/cervterm -count=1
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-windows-resource.ps1 -Arch amd64
+go run ./scripts/generate-windows-resource.go -arch amd64
 go build -tags glfw -o dist/cervterm.exe ./cmd/cervterm
 ./dist/cervterm.exe --build-info
 ./dist/cervterm.exe --print-default-config > dist/cervterm.lua
 ./dist/cervterm.exe --log-file ./dist/cervterm.log
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version <tag> -OutDir dist
+go run ./scripts/release-preflight.go -version <tag> -outdir dist
 ```

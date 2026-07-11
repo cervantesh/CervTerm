@@ -6,13 +6,13 @@ This guide is for beta users and maintainers diagnosing startup, rendering, conf
 
 Run CervTerm's diagnostic summary first:
 
-```powershell
+```cmd
 .\cervterm.exe --doctor
 ```
 
 Then run CervTerm with an explicit log file if you need a detailed startup log:
 
-```powershell
+```cmd
 .\cervterm.exe --log-file .\cervterm.log
 ```
 
@@ -20,7 +20,7 @@ The log should include startup diagnostics and panic stack traces if the process
 
 For scripted smoke tests, use stderr-only logging:
 
-```powershell
+```cmd
 .\cervterm.exe --log-file - --version
 ```
 
@@ -28,7 +28,7 @@ For scripted smoke tests, use stderr-only logging:
 
 From an extracted release zip:
 
-```powershell
+```cmd
 .\cervterm.exe --version
 .\cervterm.exe --build-info
 .\cervterm.exe --print-default-config > cervterm.lua
@@ -48,15 +48,15 @@ The Windows zip should contain:
 
 Use the package smoke script from the repo to verify a zip:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-installed-package.ps1 -ZipPath dist/cervterm-<tag>-windows.zip
+```cmd
+go run ./scripts/smoke-installed-package.go -zip dist/cervterm-<tag>-windows.zip
 ```
 
 ## Config loading problems
 
 Start from the generated default config:
 
-```powershell
+```cmd
 .\cervterm.exe --print-default-config > cervterm.lua
 .\cervterm.exe --config .\cervterm.lua --log-file .\cervterm.log
 ```
@@ -109,8 +109,8 @@ Before running a downloaded zip:
 
 When reporting terminal rendering bugs, capture raw PTY output if possible:
 
-```powershell
-.\cervterm.exe --capture-vt .\bug.vt --capture-program powershell.exe --capture-timeout 30s --log-file .\capture.log
+```cmd
+.\cervterm.exe --capture-vt .\bug.vt --capture-program cmd.exe --capture-timeout 30s --log-file .\capture.log
 ```
 
 Attach:

@@ -1,6 +1,6 @@
 # Daily-driver Smoke Matrix
 
-The daily-driver smoke matrix is a CI-safe Windows gate for common terminal workflows that are not well represented by unit tests alone. It is implemented as a Go harness so CI does not depend on PowerShell script orchestration. The harness records raw VT output through CervTerm's `--capture-vt` path and verifies markers in the captured streams.
+The daily-driver smoke matrix is a CI-safe Windows gate for common terminal workflows that are not well represented by unit tests alone. It is implemented as a Go harness and uses `cmd.exe`, `git.exe`, `more.com`, and a small Go helper executable for synthetic VT behaviors. The harness records raw VT output through CervTerm's `--capture-vt` path and verifies markers in the captured streams.
 
 Run locally from the repository root:
 
@@ -19,7 +19,6 @@ go run ./scripts/daily-driver-smoke.go -cervterm dist/cervterm-<tag>-windows/cer
 | Case | Program | What it proves |
 |---|---|---|
 | `cmd-basic` | `cmd.exe` | ConPTY starts a Windows shell, emits text, and exits with markers captured. |
-| `powershell-basic` | `powershell.exe` | PowerShell startup, output, location rendering, and simple pipeline output. |
 | `git-log` | `git.exe --no-pager log --oneline` | Real Git output, colored output sequences, and repository command execution. |
 | `pager-more` | `more.com` | Real pager behavior, screen-sized output, and `-- More --` prompt capture. |
 | `alternate-screen` | Go helper executable | Alternate-screen enter/exit sequences and content inside the alternate buffer. |

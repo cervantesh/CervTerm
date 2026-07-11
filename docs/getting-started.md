@@ -22,13 +22,13 @@ The Linux artifact is currently headless and intended for non-GUI verification s
 
 Before filing an issue, run:
 
-```powershell
+```cmd
 .\cervterm.exe --doctor
 ```
 
 Useful related commands:
 
-```powershell
+```cmd
 .\cervterm.exe --version
 .\cervterm.exe --build-info
 .\cervterm.exe --print-default-config
@@ -71,13 +71,13 @@ $XDG_CONFIG_HOME/cervterm/cervterm.lua
 
 Generate a default config:
 
-```powershell
+```cmd
 .\cervterm.exe --print-default-config > cervterm.lua
 ```
 
 Run with an explicit config:
 
-```powershell
+```cmd
 .\cervterm.exe --config .\cervterm.lua
 ```
 
@@ -91,13 +91,13 @@ By default, CervTerm writes diagnostics to a user cache path such as:
 
 Override the log file:
 
-```powershell
+```cmd
 .\cervterm.exe --log-file .\cervterm.log
 ```
 
 Disable file logging and use stderr only:
 
-```powershell
+```cmd
 .\cervterm.exe --log-file -
 ```
 
@@ -105,7 +105,7 @@ Disable file logging and use stderr only:
 
 For PTY/rendering bugs, capture raw terminal output:
 
-```powershell
+```cmd
 .\cervterm.exe --capture-vt .\issue.vt --capture-program cmd.exe --capture-arg /c --capture-arg "echo cervterm-capture"
 ```
 

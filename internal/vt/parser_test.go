@@ -385,7 +385,7 @@ func TestParserGoldenRecordings(t *testing.T) {
 		rows int
 	}{
 		{name: "fullscreen-region", cols: 12, rows: 4},
-		{name: "powershell-ansi-smoke", cols: 80, rows: 24},
+		{name: "ansi-smoke", cols: 80, rows: 24},
 		{name: "vttest-startup", cols: 80, rows: 24},
 	}
 	for _, tt := range tests {

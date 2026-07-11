@@ -209,7 +209,7 @@ Near-term fields:
 
 ```lua
 shell = {
-   program = "powershell.exe",
+   program = "cmd.exe",
    args = {},
    working_directory = nil,
    env = {},
@@ -285,7 +285,7 @@ return {
    },
 
    shell = {
-      program = "powershell.exe",
+      program = "cmd.exe",
       args = {},
    },
 }
@@ -361,7 +361,7 @@ local config: Config = {
    },
 
    shell = {
-      program = "powershell.exe",
+      program = "cmd.exe",
       args = {},
    },
 }

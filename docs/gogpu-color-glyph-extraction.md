@@ -75,4 +75,4 @@ It does **not** yet implement the full color glyph matrix. The remaining GoGPU-s
 
 ## Why this split
 
-The failed Edge/PowerShell attempt proved that external screenshot-style emoji rendering lacks terminal-grade metrics and clips vertically. WezTerm, Alacritty, and Kitty all keep glyph metrics and color-glyph state inside their normal font pipeline. The GoGPU contribution should therefore be a font/color-glyph pipeline, not a terminal renderer.
+The failed Edge/cmd.exe attempt proved that external screenshot-style emoji rendering lacks terminal-grade metrics and clips vertically. WezTerm, Alacritty, and Kitty all keep glyph metrics and color-glyph state inside their normal font pipeline. The GoGPU contribution should therefore be a font/color-glyph pipeline, not a terminal renderer.

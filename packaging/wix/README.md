@@ -4,7 +4,7 @@
 
 Build sketch after a release directory exists:
 
-```powershell
+```cmd
 winget install WiXToolset.WiXToolset
 wix build packaging/wix/CervTerm.wxs `
   -d SourceDir=dist/cervterm-v0.2.0-beta.1-windows `

@@ -13,7 +13,7 @@ func TestLoadLuaConfig(t *testing.T) {
   colors = { foreground = "#ffffff", background = "#000000", cursor = "#112233" },
   scrolling = { history = 4000, wheel_multiplier = 5 },
   cursor = { shape = "beam", blink_interval_ms = 700, thickness = 0.2 },
-  shell = { program = "pwsh", args = { "-NoLogo" }, env = { FOO = "bar" } },
+  shell = { program = "cmd.exe", args = { "/Q" }, env = { FOO = "bar" } },
 }`)
 
 	cfg, err := LoadLua(path, Defaults())
@@ -23,7 +23,7 @@ func TestLoadLuaConfig(t *testing.T) {
 	if cfg.Window.Width != 1200 || cfg.Window.PaddingY != 11 || cfg.Font.Size != 16 {
 		t.Fatalf("window/font overrides missing: %#v", cfg)
 	}
-	if cfg.Shell.Program != "pwsh" || len(cfg.Shell.Args) != 1 || cfg.Shell.Env["FOO"] != "bar" {
+	if cfg.Shell.Program != "cmd.exe" || len(cfg.Shell.Args) != 1 || cfg.Shell.Env["FOO"] != "bar" {
 		t.Fatalf("shell overrides missing: %#v", cfg.Shell)
 	}
 	if err := cfg.Validate(); err != nil {

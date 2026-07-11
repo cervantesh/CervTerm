@@ -39,7 +39,7 @@ Updated:
 Added:
 
 - `scripts/check-maturity-gates.go`
-- `scripts/smoke-installed-package.ps1`
+- `scripts/smoke-installed-package.go`
 
 Integrated:
 
@@ -82,10 +82,10 @@ go run ./scripts/check-maturity-gates.go
 
 Windows package verification run successfully:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-beta.ps1 -Version v0.2.0-beta.1 -OutDir dist
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version v0.2.0-beta.1 -OutDir dist -WindowsZip dist/cervterm-v0.2.0-beta.1-windows.zip
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-installed-package.ps1 -ZipPath dist/cervterm-v0.2.0-beta.1-windows.zip -ExpectedVersion v0.2.0-beta.1
+```cmd
+go run ./scripts/package-beta.go -version v0.2.0-beta.1 -outdir dist
+go run ./scripts/release-preflight.go -version v0.2.0-beta.1 -outdir dist -windows-zip dist/cervterm-v0.2.0-beta.1-windows.zip
+go run ./scripts/smoke-installed-package.go -zip dist/cervterm-v0.2.0-beta.1-windows.zip -expected-version v0.2.0-beta.1
 ```
 
 Observed preflight result:
@@ -134,6 +134,6 @@ Still open:
 
 Implement the daily-driver correctness gate:
 
-1. Add replayable captures for PowerShell, cmd, pager/git-log style output, alternate screen, and resize/reflow.
+1. Add replayable captures for cmd.exe, pager/git-log style output, alternate screen, and resize/reflow.
 2. Add a local/CI script that replays captures and verifies expected screen snapshots.
 3. Use the resulting gate to raise terminal correctness and GUI/PTY confidence before the next beta release.

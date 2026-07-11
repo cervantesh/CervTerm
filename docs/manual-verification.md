@@ -22,7 +22,7 @@ go build -tags glfw -o dist/cervterm.exe ./cmd/cervterm
 
 Inside CervTerm, verify:
 
-- PowerShell starts and accepts input.
+- cmd.exe starts and accepts input.
 - `cmd.exe` starts when configured as the shell.
 - `vim` insert/delete and cursor movement do not corrupt the screen.
 - `less` and `git log` use alternate screen/scrollback correctly.

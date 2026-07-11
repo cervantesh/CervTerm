@@ -73,7 +73,7 @@ Components:
 
 1. `docs/troubleshooting.md` — user/debug operator workflow.
 2. `docs/release-trust.md` — release authenticity and unsigned-beta expectations.
-3. `scripts/smoke-installed-package.ps1` — reusable clean-package smoke for Windows zip.
+3. `scripts/smoke-installed-package.go` — reusable clean-package smoke for Windows zip.
 4. `scripts/check-maturity-gates.go` — cross-platform repository maturity guard.
 5. CI integration — run maturity gates and installed-package smoke.
 6. Release preflight integration — require docs and smoke script presence.
@@ -125,9 +125,9 @@ Review checklist:
 - `go test ./...`
 - `go test -tags glfw ./internal/applog ./internal/fontglyph ./internal/frontend/glfwgl ./cmd/cervterm -count=1`
 - `go run ./scripts/check-maturity-gates.go`
-- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-beta.ps1 -Version v0.2.0-beta.1 -OutDir dist`
-- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version v0.2.0-beta.1 -OutDir dist -WindowsZip dist/cervterm-v0.2.0-beta.1-windows.zip`
-- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-installed-package.ps1 -ZipPath dist/cervterm-v0.2.0-beta.1-windows.zip`
+- `go run ./scripts/package-beta.go -version v0.2.0-beta.1 -outdir dist`
+- `go run ./scripts/release-preflight.go -version v0.2.0-beta.1 -outdir dist -windows-zip dist/cervterm-v0.2.0-beta.1-windows.zip`
+- `go run ./scripts/smoke-installed-package.go -zip dist/cervterm-v0.2.0-beta.1-windows.zip`
 
 ## Residual Risks
 
@@ -140,7 +140,7 @@ Review checklist:
 
 The next maturity slice should implement a daily-driver correctness gate using replayable sessions for:
 
-1. PowerShell prompt and colored output.
+1. cmd.exe prompt and colored output.
 2. `cmd.exe` prompt and command output.
 3. A pager or `git log` style output.
 4. Full-screen alternate-screen behavior.

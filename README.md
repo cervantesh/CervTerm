@@ -17,7 +17,7 @@ CervTerm is not a finished daily-driver terminal yet, but it already includes:
 - Lua config loading, Teal check/gen support, and `--print-default-config`.
 - Renderer-neutral OpenType glyph backend with bitmap color fonts, broad COLRv1 paint/composite/variation support, SVG glyph extraction/rasterization, DirectWrite shaping smoke coverage, and shaped color cluster handling.
 - Diagnostics logging via `--log-file` / `CERVTERM_LOG_FILE`, including panic stack capture.
-- Parser fuzz smoke coverage, replay-style VT golden fixtures, and a Windows daily-driver smoke matrix for cmd, PowerShell, git, pager, alternate-screen, resize/reflow, and longer-session paths.
+- Parser fuzz smoke coverage, replay-style VT golden fixtures, and a Windows daily-driver smoke matrix for cmd.exe, git, pager, alternate-screen, resize/reflow, and longer-session paths.
 
 - `--doctor` support diagnostics for config/log/environment reporting.
 See:
@@ -64,8 +64,9 @@ go build -tags glfw -o cervterm.exe ./cmd/cervterm
 
 Run the release/package preflight after creating a local beta zip:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version <tag> -OutDir dist
+```cmd
+go run ./scripts/package-beta.go -version <tag> -outdir dist
+go run ./scripts/release-preflight.go -version <tag> -outdir dist -windows-zip dist/cervterm-<tag>-windows.zip
 ```
 
 Run the Windows daily-driver smoke matrix:
@@ -74,12 +75,6 @@ Run the Windows daily-driver smoke matrix:
 go run ./scripts/daily-driver-smoke.go -workdir dist/daily-driver-smoke -version daily-smoke
 ```
 
-Regenerate the README preview screenshot on Windows:
-
-```powershell
-go build -tags glfw -o dist/cervterm-screenshot.exe ./cmd/cervterm
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/capture-cervterm-screenshot.ps1
-```
 
 Cross-compile smoke for the non-GLFW headless command:
 
@@ -108,7 +103,7 @@ Generate a complete editable template with `--print-default-config`. A minimal e
 return {
   window = { width = 1100, height = 720, padding_x = 18, padding_y = 44 },
   font = { family = "Go Mono", size = 14 },
-  shell = { program = "powershell.exe", args = {} },
+  shell = { program = "cmd.exe", args = {} },
 }
 ```
 

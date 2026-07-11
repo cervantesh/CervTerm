@@ -180,7 +180,7 @@ Recommended work:
 
 1. Expand `vttest` automation beyond startup/menu capture.
 2. Add scripted smoke fixtures for:
-   - PowerShell
+   - cmd.exe
    - cmd
    - Git interactive output
    - vim or a comparable full-screen TUI

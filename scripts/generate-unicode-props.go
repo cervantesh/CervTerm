@@ -7,8 +7,7 @@
 // When upgrading Unicode versions, update the table source below from UCD files
 // (emoji-data.txt, EastAsianWidth.txt, DerivedCoreProperties.txt) and rerun:
 //
-//   go run ./scripts/generate-unicode-props.go
-//
+//	go run ./scripts/generate-unicode-props.go
 package main
 
 import (

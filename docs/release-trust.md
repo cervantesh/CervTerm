@@ -21,10 +21,10 @@ Download all release assets into one directory, then run:
 sha256sum -c SHA256SUMS.txt
 ```
 
-On Windows PowerShell, verify an individual file with:
+On Windows, verify an individual file with:
 
-```powershell
-Get-FileHash .\cervterm-<tag>-windows.zip -Algorithm SHA256
+```cmd
+certutil -hashfile cervterm-<tag>-windows.zip SHA256
 ```
 
 Compare the hash with the matching line in `SHA256SUMS.txt`.

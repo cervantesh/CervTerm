@@ -59,7 +59,7 @@ Priority work:
 
 Success criteria:
 
-- `vim`, `less`, `top`, `git log`, PowerShell, and `cmd` are usable without major visual corruption.
+- `vim`, `less`, `top`, `git log`, cmd.exe, and `cmd` are usable without major visual corruption.
 - Scrollback and alternate screen remain isolated correctly.
 - Cursor position stays accurate across wraps, resize, wide chars, and scrollback.
 - Parser/render hot path remains allocation-free in steady state where practical.
@@ -127,7 +127,7 @@ Priority work:
    - resize error handling.
 9. Add Unix PTY support.
 
-Implemented so far: parser fuzz smoke coverage, replay-style golden fixtures including a real ConPTY-captured PowerShell smoke stream and a real MSYS2-built `vttest` startup/menu capture, compatibility checklist docs, a built-in `--capture-vt` PTY/ConPTY recorder for authoritative raw VT byte capture, and helper scripts to build/capture `vttest` locally.
+Implemented so far: parser fuzz smoke coverage, replay-style golden fixtures including a real ConPTY-captured cmd.exe smoke stream and a real MSYS2-built `vttest` startup/menu capture, compatibility checklist docs, a built-in `--capture-vt` PTY/ConPTY recorder for authoritative raw VT byte capture, and helper scripts to build/capture `vttest` locally.
 Success criteria:
 
 - Invalid config reports actionable errors and falls back safely.
@@ -238,7 +238,7 @@ Deliverable:
    - font fallback and glyph IDs/clusters
    - baseline/bearing-aware raster metrics
    - RGBA atlas entries for color glyphs
-   - no external browser/PowerShell rasterization in the steady-state renderer.
+   - no external browser/cmd.exe rasterization in the steady-state renderer.
 
 Deliverable:
 

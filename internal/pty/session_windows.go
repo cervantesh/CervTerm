@@ -35,7 +35,7 @@ func NewLocalWithOptions(rows, cols uint16, opts Options) (Session, error) {
 		shell = os.Getenv("COMSPEC")
 	}
 	if shell == "" {
-		shell = "powershell.exe"
+		shell = "cmd.exe"
 	}
 	shell, err = resolveWindowsProgram(shell)
 	if err != nil {

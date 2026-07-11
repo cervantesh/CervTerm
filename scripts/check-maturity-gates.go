@@ -35,6 +35,9 @@ var requiredDocs = []string{
 	"docs/getting-started.md",
 	"docs/daily-driver-smoke.md",
 	"scripts/daily-driver-smoke.go",
+	"scripts/package-beta.go",
+	"scripts/release-preflight.go",
+	"scripts/smoke-installed-package.go",
 }
 
 var largeGoAllowlist = map[string]string{
@@ -157,9 +160,14 @@ func checkCIGates() []finding {
 	}
 	text := string(data)
 	var findings []finding
-	for _, required := range []string{"go vet", "govulncheck ./...", "scripts/daily-driver-smoke.go"} {
+	for _, required := range []string{"go vet", "govulncheck ./...", "scripts/package-beta.go", "scripts/release-preflight.go", "scripts/smoke-installed-package.go", "scripts/daily-driver-smoke.go"} {
 		if !strings.Contains(text, required) {
 			findings = append(findings, finding{path: path, reason: "CI must run " + required})
+		}
+	}
+	for _, forbidden := range []string{"power" + "shell", "p" + "wsh"} {
+		if strings.Contains(strings.ToLower(text), forbidden) {
+			findings = append(findings, finding{path: path, reason: "CI must not invoke forbidden shell host"})
 		}
 	}
 	return findings

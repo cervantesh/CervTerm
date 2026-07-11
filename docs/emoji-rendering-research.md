@@ -1,6 +1,6 @@
 # Emoji and color glyph rendering research
 
-CervTerm's temporary Edge/PowerShell emoji rasterization path is not the right long-term design. Established terminals render emoji through the same font pipeline as other glyphs: font fallback, shaping/metrics, glyph rasterization, atlas upload, and a color-aware shader path.
+CervTerm's temporary Edge/cmd.exe emoji rasterization path is not the right long-term design. Established terminals render emoji through the same font pipeline as other glyphs: font fallback, shaping/metrics, glyph rasterization, atlas upload, and a color-aware shader path.
 
 ## Evidence from established terminals
 
@@ -30,7 +30,7 @@ A pure-Go candidate, `gogpu/gg`, exposes a color font interface for CBDT/CBLC, s
 
 ## CervTerm direction
 
-Do not continue with the Edge/PowerShell screenshot-style rasterizer as the real solution. It does not provide terminal-grade glyph metrics, baseline, shaping, fallback, or stable performance.
+Do not continue with the Edge/cmd.exe screenshot-style rasterizer as the real solution. It does not provide terminal-grade glyph metrics, baseline, shaping, fallback, or stable performance.
 
 Instead, implement a font backend with this contract:
 

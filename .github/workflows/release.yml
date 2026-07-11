@@ -10,12 +10,16 @@ permissions:
   id-token: write
   attestations: write
 
+
 jobs:
   windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: cmd
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Maturity gates
@@ -23,40 +27,37 @@ jobs:
       - name: Generate Windows resources
         run: |
           go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-windows-resource.ps1 -Arch amd64
+          go run ./scripts/generate-windows-resource.go -arch amd64
       - name: Build Windows package
         run: |
-          $version = "${{ github.ref_name }}"
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-beta.ps1 -Version $version -OutDir dist
+          go run ./scripts/package-beta.go -version ${{ github.ref_name }} -outdir dist
       - name: Authenticode sign Windows executable
         env:
           WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
           WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
         run: |
-          $version = "${{ github.ref_name }}"
-          if (-not $env:WINDOWS_CODESIGN_PFX_BASE64 -or -not $env:WINDOWS_CODESIGN_PASSWORD) {
-            Write-Host "Code-signing secrets are not configured; skipping Authenticode signing."
-            exit 0
-          }
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sign-windows-exe.ps1 -ExePath dist\cervterm-$version-windows\cervterm.exe -PfxBase64 $env:WINDOWS_CODESIGN_PFX_BASE64 -PfxPassword $env:WINDOWS_CODESIGN_PASSWORD
+          if "%WINDOWS_CODESIGN_PFX_BASE64%"=="" (
+            echo Code-signing secrets are not configured; skipping Authenticode signing.
+            exit /b 0
+          )
+          if "%WINDOWS_CODESIGN_PASSWORD%"=="" (
+            echo Code-signing secrets are not configured; skipping Authenticode signing.
+            exit /b 0
+          )
+          go run ./scripts/sign-windows-exe.go -exe dist\cervterm-${{ github.ref_name }}-windows\cervterm.exe
       - name: Package signed Windows zip
         run: |
-          $version = "${{ github.ref_name }}"
-          Remove-Item -Force dist\cervterm-$version-windows.zip -ErrorAction SilentlyContinue
-          Compress-Archive -Path dist\cervterm-$version-windows\* -DestinationPath dist\cervterm-$version-windows.zip
+          go run ./scripts/package-beta.go -version ${{ github.ref_name }} -outdir dist -reuse
       - name: Release preflight (Windows package)
         run: |
-          $version = "${{ github.ref_name }}"
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version $version -OutDir dist -WindowsZip dist\cervterm-$version-windows.zip
+          go run ./scripts/release-preflight.go -version ${{ github.ref_name }} -outdir dist -windows-zip dist\cervterm-${{ github.ref_name }}-windows.zip
       - name: Installed package smoke
         run: |
-          $version = "${{ github.ref_name }}"
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-installed-package.ps1 -ZipPath dist\cervterm-$version-windows.zip -ExpectedVersion $version
+          go run ./scripts/smoke-installed-package.go -zip dist\cervterm-${{ github.ref_name }}-windows.zip -expected-version ${{ github.ref_name }}
       - name: Daily-driver smoke
         run: |
-          $version = "${{ github.ref_name }}"
-          go run ./scripts/daily-driver-smoke.go -cervterm dist\cervterm-$version-windows\cervterm.exe -workdir dist\daily-driver-smoke
-      - uses: actions/upload-artifact@v4
+          go run ./scripts/daily-driver-smoke.go -cervterm dist\cervterm-${{ github.ref_name }}-windows\cervterm.exe -workdir dist\daily-driver-smoke
+      - uses: actions/upload-artifact@v7
         with:
           name: cervterm-windows-amd64
           path: |
@@ -67,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Maturity gates
@@ -81,7 +82,7 @@ jobs:
           cp README.md CHANGELOG.md SUPPORT.md "dist/cervterm-$version-linux-headless-amd64/"
           cp -R docs "dist/cervterm-$version-linux-headless-amd64/docs"
           python -m zipfile -c "dist/cervterm-$version-linux-headless-amd64.zip" "dist/cervterm-$version-linux-headless-amd64"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cervterm-linux-headless-amd64
           path: dist/*.zip
@@ -92,7 +93,7 @@ jobs:
       - windows
       - linux-headless
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           pattern: cervterm-*
@@ -102,12 +103,12 @@ jobs:
           cd dist
           sha256sum *.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/*.zip
             dist/SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/*.zip

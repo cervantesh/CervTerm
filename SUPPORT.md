@@ -6,7 +6,7 @@ CervTerm is beta software. The project currently supports developer testing, con
 
 Please run:
 
-```powershell
+```cmd
 cervterm --doctor
 cervterm --build-info
 ```
