@@ -62,6 +62,11 @@ return {
   --     end,
   --   },
   -- },
+  -- events = {
+  --   output = function(term, data) end,
+  --   title = function(term, title) end,
+  --   bell = function(term) term:notify("ding") end,
+  -- },
 }
 `, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY, cfg.Window.DynamicTitle,
 		cfg.Font.Family, cfg.Font.Size,
