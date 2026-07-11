@@ -348,10 +348,30 @@ func (b *OpenTypeBackend) faceForRune(r rune) (loadedFace, fixed.Rectangle26_6, 
 		if ok {
 			return face, bounds, advance, true
 		}
+		if b.faceHasColorGlyph(face, r) {
+			return face, fixed.Rectangle26_6{
+				Min: fixed.Point26_6{X: 0, Y: -fixed.I(b.cellH)},
+				Max: fixed.Point26_6{X: fixed.I(b.cellW * 2), Y: 0},
+			}, fixed.I(b.cellW * 2), true
+		}
 	}
 	return loadedFace{}, fixed.Rectangle26_6{}, 0, false
 }
 
+func (b *OpenTypeBackend) faceHasColorGlyph(face loadedFace, r rune) bool {
+	if face.sfnt == nil || !face.tables.HasAnyColor() {
+		return false
+	}
+	var buf sfnt.Buffer
+	glyphID, err := face.sfnt.GlyphIndex(&buf, r)
+	if err != nil || glyphID == 0 {
+		return false
+	}
+	if _, ok := bitmapColorGlyph(face, uint16(glyphID), b.ppem); ok {
+		return true
+	}
+	return face.colr != nil || face.svg != nil
+}
 func (b *OpenTypeBackend) faceForCluster(cluster string) (loadedFace, bool) {
 	for _, face := range b.clusterFaceCandidates(cluster) {
 		return face, true
@@ -539,6 +559,9 @@ func fallbackFontPaths() []string {
 		filepath.Join(fontDir, "segoeui.ttf"),
 		filepath.Join(fontDir, "LeelawUI.ttf"),
 		filepath.Join(fontDir, "NotoSans-Regular.ttf"),
+		"/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+		"/usr/share/fonts/google-noto-emoji/NotoColorEmoji.ttf",
+		"/System/Library/Fonts/Apple Color Emoji.ttc",
 	)
 	return uniqueExistingFontCandidates(paths)
 }

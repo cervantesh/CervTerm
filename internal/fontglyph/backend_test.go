@@ -202,8 +202,8 @@ func TestOpenTypeBackendUsesConfiguredShaper(t *testing.T) {
 
 func TestDiagnoseEmojiFontsReportsInstalledFallbacks(t *testing.T) {
 	diag := DiagnoseEmojiFonts()
-	if diag.NotoColorEmojiPath == "" && diag.SegoeEmojiPath == "" {
-		t.Fatalf("expected at least one emoji font diagnostic path or warning, got %#v", diag)
+	if diag.NotoColorEmojiPath == "" && diag.SegoeEmojiPath == "" && len(diag.Warnings) == 0 {
+		t.Fatalf("expected emoji font diagnostic path or warning, got %#v", diag)
 	}
 	if diag.NotoColorEmojiPath == "" && len(diag.Warnings) == 0 {
 		t.Fatalf("missing Noto should produce a warning")

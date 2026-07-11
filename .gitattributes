@@ -1,0 +1,9 @@
+# Preserve terminal capture control bytes and expected output line endings.
+internal/vt/testdata/*.vt -text
+internal/vt/testdata/*.golden text eol=lf
+
+# Binary fixtures/assets.
+*.bin binary
+*.ico binary
+*.png binary
+*.ttf binary
