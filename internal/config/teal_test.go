@@ -22,9 +22,9 @@ func TestGenerateTealHappyPathWithFakeTool(t *testing.T) {
 	tlPath := filepath.Join(dir, "tl")
 	if runtime.GOOS == "windows" {
 		tlPath += ".bat"
-		writeTestFile(t, tlPath, "@echo off\r\nif \"%1\"==\"check\" exit /b 0\r\nif \"%1\"==\"gen\" copy \"%2\" \"%~dpn2.lua\" >nul & exit /b 0\r\nexit /b 1\r\n")
+		writeTestFile(t, tlPath, "@echo off\r\nif \"%1\"==\"check\" if \"%2\"==\"-I\" exit /b 0\r\nif \"%1\"==\"gen\" if \"%2\"==\"-I\" copy \"%4\" \"%~dpn4.lua\" >nul & exit /b 0\r\nexit /b 1\r\n")
 	} else {
-		writeTestFile(t, tlPath, "#!/bin/sh\nif [ \"$1\" = check ]; then exit 0; fi\nif [ \"$1\" = gen ]; then cp \"$2\" \"${2%.tl}.lua\"; exit 0; fi\nexit 1\n")
+		writeTestFile(t, tlPath, "#!/bin/sh\nif [ \"$1\" = check ] && [ \"$2\" = -I ]; then exit 0; fi\nif [ \"$1\" = gen ] && [ \"$2\" = -I ]; then cp \"$4\" \"${4%.tl}.lua\"; exit 0; fi\nexit 1\n")
 		if err := os.Chmod(tlPath, 0o755); err != nil {
 			t.Fatalf("chmod fake tl: %v", err)
 		}
