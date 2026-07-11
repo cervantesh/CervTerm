@@ -71,7 +71,23 @@ same bytes to the terminal parser.
 `term:notify(s)` shows a transient notice in the status line area for about four
 seconds.
 
-Both methods require strings.
+Both write and notify require strings.
+
+Handlers can also read terminal state:
+
+- `term:size()` returns `cols, rows`.
+- `term:cursor()` returns the cursor `row, col` (1-based).
+- `term:title()` returns the current title string.
+- `term:line(n)` returns the text of visible row `n` (1-based, trailing blanks
+  trimmed), or `nil` when `n` is outside the screen.
+
+```lua
+action = function(term)
+  local _, rows = term:size()
+  local row = select(1, term:cursor())
+  term:notify("row " .. row .. "/" .. rows .. ": " .. (term:line(row) or ""))
+end
+```
 
 ## Teal
 
