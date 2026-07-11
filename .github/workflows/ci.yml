@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Maturity gates
+        run: go run ./scripts/check-maturity-gates.go
       - name: Test
         run: go test ./...
       - name: VT parser fuzz smoke
@@ -26,6 +28,7 @@ jobs:
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-beta.ps1 -Version 0.1.0-ci -OutDir dist
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version 0.1.0-ci -OutDir dist -WindowsZip dist\cervterm-0.1.0-ci-windows.zip
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-installed-package.ps1 -ZipPath dist\cervterm-0.1.0-ci-windows.zip -ExpectedVersion 0.1.0-ci
       - uses: actions/upload-artifact@v4
         with:
           name: cervterm-windows-zip
@@ -38,6 +41,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Maturity gates
+        run: go run ./scripts/check-maturity-gates.go
       - name: Test
         run: go test ./...
       - name: Build Linux headless beta zip

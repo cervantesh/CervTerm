@@ -7,9 +7,9 @@ Build sketch after a release directory exists:
 ```powershell
 winget install WiXToolset.WiXToolset
 wix build packaging/wix/CervTerm.wxs `
-  -d SourceDir=dist/cervterm-v0.1.0-beta.1-windows-amd64 `
-  -d ProductVersion=0.1.0 `
-  -o dist/CervTerm-0.1.0.msi
+  -d SourceDir=dist/cervterm-v0.2.0-beta.1-windows `
+  -d ProductVersion=0.2.0 `
+  -o dist/CervTerm-0.2.0.msi
 ```
 
 The template currently installs:

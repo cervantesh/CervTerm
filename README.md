@@ -33,7 +33,7 @@ See:
 
 Tagged releases publish portable zip artifacts from GitHub Actions:
 
-- `cervterm-<tag>-windows-amd64.zip` contains the GLFW Windows executable, generated default config, README, CHANGELOG, docs, and packaging metadata.
+- `cervterm-<tag>-windows.zip` contains the GLFW Windows executable, generated default config, bundled `font-sources/NotoColorEmoji.ttf`, README, CHANGELOG, docs, and packaging metadata.
 - `cervterm-<tag>-linux-headless-amd64.zip` contains the headless command for Unix PTY/config/capture smoke coverage before a Linux GUI frontend is packaged.
 
 For a Windows zip install:
@@ -46,6 +46,8 @@ For a Windows zip install:
 
 Portable winget manifest templates live under `packaging/winget/`. Authenticode signing and MSI/WiX publishing are intentionally deferred for now; beta distribution uses unsigned portable zips with SHA256 checksums and GitHub provenance attestations.
 
+For release authenticity and unsigned beta expectations, see [`docs/release-trust.md`](docs/release-trust.md). For diagnostics, see [`docs/troubleshooting.md`](docs/troubleshooting.md).
+
 ## Build and test
 
 ```sh
@@ -57,7 +59,7 @@ go build -tags glfw -o cervterm.exe ./cmd/cervterm
 Run the release/package preflight after creating a local beta zip:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version 0.1.0-beta.1 -OutDir dist
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version <tag> -OutDir dist
 ```
 
 Regenerate the README preview screenshot on Windows:

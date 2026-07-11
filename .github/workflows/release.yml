@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Maturity gates
+        run: go run ./scripts/check-maturity-gates.go
       - name: Generate Windows resources
         run: |
           go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
@@ -46,6 +48,10 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}"
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version $version -OutDir dist -WindowsZip dist\cervterm-$version-windows.zip
+      - name: Installed package smoke
+        run: |
+          $version = "${{ github.ref_name }}"
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-installed-package.ps1 -ZipPath dist\cervterm-$version-windows.zip -ExpectedVersion $version
       - uses: actions/upload-artifact@v4
         with:
           name: cervterm-windows-amd64

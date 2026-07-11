@@ -1,5 +1,5 @@
 param(
-  [string]$Version = "0.1.0-beta.1",
+  [string]$Version = "v0.2.0-beta.1",
   [string]$OutDir = "dist",
   [string]$WindowsZip = "",
   [string]$VttestExe = "",
@@ -35,6 +35,11 @@ Add-Check "vttest build route" (Test-Path (Join-Path $root "scripts/build-vttest
 Add-Check "vttest capture route" (Test-Path (Join-Path $root "scripts/capture-vttest.ps1")) "raw vttest capture helper should exist"
 Add-Check "WiX template" (Test-Path (Join-Path $root "packaging/wix/CervTerm.wxs")) "MSI template should exist"
 Add-Check "winget templates" (Test-Path (Join-Path $root "packaging/winget/T50Systems.CervTerm.yaml")) "portable winget templates should exist"
+Add-Check "installed package smoke script" (Test-Path (Join-Path $root "scripts/smoke-installed-package.ps1")) "clean package smoke should be reusable locally and in CI"
+Add-Check "maturity gates script" (Test-Path (Join-Path $root "scripts/check-maturity-gates.go")) "maturity guardrails should be executable in CI"
+Add-Check "troubleshooting docs" (Test-Path (Join-Path $root "docs/troubleshooting.md")) "user diagnostics workflow should be documented"
+Add-Check "release trust docs" (Test-Path (Join-Path $root "docs/release-trust.md")) "checksums, attestations, and unsigned beta status should be documented"
+Add-Check "maturity improvement plan" (Test-Path (Join-Path $root "docs/maturity-improvement-plan.md")) "DoE/DoDm maturity improvement plan should exist"
 
 $hasPfx = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_PFX_BASE64)
 $hasPfxPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_PASSWORD)
@@ -78,7 +83,7 @@ if (Test-Path $WindowsZip) {
   $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $WindowsZip))
   try {
     $entries = $archive.Entries.FullName | ForEach-Object { $_ -replace "\\", "/" }
-    foreach ($required in @("cervterm.exe", "cervterm.lua", "README.md", "CHANGELOG.md", "font-sources/NotoColorEmoji.ttf", "font-sources/NotoEmoji-LICENSE.txt", "docs/product-roadmap.md", "docs/assets/cervterm-preview.png", "packaging/winget/README.md")) {
+    foreach ($required in @("cervterm.exe", "cervterm.lua", "README.md", "CHANGELOG.md", "font-sources/NotoColorEmoji.ttf", "font-sources/NotoEmoji-LICENSE.txt", "docs/product-roadmap.md", "docs/troubleshooting.md", "docs/release-trust.md", "docs/maturity-improvement-plan.md", "docs/assets/cervterm-preview.png", "packaging/winget/README.md")) {
       Add-Check "zip contains $required" ($entries -contains $required) "check $WindowsZip package contents"
     }
   } finally {

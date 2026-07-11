@@ -32,16 +32,18 @@ The repository carries packaging metadata under `packaging/windows/` and source 
 
 ## Tagged release workflow
 
-Push a tag such as `v0.1.0-beta.1` to run the release workflow. It generates release notes from GitHub, uploads `cervterm-<tag>-windows-amd64.zip`, uploads `cervterm-<tag>-linux-headless-amd64.zip`, publishes `SHA256SUMS.txt`, and requests GitHub artifact provenance attestations for those assets. Windows release builds run `goversioninfo` before `go build` so icon, manifest, and version metadata are embedded when the tool succeeds.
+Push a tag such as `v0.2.0-beta.1` to run the release workflow. It generates release notes from GitHub, uploads `cervterm-<tag>-windows.zip`, uploads `cervterm-<tag>-linux-headless-amd64.zip`, publishes `SHA256SUMS.txt`, and requests GitHub artifact provenance attestations for those assets. Windows release builds run `goversioninfo` before `go build` so icon, manifest, and version metadata are embedded when the tool succeeds.
 
 Packaged binaries support diagnostics logging with `--log-file <path>` or `CERVTERM_LOG_FILE`; panic recovery writes a stack trace through the standard diagnostics logger before process exit. Use `--log-file -` for stderr-only logging in scripted smoke tests.
+
+For the release trust model, checksum verification, provenance, and unsigned beta status, see [`docs/release-trust.md`](release-trust.md). For user diagnostics and bug-report capture workflow, see [`docs/troubleshooting.md`](troubleshooting.md).
 
 ## Release preflight
 
 Run the local preflight before cutting or publishing a release:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version 0.1.0-beta.1 -OutDir dist
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version <tag> -OutDir dist
 ```
 
 By default, Authenticode signing and MSI/WiX publishing are treated as intentionally deferred because the free beta release path is the portable zip plus SHA256 checksums and GitHub attestations. The Windows release workflow runs this non-strict preflight after creating the zip. Add `-RequireSigning`, `-RequireVttest`, and/or `-RequireWix` only when preparing a stricter local gate that must fail until those optional dependencies are present.
@@ -73,5 +75,5 @@ go build -tags glfw -o dist/cervterm.exe ./cmd/cervterm
 ./dist/cervterm.exe --build-info
 ./dist/cervterm.exe --print-default-config > dist/cervterm.lua
 ./dist/cervterm.exe --log-file ./dist/cervterm.log
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version 0.1.0-beta.1 -OutDir dist
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version <tag> -OutDir dist
 ```
