@@ -124,6 +124,8 @@ func (t *Terminal) snapshotScreen() *screenState {
 		hasSavedCursor:    t.hasSavedCursor,
 		scrollTop:         t.scrollTop,
 		scrollBottom:      t.scrollBottom,
+		charsets:          t.charsets,
+		activeCharset:     t.activeCharset,
 	}
 }
 
@@ -146,6 +148,8 @@ func (t *Terminal) restoreScreen(s *screenState) {
 	t.hasSavedCursor = s.hasSavedCursor
 	t.scrollTop = min(s.scrollTop, max(0, t.rows-1))
 	t.scrollBottom = min(s.scrollBottom, max(0, t.rows-1))
+	t.charsets = s.charsets
+	t.activeCharset = s.activeCharset
 	if t.scrollBottom <= t.scrollTop {
 		t.resetScrollRegion()
 	}

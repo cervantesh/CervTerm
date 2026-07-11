@@ -11,6 +11,7 @@ type Snapshot struct {
 	Cols, Rows           int
 	CursorRow, CursorCol int
 	CursorVisible        bool
+	CursorStyle          int
 	Title                string
 	Cells                []core.Cell
 }
@@ -33,6 +34,7 @@ func Capture(dst *Snapshot, term *core.Terminal) {
 	dst.CursorRow = term.CursorRow()
 	dst.CursorCol = term.CursorCol()
 	dst.CursorVisible = term.CursorVisible() && term.DisplayOffset() == 0
+	dst.CursorStyle = term.CursorStyle()
 	dst.Title = term.Title()
 	term.CopyView(dst.Cells)
 }
