@@ -457,6 +457,7 @@ func (a *App) flushReplies() {
 	for _, b := range replies {
 		_, _ = a.pty.Write(b)
 	}
+}
 
 // Size, Cursor, Title, and Line expose read-only terminal state to Lua handlers.
 // They are called on the main loop thread while the handler runs; the lock guards

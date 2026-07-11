@@ -255,8 +255,8 @@ func TestTermReadState(t *testing.T) {
     { key = "r", action = function(term)
         local cols, rows = term:size()
         local crow, ccol = term:cursor()
-        term:notify(string.format("%dx%d @%d,%d t=%s l=%s l0=%s",
-          cols, rows, crow, ccol, term:title(), tostring(term:line(1)), tostring(term:line(99))))
+        term:notify(string.format("%dx%d @%d,%d t=%s l=[%s] oob=[%s]",
+          cols, rows, crow, ccol, term:title(), term:line(1), term:line(99)))
       end },
   },
 }`)
@@ -269,8 +269,8 @@ func TestTermReadState(t *testing.T) {
 	if err := rt.Dispatch(0, host); err != nil {
 		t.Fatalf("Dispatch failed: %v", err)
 	}
-	// cursor is reported 1-based (3,6); term:line(1) maps to host row 0; out-of-range is nil.
-	want := "80x24 @3,6 t=sh l=hello l0=nil"
+	// cursor is reported 1-based (3,6); term:line(1) maps to host row 0; out-of-range is "".
+	want := "80x24 @3,6 t=sh l=[hello] oob=[]"
 	if got := strings.Join(host.notices, ""); got != want {
 		t.Fatalf("notice = %q, want %q", got, want)
 	}

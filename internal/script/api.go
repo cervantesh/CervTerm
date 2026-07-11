@@ -47,11 +47,8 @@ func termTable(state *lua.LState, host Host) *lua.LTable {
 	tbl.RawSetString("line", state.NewFunction(func(state *lua.LState) int {
 		state.CheckTypes(1, lua.LTTable)
 		row := state.CheckInt(2)
-		text, ok := host.Line(row - 1)
-		if !ok {
-			state.Push(lua.LNil)
-			return 1
-		}
+		// Out-of-range rows yield "" so the Lua return type is always a string.
+		text, _ := host.Line(row - 1)
 		state.Push(lua.LString(text))
 		return 1
 	}))
