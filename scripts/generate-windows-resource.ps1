@@ -23,10 +23,10 @@ Copy-Item (Join-Path $src "cervterm.manifest") $tmp
 Push-Location $tmp
 try {
   & $Tool -platform-specific -64
-  if (-not (Test-Path "resource.syso")) {
-    throw "goversioninfo did not produce resource.syso"
+  if (-not (Test-Path $outName)) {
+    throw "goversioninfo did not produce $outName"
   }
-  Copy-Item "resource.syso" $outPath -Force
+  Copy-Item $outName $outPath -Force
   Write-Host "Wrote $outPath"
 } finally {
   Pop-Location
