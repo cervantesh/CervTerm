@@ -41,6 +41,16 @@ return {
     working_directory = %q,
     env = {},
   },
+  -- keys = {
+  --   {
+  --     key = "p",
+  --     mods = "ctrl+shift",
+  --     action = function(term)
+  --       term:write("echo hola desde lua\r")
+  --       term:notify("saludo enviado")
+  --     end,
+  --   },
+  -- },
 }
 `, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY, cfg.Window.DynamicTitle,
 		cfg.Font.Family, cfg.Font.Size,

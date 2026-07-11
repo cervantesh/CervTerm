@@ -17,10 +17,10 @@ func LoadLua(path string, base Config) (Config, error) {
 	if !ok {
 		return base, fmt.Errorf("config must return a table, got %s", value.Type().String())
 	}
-	return applyTable(base, table), nil
+	return FromTable(base, table), nil
 }
 
-func applyTable(cfg Config, root *lua.LTable) Config {
+func FromTable(cfg Config, root *lua.LTable) Config {
 	if tbl := tableField(root, "window"); tbl != nil {
 		cfg.Window.Width = intField(tbl, "width", cfg.Window.Width)
 		cfg.Window.Height = intField(tbl, "height", cfg.Window.Height)
