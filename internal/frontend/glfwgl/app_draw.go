@@ -34,12 +34,13 @@ func (a *App) draw() {
 	glClearColor(background)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 	gl.Disable(gl.TEXTURE_2D)
-	fillRect(10, 10, float32(w-20), float32(h-20), panel)
-	fillRect(10, 10, float32(w-20), 28, themeColor(palette.Chrome))
-	fillRect(22, 20, 9, 9, themeColor(palette.ANSI[1]))
-	fillRect(38, 20, 9, 9, themeColor(palette.ANSI[3]))
-	fillRect(54, 20, 9, 9, themeColor(palette.ANSI[2]))
-	fillRect(0, 38, float32(w), 1, cursorColor)
+	s := a.uiScale
+	fillRect(10*s, 10*s, float32(w)-20*s, float32(h)-20*s, panel)
+	fillRect(10*s, 10*s, float32(w)-20*s, 28*s, themeColor(palette.Chrome))
+	fillRect(22*s, 20*s, 9*s, 9*s, themeColor(palette.ANSI[1]))
+	fillRect(38*s, 20*s, 9*s, 9*s, themeColor(palette.ANSI[3]))
+	fillRect(54*s, 20*s, 9*s, 9*s, themeColor(palette.ANSI[2]))
+	fillRect(0, 38*s, float32(w), s, cursorColor)
 
 	if time.Since(a.lastStats) > 500*time.Millisecond {
 		s := a.meter.Snapshot()
@@ -53,7 +54,7 @@ func (a *App) draw() {
 		statusText = a.notice
 		statusColor = themeColor(palette.Accent)
 	}
-	a.drawString(statusText, 78, 16, statusColor, 1)
+	a.drawString(statusText, 78*s, 16*s, statusColor, 1)
 
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)
@@ -64,15 +65,24 @@ func (a *App) draw() {
 	}
 
 	for r := 0; r < a.snap.Rows; r++ {
-		skipGlyphUntil := -1
-		for c := 0; c < a.snap.Cols; c++ {
-			cell := a.snap.Cells[r*a.snap.Cols+c]
-			x := a.paddingX + float32(c)*a.cellW
+		rowCells := a.snap.Cells[r*a.snap.Cols : (r+1)*a.snap.Cols]
+		var order []int
+		if a.cfg.Render.Bidi {
+			order = render.VisualOrder(rowCells)
+		}
+		skippedGlyph := make([]bool, a.snap.Cols)
+		for visualCol := 0; visualCol < a.snap.Cols; visualCol++ {
+			logicalCol := visualCol
+			if order != nil {
+				logicalCol = order[visualCol]
+			}
+			cell := rowCells[logicalCol]
+			x := a.paddingX + float32(visualCol)*a.cellW
 			y := a.paddingY + float32(r)*a.cellH
 			if cell.Attr.BG != core.DefaultBG {
 				fillRect(x, y, a.cellW, a.cellH, rgb(cell.Attr.BG))
 			}
-			if a.selectionActive && termsel.Contains(termsel.Range{Start: a.selectionStart, End: a.selectionEnd}, termsel.Point{Row: r, Col: c}) {
+			if a.selectionActive && termsel.Contains(termsel.Range{Start: a.selectionStart, End: a.selectionEnd}, termsel.Point{Row: r, Col: logicalCol}) {
 				fillRect(x, y, a.cellW, a.cellH, selectionColor)
 			}
 			fg := defaultFG
@@ -89,7 +99,7 @@ func (a *App) draw() {
 				fg, bg = bg, fg
 				fillRect(x, y, a.cellW, a.cellH, bg)
 			}
-			if c < skipGlyphUntil || cell.Rune == ' ' || cell.Rune == 0 || cell.WideContinuation {
+			if skippedGlyph[logicalCol] || cell.Rune == ' ' || cell.Rune == 0 || cell.WideContinuation {
 				continue
 			}
 			if cell.Attr.Bold {
@@ -102,13 +112,15 @@ func (a *App) draw() {
 			if cell.Attr.Italic {
 				skew = 0.2 * a.cellH
 			}
-			if cluster, ok := collectRenderCluster(a.snap.Cells, a.snap.Cols, r, c); ok {
+			if cluster, ok := collectRenderCluster(a.snap.Cells, a.snap.Cols, r, logicalCol); ok {
 				if a.drawCluster(cluster.Text, cluster.CellSpan, x, y, fg, 1, skew) {
 					if cell.Attr.Bold {
 						a.drawCluster(cluster.Text, cluster.CellSpan, x+1, y, fg, 1, skew)
 					}
 					drawTextDecorations(x, y, a.cellW*float32(cluster.CellSpan), a.cellH, fg, cell.Attr)
-					skipGlyphUntil = c + cluster.CellSpan
+					for i := 1; i < cluster.CellSpan && logicalCol+i < a.snap.Cols; i++ {
+						skippedGlyph[logicalCol+i] = true
+					}
 					continue
 				}
 			}
@@ -128,6 +140,13 @@ func (a *App) draw() {
 
 	if a.snap.CursorVisible {
 		cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
+		if a.cfg.Render.Bidi && cursorRow >= 0 && cursorRow < a.snap.Rows {
+			row := a.snap.Cells[cursorRow*a.snap.Cols : (cursorRow+1)*a.snap.Cols]
+			inverse := render.InversePermutation(render.VisualOrder(row))
+			if cursorCol >= 0 && cursorCol < len(inverse) {
+				cursorCol = inverse[cursorCol]
+			}
+		}
 		x := a.paddingX + float32(cursorCol)*a.cellW
 		y := a.paddingY + float32(cursorRow)*a.cellH
 		a.drawCursor(x, y, cursorColor)
