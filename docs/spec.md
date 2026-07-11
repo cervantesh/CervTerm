@@ -35,18 +35,21 @@ This document is the executable contract for the MVP. Implementation must follow
 - Prints UTF-8 text.
 - Preserves incomplete UTF-8 sequences across PTY read boundaries.
 - Handles CR/LF/backspace/tab.
+- Handles IND/NEL/RI (`ESC D/E/M`) and settable tab stops (`ESC H`, `CSI g/I/Z`).
 - Handles CSI cursor movement: `A`, `B`, `C`, `D`, `H`, `f`.
 - Handles cursor save/restore via `ESC 7`/`ESC 8` and `CSI s`/`CSI u`.
 - Handles CSI erase modes: `J` modes 0/1/2/3 and `K` modes 0/1/2.
-- Handles SGR basics: reset, bold, ANSI 16 foreground/background including bright colors and default FG/BG resets.
+- Handles SGR basics: reset, bold, dim, blink state, ANSI 16 foreground/background including bright colors and default FG/BG resets.
 - Handles extended SGR colors: 256-color `38;5;n`/`48;5;n` and truecolor `38;2;r;g;b`/`48;2;r;g;b`.
 - Handles OSC 0/2 title updates with BEL or ST terminators.
+- Answers DA1/DA2 and DSR/CPR reports (`CSI c`, `CSI > c`, `CSI 5 n`, `CSI 6 n`, `CSI ? 6 n`).
 - Handles DECSET/DECRST bracketed paste mode: `CSI ?2004 h/l`.
 - Handles DECSET/DECRST alternate screen mode: `CSI ?1049 h/l`, preserving the primary screen and scrollback.
+- Handles DECOM origin mode, IRM insert mode, alternate screen variants `47`/`1047`/`1048`, DEC Special Graphics G0/G1 charsets, DECSCUSR cursor styles, mouse modes `1000`/`1002`/`1003`/`1004`/`1006`, OSC 52 clipboard writes, and OSC 7 working-directory URLs.
 
 ### Input encoding
 
-- `internal/input` converts toolkit-neutral key events to terminal bytes.
+- `internal/input` converts toolkit-neutral key and mouse events to terminal bytes.
 - Printable runes encode as UTF-8.
 - Enter, backspace, tab, escape, and arrow keys encode to common VT bytes.
 - Ctrl-letter combinations encode to C0 control bytes, except Ctrl+V is reserved for paste by the frontend.

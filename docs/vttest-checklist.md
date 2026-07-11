@@ -19,6 +19,9 @@ This checklist turns the roadmap's vttest item into a repeatable manual/automate
 - [x] Cursor visibility (`CSI ?25 h/l`).
 - [x] Application cursor mode (`CSI ?1 h/l`).
 - [x] Application keypad mode (`ESC =`, `ESC >`).
+- [x] Device attributes and status reports (`CSI c`, `CSI > c`, `CSI 5/6 n`, `CSI ?6 n`).
+- [x] Origin mode (`CSI ?6 h/l`) and origin-aware CPR.
+- [x] Cursor style selection (`CSI Ps SP q`).
 
 ## Erase and editing
 
@@ -27,6 +30,10 @@ This checklist turns the roadmap's vttest item into a repeatable manual/automate
 - [x] Scroll regions (`CSI t;b r`).
 - [x] Insert/delete characters (`CSI @`, `CSI P`).
 - [x] Insert/delete lines (`CSI L`, `CSI M`).
+- [x] IND/NEL/RI (`ESC D/E/M`).
+- [x] Insert mode (`CSI 4 h/l`).
+- [x] Settable tab stops (`ESC H`, `CSI g/I/Z`).
+- [x] Legacy alternate screen variants (`CSI ?47/1047/1048 h/l`).
 
 ## Colors and attributes
 
@@ -35,6 +42,7 @@ This checklist turns the roadmap's vttest item into a repeatable manual/automate
 - [x] 256-color foreground/background.
 - [x] Truecolor foreground/background.
 - [x] Additional SGR attributes beyond bold (underline, inverse, italic, strikethrough).
+- [x] Dim and blink SGR state (`2`, `5`, `22`, `25`); blink is currently static.
 
 ## Input and mouse
 
@@ -43,7 +51,8 @@ This checklist turns the roadmap's vttest item into a repeatable manual/automate
 - [x] Bracketed paste.
 - [x] SGR mouse press/release/wheel/drag encoding.
 - [x] Mouse modifier encoding for press/wheel/drag.
-- [ ] Non-SGR legacy mouse encodings if required by target apps.
+- [x] Non-SGR legacy mouse encodings if required by target apps.
+- [x] Any-event mouse tracking (`CSI ?1003 h/l`) and focus events (`CSI ?1004 h/l`).
 
 ## Unicode and rendering
 
@@ -51,6 +60,8 @@ This checklist turns the roadmap's vttest item into a repeatable manual/automate
 - [x] Combining mark storage and renderer cluster path.
 - [x] NFC composition attempt for canonical combining clusters.
 - [x] Emoji variation selector/modifier grouping in renderer clusters.
+- [x] DEC Special Graphics line drawing charset.
+- [x] Synthetic bold and italic rendering in the GLFW frontend.
 - [ ] Full GSUB/GPOS shaping for complex scripts and fully-qualified ZWJ emoji glyph substitution.
 
 ## Regression harness

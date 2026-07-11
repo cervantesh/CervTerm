@@ -13,12 +13,19 @@ type Parser struct {
 	cur        int
 	hasCur     bool
 	csiPrivate bool
+	csiGT      bool
+	csiInter   byte
 
 	osc    [512]byte
 	oscLen int
 
 	utf8Buf [utf8.UTFMax]byte
 	utf8Len int
+
+	// Reply, when set, receives bytes to send back to the application.
+	Reply func([]byte)
+	// SetClipboard, when set, receives OSC 52 clipboard writes.
+	SetClipboard func(string)
 }
 
 const (
@@ -27,6 +34,8 @@ const (
 	stateCSI
 	stateOSC
 	stateOSCEsc
+	stateEscG0
+	stateEscG1
 )
 
 func (p *Parser) Advance(t *core.Terminal, data []byte) {
@@ -85,6 +94,10 @@ func (p *Parser) advanceByte(t *core.Terminal, b byte) {
 		switch b {
 		case 0x1b:
 			p.state = stateEsc
+		case 0x0e:
+			t.SelectCharset(1)
+		case 0x0f:
+			t.SelectCharset(0)
 		case '\r':
 			t.CarriageReturn()
 		case '\n':
@@ -95,30 +108,12 @@ func (p *Parser) advanceByte(t *core.Terminal, b byte) {
 			t.Tab()
 		}
 	case stateEsc:
-		if b == '[' {
-			p.resetCSI()
-			p.state = stateCSI
-			return
-		}
-		if b == ']' {
-			p.resetOSC()
-			p.state = stateOSC
-			return
-		}
-		switch b {
-		case '7':
-			t.SaveCursor()
-		case '8':
-			t.RestoreCursor()
-		case '=':
-			t.SetApplicationKeypadMode(true)
-		case '>':
-			t.SetApplicationKeypadMode(false)
-		case 'c':
-			t.Reset()
-		}
-		p.state = stateGround
+		p.dispatchESC(t, b)
 	case stateCSI:
+		if b >= 0x20 && b <= 0x2f {
+			p.csiInter = b
+			return
+		}
 		if b >= '0' && b <= '9' {
 			p.cur = p.cur*10 + int(b-'0')
 			p.hasCur = true
@@ -126,6 +121,10 @@ func (p *Parser) advanceByte(t *core.Terminal, b byte) {
 		}
 		if b == '?' && p.paramCount == 0 && !p.hasCur {
 			p.csiPrivate = true
+			return
+		}
+		if b == '>' && p.paramCount == 0 && !p.hasCur {
+			p.csiGT = true
 			return
 		}
 		if b == ';' {
@@ -155,6 +154,12 @@ func (p *Parser) advanceByte(t *core.Terminal, b byte) {
 		p.appendOSC(0x1b)
 		p.appendOSC(b)
 		p.state = stateOSC
+	case stateEscG0:
+		p.designateCharset(t, 0, b)
+		p.state = stateGround
+	case stateEscG1:
+		p.designateCharset(t, 1, b)
+		p.state = stateGround
 	}
 }
 
@@ -163,31 +168,11 @@ func (p *Parser) resetCSI() {
 	p.cur = 0
 	p.hasCur = false
 	p.csiPrivate = false
+	p.csiGT = false
+	p.csiInter = 0
 	for i := range p.params {
 		p.params[i] = 0
 	}
-}
-
-func (p *Parser) resetOSC() {
-	p.oscLen = 0
-}
-
-func (p *Parser) appendOSC(b byte) {
-	if p.oscLen >= len(p.osc) {
-		return
-	}
-	p.osc[p.oscLen] = b
-	p.oscLen++
-}
-
-func (p *Parser) dispatchOSC(t *core.Terminal) {
-	if p.oscLen < 2 || p.osc[1] != ';' {
-		return
-	}
-	if p.osc[0] != '0' && p.osc[0] != '2' {
-		return
-	}
-	t.SetTitle(string(p.osc[2:p.oscLen]))
 }
 
 func (p *Parser) pushParam() {
@@ -211,190 +196,4 @@ func (p *Parser) param(i, fallback int) int {
 		return fallback
 	}
 	return p.params[i]
-}
-
-func (p *Parser) dispatchCSI(t *core.Terminal, action byte) {
-	switch action {
-	case '@':
-		t.InsertChars(p.param(0, 1))
-	case 'A':
-		t.MoveCursor(-p.param(0, 1), 0)
-	case 'B':
-		t.MoveCursor(p.param(0, 1), 0)
-	case 'C':
-		t.MoveCursor(0, p.param(0, 1))
-	case 'D':
-		t.MoveCursor(0, -p.param(0, 1))
-	case 'E':
-		t.SetCursor(t.CursorRow()+p.param(0, 1), 0)
-	case 'F':
-		t.SetCursor(t.CursorRow()-p.param(0, 1), 0)
-	case 'G':
-		t.SetCursor(t.CursorRow(), p.param(0, 1)-1)
-	case 'H', 'f':
-		t.SetCursor(p.param(0, 1)-1, p.param(1, 1)-1)
-	case 'J':
-		switch p.param(0, 0) {
-		case 0:
-			t.ClearToEndOfScreen()
-		case 1:
-			t.ClearToBeginningOfScreen()
-		case 2:
-			t.Clear()
-		case 3:
-			t.ClearScrollback()
-		}
-	case 'K':
-		switch p.param(0, 0) {
-		case 0:
-			t.ClearToEndOfLine()
-		case 1:
-			t.ClearToBeginningOfLine()
-		case 2:
-			t.ClearLine(t.CursorRow())
-		}
-	case 'L':
-		t.InsertLines(p.param(0, 1))
-	case 'M':
-		t.DeleteLines(p.param(0, 1))
-	case 'P':
-		t.DeleteChars(p.param(0, 1))
-	case 'S':
-		t.ScrollUp(p.param(0, 1))
-	case 'T':
-		t.ScrollDown(p.param(0, 1))
-	case 'd':
-		t.SetCursor(p.param(0, 1)-1, t.CursorCol())
-	case 'h', 'l':
-		p.dispatchMode(t, action == 'h')
-	case 'm':
-		p.dispatchSGR(t)
-	case 'r':
-		if p.paramCount == 0 {
-			t.ResetScrollRegion()
-			return
-		}
-		t.SetScrollRegion(p.param(0, 1)-1, p.param(1, t.Rows())-1)
-	case 's':
-		t.SaveCursor()
-	case 'u':
-		t.RestoreCursor()
-	}
-}
-
-func (p *Parser) dispatchMode(t *core.Terminal, enabled bool) {
-	if !p.csiPrivate {
-		return
-	}
-	for i := 0; i < p.paramCount; i++ {
-		switch p.params[i] {
-		case 1:
-			t.SetApplicationCursorMode(enabled)
-		case 7:
-			t.SetAutoWrapMode(enabled)
-		case 25:
-			t.SetCursorVisible(enabled)
-		case 1000, 1002, 1006:
-			t.SetMouseMode(p.params[i], enabled)
-		case 2004:
-			t.SetBracketedPasteMode(enabled)
-		case 1049:
-			t.SetAlternateScreenMode(enabled)
-		}
-	}
-}
-
-func (p *Parser) dispatchSGR(t *core.Terminal) {
-	if p.paramCount == 0 {
-		t.ResetAttr()
-		return
-	}
-	for i := 0; i < p.paramCount; i++ {
-		v := p.params[i]
-		switch {
-		case v == 0:
-			t.ResetAttr()
-		case v == 1:
-			t.SetBold(true)
-		case v == 3:
-			t.SetItalic(true)
-		case v == 4:
-			t.SetUnderline(true)
-		case v == 7:
-			t.SetInverse(true)
-		case v == 9:
-			t.SetStrikethrough(true)
-		case v == 22:
-			t.SetBold(false)
-		case v == 23:
-			t.SetItalic(false)
-		case v == 24:
-			t.SetUnderline(false)
-		case v == 27:
-			t.SetInverse(false)
-		case v == 29:
-			t.SetStrikethrough(false)
-		case v >= 30 && v <= 37:
-			t.SetFG(core.ANSIColor(v - 30))
-		case v == 38:
-			consumed := p.dispatchExtendedColor(t, true, i)
-			i += consumed
-		case v == 39:
-			t.SetFG(core.DefaultFG)
-		case v >= 40 && v <= 47:
-			t.SetBG(core.ANSIColor(v - 40))
-		case v == 48:
-			consumed := p.dispatchExtendedColor(t, false, i)
-			i += consumed
-		case v == 49:
-			t.SetBG(core.DefaultBG)
-		case v >= 90 && v <= 97:
-			t.SetFG(core.ANSIColor(8 + v - 90))
-		case v >= 100 && v <= 107:
-			t.SetBG(core.ANSIColor(8 + v - 100))
-		}
-	}
-}
-
-func (p *Parser) dispatchExtendedColor(t *core.Terminal, foreground bool, start int) int {
-	if start+1 >= p.paramCount {
-		return 0
-	}
-	mode := p.params[start+1]
-	switch mode {
-	case 5:
-		if start+2 >= p.paramCount {
-			return 1
-		}
-		color := core.ANSI256Color(p.params[start+2])
-		if foreground {
-			t.SetFG(color)
-		} else {
-			t.SetBG(color)
-		}
-		return 2
-	case 2:
-		if start+4 >= p.paramCount {
-			return 1
-		}
-		color := core.RGB{R: sgrByte(p.params[start+2]), G: sgrByte(p.params[start+3]), B: sgrByte(p.params[start+4])}
-		if foreground {
-			t.SetFG(color)
-		} else {
-			t.SetBG(color)
-		}
-		return 4
-	default:
-		return 0
-	}
-}
-
-func sgrByte(v int) uint8 {
-	if v < 0 {
-		return 0
-	}
-	if v > 255 {
-		return 255
-	}
-	return uint8(v)
 }

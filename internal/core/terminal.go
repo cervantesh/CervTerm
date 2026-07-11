@@ -1,70 +1,5 @@
 package core
 
-type Attr struct {
-	FG, BG                           RGB
-	Bold, Italic, Underline, Inverse bool
-	Strikethrough                    bool
-}
-
-type Cell struct {
-	Rune             rune
-	Combining        []rune
-	Attr             Attr
-	WideContinuation bool
-}
-
-const maxScrollbackRows = 2000
-
-type screenState struct {
-	cols, rows        int
-	cells             []Cell
-	rowWrapped        []bool
-	scrollback        []Cell
-	scrollbackWrapped []bool
-	scrollbackStart   int
-	scrollbackRows    int
-	displayOffset     int
-	cursorRow         int
-	cursorCol         int
-	wrapNext          bool
-	savedCursorRow    int
-	savedCursorCol    int
-	savedWrapNext     bool
-	hasSavedCursor    bool
-	scrollTop         int
-	scrollBottom      int
-}
-
-type Terminal struct {
-	cols, rows        int
-	cells             []Cell
-	rowWrapped        []bool
-	scrollback        []Cell
-	scrollbackWrapped []bool
-	scrollbackStart   int
-	scrollbackRows    int
-	displayOffset     int
-	cursorRow         int
-	cursorCol         int
-	wrapNext          bool
-	savedCursorRow    int
-	savedCursorCol    int
-	savedWrapNext     bool
-	hasSavedCursor    bool
-	attr              Attr
-	title             string
-	bracketedPaste    bool
-	alternateScreen   bool
-	primaryScreen     *screenState
-	scrollTop         int
-	scrollBottom      int
-	cursorVisible     bool
-	autoWrap          bool
-	applicationCursor bool
-	applicationKeypad bool
-	mouseMode         MouseMode
-}
-
 func NewTerminal(cols, rows int) *Terminal {
 	if cols < 2 {
 		cols = 2
@@ -75,6 +10,7 @@ func NewTerminal(cols, rows int) *Terminal {
 	t := &Terminal{cols: cols, rows: rows, attr: Attr{FG: DefaultFG, BG: DefaultBG}, scrollBottom: rows - 1, cursorVisible: true, autoWrap: true}
 	t.cells = make([]Cell, cols*rows)
 	t.rowWrapped = make([]bool, rows)
+	t.resetTabStops()
 	t.Clear()
 	return t
 }
@@ -117,6 +53,7 @@ func (t *Terminal) Resize(cols, rows int) {
 	}
 	t.wrapNext = false
 	t.resetScrollRegion()
+	t.resizeTabStops(oldCols, cols)
 }
 
 func (t *Terminal) Clear() {
@@ -146,6 +83,16 @@ func (t *Terminal) Reset() {
 	t.SetMouseMode(1000, false)
 	t.SetMouseMode(1002, false)
 	t.SetMouseMode(1006, false)
+	t.SetMouseMode(1003, false)
+	t.SetMouseMode(1004, false)
+	t.SetOriginMode(false)
+	t.SetInsertMode(false)
+	t.DesignateCharset(0, CharsetASCII)
+	t.DesignateCharset(1, CharsetASCII)
+	t.SelectCharset(0)
+	t.SetCursorStyle(0)
+	t.resetTabStops()
+	t.SetWorkingDirectoryURL("")
 }
 
 func (t *Terminal) ClearLine(row int) {
@@ -208,6 +155,7 @@ func (t *Terminal) PutRune(r rune) {
 	if r == 0 || r == '\uFFFD' {
 		return
 	}
+	r = t.translateCharset(r)
 	width := RuneWidth(r)
 	if width == 0 {
 		t.addCombiningRune(r)
@@ -226,6 +174,9 @@ func (t *Terminal) PutRune(r rune) {
 	}
 
 	idx := t.cursorRow*t.cols + t.cursorCol
+	if t.insertMode {
+		t.InsertChars(width)
+	}
 	t.cells[idx] = Cell{Rune: r, Attr: t.attr}
 	if width == 2 && t.cursorCol+1 < t.cols {
 		t.cells[idx+1] = Cell{Attr: t.attr, WideContinuation: true}
@@ -280,9 +231,12 @@ func (t *Terminal) Backspace() {
 }
 
 func (t *Terminal) Tab() {
-	next := ((t.cursorCol / 8) + 1) * 8
-	if next >= t.cols {
-		next = t.cols - 1
+	next := t.cols - 1
+	for col := t.cursorCol + 1; col < t.cols; col++ {
+		if col < len(t.tabStops) && t.tabStops[col] {
+			next = col
+			break
+		}
 	}
 	t.cursorCol = next
 	t.wrapNext = false
@@ -293,6 +247,15 @@ func (t *Terminal) MoveCursor(rowDelta, colDelta int) {
 }
 
 func (t *Terminal) SetCursor(row, col int) {
+	if t.originMode {
+		row += t.scrollTop
+		if row < t.scrollTop {
+			row = t.scrollTop
+		}
+		if row > t.scrollBottom {
+			row = t.scrollBottom
+		}
+	}
 	if row < 0 {
 		row = 0
 	}
@@ -323,6 +286,10 @@ func (t *Terminal) SetScrollRegion(top, bottom int) {
 	}
 	t.scrollTop = top
 	t.scrollBottom = bottom
+	if t.originMode {
+		t.SetCursor(0, 0)
+		return
+	}
 	t.SetCursor(0, 0)
 }
 
@@ -438,10 +405,17 @@ func (t *Terminal) RestoreCursor() {
 }
 
 func (t *Terminal) SetAlternateScreenMode(enabled bool) {
+	t.SetAlternateScreenModeWithOptions(enabled, true, true, false)
+}
+
+func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearOnEnter, clearOnExit bool) {
 	if enabled == t.alternateScreen {
 		return
 	}
 	if enabled {
+		if saveCursor {
+			t.SaveCursor()
+		}
 		t.primaryScreen = t.snapshotScreen()
 		t.alternateScreen = true
 		t.cells = make([]Cell, t.cols*t.rows)
@@ -451,7 +425,12 @@ func (t *Terminal) SetAlternateScreenMode(enabled bool) {
 		t.scrollbackStart = 0
 		t.scrollbackRows = 0
 		t.displayOffset = 0
-		t.Clear()
+		if clearOnEnter {
+			t.Clear()
+		} else {
+			t.fillBlank(t.cells)
+			t.cursorRow, t.cursorCol, t.wrapNext = 0, 0, false
+		}
 		t.resetScrollRegion()
 		return
 	}
@@ -465,9 +444,15 @@ func (t *Terminal) SetAlternateScreenMode(enabled bool) {
 		t.resetScrollRegion()
 		return
 	}
+	if clearOnExit {
+		t.fillBlank(t.cells)
+	}
 	t.restoreScreen(primary)
 	if t.cols != cols || t.rows != rows {
 		t.Resize(cols, rows)
+	}
+	if saveCursor {
+		t.RestoreCursor()
 	}
 }
 func (t *Terminal) ScrollbackLines() int { return t.scrollbackRows }
