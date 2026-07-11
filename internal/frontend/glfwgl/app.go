@@ -52,6 +52,7 @@ type App struct {
 	suppressNextChar bool
 	lastStats        time.Time
 	lastTitle        string
+	lastBellCount    int
 	blinkStart       time.Time
 	pendingReplies   [][]byte
 
@@ -293,6 +294,17 @@ func (a *App) installCallbacks() {
 	})
 }
 
+// fireScriptEvent runs a terminal-event handler when a runtime is present,
+// surfacing any script error as a transient notice. Called on the main thread.
+func (a *App) fireScriptEvent(fire func() error) {
+	if a.scriptRT == nil {
+		return
+	}
+	if err := fire(); err != nil {
+		a.Notify("script error: " + err.Error())
+	}
+}
+
 func (a *App) dispatchScriptKey(key glfw.Key, mods glfw.ModifierKey, dispatch bool) bool {
 	if a.scriptRT == nil {
 		return false
@@ -454,6 +466,13 @@ func (a *App) drainIncoming() {
 			a.parser.Advance(a.term, data)
 			a.mu.Unlock()
 			a.flushReplies()
+			// Fire on_output outside the lock: a handler may call term:write,
+			// which re-enters writeInput and would deadlock on a.mu.
+			if a.scriptRT != nil && a.scriptRT.WantsOutput() {
+				if err := a.scriptRT.FireOutput(a, string(data)); err != nil {
+					a.Notify("script error: " + err.Error())
+				}
+			}
 			a.meter.AddBytes(len(data))
 		default:
 			return
