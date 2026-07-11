@@ -106,6 +106,8 @@ func (p *Parser) advanceByte(t *core.Terminal, b byte) {
 			t.Backspace()
 		case '\t':
 			t.Tab()
+		case 0x07:
+			t.Bell()
 		}
 	case stateEsc:
 		p.dispatchESC(t, b)
