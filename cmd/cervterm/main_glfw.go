@@ -13,6 +13,7 @@ import (
 	"cervterm/internal/config"
 	"cervterm/internal/fontglyph"
 	"cervterm/internal/frontend/glfwgl"
+	"cervterm/internal/script"
 )
 
 func main() {
@@ -69,14 +70,24 @@ func main() {
 		os.Exit(0)
 	}
 
-	cfg, loadedPath, err := config.Load(*configPath)
-	if err != nil {
+	path := *configPath
+	if path == "" {
+		path = config.DiscoverPath()
+	}
+	var rt *script.Runtime
+	cfg := config.Defaults()
+	if path != "" {
+		cfg, rt, err = script.Load(path, cfg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer rt.Close()
+		log.Printf("loaded config: %s", path)
+	}
+	if err := cfg.Validate(); err != nil {
 		log.Fatal(err)
 	}
-	if loadedPath != "" {
-		log.Printf("loaded config: %s", loadedPath)
-	}
-	if err := glfwgl.RunWithConfig(cfg); err != nil {
+	if err := glfwgl.RunWithOptions(cfg, rt); err != nil {
 		log.Fatal(err)
 	}
 }
