@@ -37,7 +37,7 @@ Add-Check "WiX template" (Test-Path (Join-Path $root "packaging/wix/CervTerm.wxs
 Add-Check "winget templates" (Test-Path (Join-Path $root "packaging/winget/T50Systems.CervTerm.yaml")) "portable winget templates should exist"
 Add-Check "installed package smoke script" (Test-Path (Join-Path $root "scripts/smoke-installed-package.ps1")) "clean package smoke should be reusable locally and in CI"
 Add-Check "maturity gates script" (Test-Path (Join-Path $root "scripts/check-maturity-gates.go")) "maturity guardrails should be executable in CI"
-Add-Check "daily-driver smoke script" (Test-Path (Join-Path $root "scripts/daily-driver-smoke.ps1")) "daily-driver workflows should be smoke-gated"
+Add-Check "daily-driver smoke script" (Test-Path (Join-Path $root "scripts/daily-driver-smoke.go")) "daily-driver workflows should be smoke-gated"
 Add-Check "troubleshooting docs" (Test-Path (Join-Path $root "docs/troubleshooting.md")) "user diagnostics workflow should be documented"
 Add-Check "getting started docs" (Test-Path (Join-Path $root "docs/getting-started.md")) "onboarding workflow should be documented"
 Add-Check "daily-driver smoke docs" (Test-Path (Join-Path $root "docs/daily-driver-smoke.md")) "daily-driver smoke matrix should be documented"

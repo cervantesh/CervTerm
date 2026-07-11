@@ -55,7 +55,7 @@ jobs:
       - name: Daily-driver smoke
         run: |
           $version = "${{ github.ref_name }}"
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/daily-driver-smoke.ps1 -CervTermExe dist\cervterm-$version-windows\cervterm.exe -WorkDir dist\daily-driver-smoke
+          go run ./scripts/daily-driver-smoke.go -cervterm dist\cervterm-$version-windows\cervterm.exe -workdir dist\daily-driver-smoke
       - uses: actions/upload-artifact@v4
         with:
           name: cervterm-windows-amd64

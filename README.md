@@ -70,8 +70,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps
 
 Run the Windows daily-driver smoke matrix:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/daily-driver-smoke.ps1 -WorkDir dist/daily-driver-smoke -Version daily-smoke
+```sh
+go run ./scripts/daily-driver-smoke.go -workdir dist/daily-driver-smoke -version daily-smoke
 ```
 
 Regenerate the README preview screenshot on Windows:
