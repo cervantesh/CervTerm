@@ -12,6 +12,7 @@ type Config struct {
 	Colors    ColorsConfig
 	Scrolling ScrollingConfig
 	Cursor    CursorConfig
+	Clipboard ClipboardConfig
 	Shell     ShellConfig
 }
 
@@ -48,6 +49,10 @@ type CursorConfig struct {
 	Thickness       float64
 }
 
+type ClipboardConfig struct {
+	OSC52 string
+}
+
 type ShellConfig struct {
 	Program          string
 	Args             []string
@@ -62,6 +67,7 @@ func Defaults() Config {
 		Colors:    ColorsConfig{Foreground: "#E6E1D8", Background: "#080B12", Cursor: "#60E8F0", SelectionBackground: "#2A6377"},
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
+		Clipboard: ClipboardConfig{OSC52: "write"},
 		Shell:     ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
 }
@@ -85,6 +91,9 @@ func (c Config) Validate() error {
 	}
 	if c.Cursor.BlinkIntervalMS <= 0 || c.Cursor.Thickness <= 0 {
 		errs = append(errs, errors.New("cursor blink_interval_ms and thickness must be > 0"))
+	}
+	if c.Clipboard.OSC52 != "write" && c.Clipboard.OSC52 != "off" {
+		errs = append(errs, fmt.Errorf("clipboard.osc52 %q must be write or off", c.Clipboard.OSC52))
 	}
 	for name, value := range map[string]string{"foreground": c.Colors.Foreground, "background": c.Colors.Background, "cursor": c.Colors.Cursor, "selection_background": c.Colors.SelectionBackground} {
 		if !isHexColor(value) {

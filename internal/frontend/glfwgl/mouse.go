@@ -17,7 +17,7 @@ func (a *App) mouseMode() core.MouseMode {
 
 func (a *App) sendMouseButton(button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) bool {
 	mode := a.mouseMode()
-	if !mode.ReportsMouse() || !mode.SGR || mods&glfw.ModShift != 0 {
+	if !mode.ReportsMouse() || mods&glfw.ModShift != 0 {
 		return false
 	}
 	mouseButton, ok := mouseButtonFromGLFW(button)
@@ -37,7 +37,7 @@ func (a *App) sendMouseButton(button glfw.MouseButton, action glfw.Action, mods 
 	} else {
 		return false
 	}
-	encoded, ok := input.EncodeMouse(input.MouseEvent{Button: mouseButton, Action: mouseAction, Row: point.Row, Col: point.Col, Mods: mouseModsFromGLFW(mods), SGR: true})
+	encoded, ok := input.EncodeMouse(input.MouseEvent{Button: mouseButton, Action: mouseAction, Row: point.Row, Col: point.Col, Mods: mouseModsFromGLFW(mods), SGR: mode.SGR})
 	if !ok {
 		return false
 	}
@@ -47,11 +47,20 @@ func (a *App) sendMouseButton(button glfw.MouseButton, action glfw.Action, mods 
 
 func (a *App) sendMouseMove(x, y float64) bool {
 	mode := a.mouseMode()
-	if !mode.ButtonEventTracking || !mode.SGR || !a.mouseReportDown {
+	if !mode.ButtonEventTracking && !mode.AnyEventTracking {
 		return false
 	}
+	button := a.mouseReportButton
+	mods := a.mouseReportMods
+	if !a.mouseReportDown {
+		if !mode.AnyEventTracking {
+			return false
+		}
+		button = input.MouseButton(3)
+		mods = input.ModNone
+	}
 	point := a.pointFromPixels(float32(x), float32(y))
-	encoded, ok := input.EncodeMouse(input.MouseEvent{Button: a.mouseReportButton, Action: input.MouseMove, Row: point.Row, Col: point.Col, Mods: a.mouseReportMods, SGR: true})
+	encoded, ok := input.EncodeMouse(input.MouseEvent{Button: button, Action: input.MouseMove, Row: point.Row, Col: point.Col, Mods: mods, SGR: mode.SGR})
 	if !ok {
 		return false
 	}
@@ -61,7 +70,7 @@ func (a *App) sendMouseMove(x, y float64) bool {
 
 func (a *App) sendMouseWheel(yoff float64, mods glfw.ModifierKey) bool {
 	mode := a.mouseMode()
-	if !mode.ReportsMouse() || !mode.SGR || mods&glfw.ModShift != 0 || yoff == 0 {
+	if !mode.ReportsMouse() || mods&glfw.ModShift != 0 || yoff == 0 {
 		return false
 	}
 	button := input.MouseWheelDown
@@ -70,7 +79,7 @@ func (a *App) sendMouseWheel(yoff float64, mods glfw.ModifierKey) bool {
 	}
 	x, y := a.window.GetCursorPos()
 	point := a.pointFromPixels(float32(x), float32(y))
-	encoded, ok := input.EncodeMouse(input.MouseEvent{Button: button, Action: input.MousePress, Row: point.Row, Col: point.Col, Mods: mouseModsFromGLFW(mods), SGR: true})
+	encoded, ok := input.EncodeMouse(input.MouseEvent{Button: button, Action: input.MousePress, Row: point.Row, Col: point.Col, Mods: mouseModsFromGLFW(mods), SGR: mode.SGR})
 	if !ok {
 		return false
 	}

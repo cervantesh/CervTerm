@@ -49,6 +49,9 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Cursor.BlinkIntervalMS = intField(tbl, "blink_interval_ms", cfg.Cursor.BlinkIntervalMS)
 		cfg.Cursor.Thickness = numberField(tbl, "thickness", cfg.Cursor.Thickness)
 	}
+	if tbl := tableField(root, "clipboard"); tbl != nil {
+		cfg.Clipboard.OSC52 = stringField(tbl, "osc52", cfg.Clipboard.OSC52)
+	}
 	if tbl := tableField(root, "shell"); tbl != nil {
 		cfg.Shell.Program = stringField(tbl, "program", cfg.Shell.Program)
 		cfg.Shell.WorkingDirectory = stringField(tbl, "working_directory", cfg.Shell.WorkingDirectory)

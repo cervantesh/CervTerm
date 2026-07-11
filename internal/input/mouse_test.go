@@ -26,10 +26,28 @@ func TestEncodeSGRMouse(t *testing.T) {
 }
 
 func TestEncodeMouseRejectsUnsupportedModes(t *testing.T) {
-	if got, ok := EncodeMouse(MouseEvent{Button: MouseLeft, SGR: false}); ok || got != nil {
-		t.Fatalf("non-SGR mouse should be unsupported for now, got %q ok=%v", string(got), ok)
-	}
 	if got, ok := EncodeMouse(MouseEvent{Button: MouseLeft, SGR: true, Row: -1}); ok || got != nil {
 		t.Fatalf("negative coordinates should be rejected, got %q ok=%v", string(got), ok)
+	}
+}
+
+func TestEncodeMouseLegacy(t *testing.T) {
+	tests := []struct {
+		name  string
+		event MouseEvent
+		want  string
+	}{
+		{"press", MouseEvent{Button: MouseLeft, Action: MousePress, Row: 0, Col: 0}, "\x1b[M !!"},
+		{"release", MouseEvent{Button: MouseLeft, Action: MouseRelease, Row: 0, Col: 0}, "\x1b[M#!!"},
+		{"wheel clamp", MouseEvent{Button: MouseWheelDown, Action: MousePress, Row: 300, Col: 300}, "\x1b[Ma\xfe\xfe"},
+		{"motion", MouseEvent{Button: MouseLeft, Action: MouseMove, Row: 1, Col: 2, Mods: ModShift}, "\x1b[MD#\""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := EncodeMouse(tt.event)
+			if !ok || string(got) != tt.want {
+				t.Fatalf("want %q ok=true, got %q ok=%v", tt.want, string(got), ok)
+			}
+		})
 	}
 }
