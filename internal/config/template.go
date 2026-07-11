@@ -38,6 +38,10 @@ return {
   clipboard = {
     osc52 = %q,
   },
+  render = {
+    -- Experimental visual reordering for RTL text; logical storage is unchanged.
+    bidi = %t,
+  },
   shell = {
     program = %q,
     args = {},
@@ -61,5 +65,6 @@ return {
 		cfg.Scrolling.History, cfg.Scrolling.WheelMultiplier, cfg.Scrolling.HideCursorWhenScrolled,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
 		cfg.Clipboard.OSC52,
+		cfg.Render.Bidi,
 		cfg.Shell.Program, cfg.Shell.WorkingDirectory)
 }
