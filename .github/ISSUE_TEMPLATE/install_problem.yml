@@ -1,0 +1,40 @@
+name: Install problem
+description: Report download, extraction, checksum, signing, or startup problems
+title: "install: "
+labels: [bug, packaging]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Install problem
+      description: What failed during download, verification, extraction, or first launch?
+    validations:
+      required: true
+  - type: input
+    id: release
+    attributes:
+      label: Release/tag
+      placeholder: v0.2.0-beta.1
+    validations:
+      required: true
+  - type: input
+    id: asset
+    attributes:
+      label: Asset name
+      placeholder: cervterm-<tag>-windows.zip
+  - type: textarea
+    id: verification
+    attributes:
+      label: Checksum or attestation step
+      description: Paste command/output if checksum or attestation verification failed.
+      render: text
+  - type: textarea
+    id: doctor
+    attributes:
+      label: cervterm --doctor output, if the executable starts
+      render: text
+  - type: textarea
+    id: windows-warning
+    attributes:
+      label: Windows warning or antivirus message
+      description: Paste exact wording or attach screenshot.

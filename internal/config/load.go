@@ -36,7 +36,7 @@ func Load(path string) (Config, string, error) {
 }
 
 func DiscoverPath() string {
-	for _, path := range candidatePaths() {
+	for _, path := range CandidatePaths() {
 		if _, err := os.Stat(path); err == nil {
 			return path
 		}
@@ -44,7 +44,7 @@ func DiscoverPath() string {
 	return ""
 }
 
-func candidatePaths() []string {
+func CandidatePaths() []string {
 	var paths []string
 	if exe, err := os.Executable(); err == nil {
 		dir := filepath.Dir(exe)

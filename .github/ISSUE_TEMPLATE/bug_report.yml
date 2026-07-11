@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a reproducible CervTerm bug
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing CervTerm. Please run `cervterm --doctor` before filing.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include exact commands, shell, config, and input sequence.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: cervterm --doctor output
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: build-info
+    attributes:
+      label: cervterm --build-info output
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Diagnostics log excerpt
+      description: Attach or paste relevant lines. Do not include secrets.
+      render: text
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Attachments
+      description: Screenshots, `.vt` captures, config, or minimal repro files.

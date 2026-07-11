@@ -30,6 +30,12 @@ $buildInfo = (& $exe --build-info).Trim()
 if ($buildInfo -notmatch "CervTerm") { throw "unexpected build info: $buildInfo" }
 Write-Host "build-info: $buildInfo"
 
+$doctor = (& $exe --doctor) -join "`n"
+if ($doctor -notmatch "CervTerm doctor") { throw "doctor output missing header" }
+if ($doctor -notmatch "diagnostics:") { throw "doctor output missing diagnostics section" }
+if ($doctor -notmatch "config:") { throw "doctor output missing config section" }
+Write-Host "doctor: ok"
+
 $config = & $exe --print-default-config
 if (($config -join "`n") -notmatch "return \{") { throw "default config did not look like Lua" }
 $configPath = Join-Path $WorkDir "generated-default.lua"

@@ -13,7 +13,7 @@ New-Item -ItemType Directory -Force -Path $pkgDir | Out-Null
 $exe = Join-Path $pkgDir "cervterm.exe"
 go build -tags glfw -ldflags "-X cervterm/internal/buildinfo.Version=$Version" -o $exe ./cmd/cervterm
 & $exe --print-default-config | Set-Content -Encoding UTF8 (Join-Path $pkgDir "cervterm.lua")
-Copy-Item README.md, CHANGELOG.md -Destination $pkgDir
+Copy-Item README.md, CHANGELOG.md, SUPPORT.md -Destination $pkgDir
 Copy-Item docs -Destination (Join-Path $pkgDir "docs") -Recurse
 Copy-Item packaging -Destination (Join-Path $pkgDir "packaging") -Recurse
 

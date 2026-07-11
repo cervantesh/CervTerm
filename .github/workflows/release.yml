@@ -64,13 +64,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Maturity gates
+        run: go run ./scripts/check-maturity-gates.go
       - name: Build Linux headless zip
         run: |
           version="${{ github.ref_name }}"
           mkdir -p "dist/cervterm-$version-linux-headless-amd64"
           go build -ldflags "-X cervterm/internal/buildinfo.Version=$version" -o "dist/cervterm-$version-linux-headless-amd64/cervterm-linux-amd64" ./cmd/cervterm
           "dist/cervterm-$version-linux-headless-amd64/cervterm-linux-amd64" --print-default-config > "dist/cervterm-$version-linux-headless-amd64/cervterm.lua"
-          cp README.md CHANGELOG.md "dist/cervterm-$version-linux-headless-amd64/"
+          cp README.md CHANGELOG.md SUPPORT.md "dist/cervterm-$version-linux-headless-amd64/"
           cp -R docs "dist/cervterm-$version-linux-headless-amd64/docs"
           python -m zipfile -c "dist/cervterm-$version-linux-headless-amd64.zip" "dist/cervterm-$version-linux-headless-amd64"
       - uses: actions/upload-artifact@v4

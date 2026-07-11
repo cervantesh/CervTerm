@@ -1,0 +1,45 @@
+name: Rendering bug
+description: Report visual, Unicode, emoji, color, cursor, or layout issues
+title: "rendering: "
+labels: [bug, rendering]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please attach a screenshot and `cervterm --doctor` output. For terminal-output issues, include a `.vt` capture when possible.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Visual problem
+      description: Describe the visual corruption or mismatch.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected rendering
+      description: If possible, compare with Windows Terminal, xterm, or another terminal.
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction text or command
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: cervterm --doctor output
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: font
+    attributes:
+      label: Font/config used
+      placeholder: e.g. default config, custom font family, emoji font notes
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots or captures
+      description: Attach screenshots, screen recordings, `.vt` captures, or config snippets.

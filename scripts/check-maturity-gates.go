@@ -19,12 +19,20 @@ type finding struct {
 }
 
 var requiredDocs = []string{
+	"SUPPORT.md",
+	".github/ISSUE_TEMPLATE/bug_report.yml",
+	".github/ISSUE_TEMPLATE/feature_request.yml",
+	".github/ISSUE_TEMPLATE/install_problem.yml",
+	".github/ISSUE_TEMPLATE/rendering_bug.yml",
+	".github/dependabot.yml",
 	"docs/maturity-improvement-plan.md",
 	"docs/maturity-improvement-review.md",
+	"docs/product-ux-maintainability-to-9-plan.md",
 	"docs/project-maturity-analysis.md",
 	"docs/release-stabilization-plan.md",
 	"docs/release-trust.md",
 	"docs/troubleshooting.md",
+	"docs/getting-started.md",
 }
 
 var largeGoAllowlist = map[string]string{
@@ -38,6 +46,7 @@ func main() {
 	findings = append(findings, checkLargeGoFiles()...)
 	findings = append(findings, checkStaleVersions()...)
 	findings = append(findings, checkReleaseTrustDoc()...)
+	findings = append(findings, checkCIGates()...)
 	if len(findings) > 0 {
 		fmt.Fprintln(os.Stderr, "maturity gate failures:")
 		for _, f := range findings {
@@ -56,11 +65,11 @@ func checkRequiredDocs() []finding {
 	for _, path := range requiredDocs {
 		info, err := os.Stat(path)
 		if err != nil {
-			findings = append(findings, finding{path: path, reason: "required maturity document is missing"})
+			findings = append(findings, finding{path: path, reason: "required maturity/support file is missing"})
 			continue
 		}
 		if info.IsDir() || info.Size() == 0 {
-			findings = append(findings, finding{path: path, reason: "required maturity document is empty or a directory"})
+			findings = append(findings, finding{path: path, reason: "required maturity/support file is empty or a directory"})
 		}
 	}
 	return findings
@@ -133,6 +142,22 @@ func checkReleaseTrustDoc() []finding {
 	for _, required := range []string{"sha256", "attestation", "authenticode", "unsigned"} {
 		if !strings.Contains(text, required) {
 			findings = append(findings, finding{path: path, reason: "release trust doc must mention " + required})
+		}
+	}
+	return findings
+}
+
+func checkCIGates() []finding {
+	path := ".github/workflows/ci.yml"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	text := string(data)
+	var findings []finding
+	for _, required := range []string{"go vet", "govulncheck ./..."} {
+		if !strings.Contains(text, required) {
+			findings = append(findings, finding{path: path, reason: "CI must run " + required})
 		}
 	}
 	return findings

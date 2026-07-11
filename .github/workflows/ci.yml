@@ -16,6 +16,8 @@ jobs:
         run: go run ./scripts/check-maturity-gates.go
       - name: Test
         run: go test ./...
+      - name: Vet
+        run: go vet -unsafeptr=false ./...
       - name: VT parser fuzz smoke
         run: go test ./internal/vt -run '^$' -fuzz=FuzzParserAdvanceDoesNotPanic -fuzztime=2s
       - name: GLFW compile check
@@ -45,12 +47,18 @@ jobs:
         run: go run ./scripts/check-maturity-gates.go
       - name: Test
         run: go test ./...
+      - name: Vet
+        run: go vet -unsafeptr=false ./...
+      - name: Vulnerability check
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
       - name: Build Linux headless beta zip
         run: |
           mkdir -p dist/cervterm-linux-headless
           go build -o dist/cervterm-linux-headless/cervterm-linux-amd64 ./cmd/cervterm
           ./dist/cervterm-linux-headless/cervterm-linux-amd64 --print-default-config > dist/cervterm-linux-headless/cervterm.lua
-          cp README.md CHANGELOG.md dist/cervterm-linux-headless/
+          cp README.md CHANGELOG.md SUPPORT.md dist/cervterm-linux-headless/
           cp -R docs dist/cervterm-linux-headless/docs
           python -m zipfile -c dist/cervterm-linux-headless.zip dist/cervterm-linux-headless
       - uses: actions/upload-artifact@v4

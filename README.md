@@ -19,6 +19,7 @@ CervTerm is not a finished daily-driver terminal yet, but it already includes:
 - Diagnostics logging via `--log-file` / `CERVTERM_LOG_FILE`, including panic stack capture.
 - Parser fuzz smoke coverage and replay-style VT golden fixtures.
 
+- `--doctor` support diagnostics for config/log/environment reporting.
 See:
 
 - [`docs/product-roadmap.md`](docs/product-roadmap.md)
@@ -28,6 +29,10 @@ See:
 - [`docs/emoji-rendering-research.md`](docs/emoji-rendering-research.md)
 - [`docs/shaping-options.md`](docs/shaping-options.md)
 - [`docs/release-packaging.md`](docs/release-packaging.md)
+- [`docs/getting-started.md`](docs/getting-started.md)
+- [`docs/troubleshooting.md`](docs/troubleshooting.md)
+- [`docs/release-trust.md`](docs/release-trust.md)
+- [`SUPPORT.md`](SUPPORT.md)
 
 ## Install beta builds
 
@@ -39,7 +44,7 @@ Tagged releases publish portable zip artifacts from GitHub Actions:
 For a Windows zip install:
 
 1. Download and extract the Windows zip from the GitHub release.
-2. Run `cervterm.exe --version` or `cervterm.exe --build-info` to verify the binary.
+2. Run `cervterm.exe --version`, `cervterm.exe --build-info`, or `cervterm.exe --doctor` to verify the binary and environment.
 3. Generate a starter config with `cervterm.exe --print-default-config > cervterm.lua`.
 4. Launch with `cervterm.exe --config cervterm.lua`.
 5. If diagnosing startup issues, add `--log-file cervterm.log`.
@@ -81,6 +86,7 @@ GOOS=linux GOARCH=amd64 go build -o dist/cervterm-linux-amd64 ./cmd/cervterm
 ./cervterm.exe
 ./cervterm.exe --version
 ./cervterm.exe --build-info
+./cervterm.exe --doctor
 ./cervterm.exe --print-default-config > cervterm.lua
 ./cervterm.exe --config path/to/cervterm.lua
 ./cervterm.exe --capture-vt internal/vt/testdata/manual.vt --capture-program vttest --capture-rows 24 --capture-cols 80
@@ -105,7 +111,7 @@ return {
 
 ## Diagnostics logging
 
-Runtime diagnostics are written to stderr and to a local log file by default. Override the location with `--log-file path/to/cervterm.log` or `CERVTERM_LOG_FILE`; use `--log-file -` to keep diagnostics on stderr only. Unexpected panics are captured with a stack trace before CervTerm exits.
+Runtime diagnostics are written to stderr and to a local log file by default. Override the location with `--log-file path/to/cervterm.log` or `CERVTERM_LOG_FILE`; use `--log-file -` to keep diagnostics on stderr only. Run `--doctor` to print the effective log path, config discovery state, environment hints, and support checklist. Unexpected panics are captured with a stack trace before CervTerm exits.
 
 ## Known limitations
 

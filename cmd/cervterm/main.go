@@ -14,9 +14,11 @@ import (
 )
 
 func main() {
+	configPath := flag.String("config", "", "path to cervterm.lua or cervterm.tl")
 	showVersion := flag.Bool("version", false, "print CervTerm version")
 	showBuildInfo := flag.Bool("build-info", false, "print CervTerm build information")
 	printDefaultConfig := flag.Bool("print-default-config", false, "print default Lua configuration")
+	doctor := flag.Bool("doctor", false, "print diagnostic environment report")
 	logPath := flag.String("log-file", "", "diagnostic log path (default: user cache; use '-' for stderr only; env: CERVTERM_LOG_FILE)")
 	capturePath := flag.String("capture-vt", "", "record raw PTY output to this .vt file")
 	captureProgram := flag.String("capture-program", "", "program to run for --capture-vt (defaults to the configured shell)")
@@ -37,6 +39,9 @@ func main() {
 	if *printDefaultConfig {
 		fmt.Print(config.DefaultLua())
 		return
+	}
+	if *doctor {
+		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath}))
 	}
 	logFile, err := applog.Setup(applog.ResolvePath(*logPath))
 	if err != nil {
