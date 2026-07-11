@@ -59,13 +59,18 @@ func (a *App) draw() {
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)
 	a.mu.Unlock()
-	if a.snap.Title != "" && a.snap.Title != a.lastTitle {
+	if a.snap.Title != a.lastTitle {
 		a.lastTitle = a.snap.Title
-		a.window.SetTitle("CervTerm · " + a.snap.Title)
+		if a.snap.Title == "" {
+			a.window.SetTitle("CervTerm")
+		} else {
+			a.window.SetTitle("CervTerm · " + a.snap.Title)
+		}
 		a.fireScriptEvent(func() error { return a.scriptRT.FireTitle(a, a.snap.Title) })
 	}
-	if a.snap.BellCount != a.lastBellCount {
-		a.lastBellCount = a.snap.BellCount
+	// BellCount is monotonic; fire once per bell so bursts are not collapsed.
+	for a.lastBellCount < a.snap.BellCount {
+		a.lastBellCount++
 		a.fireScriptEvent(func() error { return a.scriptRT.FireBell(a) })
 	}
 
