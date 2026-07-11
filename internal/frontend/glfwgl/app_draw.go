@@ -47,7 +47,13 @@ func (a *App) draw() {
 			a.cols, a.rows, float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause)
 		a.lastStats = time.Now()
 	}
-	a.drawString(a.status, 78, 16, themeColor(palette.Muted), 1)
+	statusText := a.status
+	statusColor := themeColor(palette.Muted)
+	if time.Now().Before(a.noticeUntil) {
+		statusText = a.notice
+		statusColor = themeColor(palette.Accent)
+	}
+	a.drawString(statusText, 78, 16, statusColor, 1)
 
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)

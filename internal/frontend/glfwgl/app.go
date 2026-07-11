@@ -16,6 +16,7 @@ import (
 	"cervterm/internal/metrics"
 	ptyio "cervterm/internal/pty"
 	"cervterm/internal/render"
+	"cervterm/internal/script"
 	termsel "cervterm/internal/selection"
 	"cervterm/internal/vt"
 
@@ -36,15 +37,19 @@ type App struct {
 	window   *glfw.Window
 	atlas    *glyphAtlas
 
-	cols, rows int
-	cellW      float32
-	cellH      float32
-	paddingX   float32
-	paddingY   float32
-	status     string
-	lastStats  time.Time
-	lastTitle  string
-	blinkStart time.Time
+	cols, rows       int
+	cellW            float32
+	cellH            float32
+	paddingX         float32
+	paddingY         float32
+	status           string
+	scriptRT         *script.Runtime
+	notice           string
+	noticeUntil      time.Time
+	suppressNextChar bool
+	lastStats        time.Time
+	lastTitle        string
+	blinkStart       time.Time
 
 	selecting         bool
 	selectionActive   bool
@@ -60,10 +65,15 @@ func Run() error {
 }
 
 func RunWithConfig(cfg config.Config) error {
+	return RunWithOptions(cfg, nil)
+}
+
+func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 	runtime.LockOSThread()
 	app := &App{
 		term:       core.NewTerminal(100, 32),
 		cfg:        cfg,
+		scriptRT:   rt,
 		incoming:   make(chan []byte, 128),
 		cellW:      9,
 		cellH:      16,
@@ -158,12 +168,19 @@ func (a *App) bracketedPasteMode() bool {
 
 func (a *App) installCallbacks() {
 	a.window.SetCharCallback(func(_ *glfw.Window, char rune) {
+		if a.suppressNextChar {
+			a.suppressNextChar = false
+			return
+		}
 		if encoded, ok := input.Encode(input.Event{Rune: char}); ok {
 			a.writeInputBytes(encoded)
 		}
 	})
 	a.window.SetKeyCallback(func(_ *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		if action != glfw.Press && action != glfw.Repeat {
+			return
+		}
+		if a.dispatchScriptKey(key, mods, action == glfw.Press) {
 			return
 		}
 
@@ -239,6 +256,48 @@ func (a *App) installCallbacks() {
 		a.term.ScrollViewport(rows)
 		a.mu.Unlock()
 	})
+}
+
+func (a *App) dispatchScriptKey(key glfw.Key, mods glfw.ModifierKey, dispatch bool) bool {
+	if a.scriptRT == nil {
+		return false
+	}
+	spec, ok := specFromGLFW(key, mods)
+	if !ok {
+		return false
+	}
+	for i, binding := range a.scriptRT.Bindings() {
+		if binding == spec {
+			if dispatch {
+				if err := a.scriptRT.Dispatch(i, a); err != nil {
+					a.Notify("script error: " + err.Error())
+				}
+			}
+			a.suppressNextChar = scriptKeyProducesChar(key, mods)
+			return true
+		}
+	}
+	return false
+}
+
+func scriptKeyProducesChar(key glfw.Key, mods glfw.ModifierKey) bool {
+	if mods&(glfw.ModControl|glfw.ModAlt|glfw.ModSuper) != 0 {
+		return false
+	}
+	if key >= glfw.KeyA && key <= glfw.KeyZ {
+		return true
+	}
+	if key >= glfw.Key0 && key <= glfw.Key9 {
+		return true
+	}
+	switch key {
+	case glfw.KeySpace, glfw.KeyMinus, glfw.KeyEqual, glfw.KeyComma, glfw.KeyPeriod,
+		glfw.KeySlash, glfw.KeyBackslash, glfw.KeySemicolon, glfw.KeyApostrophe,
+		glfw.KeyGraveAccent:
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *App) handleClipboardKey(key glfw.Key, mods glfw.ModifierKey) bool {
@@ -325,6 +384,15 @@ func (a *App) writeInput(s string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.parser.Advance(a.term, []byte(s))
+}
+
+func (a *App) WriteInput(s string) {
+	a.writeInput(s)
+}
+
+func (a *App) Notify(msg string) {
+	a.notice = msg
+	a.noticeUntil = time.Now().Add(4 * time.Second)
 }
 
 func (a *App) drainIncoming() {
