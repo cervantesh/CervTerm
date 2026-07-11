@@ -35,6 +35,9 @@ return {
     blink_interval_ms = %d,
     thickness = %.2f,
   },
+  clipboard = {
+    osc52 = %q,
+  },
   shell = {
     program = %q,
     args = {},
@@ -57,5 +60,6 @@ return {
 		cfg.Colors.Foreground, cfg.Colors.Background, cfg.Colors.Cursor, cfg.Colors.SelectionBackground,
 		cfg.Scrolling.History, cfg.Scrolling.WheelMultiplier, cfg.Scrolling.HideCursorWhenScrolled,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
+		cfg.Clipboard.OSC52,
 		cfg.Shell.Program, cfg.Shell.WorkingDirectory)
 }

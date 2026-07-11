@@ -81,6 +81,18 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 		paddingY:   float32(cfg.Window.PaddingY),
 		blinkStart: time.Now(),
 	}
+	app.parser.Reply = func(b []byte) {
+		if app.pty != nil {
+			_, _ = app.pty.Write(b)
+		}
+	}
+	if cfg.Clipboard.OSC52 == "write" {
+		app.parser.SetClipboard = func(s string) {
+			if app.window != nil {
+				app.window.SetClipboardString(s)
+			}
+		}
+	}
 	if err := app.startPTY(); err != nil {
 		app.parser.Advance(app.term, []byte("\x1b[96mCervTerm\x1b[0m\r\n\r\n"))
 		app.parser.Advance(app.term, []byte("Local PTY unavailable on this platform/build.\r\n"))
@@ -255,6 +267,19 @@ func (a *App) installCallbacks() {
 		a.mu.Lock()
 		a.term.ScrollViewport(rows)
 		a.mu.Unlock()
+	})
+	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
+		a.mu.Lock()
+		enabled := a.term.FocusEventsMode()
+		a.mu.Unlock()
+		if !enabled {
+			return
+		}
+		if focused {
+			a.writeInput("\x1b[I")
+		} else {
+			a.writeInput("\x1b[O")
+		}
 	})
 }
 
