@@ -22,6 +22,8 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: Resolve release version
+        run: go run ./scripts/resolve-release-version.go
       - name: Maturity gates
         run: go run ./scripts/check-maturity-gates.go
       - name: Generate Windows resources
@@ -30,33 +32,25 @@ jobs:
           go run ./scripts/generate-windows-resource.go -arch amd64
       - name: Build Windows package
         run: |
-          go run ./scripts/package-beta.go -version ${{ github.ref_name }} -outdir dist
+          go run ./scripts/package-beta.go -version "%RELEASE_VERSION%" -outdir dist
       - name: Authenticode sign Windows executable
         env:
           WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
           WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
         run: |
-          if "%WINDOWS_CODESIGN_PFX_BASE64%"=="" (
-            echo Code-signing secrets are not configured; skipping Authenticode signing.
-            exit /b 0
-          )
-          if "%WINDOWS_CODESIGN_PASSWORD%"=="" (
-            echo Code-signing secrets are not configured; skipping Authenticode signing.
-            exit /b 0
-          )
-          go run ./scripts/sign-windows-exe.go -exe dist\cervterm-${{ github.ref_name }}-windows\cervterm.exe
+          go run ./scripts/sign-windows-exe.go -exe "dist\cervterm-%RELEASE_VERSION%-windows\cervterm.exe" -skip-if-missing
       - name: Package signed Windows zip
         run: |
-          go run ./scripts/package-beta.go -version ${{ github.ref_name }} -outdir dist -reuse
+          go run ./scripts/package-beta.go -version "%RELEASE_VERSION%" -outdir dist -reuse
       - name: Release preflight (Windows package)
         run: |
-          go run ./scripts/release-preflight.go -version ${{ github.ref_name }} -outdir dist -windows-zip dist\cervterm-${{ github.ref_name }}-windows.zip
+          go run ./scripts/release-preflight.go -version "%RELEASE_VERSION%" -outdir dist -windows-zip "dist\cervterm-%RELEASE_VERSION%-windows.zip"
       - name: Installed package smoke
         run: |
-          go run ./scripts/smoke-installed-package.go -zip dist\cervterm-${{ github.ref_name }}-windows.zip -expected-version ${{ github.ref_name }}
+          go run ./scripts/smoke-installed-package.go -zip "dist\cervterm-%RELEASE_VERSION%-windows.zip" -expected-version "%RELEASE_VERSION%"
       - name: Daily-driver smoke
         run: |
-          go run ./scripts/daily-driver-smoke.go -cervterm dist\cervterm-${{ github.ref_name }}-windows\cervterm.exe -workdir dist\daily-driver-smoke
+          go run ./scripts/daily-driver-smoke.go -cervterm "dist\cervterm-%RELEASE_VERSION%-windows\cervterm.exe" -workdir dist\daily-driver-smoke
       - uses: actions/upload-artifact@v7
         with:
           name: cervterm-windows-amd64
@@ -71,11 +65,13 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: Resolve release version
+        run: go run ./scripts/resolve-release-version.go
       - name: Maturity gates
         run: go run ./scripts/check-maturity-gates.go
       - name: Build Linux headless zip
         run: |
-          version="${{ github.ref_name }}"
+          version="$RELEASE_VERSION"
           mkdir -p "dist/cervterm-$version-linux-headless-amd64"
           go build -ldflags "-X cervterm/internal/buildinfo.Version=$version" -o "dist/cervterm-$version-linux-headless-amd64/cervterm-linux-amd64" ./cmd/cervterm
           "dist/cervterm-$version-linux-headless-amd64/cervterm-linux-amd64" --print-default-config > "dist/cervterm-$version-linux-headless-amd64/cervterm.lua"

@@ -58,8 +58,22 @@ func captureVttest(vttestExe, output string, rows, cols int, cervtermExe, msys2B
 	cmd := exec.Command(cervtermExe, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("capture-vttest warning: capture exited with %v; verify output before using it\n", err)
+	processErr := cmd.Run()
+	if processErr != nil {
+		fmt.Printf("capture-vttest warning: capture exited with %v; validating output before accepting it\n", processErr)
+	}
+	info, err := os.Stat(output)
+	if err != nil {
+		if processErr != nil {
+			return fmt.Errorf("capture failed and did not create %s: %w", output, processErr)
+		}
+		return fmt.Errorf("capture did not create %s: %w", output, err)
+	}
+	if info.Size() == 0 {
+		if processErr != nil {
+			return fmt.Errorf("capture failed and created empty output %s: %w", output, processErr)
+		}
+		return fmt.Errorf("capture created empty output %s", output)
 	}
 	fmt.Printf("Captured %s\n", output)
 	return nil

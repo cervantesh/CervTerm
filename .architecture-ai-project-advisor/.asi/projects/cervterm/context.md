@@ -11,7 +11,7 @@ The current architecture concern is Unicode/emoji rendering correctness. Recent 
 - Render cluster collection currently lives in `internal/frontend/glfwgl/cluster.go`.
 - Font fallback and emoji-family selection currently live in `internal/fontglyph/backend.go`.
 - Segoe UI Emoji compatibility rendering currently uses COLRv0 preference and canvas fitting in `internal/fontglyph/color_colr_render.go`.
-- Verification includes `go test ./...`, GLFW-tagged tests, and visual screenshot capture via `scripts/capture-cervterm-screenshot.ps1`.
+- Verification includes `go test ./...`, GLFW-tagged tests, and Go-based visual/capture smoke helpers under `scripts/`.
 
 ## Architecture Direction So Far
 CervTerm should not maintain per-emoji hand patches. Unicode behavior must be modeled at the level of generated Unicode properties, grapheme clusters, and cluster display width. Font fallback and color rendering should operate on clusters rather than individual runes.

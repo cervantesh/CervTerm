@@ -31,10 +31,7 @@ func smokeInstalledPackage(zipPath, workDir, expectedVersion string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.RemoveAll(workDir); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(workDir, 0o755); err != nil {
+	if err := prepareCleanWorkDir(workDir); err != nil {
 		return err
 	}
 	if err := unzip(zipAbs, workDir); err != nil {
@@ -117,6 +114,43 @@ func smokeInstalledPackage(zipPath, workDir, expectedVersion string) error {
 	}
 	fmt.Printf("installed package smoke passed: %s\n", zipPath)
 	return nil
+}
+
+func prepareCleanWorkDir(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("workdir must not be empty")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	root := filepath.VolumeName(abs) + string(os.PathSeparator)
+	if abs == root {
+		return fmt.Errorf("refusing to remove filesystem root: %s", abs)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	cwd, err = filepath.Abs(cwd)
+	if err != nil {
+		return err
+	}
+	if containsPath(abs, cwd) {
+		return fmt.Errorf("refusing to remove repository root or parent: %s", abs)
+	}
+	if err := os.RemoveAll(abs); err != nil {
+		return err
+	}
+	return os.MkdirAll(abs, 0o755)
+}
+
+func containsPath(parent, child string) bool {
+	rel, err := filepath.Rel(parent, child)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)))
 }
 
 func runOutput(name string, args ...string) (string, error) {

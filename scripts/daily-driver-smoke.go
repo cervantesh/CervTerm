@@ -41,7 +41,7 @@ func main() {
 		return
 	}
 
-	must(os.RemoveAll(workDir))
+	must(prepareCleanWorkDir(workDir))
 	must(os.MkdirAll(workDir, 0o755))
 
 	resolved, err := resolveCervTerm(cervtermExe, workDir, version)
@@ -243,6 +243,43 @@ func must(err error) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func prepareCleanWorkDir(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("workdir must not be empty")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	root := filepath.VolumeName(abs) + string(os.PathSeparator)
+	if abs == root {
+		return fmt.Errorf("refusing to remove filesystem root: %s", abs)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	cwd, err = filepath.Abs(cwd)
+	if err != nil {
+		return err
+	}
+	if containsPath(abs, cwd) {
+		return fmt.Errorf("refusing to remove repository root or parent: %s", abs)
+	}
+	if err := os.RemoveAll(abs); err != nil {
+		return err
+	}
+	return os.MkdirAll(abs, 0o755)
+}
+
+func containsPath(parent, child string) bool {
+	rel, err := filepath.Rel(parent, child)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)))
 }
 
 const helperSource = `package main

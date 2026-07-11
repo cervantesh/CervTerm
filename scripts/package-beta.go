@@ -4,6 +4,8 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +14,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+)
+
+const (
+	notoColorEmojiURL    = "https://raw.githubusercontent.com/googlefonts/noto-emoji/8998f5dd683424a73e2314a8c1f1e359c19e8742/fonts/NotoColorEmoji.ttf"
+	notoColorEmojiSHA256 = "72a635cb3d2f3524c51620cdde406b217204e8a6a06c6a096ff8ed4b5fd6e27b"
 )
 
 func main() {
@@ -23,6 +30,9 @@ func main() {
 }
 
 func packageBeta(version, outDir string, reuse bool) error {
+	if err := validatePackageVersion(version); err != nil {
+		return err
+	}
 	pkgDir := filepath.Join(outDir, "cervterm-"+version+"-windows")
 	zipPath := filepath.Join(outDir, "cervterm-"+version+"-windows.zip")
 	if !reuse {
@@ -72,6 +82,22 @@ func packageBeta(version, outDir string, reuse bool) error {
 	return nil
 }
 
+func validatePackageVersion(version string) error {
+	if strings.TrimSpace(version) == "" {
+		return fmt.Errorf("package version must not be empty")
+	}
+	if strings.HasPrefix(version, ".") || strings.Contains(version, "..") {
+		return fmt.Errorf("unsafe package version %q", version)
+	}
+	for _, r := range version {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-' {
+			continue
+		}
+		return fmt.Errorf("unsafe package version %q", version)
+	}
+	return nil
+}
+
 func copyFontSources(outDir, dstDir string) error {
 	if err := os.MkdirAll(dstDir, 0o755); err != nil {
 		return err
@@ -90,12 +116,14 @@ func copyFontSources(outDir, dstDir string) error {
 		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 			return err
 		}
-		url := "https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf"
-		fmt.Printf("Downloading Noto Color Emoji from %s\n", url)
-		if err := downloadFile(url, cachePath); err != nil {
+		fmt.Printf("Downloading Noto Color Emoji from %s\n", notoColorEmojiURL)
+		if err := downloadFile(notoColorEmojiURL, cachePath); err != nil {
 			return err
 		}
 		source = cachePath
+	}
+	if err := verifyFileSHA256(source, notoColorEmojiSHA256); err != nil {
+		return err
 	}
 	if err := copyFile(source, filepath.Join(dstDir, "NotoColorEmoji.ttf")); err != nil {
 		return err
@@ -119,6 +147,23 @@ func downloadFile(url, path string) error {
 	defer out.Close()
 	_, err = io.Copy(out, resp.Body)
 	return err
+}
+
+func verifyFileSHA256(path, want string) error {
+	in, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, in); err != nil {
+		return err
+	}
+	got := hex.EncodeToString(h.Sum(nil))
+	if !strings.EqualFold(got, want) {
+		return fmt.Errorf("%s SHA256 mismatch: got %s, want %s", path, got, want)
+	}
+	return nil
 }
 
 func copyDir(src, dst string) error {
@@ -206,9 +251,12 @@ func zipDirContents(srcDir, zipPath string) error {
 		if err != nil {
 			return err
 		}
-		defer in.Close()
-		_, err = io.Copy(writer, in)
-		return err
+		_, copyErr := io.Copy(writer, in)
+		closeErr := in.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
 	})
 }
 
