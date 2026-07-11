@@ -62,6 +62,11 @@ func (a *App) draw() {
 	if a.snap.Title != "" && a.snap.Title != a.lastTitle {
 		a.lastTitle = a.snap.Title
 		a.window.SetTitle("CervTerm · " + a.snap.Title)
+		a.fireScriptEvent(func() error { return a.scriptRT.FireTitle(a, a.snap.Title) })
+	}
+	if a.snap.BellCount != a.lastBellCount {
+		a.lastBellCount = a.snap.BellCount
+		a.fireScriptEvent(func() error { return a.scriptRT.FireBell(a) })
 	}
 
 	var cursorRowOrder []int
