@@ -22,6 +22,12 @@ func (t *Terminal) CursorCol() int    { return t.cursorCol }
 func (t *Terminal) Title() string     { return t.title }
 func (t *Terminal) SetTitle(s string) { t.title = s }
 
+// BellCount reports how many BEL controls have executed. It is monotonic for the
+// terminal's lifetime (unaffected by Reset) so observers can detect new bells by
+// watching for increases.
+func (t *Terminal) BellCount() int { return t.bellCount }
+func (t *Terminal) Bell()          { t.bellCount++ }
+
 func (t *Terminal) Cells() []Cell { return t.cells }
 
 func (t *Terminal) Resize(cols, rows int) {

@@ -62,6 +62,7 @@ type Terminal struct {
 	hasSavedCursor    bool
 	attr              Attr
 	title             string
+	bellCount         int
 	bracketedPaste    bool
 	alternateScreen   bool
 	primaryScreen     *screenState

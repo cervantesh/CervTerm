@@ -128,6 +128,40 @@ func TestParserIgnoresUnsupportedOSC(t *testing.T) {
 	}
 }
 
+func TestParserGroundBellIncrementsCount(t *testing.T) {
+	term := core.NewTerminal(20, 4)
+	var p Parser
+	p.Advance(term, []byte("a\x07b\x07"))
+	if term.BellCount() != 2 {
+		t.Fatalf("bell count = %d, want 2", term.BellCount())
+	}
+	if cellsFirstRow(term) != "ab" {
+		t.Fatalf("BEL should not print: %q", cellsFirstRow(term))
+	}
+}
+
+func TestParserOSCTerminatorBELIsNotABell(t *testing.T) {
+	term := core.NewTerminal(20, 4)
+	var p Parser
+	p.Advance(term, []byte("\x1b]0;t\x07"))
+	if term.BellCount() != 0 {
+		t.Fatalf("OSC-terminating BEL counted as bell: %d", term.BellCount())
+	}
+}
+
+func cellsFirstRow(term *core.Terminal) string {
+	cells := make([]core.Cell, term.Cols()*term.Rows())
+	term.CopyView(cells)
+	out := ""
+	for i := 0; i < term.Cols(); i++ {
+		if cells[i].Rune == ' ' || cells[i].Rune == 0 {
+			break
+		}
+		out += string(cells[i].Rune)
+	}
+	return out
+}
+
 func TestParserBracketedPasteMode(t *testing.T) {
 	term := core.NewTerminal(20, 4)
 	var p Parser
