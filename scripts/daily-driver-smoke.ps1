@@ -44,7 +44,7 @@ function New-PowerShellCommandArgs {
   param([Parameter(Mandatory = $true)] [string]$Command)
   $encoded = ConvertTo-EncodedPowerShellCommand $Command
   $powershellExe = Join-Path $env:SystemRoot "System32/WindowsPowerShell/v1.0/powershell.exe"
-  return @("/C", "`"$powershellExe`" -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded")
+  return @("/C", "$powershellExe -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded")
 }
 
 function Invoke-Capture {
