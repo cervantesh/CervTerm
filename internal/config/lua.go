@@ -52,6 +52,9 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 	if tbl := tableField(root, "clipboard"); tbl != nil {
 		cfg.Clipboard.OSC52 = stringField(tbl, "osc52", cfg.Clipboard.OSC52)
 	}
+	if tbl := tableField(root, "render"); tbl != nil {
+		cfg.Render.Bidi = boolField(tbl, "bidi", cfg.Render.Bidi)
+	}
 	if tbl := tableField(root, "shell"); tbl != nil {
 		cfg.Shell.Program = stringField(tbl, "program", cfg.Shell.Program)
 		cfg.Shell.WorkingDirectory = stringField(tbl, "working_directory", cfg.Shell.WorkingDirectory)

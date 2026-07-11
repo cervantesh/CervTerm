@@ -10,6 +10,9 @@ func TestDefaultsValidate(t *testing.T) {
 	if cfg.Window.Width != 1100 || cfg.Font.Size != 14 || cfg.Scrolling.WheelMultiplier != 3 {
 		t.Fatalf("unexpected defaults: %#v", cfg)
 	}
+	if cfg.Render.Bidi {
+		t.Fatal("render.bidi must default to false")
+	}
 }
 
 func TestValidateRejectsInvalidConfig(t *testing.T) {
@@ -19,5 +22,13 @@ func TestValidateRejectsInvalidConfig(t *testing.T) {
 	cfg.Cursor.Shape = "triangle"
 	if err := cfg.Validate(); err == nil {
 		t.Fatalf("expected validation errors")
+	}
+}
+
+func TestValidateAcceptsBidiFlag(t *testing.T) {
+	cfg := Defaults()
+	cfg.Render.Bidi = true
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("render.bidi should validate: %v", err)
 	}
 }
