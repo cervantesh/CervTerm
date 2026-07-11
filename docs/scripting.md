@@ -79,13 +79,13 @@ Handlers can also read terminal state:
 - `term:cursor()` returns the cursor `row, col` (1-based).
 - `term:title()` returns the current title string.
 - `term:line(n)` returns the text of visible row `n` (1-based, trailing blanks
-  trimmed), or `nil` when `n` is outside the screen.
+  trimmed), or an empty string when `n` is outside the screen.
 
 ```lua
 action = function(term)
   local _, rows = term:size()
   local row = select(1, term:cursor())
-  term:notify("row " .. row .. "/" .. rows .. ": " .. (term:line(row) or ""))
+  term:notify("row " .. row .. "/" .. rows .. ": " .. term:line(row))
 end
 ```
 
