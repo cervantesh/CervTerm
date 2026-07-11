@@ -42,6 +42,9 @@ type App struct {
 	cellH            float32
 	paddingX         float32
 	paddingY         float32
+	uiScale          float32
+	contentScaleX    float32
+	contentScaleY    float32
 	status           string
 	scriptRT         *script.Runtime
 	notice           string
@@ -78,8 +81,7 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 		incoming:   make(chan []byte, 128),
 		cellW:      9,
 		cellH:      16,
-		paddingX:   float32(cfg.Window.PaddingX),
-		paddingY:   float32(cfg.Window.PaddingY),
+		uiScale:    1,
 		blinkStart: time.Now(),
 	}
 	// Replies queue up and flush after Advance returns so the PTY write never
@@ -154,11 +156,14 @@ func (a *App) runWindow() error {
 	if err := gl.Init(); err != nil {
 		return err
 	}
-	atlas, err := newGlyphAtlasWithSpec(fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: 96})
+	sx, sy := w.GetContentScale()
+	a.applyScale(sx, sy)
+	atlas, err := newGlyphAtlasWithSpec(fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(sx, sy)})
 	if err != nil {
 		return err
 	}
 	a.atlas = atlas
+	defer func() { a.atlas.close() }()
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
 	a.installCallbacks()
@@ -181,6 +186,9 @@ func (a *App) bracketedPasteMode() bool {
 }
 
 func (a *App) installCallbacks() {
+	a.window.SetContentScaleCallback(func(_ *glfw.Window, scaleX, scaleY float32) {
+		a.rebuildForContentScale(scaleX, scaleY)
+	})
 	a.window.SetCharCallback(func(_ *glfw.Window, char rune) {
 		if a.suppressNextChar {
 			a.suppressNextChar = false
@@ -456,7 +464,7 @@ func (a *App) drainIncoming() {
 func (a *App) resizeToWindow() {
 	w, h := a.window.GetFramebufferSize()
 	cols := max(2, int((float32(w)-2*a.paddingX)/a.cellW))
-	rows := max(1, int((float32(h)-a.paddingY-18)/a.cellH))
+	rows := max(1, int((float32(h)-a.paddingY-18*a.uiScale)/a.cellH))
 	if cols == a.cols && rows == a.rows {
 		return
 	}
