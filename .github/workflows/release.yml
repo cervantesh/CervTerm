@@ -101,7 +101,7 @@ jobs:
           subject-path: |
             dist/*.zip
             dist/SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/*.zip
