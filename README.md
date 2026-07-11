@@ -115,7 +115,19 @@ return {
 
 Runtime diagnostics are written to stderr and to a local log file by default. Override the location with `--log-file path/to/cervterm.log` or `CERVTERM_LOG_FILE`; use `--log-file -` to keep diagnostics on stderr only. Run `--doctor` to print the effective log path, config discovery state, environment hints, and support checklist. Unexpected panics are captured with a stack trace before CervTerm exits.
 
+## Display scaling
+
+The GLFW frontend uses the current monitor content scale to rasterize text and scale window padding and chrome in framebuffer pixels. Moving the window between monitors rebuilds the glyph atlas at the new effective DPI. A GLFW-enabled `--doctor` reports the primary monitor scale and effective DPI; headless builds report that scale detection is unavailable.
+
+Glyphs, including color emoji and shaped clusters, share at most two 2048 x 2048 RGBA atlas pages. ASCII is prewarmed; when both pages fill, CervTerm resets the atlas generation and rasterizes visible glyphs again on demand, keeping GPU texture memory bounded.
+
+`font.family` resolves installed `.ttf`, `.otf`, and `.ttc` faces from standard system and per-user font directories. Empty values and `Go Mono` keep the embedded font. An unknown or unreadable family logs a warning and safely falls back to Go Mono; `--doctor` shows the configured family and resolved files. Bold and italic variants are discovered for diagnostics, while rendering currently retains synthetic bold and italic transforms.
+
 ## Known limitations
+
+### Optional BiDi rendering
+
+Set `render = { bidi = true }` to reorder each terminal row visually with the Unicode Bidirectional Algorithm. It is experimental and defaults to off. Terminal storage and selection remain logical: wrapped rows do not share paragraph context, mixed-direction selections may look discontiguous, and Arabic letters are not contextually joined across cells. Wide-cell pairs and combining marks remain attached while visual ordering is applied.
 
 - Bold and italic rendering in the GLFW frontend are synthesized (1px double draw for bold, quad shear for italic); real font variants remain future work.
 - DirectWrite shaping is implemented on Windows with Arabic/Indic/emoji smoke coverage; broader real-world fixture coverage is still growing.

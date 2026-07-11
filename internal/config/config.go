@@ -13,6 +13,7 @@ type Config struct {
 	Scrolling ScrollingConfig
 	Cursor    CursorConfig
 	Clipboard ClipboardConfig
+	Render    RenderConfig
 	Shell     ShellConfig
 }
 
@@ -53,6 +54,10 @@ type ClipboardConfig struct {
 	OSC52 string
 }
 
+type RenderConfig struct {
+	Bidi bool
+}
+
 type ShellConfig struct {
 	Program          string
 	Args             []string
@@ -68,6 +73,7 @@ func Defaults() Config {
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
 		Clipboard: ClipboardConfig{OSC52: "write"},
+		Render:    RenderConfig{Bidi: false},
 		Shell:     ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
 }
