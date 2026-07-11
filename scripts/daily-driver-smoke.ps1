@@ -48,7 +48,7 @@ function New-PowerShellScriptArgs {
     "@echo off",
     "$powershellExe -NoProfile -ExecutionPolicy Bypass -File $ps1Path"
   ) | Set-Content -Encoding ASCII $cmdPath
-  return @("/C", (Resolve-Path $cmdPath).Path)
+  return @("/C", "call $((Resolve-Path $cmdPath).Path)")
 }
 function Invoke-Capture {
   param(
