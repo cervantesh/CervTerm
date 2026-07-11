@@ -73,29 +73,29 @@ func newGlyphAtlasWithSpec(spec fontglyph.Spec) (*glyphAtlas, error) {
 	}, nil
 }
 
-func (a *glyphAtlas) drawRune(r rune, x, y float32, scale float32) {
+func (a *glyphAtlas) drawRune(r rune, x, y float32, scale, skew float32) {
 	if r >= 32 && r <= 126 {
-		a.drawASCII(r, x, y, scale)
+		a.drawASCII(r, x, y, scale, skew)
 		return
 	}
 	glyph, ok := a.cachedGlyph(r)
 	if !ok {
-		a.drawASCII('?', x, y, scale)
+		a.drawASCII('?', x, y, scale, skew)
 		return
 	}
-	a.drawTexture(glyph.tex, 0, 0, 1, 1, x, y, scale, glyph.colored, glyph.cellSpan)
+	a.drawTexture(glyph.tex, 0, 0, 1, 1, x, y, scale, skew, glyph.colored, glyph.cellSpan)
 }
 
-func (a *glyphAtlas) drawCluster(cluster string, cellSpan int, x, y float32, scale float32) bool {
+func (a *glyphAtlas) drawCluster(cluster string, cellSpan int, x, y float32, scale, skew float32) bool {
 	glyph, ok := a.cachedCluster(cluster, cellSpan)
 	if !ok {
 		return false
 	}
-	a.drawTexture(glyph.tex, 0, 0, 1, 1, x, y, scale, glyph.colored, glyph.cellSpan)
+	a.drawTexture(glyph.tex, 0, 0, 1, 1, x, y, scale, skew, glyph.colored, glyph.cellSpan)
 	return true
 }
 
-func (a *glyphAtlas) drawASCII(r rune, x, y, scale float32) {
+func (a *glyphAtlas) drawASCII(r rune, x, y, scale, skew float32) {
 	i := int(r - a.firstRune)
 	col := i % a.cols
 	row := i / a.cols
@@ -105,7 +105,7 @@ func (a *glyphAtlas) drawASCII(r rune, x, y, scale float32) {
 	v0 := float32(row*a.cellH) / th
 	u1 := float32((col+1)*a.cellW) / tw
 	v1 := float32((row+1)*a.cellH) / th
-	a.drawTexture(a.tex, u0, v0, u1, v1, x, y, scale, false, 1)
+	a.drawTexture(a.tex, u0, v0, u1, v1, x, y, scale, skew, false, 1)
 }
 
 func (a *glyphAtlas) cachedGlyph(r rune) (glyphTexture, bool) {
@@ -152,7 +152,7 @@ func uploadTexture(img *image.RGBA) uint32 {
 	return tex
 }
 
-func (a *glyphAtlas) drawTexture(tex uint32, u0, v0, u1, v1 float32, x, y, scale float32, colored bool, cellSpan int) {
+func (a *glyphAtlas) drawTexture(tex uint32, u0, v0, u1, v1 float32, x, y, scale, skew float32, colored bool, cellSpan int) {
 	w := float32(a.cellW*max(1, cellSpan)) * scale
 	h := float32(a.cellH) * scale
 	if colored {
@@ -161,9 +161,9 @@ func (a *glyphAtlas) drawTexture(tex uint32, u0, v0, u1, v1 float32, x, y, scale
 	gl.BindTexture(gl.TEXTURE_2D, tex)
 	gl.Begin(gl.QUADS)
 	gl.TexCoord2f(u0, v0)
-	gl.Vertex2f(x, y)
+	gl.Vertex2f(x+skew, y)
 	gl.TexCoord2f(u1, v0)
-	gl.Vertex2f(x+w, y)
+	gl.Vertex2f(x+w+skew, y)
 	gl.TexCoord2f(u1, v1)
 	gl.Vertex2f(x+w, y+h)
 	gl.TexCoord2f(u0, v1)
