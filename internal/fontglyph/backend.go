@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -84,7 +85,7 @@ type loadedFace struct {
 }
 
 func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
-	primary, metrics, err := loadOpenTypeFace(gomono.TTF, spec)
+	primary, metrics, err := primaryFace(spec)
 	if err != nil {
 		return nil, err
 	}
@@ -96,8 +97,40 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 	return &OpenTypeBackend{faces: faces, cellW: cellW, cellH: cellH, baseline: baseline, ppem: ppem, shaper: newDefaultShaper()}, nil
 }
 
+func primaryFace(spec Spec) (loadedFace, font.Metrics, error) {
+	if isEmbeddedFamily(spec.Family) {
+		return loadOpenTypeFace(gomono.TTF, spec)
+	}
+	resolution := ResolveSystemFont(spec.Family)
+	if !resolution.Found {
+		log.Printf("configured font family %q not found; falling back to Go Mono", spec.Family)
+		return loadOpenTypeFace(gomono.TTF, spec)
+	}
+	log.Printf("configured font family %q resolved to %s face %d", spec.Family, resolution.Regular, resolution.FaceIndex)
+	data, err := os.ReadFile(resolution.Regular)
+	if err != nil {
+		log.Printf("configured font family %q could not be loaded from %s: %v; falling back to Go Mono", spec.Family, resolution.Regular, err)
+		return loadOpenTypeFace(gomono.TTF, spec)
+	}
+	face, metrics, err := loadOpenTypeFaceIndex(data, resolution.FaceIndex, spec)
+	if err != nil {
+		log.Printf("configured font family %q could not be parsed from %s: %v; falling back to Go Mono", spec.Family, resolution.Regular, err)
+		return loadOpenTypeFace(gomono.TTF, spec)
+	}
+	face.sourcePath = resolution.Regular
+	return face, metrics, nil
+}
+
 func loadOpenTypeFace(data []byte, spec Spec) (loadedFace, font.Metrics, error) {
-	parsed, err := opentype.Parse(data)
+	return loadOpenTypeFaceIndex(data, 0, spec)
+}
+
+func loadOpenTypeFaceIndex(data []byte, index int, spec Spec) (loadedFace, font.Metrics, error) {
+	collection, err := opentype.ParseCollection(data)
+	if err != nil {
+		return loadedFace{}, font.Metrics{}, err
+	}
+	parsed, err := collection.Font(index)
 	if err != nil {
 		return loadedFace{}, font.Metrics{}, err
 	}
@@ -106,33 +139,33 @@ func loadOpenTypeFace(data []byte, spec Spec) (loadedFace, font.Metrics, error) 
 		return loadedFace{}, font.Metrics{}, err
 	}
 	lf := loadedFace{face: face}
-	if sfntFont, err := sfnt.Parse(data); err == nil {
-		lf.sfnt = sfntFont
-	}
-	if tables, err := DetectColorTables(data); err == nil {
-		lf.tables = tables
-		if tables.HasSbix && lf.sfnt != nil {
-			if sbixData, ok, err := getSFNTTable(data, "sbix"); err == nil && ok {
-				lf.sbix, _ = newSbixExtractor(sbixData, lf.sfnt.NumGlyphs())
+	lf.sfnt = parsed
+	if index == 0 {
+		if tables, err := DetectColorTables(data); err == nil {
+			lf.tables = tables
+			if tables.HasSbix && lf.sfnt != nil {
+				if sbixData, ok, err := getSFNTTable(data, "sbix"); err == nil && ok {
+					lf.sbix, _ = newSbixExtractor(sbixData, lf.sfnt.NumGlyphs())
+				}
 			}
-		}
-		if tables.HasCBDT && tables.HasCBLC {
-			cbdtData, hasCBDT, cbdtErr := getSFNTTable(data, "CBDT")
-			cblcData, hasCBLC, cblcErr := getSFNTTable(data, "CBLC")
-			if cbdtErr == nil && cblcErr == nil && hasCBDT && hasCBLC {
-				lf.cbdt, _ = newCBDTExtractor(cbdtData, cblcData)
+			if tables.HasCBDT && tables.HasCBLC {
+				cbdtData, hasCBDT, cbdtErr := getSFNTTable(data, "CBDT")
+				cblcData, hasCBLC, cblcErr := getSFNTTable(data, "CBLC")
+				if cbdtErr == nil && cblcErr == nil && hasCBDT && hasCBLC {
+					lf.cbdt, _ = newCBDTExtractor(cbdtData, cblcData)
+				}
 			}
-		}
-		if tables.HasRenderableLayerColor() {
-			colrData, hasCOLR, colrErr := getSFNTTable(data, "COLR")
-			cpalData, hasCPAL, cpalErr := getSFNTTable(data, "CPAL")
-			if colrErr == nil && cpalErr == nil && hasCOLR && hasCPAL {
-				lf.colr, _ = newCOLRParser(colrData, cpalData)
+			if tables.HasRenderableLayerColor() {
+				colrData, hasCOLR, colrErr := getSFNTTable(data, "COLR")
+				cpalData, hasCPAL, cpalErr := getSFNTTable(data, "CPAL")
+				if colrErr == nil && cpalErr == nil && hasCOLR && hasCPAL {
+					lf.colr, _ = newCOLRParser(colrData, cpalData)
+				}
 			}
-		}
-		if tables.HasSVG {
-			if svgData, ok, err := getSFNTTable(data, "SVG "); err == nil && ok {
-				lf.svg, _ = newSVGExtractor(svgData)
+			if tables.HasSVG {
+				if svgData, ok, err := getSFNTTable(data, "SVG "); err == nil && ok {
+					lf.svg, _ = newSVGExtractor(svgData)
+				}
 			}
 		}
 	}
