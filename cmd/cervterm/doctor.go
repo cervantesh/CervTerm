@@ -9,12 +9,14 @@ import (
 	"cervterm/internal/applog"
 	"cervterm/internal/buildinfo"
 	"cervterm/internal/config"
+	"cervterm/internal/fontglyph"
 )
 
 type doctorOptions struct {
 	ConfigPath    string
 	LogPath       string
 	EmojiWarnings []string
+	ContentScale  string
 }
 
 func runDoctor(opts doctorOptions) int {
@@ -34,6 +36,11 @@ func runDoctor(opts doctorOptions) int {
 	printConfigDoctor(opts.ConfigPath)
 	printLogDoctor(opts.LogPath)
 	printEnvironmentDoctor()
+	if opts.ContentScale == "" {
+		fmt.Println("content-scale: unavailable in headless build")
+	} else {
+		fmt.Printf("content-scale: %s\n", opts.ContentScale)
+	}
 	printEmojiDoctor(opts.EmojiWarnings)
 	fmt.Println("support: attach this output, the diagnostics log, and screenshots/captures when filing an issue")
 	return 0
@@ -74,6 +81,23 @@ func printConfigDoctor(configPath string) {
 	}
 	if cfg.Shell.WorkingDirectory != "" {
 		fmt.Printf("  shell-working-directory: %s\n", cfg.Shell.WorkingDirectory)
+	}
+	printFontDoctor(cfg.Font.Family)
+}
+
+func printFontDoctor(family string) {
+	resolution := fontglyph.ResolveSystemFont(family)
+	fmt.Printf("  font-family: %s\n", family)
+	if !resolution.Found {
+		fmt.Println("  font-resolution: not found (using embedded Go Mono)")
+		fmt.Println("  warning: configured font family was not found")
+		return
+	}
+	fmt.Printf("  font-regular: %s\n", resolution.Regular)
+	for label, path := range map[string]string{"bold": resolution.Bold, "italic": resolution.Italic, "bold-italic": resolution.BoldItalic} {
+		if path != "" {
+			fmt.Printf("  font-%s: %s\n", label, path)
+		}
 	}
 }
 
