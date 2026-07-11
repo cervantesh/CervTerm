@@ -3,9 +3,7 @@
 package glfwgl
 
 import (
-	"image"
-	"image/draw"
-	"math"
+	"log"
 
 	"cervterm/internal/core"
 	"cervterm/internal/fontglyph"
@@ -13,23 +11,38 @@ import (
 	"github.com/go-gl/gl/v2.1/gl"
 )
 
-type glyphAtlas struct {
-	tex       uint32
-	cellW     int
-	cellH     int
-	cols      int
-	rows      int
-	baseline  int
-	firstRune rune
-	backend   fontglyph.Backend
-	glyphs    map[rune]glyphTexture
-	clusters  map[string]glyphTexture
+const (
+	atlasPageSize  = 2048
+	atlasPageCount = 2
+)
+
+type atlasKey struct {
+	kind byte
+	text string
 }
 
-type glyphTexture struct {
-	tex      uint32
-	colored  bool
-	cellSpan int
+type atlasEntry struct {
+	page       int
+	u0, v0     float32
+	u1, v1     float32
+	colored    bool
+	cellSpan   int
+	generation uint64
+}
+
+type atlasPage struct {
+	tex    uint32
+	packer shelfPacker
+}
+
+type glyphAtlas struct {
+	cellW, cellH int
+	baseline     int
+	backend      fontglyph.Backend
+	pages        [atlasPageCount]atlasPage
+	entries      map[atlasKey]atlasEntry
+	generation   uint64
+	boundTexture uint32
 }
 
 func newGlyphAtlas() (*glyphAtlas, error) {
@@ -42,105 +55,129 @@ func newGlyphAtlasWithSpec(spec fontglyph.Spec) (*glyphAtlas, error) {
 		return nil, err
 	}
 	cellW, cellH, baseline := backend.CellMetrics()
-
-	const first, last = rune(32), rune(126)
-	const cols = 16
-	rows := int(math.Ceil(float64(last-first+1) / float64(cols)))
-	img := image.NewRGBA(image.Rect(0, 0, cols*cellW, rows*cellH))
-	for r := first; r <= last; r++ {
-		glyph, ok := backend.Rasterize(r, 1)
-		if !ok {
-			continue
-		}
-		i := int(r - first)
-		x := (i % cols) * cellW
-		y := (i / cols) * cellH
-		draw.Draw(img, image.Rect(x, y, x+cellW, y+cellH), glyph.Image, glyph.Image.Bounds().Min, draw.Src)
+	a := &glyphAtlas{
+		cellW: cellW, cellH: cellH, baseline: baseline,
+		backend: backend, entries: make(map[atlasKey]atlasEntry), generation: 1,
 	}
+	for i := range a.pages {
+		a.pages[i].packer = newShelfPacker(atlasPageSize, atlasPageSize)
+		a.pages[i].tex = createAtlasTexture()
+	}
+	a.prewarmASCII()
+	return a, nil
+}
 
-	tex := uploadTexture(img)
-	return &glyphAtlas{
-		tex:       tex,
-		cellW:     cellW,
-		cellH:     cellH,
-		cols:      cols,
-		rows:      rows,
-		baseline:  baseline,
-		firstRune: first,
-		backend:   backend,
-		glyphs:    make(map[rune]glyphTexture),
-		clusters:  make(map[string]glyphTexture),
-	}, nil
+func (a *glyphAtlas) prewarmASCII() {
+	for r := rune(32); r <= 126; r++ {
+		_, _ = a.cachedRune(r)
+	}
+}
+
+func (a *glyphAtlas) Reset() {
+	for i := range a.pages {
+		a.pages[i].packer.Reset()
+		clearAtlasTexture(a.pages[i].tex)
+	}
+	clear(a.entries)
+	a.generation++
+	a.boundTexture = 0
+	log.Printf("glyph atlas generation reset: generation=%d", a.generation)
+}
+
+func (a *glyphAtlas) close() {
+	for i := range a.pages {
+		if a.pages[i].tex != 0 {
+			gl.DeleteTextures(1, &a.pages[i].tex)
+			a.pages[i].tex = 0
+		}
+	}
+	a.entries = nil
 }
 
 func (a *glyphAtlas) drawRune(r rune, x, y float32, scale, skew float32) {
-	if r >= 32 && r <= 126 {
-		a.drawASCII(r, x, y, scale, skew)
-		return
+	entry, ok := a.cachedRune(r)
+	if !ok && r != '?' {
+		entry, ok = a.cachedRune('?')
 	}
-	glyph, ok := a.cachedGlyph(r)
-	if !ok {
-		a.drawASCII('?', x, y, scale, skew)
-		return
+	if ok {
+		a.drawEntry(entry, x, y, scale, skew)
 	}
-	a.drawTexture(glyph.tex, 0, 0, 1, 1, x, y, scale, skew, glyph.colored, glyph.cellSpan)
 }
 
 func (a *glyphAtlas) drawCluster(cluster string, cellSpan int, x, y float32, scale, skew float32) bool {
-	glyph, ok := a.cachedCluster(cluster, cellSpan)
-	if !ok {
-		return false
+	entry, ok := a.cachedCluster(cluster, cellSpan)
+	if ok {
+		a.drawEntry(entry, x, y, scale, skew)
 	}
-	a.drawTexture(glyph.tex, 0, 0, 1, 1, x, y, scale, skew, glyph.colored, glyph.cellSpan)
-	return true
+	return ok
 }
 
-func (a *glyphAtlas) drawASCII(r rune, x, y, scale, skew float32) {
-	i := int(r - a.firstRune)
-	col := i % a.cols
-	row := i / a.cols
-	tw := float32(a.cols * a.cellW)
-	th := float32(a.rows * a.cellH)
-	u0 := float32(col*a.cellW) / tw
-	v0 := float32(row*a.cellH) / th
-	u1 := float32((col+1)*a.cellW) / tw
-	v1 := float32((row+1)*a.cellH) / th
-	a.drawTexture(a.tex, u0, v0, u1, v1, x, y, scale, skew, false, 1)
-}
-
-func (a *glyphAtlas) cachedGlyph(r rune) (glyphTexture, bool) {
-	if glyph, ok := a.glyphs[r]; ok {
-		return glyph, true
+func (a *glyphAtlas) cachedRune(r rune) (atlasEntry, bool) {
+	key := atlasKey{kind: 'r', text: string(r)}
+	if entry, ok := a.currentEntry(key); ok {
+		return entry, true
 	}
 	span := max(1, core.RuneWidth(r))
 	rasterized, ok := a.backend.Rasterize(r, span)
 	if !ok {
-		return glyphTexture{}, false
+		return atlasEntry{}, false
 	}
-	glyph := glyphTexture{tex: uploadTexture(rasterized.Image), colored: rasterized.HasColor, cellSpan: rasterized.CellSpan}
-	a.glyphs[r] = glyph
-	return glyph, true
+	return a.insertRaster(key, rasterized)
 }
 
-func (a *glyphAtlas) cachedCluster(cluster string, cellSpan int) (glyphTexture, bool) {
+func (a *glyphAtlas) cachedCluster(cluster string, cellSpan int) (atlasEntry, bool) {
 	if cluster == "" {
-		return glyphTexture{}, false
+		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	key := cluster + "\x00" + string(rune(cellSpan))
-	if glyph, ok := a.clusters[key]; ok {
-		return glyph, true
+	key := atlasKey{kind: 'c', text: cluster + "\x00" + string(rune(cellSpan))}
+	if entry, ok := a.currentEntry(key); ok {
+		return entry, true
 	}
 	rasterized, ok := a.backend.RasterizeCluster(cluster, cellSpan)
 	if !ok {
-		return glyphTexture{}, false
+		return atlasEntry{}, false
 	}
-	glyph := glyphTexture{tex: uploadTexture(rasterized.Image), colored: rasterized.HasColor, cellSpan: rasterized.CellSpan}
-	a.clusters[key] = glyph
-	return glyph, true
+	return a.insertRaster(key, rasterized)
 }
 
-func uploadTexture(img *image.RGBA) uint32 {
+func (a *glyphAtlas) currentEntry(key atlasKey) (atlasEntry, bool) {
+	entry, ok := a.entries[key]
+	return entry, ok && entryGenerationValid(entry.generation, a.generation)
+}
+
+func (a *glyphAtlas) insertRaster(key atlasKey, glyph fontglyph.RasterizedGlyph) (atlasEntry, bool) {
+	entry, ok := a.tryInsert(key, glyph)
+	if ok {
+		return entry, true
+	}
+	a.Reset()
+	a.prewarmASCII()
+	return a.tryInsert(key, glyph)
+}
+
+func (a *glyphAtlas) tryInsert(key atlasKey, glyph fontglyph.RasterizedGlyph) (atlasEntry, bool) {
+	w, h := glyph.Image.Bounds().Dx(), glyph.Image.Bounds().Dy()
+	for pageIndex := range a.pages {
+		x, y, ok := a.pages[pageIndex].packer.Insert(w, h)
+		if !ok {
+			continue
+		}
+		gl.BindTexture(gl.TEXTURE_2D, a.pages[pageIndex].tex)
+		gl.TexSubImage2D(gl.TEXTURE_2D, 0, int32(x), int32(y), int32(w), int32(h), gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(glyph.Image.Pix))
+		a.boundTexture = a.pages[pageIndex].tex
+		entry := atlasEntry{
+			page: pageIndex, u0: float32(x) / atlasPageSize, v0: float32(y) / atlasPageSize,
+			u1: float32(x+w) / atlasPageSize, v1: float32(y+h) / atlasPageSize,
+			colored: glyph.HasColor, cellSpan: glyph.CellSpan, generation: a.generation,
+		}
+		a.entries[key] = entry
+		return entry, true
+	}
+	return atlasEntry{}, false
+}
+
+func createAtlasTexture() uint32 {
 	var tex uint32
 	gl.GenTextures(1, &tex)
 	gl.BindTexture(gl.TEXTURE_2D, tex)
@@ -148,25 +185,34 @@ func uploadTexture(img *image.RGBA) uint32 {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(img.Bounds().Dx()), int32(img.Bounds().Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix))
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, atlasPageSize, atlasPageSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
 	return tex
 }
 
-func (a *glyphAtlas) drawTexture(tex uint32, u0, v0, u1, v1 float32, x, y, scale, skew float32, colored bool, cellSpan int) {
-	w := float32(a.cellW*max(1, cellSpan)) * scale
+func clearAtlasTexture(tex uint32) {
+	gl.BindTexture(gl.TEXTURE_2D, tex)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, atlasPageSize, atlasPageSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
+}
+
+func (a *glyphAtlas) drawEntry(entry atlasEntry, x, y, scale, skew float32) {
+	w := float32(a.cellW*max(1, entry.cellSpan)) * scale
 	h := float32(a.cellH) * scale
-	if colored {
+	if entry.colored {
 		gl.Color4ub(255, 255, 255, 255)
 	}
-	gl.BindTexture(gl.TEXTURE_2D, tex)
+	tex := a.pages[entry.page].tex
+	if a.boundTexture != tex {
+		gl.BindTexture(gl.TEXTURE_2D, tex)
+		a.boundTexture = tex
+	}
 	gl.Begin(gl.QUADS)
-	gl.TexCoord2f(u0, v0)
+	gl.TexCoord2f(entry.u0, entry.v0)
 	gl.Vertex2f(x+skew, y)
-	gl.TexCoord2f(u1, v0)
+	gl.TexCoord2f(entry.u1, entry.v0)
 	gl.Vertex2f(x+w+skew, y)
-	gl.TexCoord2f(u1, v1)
+	gl.TexCoord2f(entry.u1, entry.v1)
 	gl.Vertex2f(x+w, y+h)
-	gl.TexCoord2f(u0, v1)
+	gl.TexCoord2f(entry.u0, entry.v1)
 	gl.Vertex2f(x, y+h)
 	gl.End()
 }
