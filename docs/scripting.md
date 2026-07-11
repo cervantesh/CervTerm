@@ -1,8 +1,8 @@
 # CervTerm scripting
 
 CervTerm can load `cervterm.lua` or `cervterm.tl` as both configuration and a
-small extension runtime. The first supported extension point is user keybindings
-that run Lua functions.
+small extension runtime. The supported extension points are user keybindings and
+terminal event handlers that run Lua functions.
 
 ## Keybindings
 
@@ -36,6 +36,32 @@ return {
   },
 }
 ```
+
+## Events
+
+Add an `events` table to react to terminal activity. Every handler is optional
+and receives the `term` handle first:
+
+- `output(term, data)`: fires for each chunk of program output, with the raw
+  bytes as a string. This runs on every output chunk, so keep it fast — a slow
+  handler throttles rendering.
+- `title(term, title)`: fires when the program changes the window title (OSC 0/2).
+- `bell(term)`: fires when a `BEL` control executes.
+
+```lua
+return {
+  events = {
+    output = function(term, data)
+      if data:find("error") then term:notify("saw an error") end
+    end,
+    title = function(term, title) term:notify("title: " .. title) end,
+    bell = function(term) term:notify("ding") end,
+  },
+}
+```
+
+Handlers share the keybinding watchdog: an erroring or timed-out handler surfaces
+a `script error:` notice and does not stop the runtime.
 
 ## Term API
 
@@ -74,17 +100,18 @@ return config
 ## Runtime model
 
 CervTerm executes the config file once in a persistent Lua state. Lua functions
-stored in `keys` remain alive in that state and are dispatched from the GLFW main
-loop thread. The runtime is single-owner and must not be called from other
-goroutines.
+stored in `keys` and `events` remain alive in that state and are dispatched from
+the GLFW main loop thread. The runtime is single-owner and must not be called
+from other goroutines.
 
-Each action has a watchdog timeout. An erroring or timed-out action does not stop
-the runtime; later keybindings can still run.
+Each action and event handler has a watchdog timeout. An erroring or timed-out
+call does not stop the runtime; later keybindings and events can still run.
 
 ## Non-goals
 
 User config is the user's own file and is not sandboxed. Filesystem and network
 permission controls are future work for third-party plugin support.
 
-This slice does not add output events, hot reload, command palettes, overlays,
-key repeat dispatch, or multi-chord sequences.
+Event handlers observe only: an `output` handler cannot rewrite or suppress the
+bytes shown. This slice does not add hot reload, command palettes, overlays, key
+repeat dispatch, multiple handlers per event, or multi-chord sequences.
