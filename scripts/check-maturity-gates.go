@@ -33,6 +33,8 @@ var requiredDocs = []string{
 	"docs/release-trust.md",
 	"docs/troubleshooting.md",
 	"docs/getting-started.md",
+	"docs/daily-driver-smoke.md",
+	"scripts/daily-driver-smoke.ps1",
 }
 
 var largeGoAllowlist = map[string]string{
@@ -155,7 +157,7 @@ func checkCIGates() []finding {
 	}
 	text := string(data)
 	var findings []finding
-	for _, required := range []string{"go vet", "govulncheck ./..."} {
+	for _, required := range []string{"go vet", "govulncheck ./...", "scripts/daily-driver-smoke.ps1"} {
 		if !strings.Contains(text, required) {
 			findings = append(findings, finding{path: path, reason: "CI must run " + required})
 		}

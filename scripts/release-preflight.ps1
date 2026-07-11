@@ -37,8 +37,10 @@ Add-Check "WiX template" (Test-Path (Join-Path $root "packaging/wix/CervTerm.wxs
 Add-Check "winget templates" (Test-Path (Join-Path $root "packaging/winget/T50Systems.CervTerm.yaml")) "portable winget templates should exist"
 Add-Check "installed package smoke script" (Test-Path (Join-Path $root "scripts/smoke-installed-package.ps1")) "clean package smoke should be reusable locally and in CI"
 Add-Check "maturity gates script" (Test-Path (Join-Path $root "scripts/check-maturity-gates.go")) "maturity guardrails should be executable in CI"
+Add-Check "daily-driver smoke script" (Test-Path (Join-Path $root "scripts/daily-driver-smoke.ps1")) "daily-driver workflows should be smoke-gated"
 Add-Check "troubleshooting docs" (Test-Path (Join-Path $root "docs/troubleshooting.md")) "user diagnostics workflow should be documented"
 Add-Check "getting started docs" (Test-Path (Join-Path $root "docs/getting-started.md")) "onboarding workflow should be documented"
+Add-Check "daily-driver smoke docs" (Test-Path (Join-Path $root "docs/daily-driver-smoke.md")) "daily-driver smoke matrix should be documented"
 Add-Check "support docs" (Test-Path (Join-Path $root "SUPPORT.md")) "support and beta scope should be documented"
 Add-Check "bug issue template" (Test-Path (Join-Path $root ".github/ISSUE_TEMPLATE/bug_report.yml")) "bug reports should request diagnostics"
 Add-Check "Dependabot config" (Test-Path (Join-Path $root ".github/dependabot.yml")) "dependency drift should be automated"
@@ -87,7 +89,7 @@ if (Test-Path $WindowsZip) {
   $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $WindowsZip))
   try {
     $entries = $archive.Entries.FullName | ForEach-Object { $_ -replace "\\", "/" }
-    foreach ($required in @("cervterm.exe", "cervterm.lua", "README.md", "CHANGELOG.md", "SUPPORT.md", "font-sources/NotoColorEmoji.ttf", "font-sources/NotoEmoji-LICENSE.txt", "docs/getting-started.md", "docs/product-roadmap.md", "docs/troubleshooting.md", "docs/release-trust.md", "docs/maturity-improvement-plan.md", "docs/product-ux-maintainability-to-9-plan.md", "docs/assets/cervterm-preview.png", "packaging/winget/README.md")) {
+    foreach ($required in @("cervterm.exe", "cervterm.lua", "README.md", "CHANGELOG.md", "SUPPORT.md", "font-sources/NotoColorEmoji.ttf", "font-sources/NotoEmoji-LICENSE.txt", "docs/daily-driver-smoke.md", "docs/getting-started.md", "docs/product-roadmap.md", "docs/troubleshooting.md", "docs/release-trust.md", "docs/maturity-improvement-plan.md", "docs/product-ux-maintainability-to-9-plan.md", "docs/assets/cervterm-preview.png", "packaging/winget/README.md")) {
       Add-Check "zip contains $required" ($entries -contains $required) "check $WindowsZip package contents"
     }
   } finally {

@@ -31,10 +31,13 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-beta.ps1 -Version 0.1.0-ci -OutDir dist
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version 0.1.0-ci -OutDir dist -WindowsZip dist\cervterm-0.1.0-ci-windows.zip
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-installed-package.ps1 -ZipPath dist\cervterm-0.1.0-ci-windows.zip -ExpectedVersion 0.1.0-ci
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/daily-driver-smoke.ps1 -CervTermExe dist\cervterm-0.1.0-ci-windows\cervterm.exe -WorkDir dist\daily-driver-smoke
       - uses: actions/upload-artifact@v4
         with:
           name: cervterm-windows-zip
-          path: dist\*.zip
+          path: |
+            dist\*.zip
+            dist\daily-driver-smoke\*
 
   linux-headless:
     runs-on: ubuntu-latest

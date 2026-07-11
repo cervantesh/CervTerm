@@ -56,10 +56,10 @@ Expected score movement: 7.0 -> 7.6.
 
 Actions:
 
-1. Add replayable smoke captures for `cmd.exe`, PowerShell, git/pager output, alternate screen, resize/reflow, scrollback, and Unicode/emoji layouts.
-2. Add `scripts/daily-driver-smoke.ps1` and/or integration-tag Go tests.
-3. Make failures produce logs/captures as artifacts.
-4. Include the smoke in release preflight once stable.
+1. Add replayable smoke captures for `cmd.exe`, PowerShell, git/pager output, alternate screen, resize/reflow, scrollback, and Unicode/emoji layouts. **Implemented for cmd, PowerShell, git log, `more.com`, alternate screen, 40/100 column reflow, and longer delayed output in `scripts/daily-driver-smoke.ps1`.**
+2. Add `scripts/daily-driver-smoke.ps1` and/or integration-tag Go tests. **Implemented.**
+3. Make failures produce logs/captures as artifacts. **Implemented: each case writes `.vt` and `.log`; Windows CI uploads `dist/daily-driver-smoke/*`.**
+4. Include the smoke in release preflight once stable. **Implemented as a CI/release workflow gate plus release-preflight script/doc checks.**
 
 Definition of Done:
 

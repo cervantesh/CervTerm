@@ -17,7 +17,7 @@ CervTerm is not a finished daily-driver terminal yet, but it already includes:
 - Lua config loading, Teal check/gen support, and `--print-default-config`.
 - Renderer-neutral OpenType glyph backend with bitmap color fonts, broad COLRv1 paint/composite/variation support, SVG glyph extraction/rasterization, DirectWrite shaping smoke coverage, and shaped color cluster handling.
 - Diagnostics logging via `--log-file` / `CERVTERM_LOG_FILE`, including panic stack capture.
-- Parser fuzz smoke coverage and replay-style VT golden fixtures.
+- Parser fuzz smoke coverage, replay-style VT golden fixtures, and a Windows daily-driver smoke matrix for cmd, PowerShell, git, pager, alternate-screen, resize/reflow, and longer-session paths.
 
 - `--doctor` support diagnostics for config/log/environment reporting.
 See:
@@ -30,6 +30,7 @@ See:
 - [`docs/shaping-options.md`](docs/shaping-options.md)
 - [`docs/release-packaging.md`](docs/release-packaging.md)
 - [`docs/getting-started.md`](docs/getting-started.md)
+- [`docs/daily-driver-smoke.md`](docs/daily-driver-smoke.md)
 - [`docs/troubleshooting.md`](docs/troubleshooting.md)
 - [`docs/release-trust.md`](docs/release-trust.md)
 - [`SUPPORT.md`](SUPPORT.md)
@@ -65,6 +66,12 @@ Run the release/package preflight after creating a local beta zip:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version <tag> -OutDir dist
+```
+
+Run the Windows daily-driver smoke matrix:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/daily-driver-smoke.ps1 -WorkDir dist/daily-driver-smoke -Version daily-smoke
 ```
 
 Regenerate the README preview screenshot on Windows:
