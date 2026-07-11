@@ -316,8 +316,24 @@ func (p *Parser) dispatchSGR(t *core.Terminal) {
 			t.ResetAttr()
 		case v == 1:
 			t.SetBold(true)
+		case v == 3:
+			t.SetItalic(true)
+		case v == 4:
+			t.SetUnderline(true)
+		case v == 7:
+			t.SetInverse(true)
+		case v == 9:
+			t.SetStrikethrough(true)
 		case v == 22:
 			t.SetBold(false)
+		case v == 23:
+			t.SetItalic(false)
+		case v == 24:
+			t.SetUnderline(false)
+		case v == 27:
+			t.SetInverse(false)
+		case v == 29:
+			t.SetStrikethrough(false)
 		case v >= 30 && v <= 37:
 			t.SetFG(core.ANSIColor(v - 30))
 		case v == 38:

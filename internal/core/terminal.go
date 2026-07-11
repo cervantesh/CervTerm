@@ -1,8 +1,9 @@
 package core
 
 type Attr struct {
-	FG, BG RGB
-	Bold   bool
+	FG, BG                           RGB
+	Bold, Italic, Underline, Inverse bool
+	Strikethrough                    bool
 }
 
 type Cell struct {

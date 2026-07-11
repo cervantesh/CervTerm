@@ -14,13 +14,48 @@ jobs:
           go-version-file: go.mod
       - name: Test
         run: go test ./...
+      - name: VT parser fuzz smoke
+        run: go test ./internal/vt -run '^$' -fuzz=FuzzParserAdvanceDoesNotPanic -fuzztime=2s
       - name: GLFW compile check
         run: go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -run '^$' -count=0
-      - name: Build Windows artifact
+      - name: Generate Windows resources
+        run: |
+          go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-windows-resource.ps1 -Arch amd64
+      - name: Build Windows beta zip
         run: |
           mkdir dist
-          go build -tags glfw -o dist/cervterm.exe ./cmd/cervterm
+          mkdir dist\cervterm-windows
+          go build -tags glfw -o dist\cervterm-windows\cervterm.exe ./cmd/cervterm
+          .\dist\cervterm-windows\cervterm.exe --print-default-config > dist\cervterm-windows\cervterm.lua
+          copy README.md dist\cervterm-windows\README.md
+          copy CHANGELOG.md dist\cervterm-windows\CHANGELOG.md
+          xcopy /E /I docs dist\cervterm-windows\docs
+          xcopy /E /I packaging dist\cervterm-windows\packaging
+          Compress-Archive -Path dist\cervterm-windows\* -DestinationPath dist\cervterm-windows.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: cervterm-windows
-          path: dist/cervterm.exe
+          name: cervterm-windows-zip
+          path: dist\cervterm-windows.zip
+
+  linux-headless:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test ./...
+      - name: Build Linux headless beta zip
+        run: |
+          mkdir -p dist/cervterm-linux-headless
+          go build -o dist/cervterm-linux-headless/cervterm-linux-amd64 ./cmd/cervterm
+          ./dist/cervterm-linux-headless/cervterm-linux-amd64 --print-default-config > dist/cervterm-linux-headless/cervterm.lua
+          cp README.md CHANGELOG.md dist/cervterm-linux-headless/
+          cp -R docs dist/cervterm-linux-headless/docs
+          python -m zipfile -c dist/cervterm-linux-headless.zip dist/cervterm-linux-headless
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cervterm-linux-headless-zip
+          path: dist/cervterm-linux-headless.zip

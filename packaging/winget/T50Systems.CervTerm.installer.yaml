@@ -1,0 +1,14 @@
+# Template for winget-pkgs manifests. Replace <version> and <sha256> after a GitHub release is published.
+PackageIdentifier: T50Systems.CervTerm
+PackageVersion: <version>
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: cervterm.exe
+    PortableCommandAlias: cervterm
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/cervantesh/CervTerm/releases/download/v<version>/cervterm-v<version>-windows-amd64.zip
+    InstallerSha256: <sha256>
+ManifestType: installer
+ManifestVersion: 1.9.0

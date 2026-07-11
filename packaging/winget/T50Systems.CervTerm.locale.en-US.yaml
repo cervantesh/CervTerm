@@ -1,0 +1,24 @@
+# Template for winget-pkgs manifests. Replace <version> before submitting.
+PackageIdentifier: T50Systems.CervTerm
+PackageVersion: <version>
+PackageLocale: en-US
+Publisher: T50 Systems
+PublisherUrl: https://github.com/cervantesh/CervTerm
+PublisherSupportUrl: https://github.com/cervantesh/CervTerm/issues
+Author: T50 Systems
+PackageName: CervTerm
+PackageUrl: https://github.com/cervantesh/CervTerm
+License: MIT
+LicenseUrl: https://github.com/cervantesh/CervTerm/blob/main/LICENSE
+Copyright: Copyright (c) T50 Systems
+ShortDescription: GPU terminal emulator for Windows, written in Go.
+Description: CervTerm is a GPU terminal emulator with VT parsing, Lua/Teal-oriented configuration, and a Windows GLFW/OpenGL frontend.
+Moniker: cervterm
+Tags:
+  - terminal
+  - emulator
+  - console
+  - gpu
+  - go
+ManifestType: defaultLocale
+ManifestVersion: 1.9.0

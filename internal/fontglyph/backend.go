@@ -1,0 +1,562 @@
+package fontglyph
+
+import (
+	"image"
+	"image/color"
+	"image/draw"
+	"math"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"cervterm/internal/unicodecluster"
+
+	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/gofont/gomono"
+	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/font/sfnt"
+	"golang.org/x/image/math/fixed"
+	"golang.org/x/text/unicode/norm"
+)
+
+// Spec describes the font input for a glyph backend. It intentionally avoids
+// terminal- or renderer-specific concerns so this package can evolve toward a
+// reusable GoGPU-compatible color glyph backend.
+type Spec struct {
+	Family string
+	Size   float64
+	DPI    float64
+}
+
+// RasterizedGlyph is the renderer-neutral output of a font backend.
+//
+// CervTerm consumes Image/CellSpan/HasColor to upload GL textures, while a
+// future GoGPU contribution can use the same shape for CPU/GPU text pipelines.
+type RasterizedGlyph struct {
+	Image    *image.RGBA
+	Width    int
+	Height   int
+	BearingX int
+	BearingY int
+	AdvanceX float64
+	CellSpan int
+	HasColor bool
+}
+
+// GlyphInspection reports which font path and raster path CervTerm uses for a cluster.
+// It is intended for coverage tooling and tests; rendering should consume RasterizedGlyph directly.
+type GlyphInspection struct {
+	FaceSource string
+	Rasterized bool
+	HasVisible bool
+	HasColor   bool
+	CellSpan   int
+	Width      int
+	Height     int
+}
+
+// Backend rasterizes Unicode codepoints and pre-shaped text clusters into metric-bearing glyph images.
+type Backend interface {
+	CellMetrics() (width int, height int, baseline int)
+	Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool)
+	RasterizeCluster(cluster string, cellSpan int) (RasterizedGlyph, bool)
+}
+
+type OpenTypeBackend struct {
+	faces    []loadedFace
+	cellW    int
+	cellH    int
+	baseline int
+	ppem     uint16
+	shaper   Shaper
+}
+
+type loadedFace struct {
+	face       font.Face
+	sfnt       *sfnt.Font
+	tables     ColorTables
+	sbix       *sbixExtractor
+	cbdt       *cbdtExtractor
+	colr       *colrParser
+	svg        *svgExtractor
+	sourcePath string
+}
+
+func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
+	primary, metrics, err := loadOpenTypeFace(gomono.TTF, spec)
+	if err != nil {
+		return nil, err
+	}
+	faces := append([]loadedFace{primary}, loadFallbackFaces(spec)...)
+	cellW := max(1, font.MeasureString(primary.face, "W").Ceil()+2)
+	cellH := max(1, (metrics.Ascent+metrics.Descent).Ceil()+2)
+	baseline := 1 + metrics.Ascent.Ceil()
+	ppem := uint16(max(1, int(math.Round(spec.Size*spec.DPI/72))))
+	return &OpenTypeBackend{faces: faces, cellW: cellW, cellH: cellH, baseline: baseline, ppem: ppem, shaper: newDefaultShaper()}, nil
+}
+
+func loadOpenTypeFace(data []byte, spec Spec) (loadedFace, font.Metrics, error) {
+	parsed, err := opentype.Parse(data)
+	if err != nil {
+		return loadedFace{}, font.Metrics{}, err
+	}
+	face, err := opentype.NewFace(parsed, &opentype.FaceOptions{Size: spec.Size, DPI: spec.DPI, Hinting: font.HintingFull})
+	if err != nil {
+		return loadedFace{}, font.Metrics{}, err
+	}
+	lf := loadedFace{face: face}
+	if sfntFont, err := sfnt.Parse(data); err == nil {
+		lf.sfnt = sfntFont
+	}
+	if tables, err := DetectColorTables(data); err == nil {
+		lf.tables = tables
+		if tables.HasSbix && lf.sfnt != nil {
+			if sbixData, ok, err := getSFNTTable(data, "sbix"); err == nil && ok {
+				lf.sbix, _ = newSbixExtractor(sbixData, lf.sfnt.NumGlyphs())
+			}
+		}
+		if tables.HasCBDT && tables.HasCBLC {
+			cbdtData, hasCBDT, cbdtErr := getSFNTTable(data, "CBDT")
+			cblcData, hasCBLC, cblcErr := getSFNTTable(data, "CBLC")
+			if cbdtErr == nil && cblcErr == nil && hasCBDT && hasCBLC {
+				lf.cbdt, _ = newCBDTExtractor(cbdtData, cblcData)
+			}
+		}
+		if tables.HasRenderableLayerColor() {
+			colrData, hasCOLR, colrErr := getSFNTTable(data, "COLR")
+			cpalData, hasCPAL, cpalErr := getSFNTTable(data, "CPAL")
+			if colrErr == nil && cpalErr == nil && hasCOLR && hasCPAL {
+				lf.colr, _ = newCOLRParser(colrData, cpalData)
+			}
+		}
+		if tables.HasSVG {
+			if svgData, ok, err := getSFNTTable(data, "SVG "); err == nil && ok {
+				lf.svg, _ = newSVGExtractor(svgData)
+			}
+		}
+	}
+	return lf, face.Metrics(), nil
+}
+
+func (b *OpenTypeBackend) CellMetrics() (width int, height int, baseline int) {
+	return b.cellW, b.cellH, b.baseline
+}
+
+func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool) {
+	if r == 0 || r < 32 {
+		return RasterizedGlyph{}, false
+	}
+	lf, bounds, advance, ok := b.faceForRune(r)
+	if !ok {
+		return RasterizedGlyph{}, false
+	}
+	cellSpan = max(1, cellSpan)
+	if glyph, ok := b.rasterizeBitmapColorGlyph(lf, r, cellSpan, advance); ok {
+		return glyph, true
+	}
+	if glyph, ok := b.rasterizeCOLRGlyph(lf, r, cellSpan, bounds, advance); ok {
+		return glyph, true
+	}
+	if glyph, ok := b.rasterizeSVGColorGlyph(lf, r, cellSpan, advance); ok {
+		return glyph, true
+	}
+
+	img := image.NewRGBA(image.Rect(0, 0, b.cellW*cellSpan, b.cellH))
+	draw.Draw(img, img.Bounds(), image.Transparent, image.Point{}, draw.Src)
+
+	dotX := fixed.I(1) - bounds.Min.X
+	dotY := fixed.I(b.baseline)
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(color.RGBA{255, 255, 255, 255}),
+		Face: lf.face,
+		Dot:  fixed.Point26_6{X: dotX, Y: dotY},
+	}
+	d.DrawString(string(r))
+
+	return RasterizedGlyph{
+		Image:    img,
+		Width:    (bounds.Max.X - bounds.Min.X).Ceil(),
+		Height:   (bounds.Max.Y - bounds.Min.Y).Ceil(),
+		BearingX: bounds.Min.X.Ceil(),
+		BearingY: -bounds.Min.Y.Ceil(),
+		AdvanceX: float64(advance) / 64.0,
+		CellSpan: cellSpan,
+		HasColor: false,
+	}, true
+}
+
+func (b *OpenTypeBackend) RasterizeCluster(cluster string, cellSpan int) (RasterizedGlyph, bool) {
+	glyph, _, ok := b.rasterizeCluster(cluster, cellSpan)
+	return glyph, ok
+}
+
+func (b *OpenTypeBackend) rasterizeCluster(cluster string, cellSpan int) (RasterizedGlyph, loadedFace, bool) {
+	if cluster == "" {
+		return RasterizedGlyph{}, loadedFace{}, false
+	}
+	if composed, ok := normalizeClusterToSingleRune(cluster); ok {
+		if glyph, ok := b.Rasterize(composed, max(1, cellSpan)); ok {
+			face, _, _, _ := b.faceForRune(composed)
+			return glyph, face, true
+		}
+	}
+
+	candidates := b.clusterFaceCandidates(cluster)
+	var visibleFallback RasterizedGlyph
+	var visibleFallbackFace loadedFace
+	visibleFallbackOK := false
+	for _, lf := range candidates {
+		glyph, ok := b.rasterizeClusterWithFace(cluster, cellSpan, lf)
+		if !ok {
+			continue
+		}
+		if !unicodecluster.IsEmojiString(cluster) || glyph.HasColor {
+			return glyph, lf, true
+		}
+		if !visibleFallbackOK && glyph.Image != nil && hasVisibleRGBA(glyph.Image) {
+			visibleFallback = glyph
+			visibleFallbackFace = lf
+			visibleFallbackOK = true
+		}
+	}
+	if visibleFallbackOK {
+		return visibleFallback, visibleFallbackFace, true
+	}
+	return RasterizedGlyph{}, loadedFace{}, false
+}
+
+func (b *OpenTypeBackend) rasterizeClusterWithFace(cluster string, cellSpan int, lf loadedFace) (RasterizedGlyph, bool) {
+	if b.shaper != nil && lf.sfnt != nil {
+		if shaped, ok := b.shaper.Shape(cluster, lf, b.ppem); ok {
+			if glyph, ok := b.rasterizeShapedCluster(lf, shaped, max(1, cellSpan)); ok {
+				return glyph, true
+			}
+		}
+	}
+	cellSpan = max(1, cellSpan)
+	img := image.NewRGBA(image.Rect(0, 0, b.cellW*cellSpan, b.cellH))
+	draw.Draw(img, img.Bounds(), image.Transparent, image.Point{}, draw.Src)
+
+	dot := fixed.Point26_6{X: fixed.I(1), Y: fixed.I(b.baseline)}
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(color.RGBA{255, 255, 255, 255}),
+		Face: lf.face,
+		Dot:  dot,
+	}
+	d.DrawString(cluster)
+	advance := d.MeasureString(cluster)
+
+	return RasterizedGlyph{
+		Image:    img,
+		Width:    max(1, advance.Ceil()),
+		Height:   b.cellH,
+		BearingX: 1,
+		BearingY: b.baseline,
+		AdvanceX: float64(advance) / 64.0,
+		CellSpan: cellSpan,
+		HasColor: false,
+	}, true
+}
+
+func (b *OpenTypeBackend) InspectClusterGlyph(cluster string, cellSpan int) GlyphInspection {
+	info := GlyphInspection{}
+	glyph, face, ok := b.rasterizeCluster(cluster, cellSpan)
+	if !ok {
+		return info
+	}
+	info.FaceSource = face.sourcePath
+	info.Rasterized = true
+	info.HasVisible = glyph.Image != nil && hasVisibleRGBA(glyph.Image)
+	info.HasColor = glyph.HasColor
+	info.CellSpan = glyph.CellSpan
+	info.Width = glyph.Width
+	info.Height = glyph.Height
+	return info
+}
+
+func normalizeClusterToSingleRune(cluster string) (rune, bool) {
+	normalized := norm.NFC.String(cluster)
+	var out rune
+	count := 0
+	for _, r := range normalized {
+		out = r
+		count++
+		if count > 1 {
+			return 0, false
+		}
+	}
+	if count != 1 {
+		return 0, false
+	}
+	return out, normalized != cluster
+}
+
+func (b *OpenTypeBackend) rasterizeBitmapColorGlyph(lf loadedFace, r rune, cellSpan int, advance fixed.Int26_6) (RasterizedGlyph, bool) {
+	if lf.sfnt == nil {
+		return RasterizedGlyph{}, false
+	}
+	var buf sfnt.Buffer
+	glyphID, err := lf.sfnt.GlyphIndex(&buf, r)
+	if err != nil || glyphID == 0 {
+		return RasterizedGlyph{}, false
+	}
+	bitmap, ok := bitmapColorGlyph(lf, uint16(glyphID), b.ppem)
+	if !ok {
+		return RasterizedGlyph{}, false
+	}
+	canvasW := b.cellW * cellSpan
+	canvasH := b.cellH
+	img := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
+	draw.Draw(img, img.Bounds(), image.Transparent, image.Point{}, draw.Src)
+
+	srcBounds := bitmap.Image.Bounds()
+	if srcBounds.Dx() <= 0 || srcBounds.Dy() <= 0 {
+		return RasterizedGlyph{}, false
+	}
+	scale := math.Min(float64(canvasW)/float64(srcBounds.Dx()), float64(canvasH)/float64(srcBounds.Dy()))
+	if scale <= 0 {
+		return RasterizedGlyph{}, false
+	}
+	dstW := max(1, int(math.Round(float64(srcBounds.Dx())*scale)))
+	dstH := max(1, int(math.Round(float64(srcBounds.Dy())*scale)))
+	dstX := (canvasW - dstW) / 2
+	dstY := b.baseline - int(math.Round(float64(bitmap.OriginOffsetY)*scale))
+	if dstY < 0 || dstY+dstH > canvasH {
+		dstY = (canvasH - dstH) / 2
+	}
+	dst := image.Rect(dstX, dstY, dstX+dstW, dstY+dstH)
+	xdraw.CatmullRom.Scale(img, dst, bitmap.Image, srcBounds, xdraw.Over, nil)
+
+	return RasterizedGlyph{
+		Image:    img,
+		Width:    dstW,
+		Height:   dstH,
+		BearingX: dstX,
+		BearingY: canvasH - dstY,
+		AdvanceX: float64(advance) / 64.0,
+		CellSpan: cellSpan,
+		HasColor: true,
+	}, true
+}
+
+func (b *OpenTypeBackend) faceForRune(r rune) (loadedFace, fixed.Rectangle26_6, fixed.Int26_6, bool) {
+	for _, face := range b.faces {
+		bounds, advance, ok := face.face.GlyphBounds(r)
+		if ok {
+			return face, bounds, advance, true
+		}
+	}
+	return loadedFace{}, fixed.Rectangle26_6{}, 0, false
+}
+
+func (b *OpenTypeBackend) faceForCluster(cluster string) (loadedFace, bool) {
+	for _, face := range b.clusterFaceCandidates(cluster) {
+		return face, true
+	}
+	for _, r := range cluster {
+		if r == 0 || r < 32 || unicodecluster.IsZeroWidthClusterRune(r) {
+			continue
+		}
+		lf, _, _, ok := b.faceForRune(r)
+		return lf, ok
+	}
+	return loadedFace{}, false
+}
+
+func (b *OpenTypeBackend) clusterFaceCandidates(cluster string) []loadedFace {
+	var out []loadedFace
+	appendFace := func(face loadedFace, ok bool) {
+		if !ok {
+			return
+		}
+		key := strings.ToLower(filepath.Clean(face.sourcePath))
+		for _, existing := range out {
+			if strings.ToLower(filepath.Clean(existing.sourcePath)) == key {
+				return
+			}
+		}
+		out = append(out, face)
+	}
+	if unicodecluster.IsEmojiString(cluster) {
+		if unicodecluster.IsFlagString(cluster) {
+			appendFace(b.notoColorEmojiFace())
+			appendFace(b.segoeEmojiFace())
+		} else {
+			appendFace(b.segoeEmojiFace())
+			appendFace(b.notoColorEmojiFace())
+		}
+	}
+	if len(out) == 0 {
+		if face, ok := firstTextFaceForCluster(cluster, b.faceForRune); ok {
+			out = append(out, face)
+		}
+	}
+	return out
+}
+
+func firstTextFaceForCluster(cluster string, faceForRune func(rune) (loadedFace, fixed.Rectangle26_6, fixed.Int26_6, bool)) (loadedFace, bool) {
+	for _, r := range cluster {
+		if r == 0 || r < 32 || unicodecluster.IsZeroWidthClusterRune(r) {
+			continue
+		}
+		lf, _, _, ok := faceForRune(r)
+		return lf, ok
+	}
+	return loadedFace{}, false
+}
+
+func (b *OpenTypeBackend) emojiFaceForCluster(cluster string) (loadedFace, bool) {
+	if unicodecluster.IsFlagString(cluster) {
+		if face, ok := b.notoColorEmojiFace(); ok {
+			return face, true
+		}
+		return b.segoeEmojiFace()
+	}
+	if face, ok := b.segoeEmojiFace(); ok {
+		return face, true
+	}
+	return b.notoColorEmojiFace()
+}
+
+func (b *OpenTypeBackend) preferredEmojiFace() (loadedFace, bool) {
+	return b.emojiFaceForCluster("😀")
+}
+
+func (b *OpenTypeBackend) notoColorEmojiFace() (loadedFace, bool) {
+	for _, face := range b.faces {
+		if isNotoColorEmojiFace(face) {
+			return face, true
+		}
+	}
+	return loadedFace{}, false
+}
+
+func (b *OpenTypeBackend) segoeEmojiFace() (loadedFace, bool) {
+	for _, face := range b.faces {
+		if isSegoeEmojiFace(face) {
+			return face, true
+		}
+	}
+	return loadedFace{}, false
+}
+
+func isSegoeEmojiFace(face loadedFace) bool {
+	return strings.EqualFold(filepath.Base(face.sourcePath), "seguiemj.ttf")
+}
+
+func isNotoColorEmojiFace(face loadedFace) bool {
+	base := strings.ToLower(filepath.Base(face.sourcePath))
+	return base == "notocoloremoji.ttf" || base == "noto-color-emoji.ttf"
+}
+
+type EmojiFontDiagnostics struct {
+	NotoColorEmojiPath string
+	SegoeEmojiPath     string
+	Warnings           []string
+}
+
+func DiagnoseEmojiFonts() EmojiFontDiagnostics {
+	diag := EmojiFontDiagnostics{}
+	for _, path := range fallbackFontPaths() {
+		baseFace := loadedFace{sourcePath: path}
+		if diag.NotoColorEmojiPath == "" && isNotoColorEmojiFace(baseFace) {
+			if _, err := os.Stat(path); err == nil {
+				diag.NotoColorEmojiPath = path
+			}
+		}
+		if diag.SegoeEmojiPath == "" && isSegoeEmojiFace(baseFace) {
+			if _, err := os.Stat(path); err == nil {
+				diag.SegoeEmojiPath = path
+			}
+		}
+	}
+	if diag.NotoColorEmojiPath == "" {
+		diag.Warnings = append(diag.Warnings, "NotoColorEmoji.ttf not found; country and subdivision flags may render as regional letters or fallback glyphs")
+	}
+	if diag.SegoeEmojiPath == "" {
+		diag.Warnings = append(diag.Warnings, "Segoe UI Emoji not found; Windows emoji ZWJ/person sequences may have degraded rendering")
+	}
+	return diag
+}
+
+func loadFallbackFaces(spec Spec) []loadedFace {
+	var faces []loadedFace
+	for _, path := range fallbackFontPaths() {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		face, _, err := loadOpenTypeFace(data, spec)
+		face.sourcePath = path
+		if err == nil {
+			faces = append(faces, face)
+		}
+	}
+	return faces
+}
+
+func bitmapColorGlyph(lf loadedFace, glyphID uint16, ppem uint16) (bitmapGlyph, bool) {
+	if lf.sbix != nil {
+		if glyph, ok := lf.sbix.glyph(glyphID, ppem); ok {
+			return glyph, true
+		}
+	}
+	if lf.cbdt != nil {
+		if glyph, ok := lf.cbdt.glyph(glyphID, ppem); ok {
+			return glyph, true
+		}
+	}
+	return bitmapGlyph{}, false
+}
+
+func fallbackFontPaths() []string {
+	fontDir := filepath.Join(os.Getenv("SystemRoot"), "Fonts")
+	if fontDir == "Fonts" {
+		fontDir = `C:\Windows\Fonts`
+	}
+	paths := []string{
+		filepath.Join("dist", "font-sources", "NotoColorEmoji.ttf"),
+		filepath.Join("font-sources", "NotoColorEmoji.ttf"),
+	}
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		paths = append(paths,
+			filepath.Join(exeDir, "font-sources", "NotoColorEmoji.ttf"),
+			filepath.Join(exeDir, "..", "font-sources", "NotoColorEmoji.ttf"),
+		)
+	}
+	paths = append(paths,
+		filepath.Join(fontDir, "NotoColorEmoji.ttf"),
+		filepath.Join(fontDir, "seguiemj.ttf"),
+		filepath.Join(fontDir, "consola.ttf"),
+		filepath.Join(fontDir, "malgun.ttf"),
+		filepath.Join(fontDir, "simsunb.ttf"),
+		filepath.Join(fontDir, "SimsunExtG.ttf"),
+		filepath.Join(fontDir, "arial.ttf"),
+		filepath.Join(fontDir, "segoeui.ttf"),
+		filepath.Join(fontDir, "LeelawUI.ttf"),
+		filepath.Join(fontDir, "NotoSans-Regular.ttf"),
+	)
+	return uniqueExistingFontCandidates(paths)
+}
+
+func uniqueExistingFontCandidates(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		cleaned := filepath.Clean(path)
+		key := strings.ToLower(cleaned)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, cleaned)
+	}
+	return out
+}

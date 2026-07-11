@@ -11,6 +11,14 @@ func TestRuneWidth(t *testing.T) {
 		{r: '好', want: 2},
 		{r: '\u0301', want: 0},
 		{r: '😀', want: 2},
+		{r: '\U0001F3FD', want: 0},
+		{r: '🇦', want: 1},
+		{r: '✍', want: 2},
+		{r: '☕', want: 2},
+		{r: '✈', want: 2},
+		{r: '⚽', want: 2},
+		{r: '⭐', want: 2},
+		{r: '❤', want: 2},
 	}
 	for _, tt := range tests {
 		if got := RuneWidth(tt.r); got != tt.want {

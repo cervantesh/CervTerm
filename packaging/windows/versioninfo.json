@@ -1,0 +1,23 @@
+{
+  "FixedFileInfo": {
+    "FileVersion": "0.1.0.0",
+    "ProductVersion": "0.1.0.0"
+  },
+  "StringFileInfo": {
+    "CompanyName": "T50 Systems",
+    "FileDescription": "CervTerm GPU terminal emulator",
+    "FileVersion": "0.1.0-beta.1",
+    "InternalName": "cervterm",
+    "OriginalFilename": "cervterm.exe",
+    "ProductName": "CervTerm",
+    "ProductVersion": "0.1.0-beta.1"
+  },
+  "VarFileInfo": {
+    "Translation": {
+      "LangID": "0409",
+      "CharsetID": "04B0"
+    }
+  },
+  "ManifestPath": "cervterm.manifest",
+  "IconPath": "cervterm.ico"
+}

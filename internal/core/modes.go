@@ -12,6 +12,10 @@ func (m MouseMode) ReportsMouse() bool {
 
 func (t *Terminal) ResetAttr()                      { t.attr = Attr{FG: DefaultFG, BG: DefaultBG} }
 func (t *Terminal) SetBold(v bool)                  { t.attr.Bold = v }
+func (t *Terminal) SetItalic(v bool)                { t.attr.Italic = v }
+func (t *Terminal) SetUnderline(v bool)             { t.attr.Underline = v }
+func (t *Terminal) SetInverse(v bool)               { t.attr.Inverse = v }
+func (t *Terminal) SetStrikethrough(v bool)         { t.attr.Strikethrough = v }
 func (t *Terminal) SetFG(c RGB)                     { t.attr.FG = c }
 func (t *Terminal) SetBG(c RGB)                     { t.attr.BG = c }
 func (t *Terminal) BracketedPasteMode() bool        { return t.bracketedPaste }

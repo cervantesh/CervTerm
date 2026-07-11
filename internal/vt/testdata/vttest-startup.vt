@@ -1,0 +1,25 @@
+[?9001h[?1004h[?25l[2J[m[Hwhich]0;C:\msys64\usr\bin\bash.exe[?25h: no bash in ((null))
+[?1l[?4l[?5l[?8l[?45l[?25l[H[?25h[2J[?25l[K
+[K
+         VT100 test program, version 2.7 (20251205)[K
+         Line speed 38400bd[K
+         Choose test type:[K
+[K
+          0. Exit[K
+          1. Test of cursor movements[K
+          2. Test of screen features[K
+          3. Test of character sets[K
+          4. Test of double-sized characters[K
+          5. Test of keyboard[K
+          6. Test of terminal reports[K
+          7. Test of VT52 mode[K
+          8. Test of VT102 features (Insert/Delete Char/Line)[K
+          9. Test of known bugs[K
+          10. Test of reset and self-test[K
+          11. Test non-VT100 (e.g., VT220, XTERM) terminals[K
+          12. Modify test-parameters[K
+[K
+          Enter choice number (0 - 12):[K
+[K
+[K
+[K[21;41H[?25h

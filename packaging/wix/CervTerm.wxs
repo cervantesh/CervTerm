@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!--
+    WiX v4 template. Build after preparing a release directory containing:
+      cervterm.exe
+      cervterm.lua
+      README.md
+      CHANGELOG.md
+
+    Example:
+      wix build packaging/wix/CervTerm.wxs -d SourceDir=dist/cervterm-v0.1.0-beta.1-windows-amd64 -d ProductVersion=0.1.0 -o dist/CervTerm-0.1.0.msi
+  -->
+  <Package
+    Name="CervTerm"
+    Manufacturer="T50 Systems"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="9bbe355b-37b7-4f3b-9d9c-a626994bca2c"
+    Scope="perMachine">
+    <SummaryInformation Description="CervTerm GPU terminal emulator" Manufacturer="T50 Systems" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of CervTerm is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="MainFeature" Title="CervTerm" Level="1">
+      <ComponentGroupRef Id="CervTermFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="INSTALLFOLDER" Name="CervTerm" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="CervTerm" />
+    </StandardDirectory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="CervTermFiles" Directory="INSTALLFOLDER">
+      <Component Id="CervTermExe">
+        <File Id="CervTermExeFile" Source="$(var.SourceDir)\cervterm.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="DefaultConfig">
+        <File Source="$(var.SourceDir)\cervterm.lua" KeyPath="yes" />
+      </Component>
+      <Component Id="Readme">
+        <File Source="$(var.SourceDir)\README.md" KeyPath="yes" />
+      </Component>
+      <Component Id="Changelog">
+        <File Source="$(var.SourceDir)\CHANGELOG.md" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <Component Id="StartMenuShortcut" Directory="ApplicationProgramsFolder">
+      <Shortcut Id="CervTermShortcut" Name="CervTerm" Description="CervTerm GPU terminal emulator" Target="[#CervTermExeFile]" WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\T50 Systems\CervTerm" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Fragment>
+</Wix>

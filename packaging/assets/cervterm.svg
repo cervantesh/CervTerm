@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="CervTerm icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080B12"/>
+      <stop offset="1" stop-color="#123040"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#60E8F0"/>
+      <stop offset="1" stop-color="#8DFFB0"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="24" width="224" height="208" rx="28" fill="url(#bg)"/>
+  <rect x="16" y="24" width="224" height="36" rx="18" fill="#1A2433"/>
+  <circle cx="42" cy="42" r="7" fill="#FF5F57"/>
+  <circle cx="64" cy="42" r="7" fill="#FFBD2E"/>
+  <circle cx="86" cy="42" r="7" fill="#28C840"/>
+  <path d="M58 102 L102 128 L58 154" fill="none" stroke="url(#accent)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="116" y="148" width="74" height="16" rx="8" fill="url(#accent)"/>
+</svg>

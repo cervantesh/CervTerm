@@ -46,6 +46,14 @@ func (s *localSession) Resize(size Size) error {
 	return creackpty.Setsize(s.file, &creackpty.Winsize{Rows: size.Rows, Cols: size.Cols})
 }
 func (s *localSession) Close() error {
-	_ = s.cmd.Process.Kill()
-	return s.file.Close()
+	if s.cmd != nil && s.cmd.Process != nil {
+		_ = s.cmd.Process.Kill()
+		_, _ = s.cmd.Process.Wait()
+	}
+	if s.file == nil {
+		return nil
+	}
+	err := s.file.Close()
+	s.file = nil
+	return err
 }

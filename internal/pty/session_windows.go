@@ -5,6 +5,8 @@ package pty
 import (
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"syscall"
 
 	"github.com/ActiveState/termtest/conpty"
@@ -35,9 +37,18 @@ func NewLocalWithOptions(rows, cols uint16, opts Options) (Session, error) {
 	if shell == "" {
 		shell = "powershell.exe"
 	}
+	shell, err = resolveWindowsProgram(shell)
+	if err != nil {
+		_ = cp.Close()
+		return nil, err
+	}
 	args := opts.ShellArgs
 	if len(args) == 0 {
 		args = []string{shell}
+	} else if args[0] == opts.ShellProgram {
+		args[0] = shell
+	} else if args[0] != shell {
+		args = append([]string{shell}, args...)
 	}
 
 	_, handle, err := cp.Spawn(shell, args, nil)
@@ -47,6 +58,20 @@ func NewLocalWithOptions(rows, cols uint16, opts Options) (Session, error) {
 	}
 
 	return &localSession{pty: cp, handle: handle}, nil
+}
+
+func resolveWindowsProgram(program string) (string, error) {
+	if program == "" {
+		return program, nil
+	}
+	if filepath.IsAbs(program) || filepath.Dir(program) != "." {
+		return program, nil
+	}
+	resolved, err := exec.LookPath(program)
+	if err != nil {
+		return program, err
+	}
+	return resolved, nil
 }
 
 func (s *localSession) Reader() io.Reader { return s.pty.OutPipe() }
@@ -61,10 +86,10 @@ func (s *localSession) Resize(size Size) error {
 }
 
 func (s *localSession) Close() error {
+	err := s.pty.Close()
 	if s.handle != 0 {
-		_ = syscall.TerminateProcess(syscall.Handle(s.handle), 1)
 		_ = syscall.CloseHandle(syscall.Handle(s.handle))
 		s.handle = 0
 	}
-	return s.pty.Close()
+	return err
 }

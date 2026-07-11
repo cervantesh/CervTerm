@@ -1,0 +1,4 @@
+source=https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf
+subset_tool=pyftsubset/fonttools
+subset_text=😀🚀❤☀⭐👩‍💻
+license_source=font name table IDs 13/14 from source TTF

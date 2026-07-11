@@ -6,7 +6,7 @@ This roadmap captures the path from the current CervTerm prototype toward a mini
 
 CervTerm already has:
 
-- Local Windows PTY via ConPTY.
+- Local Windows PTY via ConPTY and Unix PTY via `creack/pty` behind build tags.
 - GLFW/OpenGL frontend.
 - Renderer-neutral snapshots.
 - Scrollback with scrollable viewport.
@@ -16,9 +16,12 @@ CervTerm already has:
 - Alternate screen buffer support.
 - Cursor save/restore.
 - Correct cursor hiding while viewing scrollback.
-- Basic VT parser with CSI cursor movement, erase modes, SGR ANSI/bright/256/truecolor, OSC title.
+- VT parser with CSI cursor movement, erase modes, scroll regions, insert/delete operations, cursor/autowrap/application modes, SGR ANSI/bright/256/truecolor, SGR mouse modes, and OSC title.
 - Benchmarks for parser/render hot paths.
+- Parser fuzz smoke coverage, replay-style VT golden fixtures, and a vttest compatibility checklist.
 - Product rename to CervTerm.
+- Lua/Teal-oriented config model with validated defaults and a `--print-default-config` Lua template command.
+- Renderer-neutral color glyph backend covering bitmap color fonts, broad COLRv1 paint/composite/variation support, SVG glyph extraction/rasterization, and initial cluster handling.
 
 ## Four-phase roadmap
 
@@ -124,6 +127,7 @@ Priority work:
    - resize error handling.
 9. Add Unix PTY support.
 
+Implemented so far: parser fuzz smoke coverage, replay-style golden fixtures including a real ConPTY-captured PowerShell smoke stream and a real MSYS2-built `vttest` startup/menu capture, compatibility checklist docs, a built-in `--capture-vt` PTY/ConPTY recorder for authoritative raw VT byte capture, and helper scripts to build/capture `vttest` locally.
 Success criteria:
 
 - Invalid config reports actionable errors and falls back safely.
@@ -132,7 +136,14 @@ Success criteria:
 - CI can run unit tests, parser fuzz smoke tests, and benchmarks.
 - Windows and at least one Unix-like platform are supported.
 
-See also: [`docs/config-roadmap.md`](config-roadmap.md).
+See also:
+- [`docs/config-roadmap.md`](config-roadmap.md).
+- [`docs/vttest-checklist.md`](vttest-checklist.md) for the VT compatibility checklist.
+- [`docs/vttest-captures.md`](vttest-captures.md) for VT replay/capture workflow.
+- [`docs/emoji-rendering-research.md`](emoji-rendering-research.md) for the font/color glyph direction.
+- [`docs/shaping-options.md`](shaping-options.md) for GSUB/GPOS shaping engine tradeoffs.
+- [`docs/gogpu-color-glyph-extraction.md`](gogpu-color-glyph-extraction.md) for the reusable backend boundary.
+- [`docs/release-packaging.md`](release-packaging.md) for release artifact and Windows metadata notes.
 
 ### Phase 4 — Productization and release
 
@@ -157,6 +168,8 @@ Priority work:
 7. Add default config template generation.
 8. Add crash/error logging.
 9. Add version command or `--version`.
+
+Implemented so far: SVG icon source, generated Windows `.ico`, Windows manifest/version metadata scaffolding, `goversioninfo` `.syso` generation script/`go generate` entrypoint, CI resource generation before Windows builds, CI beta zip artifacts for Windows and Linux headless builds, tag-triggered GitHub release publishing for zip assets, SHA256 checksums, GitHub provenance attestations, portable winget manifest templates, deferred optional Authenticode signing hook, deferred WiX MSI template, README/CHANGELOG with a captured preview screenshot, `--version`, `--build-info`, `--print-default-config`, diagnostics logging via `--log-file`/`CERVTERM_LOG_FILE` with panic stack capture, and a local release preflight that checks package contents plus vttest readiness while treating signing/MSI as intentionally deferred.
 
 Success criteria:
 
@@ -221,6 +234,11 @@ Deliverable:
 4. Replace static basicfont atlas with dynamic atlas.
 5. Preserve renderer hot-path benchmarks.
 6. Add visual smoke tests where feasible.
+7. Replace the temporary emoji workaround with a real color glyph pipeline:
+   - font fallback and glyph IDs/clusters
+   - baseline/bearing-aware raster metrics
+   - RGBA atlas entries for color glyphs
+   - no external browser/PowerShell rasterization in the steady-state renderer.
 
 Deliverable:
 
@@ -253,6 +271,6 @@ Deliverable:
 
 ## Near-term recommendation
 
-The next engineering task should be **scroll regions plus insert/delete line/character operations**. That work is more important than configuration or packaging because it improves real terminal compatibility immediately and reduces visible breakage in TUI applications.
+The next engineering task should be **advanced shaping integration plus richer real-font fixture coverage**. The earlier terminal-correctness slice now has scroll regions, insert/delete operations, keyboard/mouse encoding, fuzz smoke coverage, golden replay coverage, a Shaper interface, a default pure-Go `SimpleShaper` for simple glyph-ID/advance shaping, Windows DirectWriteShaper selection scaffolding, redistributable Go-font real TTF fixture tests, and a licensed Noto Color Emoji subset fixture; DirectWrite TextAnalyzer `GetGlyphs`/`GetGlyphPlacements` mapping into `ShapedGlyph` with Arabic/Indic ligature/conjunct and emoji ZWJ smoke coverage, single- and multi-glyph shaped COLR color rendering, diagnostics logging, README screenshot capture, beta zip validation, release preflight checks, and a real MSYS2-built `vttest` startup capture; the largest remaining visible gap is broader real-world fixture coverage and deeper interactive `vttest` menu-path captures.
 
-After that, implement full keyboard/mouse encoding, then start the font rendering replacement.
+After that, continue productization: app icon/metadata, release packaging, CI artifacts, and deeper documented manual `vttest` menu-path captures.

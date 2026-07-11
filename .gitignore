@@ -17,6 +17,7 @@ Thumbs.db
 # Test/temp output
 coverage.out
 /tmp/
+/.tmp/
 
 # Editor/tool temp files
 .tmp-*

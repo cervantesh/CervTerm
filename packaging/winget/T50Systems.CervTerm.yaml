@@ -1,0 +1,6 @@
+# Template for winget-pkgs manifests. Copy this directory to manifests/t/T50Systems/CervTerm/<version>/ and replace <version> before submitting.
+PackageIdentifier: T50Systems.CervTerm
+PackageVersion: <version>
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.9.0

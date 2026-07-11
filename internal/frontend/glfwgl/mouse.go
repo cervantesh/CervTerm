@@ -33,6 +33,7 @@ func (a *App) sendMouseButton(button glfw.MouseButton, action glfw.Action, mods 
 	} else if action == glfw.Press {
 		a.mouseReportDown = true
 		a.mouseReportButton = mouseButton
+		a.mouseReportMods = mouseModsFromGLFW(mods)
 	} else {
 		return false
 	}
@@ -50,7 +51,7 @@ func (a *App) sendMouseMove(x, y float64) bool {
 		return false
 	}
 	point := a.pointFromPixels(float32(x), float32(y))
-	encoded, ok := input.EncodeMouse(input.MouseEvent{Button: a.mouseReportButton, Action: input.MouseMove, Row: point.Row, Col: point.Col, SGR: true})
+	encoded, ok := input.EncodeMouse(input.MouseEvent{Button: a.mouseReportButton, Action: input.MouseMove, Row: point.Row, Col: point.Col, Mods: a.mouseReportMods, SGR: true})
 	if !ok {
 		return false
 	}

@@ -22,6 +22,7 @@ Recommended loading order:
 2. `cervterm.tl` if present and Teal validation is available.
 3. `cervterm.lua` if present.
 4. Built-in defaults.
+5. `cervterm --print-default-config` to generate an editable Lua template.
 
 Planned default config locations:
 
@@ -376,6 +377,7 @@ return config
 - Define `Config` structs.
 - Add defaults matching current CervTerm behavior.
 - Add validation for colors, dimensions, font size, shell fields.
+- Provide `--print-default-config` so users can generate a validated Lua template without opening documentation.
 
 ### Phase 2: Lua loader
 

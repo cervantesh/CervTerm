@@ -1,6 +1,8 @@
 package vt
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"cervterm/internal/core"
@@ -57,6 +59,19 @@ func TestParserExtendedSGRColors(t *testing.T) {
 	}
 	if cells[3].Attr.BG != (core.RGB{R: 200, G: 150, B: 100}) {
 		t.Fatalf("expected truecolor bg, got %#v", cells[3].Attr.BG)
+	}
+}
+
+func TestParserAdditionalSGRAttributes(t *testing.T) {
+	term := core.NewTerminal(20, 2)
+	var p Parser
+	p.Advance(term, []byte("\x1b[3;4;7;9mX\x1b[23;24;27;29mY"))
+	cells := term.Cells()
+	if !cells[0].Attr.Italic || !cells[0].Attr.Underline || !cells[0].Attr.Inverse || !cells[0].Attr.Strikethrough {
+		t.Fatalf("expected all additional attrs on first cell, got %#v", cells[0].Attr)
+	}
+	if cells[1].Attr.Italic || cells[1].Attr.Underline || cells[1].Attr.Inverse || cells[1].Attr.Strikethrough {
+		t.Fatalf("expected attrs reset on second cell, got %#v", cells[1].Attr)
 	}
 }
 
@@ -335,4 +350,60 @@ func BenchmarkCoreReuseVsNew(b *testing.B) {
 			p.Advance(term, payload)
 		}
 	})
+}
+
+func FuzzParserAdvanceDoesNotPanic(f *testing.F) {
+	for _, seed := range [][]byte{
+		[]byte("hello"),
+		[]byte("\x1b[2J\x1b[H"),
+		[]byte("\x1b[2;4r\x1b[L\x1b[M"),
+		[]byte("\x1b[38;2;255;0;0mred"),
+		[]byte{0xff, 0xfe, 0x1b, '[', '?', '2', '5', 'l'},
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		term := core.NewTerminal(12, 5)
+		var p Parser
+		p.Advance(term, data)
+		if term.CursorRow() < 0 || term.CursorRow() >= term.Rows() {
+			t.Fatalf("cursor row out of bounds: %d rows=%d", term.CursorRow(), term.Rows())
+		}
+		if term.CursorCol() < 0 || term.CursorCol() >= term.Cols() {
+			t.Fatalf("cursor col out of bounds: %d cols=%d", term.CursorCol(), term.Cols())
+		}
+		if len(term.Cells()) != term.Rows()*term.Cols() {
+			t.Fatalf("cell length = %d, want %d", len(term.Cells()), term.Rows()*term.Cols())
+		}
+	})
+}
+
+func TestParserGoldenRecordings(t *testing.T) {
+	tests := []struct {
+		name string
+		cols int
+		rows int
+	}{
+		{name: "fullscreen-region", cols: 12, rows: 4},
+		{name: "powershell-ansi-smoke", cols: 80, rows: 24},
+		{name: "vttest-startup", cols: 80, rows: 24},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input, err := os.ReadFile(filepath.Join("testdata", tt.name+".vt"))
+			if err != nil {
+				t.Fatalf("read recording: %v", err)
+			}
+			wantBytes, err := os.ReadFile(filepath.Join("testdata", tt.name+".golden"))
+			if err != nil {
+				t.Fatalf("read golden: %v", err)
+			}
+			term := core.NewTerminal(tt.cols, tt.rows)
+			var p Parser
+			p.Advance(term, input)
+			if got, want := term.PlainText(), string(wantBytes); got != want {
+				t.Fatalf("golden mismatch\nwant: %q\n got: %q", want, got)
+			}
+		})
+	}
 }

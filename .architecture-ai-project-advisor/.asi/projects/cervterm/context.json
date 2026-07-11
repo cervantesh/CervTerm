@@ -1,0 +1,26 @@
+{
+  "slug": "cervterm",
+  "name": "CervTerm",
+  "stage": "MVP / pre-beta renderer hardening",
+  "domain": "terminal emulator",
+  "goal": "Robust Unicode and emoji rendering without per-emoji hardcoding",
+  "confirmedFacts": [
+    "Go terminal emulator",
+    "GLFW/OpenGL frontend",
+    "Windows DirectWrite shaping path",
+    "Current emoji fixes use ranges and Segoe UI Emoji COLRv0 compatibility"
+  ],
+  "architectureDirection": [
+    "Generated Unicode property tables",
+    "Grapheme cluster segmentation",
+    "Cluster display width",
+    "Per-cluster font fallback",
+    "Visual regression coverage"
+  ],
+  "risks": [
+    "Manual Unicode range drift",
+    "Host font limitations for national flags",
+    "Complex emoji ZWJ/VS16 handling"
+  ],
+  "updatedAt": "2026-07-10"
+}

@@ -3,8 +3,6 @@
 package glfwgl
 
 import (
-	"fmt"
-	"image/color"
 	"io"
 	"math"
 	"runtime"
@@ -13,12 +11,12 @@ import (
 
 	"cervterm/internal/config"
 	"cervterm/internal/core"
+	"cervterm/internal/fontglyph"
 	"cervterm/internal/input"
 	"cervterm/internal/metrics"
 	ptyio "cervterm/internal/pty"
 	"cervterm/internal/render"
 	termsel "cervterm/internal/selection"
-	cervtermtheme "cervterm/internal/theme"
 	"cervterm/internal/vt"
 
 	"github.com/go-gl/gl/v2.1/gl"
@@ -54,6 +52,7 @@ type App struct {
 	selectionEnd      termsel.Point
 	mouseReportDown   bool
 	mouseReportButton input.MouseButton
+	mouseReportMods   input.Mod
 }
 
 func Run() error {
@@ -131,7 +130,7 @@ func (a *App) runWindow() error {
 	if err := gl.Init(); err != nil {
 		return err
 	}
-	atlas, err := newGlyphAtlasWithSpec(fontSpec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: 96})
+	atlas, err := newGlyphAtlasWithSpec(fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: 96})
 	if err != nil {
 		return err
 	}
@@ -168,6 +167,9 @@ func (a *App) installCallbacks() {
 			return
 		}
 
+		if a.handleClipboardKey(key, mods) {
+			return
+		}
 		event, hasEvent := inputEventFromGLFW(key, mods)
 		if hasEvent {
 			switch input.ClipboardShortcut(event) {
@@ -192,6 +194,7 @@ func (a *App) installCallbacks() {
 			a.writeInputBytes(encoded)
 		}
 	})
+
 	a.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 		if a.sendMouseButton(button, action, mods) {
 			return
@@ -236,6 +239,24 @@ func (a *App) installCallbacks() {
 		a.term.ScrollViewport(rows)
 		a.mu.Unlock()
 	})
+}
+
+func (a *App) handleClipboardKey(key glfw.Key, mods glfw.ModifierKey) bool {
+	if mods&glfw.ModControl != 0 && key == glfw.KeyV {
+		text := a.window.GetClipboardString()
+		a.writeInputBytes(input.EncodePaste(text, a.bracketedPasteMode()))
+		return true
+	}
+	if mods&glfw.ModShift != 0 && key == glfw.KeyInsert {
+		text := a.window.GetClipboardString()
+		a.writeInputBytes(input.EncodePaste(text, a.bracketedPasteMode()))
+		return true
+	}
+	if mods&glfw.ModControl != 0 && key == glfw.KeyInsert {
+		_ = a.copySelectionToClipboard()
+		return true
+	}
+	return false
 }
 
 func (a *App) copySelectionToClipboard() bool {
@@ -334,112 +355,4 @@ func (a *App) resizeToWindow() {
 	if a.pty != nil {
 		_ = a.pty.Resize(ptyio.Size{Rows: uint16(rows), Cols: uint16(cols)})
 	}
-}
-
-func (a *App) draw() {
-	w, h := a.window.GetFramebufferSize()
-	gl.Viewport(0, 0, int32(w), int32(h))
-	gl.MatrixMode(gl.PROJECTION)
-	gl.LoadIdentity()
-	gl.Ortho(0, float64(w), float64(h), 0, -1, 1)
-	gl.MatrixMode(gl.MODELVIEW)
-	gl.LoadIdentity()
-
-	palette := cervtermtheme.DefaultPalette()
-	background := themeColor(palette.Background)
-	panel := themeColor(palette.Surface)
-	accent := themeColor(palette.Accent)
-	glClearColor(background)
-	gl.Clear(gl.COLOR_BUFFER_BIT)
-	gl.Disable(gl.TEXTURE_2D)
-	fillRect(10, 10, float32(w-20), float32(h-20), panel)
-	fillRect(10, 10, float32(w-20), 28, themeColor(palette.Chrome))
-	fillRect(22, 20, 9, 9, themeColor(palette.ANSI[1]))
-	fillRect(38, 20, 9, 9, themeColor(palette.ANSI[3]))
-	fillRect(54, 20, 9, 9, themeColor(palette.ANSI[2]))
-	fillRect(0, 38, float32(w), 1, accent)
-
-	if time.Since(a.lastStats) > 500*time.Millisecond {
-		s := a.meter.Snapshot()
-		a.status = fmt.Sprintf("CervTerm · %dx%d · %.1f KB read · heap %.1f MB · mallocs %d · GC %d · last pause %s",
-			a.cols, a.rows, float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause)
-		a.lastStats = time.Now()
-	}
-	a.drawString(a.status, 78, 16, themeColor(palette.Muted), 1)
-
-	a.mu.Lock()
-	render.Capture(&a.snap, a.term)
-	a.mu.Unlock()
-	if a.snap.Title != "" && a.snap.Title != a.lastTitle {
-		a.lastTitle = a.snap.Title
-		a.window.SetTitle("CervTerm · " + a.snap.Title)
-	}
-
-	for r := 0; r < a.snap.Rows; r++ {
-		for c := 0; c < a.snap.Cols; c++ {
-			cell := a.snap.Cells[r*a.snap.Cols+c]
-			x := a.paddingX + float32(c)*a.cellW
-			y := a.paddingY + float32(r)*a.cellH
-			if cell.Attr.BG != core.DefaultBG {
-				fillRect(x, y, a.cellW, a.cellH, rgb(cell.Attr.BG))
-			}
-			if a.selectionActive && termsel.Contains(termsel.Range{Start: a.selectionStart, End: a.selectionEnd}, termsel.Point{Row: r, Col: c}) {
-				fillRect(x, y, a.cellW, a.cellH, color.RGBA{0x2A, 0x63, 0x77, 0xFF})
-			}
-			if cell.Rune != ' ' && cell.Rune != 0 && !cell.WideContinuation {
-				fg := rgb(cell.Attr.FG)
-				if cell.Attr.Bold {
-					fg = brighten(fg)
-				}
-				a.drawRune(cell.Rune, x, y, fg, 1)
-			}
-		}
-	}
-
-	if a.snap.CursorVisible && math.Mod(time.Since(a.blinkStart).Seconds(), 1.0) < 0.55 {
-		cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
-		x := a.paddingX + float32(cursorCol)*a.cellW
-		y := a.paddingY + float32(cursorRow)*a.cellH
-		fillRect(x, y+a.cellH-3, a.cellW, 2, accent)
-	}
-}
-
-func (a *App) drawString(s string, x, y float32, c color.RGBA, scale float32) {
-	for _, r := range s {
-		a.drawRune(r, x, y, c, scale)
-		x += a.cellW * scale
-	}
-}
-
-func (a *App) drawRune(r rune, x, y float32, c color.RGBA, scale float32) {
-	gl.Enable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	glColor(c)
-	a.atlas.drawRune(r, x, y, scale)
-	gl.Disable(gl.TEXTURE_2D)
-}
-
-func glClearColor(c color.RGBA) {
-	gl.ClearColor(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, 1)
-}
-func glColor(c color.RGBA) {
-	gl.Color4f(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, float32(c.A)/255)
-}
-
-func fillRect(x, y, w, h float32, c color.RGBA) {
-	glColor(c)
-	gl.Begin(gl.QUADS)
-	gl.Vertex2f(x, y)
-	gl.Vertex2f(x+w, y)
-	gl.Vertex2f(x+w, y+h)
-	gl.Vertex2f(x, y+h)
-	gl.End()
-}
-
-func themeColor(c cervtermtheme.Color) color.RGBA { return color.RGBA{c.R, c.G, c.B, 0xFF} }
-
-func rgb(c core.RGB) color.RGBA { return color.RGBA{c.R, c.G, c.B, 0xFF} }
-func brighten(c color.RGBA) color.RGBA {
-	return color.RGBA{min(255, c.R+28), min(255, c.G+28), min(255, c.B+28), c.A}
 }

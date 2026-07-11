@@ -1,0 +1,22 @@
+{
+  "name": "architecture-ai-project-advisor-state",
+  "version": 1,
+  "storageRoot": ".architecture-ai-project-advisor/.asi",
+  "requiredFiles": [
+    "active-project.json",
+    "projects/index.json"
+  ],
+  "projectFiles": [
+    "context.md",
+    "context.json",
+    "guardrails.md",
+    "scorecard.md",
+    "drift.md",
+    "structure.md",
+    "fitness.md",
+    "preflight.md",
+    "risk-register.md",
+    "decisions/README.md",
+    "checklists/ai-implementation.md"
+  ]
+}
