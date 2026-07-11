@@ -32,7 +32,7 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version 0.1.0-ci -OutDir dist -WindowsZip dist\cervterm-0.1.0-ci-windows.zip
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-installed-package.ps1 -ZipPath dist\cervterm-0.1.0-ci-windows.zip -ExpectedVersion 0.1.0-ci
           go run ./scripts/daily-driver-smoke.go -cervterm dist\cervterm-0.1.0-ci-windows\cervterm.exe -workdir dist\daily-driver-smoke
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cervterm-windows-zip
           path: |
@@ -64,7 +64,7 @@ jobs:
           cp README.md CHANGELOG.md SUPPORT.md dist/cervterm-linux-headless/
           cp -R docs dist/cervterm-linux-headless/docs
           python -m zipfile -c dist/cervterm-linux-headless.zip dist/cervterm-linux-headless
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cervterm-linux-headless-zip
           path: dist/cervterm-linux-headless.zip
