@@ -48,7 +48,8 @@ func main() {
 		for _, warning := range fontglyph.DiagnoseEmojiFonts().Warnings {
 			warnings = append(warnings, warning)
 		}
-		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath, EmojiWarnings: warnings}))
+		scale := glfwgl.DetectContentScale()
+		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath, EmojiWarnings: warnings, ContentScale: scale}))
 	}
 	logFile, err := applog.Setup(applog.ResolvePath(*logPath))
 	if err != nil {
