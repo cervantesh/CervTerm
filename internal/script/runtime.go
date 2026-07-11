@@ -16,11 +16,20 @@ type Binding struct {
 	fn   *lua.LFunction
 }
 
+// eventHandlers holds the optional Lua callbacks fired by terminal events.
+type eventHandlers struct {
+	output *lua.LFunction
+	title  *lua.LFunction
+	bell   *lua.LFunction
+}
+
 // Runtime owns a persistent Lua state and must only be used from the thread that
-// created it. The GLFW frontend calls Load and Dispatch on its main loop thread.
+// created it. The GLFW frontend calls Load, Dispatch, and the Fire* event methods
+// on its main loop thread.
 type Runtime struct {
 	state           *lua.LState
 	bindings        []Binding
+	events          eventHandlers
 	dispatchTimeout time.Duration
 }
 
@@ -54,7 +63,12 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 		state.Close()
 		return base, nil, err
 	}
-	return cfg, &Runtime{state: state, bindings: bindings, dispatchTimeout: time.Second}, nil
+	events, err := loadEvents(root)
+	if err != nil {
+		state.Close()
+		return base, nil, err
+	}
+	return cfg, &Runtime{state: state, bindings: bindings, events: events, dispatchTimeout: time.Second}, nil
 }
 
 func (r *Runtime) Bindings() []Spec {
@@ -70,17 +84,51 @@ func (r *Runtime) Dispatch(index int, host Host) error {
 		return fmt.Errorf("binding index %d out of range", index)
 	}
 	binding := r.bindings[index]
+	return r.callProtected("keys "+binding.Spec.String(), binding.fn, host)
+}
+
+// WantsOutput reports whether an on-output handler is registered, so the frontend
+// can skip converting output chunks when no handler will consume them.
+func (r *Runtime) WantsOutput() bool { return r.events.output != nil }
+
+// FireOutput runs the on-output handler with the raw output chunk. It is a no-op
+// when no handler is registered.
+func (r *Runtime) FireOutput(host Host, data string) error {
+	if r.events.output == nil {
+		return nil
+	}
+	return r.callProtected("events.output", r.events.output, host, lua.LString(data))
+}
+
+// FireTitle runs the on-title handler with the new title.
+func (r *Runtime) FireTitle(host Host, title string) error {
+	if r.events.title == nil {
+		return nil
+	}
+	return r.callProtected("events.title", r.events.title, host, lua.LString(title))
+}
+
+// FireBell runs the on-bell handler.
+func (r *Runtime) FireBell(host Host) error {
+	if r.events.bell == nil {
+		return nil
+	}
+	return r.callProtected("events.bell", r.events.bell, host)
+}
+
+// callProtected invokes fn with a fresh term handle plus extra args under a
+// deadline watchdog. A cancelled or erroring call leaves the state reusable.
+func (r *Runtime) callProtected(label string, fn *lua.LFunction, host Host, extra ...lua.LValue) error {
 	ctx, cancel := context.WithTimeout(context.Background(), r.dispatchTimeout)
 	defer cancel()
 	r.state.SetContext(ctx)
 	defer r.state.SetContext(context.Background())
 
-	if err := r.state.CallByParam(lua.P{
-		Fn:      binding.fn,
-		NRet:    0,
-		Protect: true,
-	}, termTable(r.state, host)); err != nil {
-		return fmt.Errorf("keys %s: %w", binding.Spec.String(), err)
+	args := make([]lua.LValue, 0, len(extra)+1)
+	args = append(args, termTable(r.state, host))
+	args = append(args, extra...)
+	if err := r.state.CallByParam(lua.P{Fn: fn, NRet: 0, Protect: true}, args...); err != nil {
+		return fmt.Errorf("%s: %w", label, err)
 	}
 	return nil
 }
@@ -131,4 +179,35 @@ func loadBindings(root *lua.LTable) ([]Binding, error) {
 		bindings = append(bindings, Binding{Spec: spec, fn: action})
 	}
 	return bindings, nil
+}
+
+func loadEvents(root *lua.LTable) (eventHandlers, error) {
+	var handlers eventHandlers
+	value := root.RawGetString("events")
+	if value == lua.LNil {
+		return handlers, nil
+	}
+	table, ok := value.(*lua.LTable)
+	if !ok {
+		return handlers, fmt.Errorf("events must be a table")
+	}
+	for _, entry := range []struct {
+		name string
+		dst  **lua.LFunction
+	}{
+		{"output", &handlers.output},
+		{"title", &handlers.title},
+		{"bell", &handlers.bell},
+	} {
+		value := table.RawGetString(entry.name)
+		if value == lua.LNil {
+			continue
+		}
+		fn, ok := value.(*lua.LFunction)
+		if !ok {
+			return eventHandlers{}, fmt.Errorf("events.%s must be a function", entry.name)
+		}
+		*entry.dst = fn
+	}
+	return handlers, nil
 }
