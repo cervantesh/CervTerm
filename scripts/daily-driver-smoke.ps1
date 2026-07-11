@@ -35,18 +35,21 @@ function Assert-FileContains {
   }
 }
 
-function ConvertTo-EncodedPowerShellCommand {
-  param([Parameter(Mandatory = $true)] [string]$Command)
-  return [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Command))
-}
-
-function New-PowerShellCommandArgs {
-  param([Parameter(Mandatory = $true)] [string]$Command)
-  $encoded = ConvertTo-EncodedPowerShellCommand $Command
+function New-PowerShellScriptArgs {
+  param(
+    [Parameter(Mandatory = $true)] [string]$Name,
+    [Parameter(Mandatory = $true)] [string]$Command
+  )
   $powershellExe = Join-Path $env:SystemRoot "System32/WindowsPowerShell/v1.0/powershell.exe"
-  return @("/C", "$powershellExe -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded")
+  $ps1Path = Join-Path $WorkDir "$Name.ps1"
+  $cmdPath = Join-Path $WorkDir "$Name.cmd"
+  $Command | Set-Content -Encoding ASCII $ps1Path
+  @(
+    "@echo off",
+    "$powershellExe -NoProfile -ExecutionPolicy Bypass -File $ps1Path"
+  ) | Set-Content -Encoding ASCII $cmdPath
+  return @("/C", $cmdPath)
 }
-
 function Invoke-Capture {
   param(
     [Parameter(Mandatory = $true)] [string]$Name,
@@ -103,7 +106,7 @@ $powershellBasicCommand = "Write-Output 'CERVTERM_PS_START'; Get-Location; 1..3 
 Invoke-Capture `
   -Name "powershell-basic" `
   -Program "cmd.exe" `
-  -Args (New-PowerShellCommandArgs $powershellBasicCommand) `
+  -Args (New-PowerShellScriptArgs -Name "powershell-basic" -Command $powershellBasicCommand) `
   -Markers @("CERVTERM_PS_START", "CERVTERM_PS_END")
 
 $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
@@ -137,7 +140,7 @@ $altScreenCommand = '$esc=[char]27; Write-Output "CERVTERM_ALT_START"; Write-Out
 Invoke-Capture `
   -Name "alternate-screen" `
   -Program "cmd.exe" `
-  -Args (New-PowerShellCommandArgs $altScreenCommand) `
+  -Args (New-PowerShellScriptArgs -Name "alternate-screen" -Command $altScreenCommand) `
   -Markers @("CERVTERM_ALT_START", "inside-alt-screen", "CERVTERM_ALT_END")
 
 $longLine = "CERVTERM_REFLOW_START " + ((1..12 | ForEach-Object { "segment$_" }) -join "-") + " CERVTERM_REFLOW_END"
@@ -145,13 +148,13 @@ $reflowCommand = "Write-Output '$longLine'"
 Invoke-Capture `
   -Name "resize-reflow-40col" `
   -Program "cmd.exe" `
-  -Args (New-PowerShellCommandArgs $reflowCommand) `
+  -Args (New-PowerShellScriptArgs -Name "resize-reflow-40col" -Command $reflowCommand) `
   -Markers @("CERVTERM_REFLOW_START", "CERVTERM_REFLOW_END") `
   -Cols 40
 Invoke-Capture `
   -Name "resize-reflow-100col" `
   -Program "cmd.exe" `
-  -Args (New-PowerShellCommandArgs $reflowCommand) `
+  -Args (New-PowerShellScriptArgs -Name "resize-reflow-100col" -Command $reflowCommand) `
   -Markers @("CERVTERM_REFLOW_START", "CERVTERM_REFLOW_END") `
   -Cols 100
 
@@ -159,7 +162,7 @@ $longSessionCommand = "Write-Output 'CERVTERM_LONG_START'; 1..20 | ForEach-Objec
 Invoke-Capture `
   -Name "long-session" `
   -Program "cmd.exe" `
-  -Args (New-PowerShellCommandArgs $longSessionCommand) `
+  -Args (New-PowerShellScriptArgs -Name "long-session" -Command $longSessionCommand) `
   -Markers @("CERVTERM_LONG_START", "long-session-line-20", "CERVTERM_LONG_END") `
   -Timeout "10s"
 
