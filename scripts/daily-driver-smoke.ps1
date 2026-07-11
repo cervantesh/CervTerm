@@ -40,6 +40,13 @@ function ConvertTo-EncodedPowerShellCommand {
   return [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Command))
 }
 
+function New-PowerShellCommandArgs {
+  param([Parameter(Mandatory = $true)] [string]$Command)
+  $encoded = ConvertTo-EncodedPowerShellCommand $Command
+  $powershellExe = Join-Path $env:SystemRoot "System32/WindowsPowerShell/v1.0/powershell.exe"
+  return @("/C", "`"$powershellExe`" -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded")
+}
+
 function Invoke-Capture {
   param(
     [Parameter(Mandatory = $true)] [string]$Name,
@@ -95,8 +102,8 @@ Invoke-Capture `
 $powershellBasicCommand = "Write-Output 'CERVTERM_PS_START'; Get-Location; 1..3 | ForEach-Object { Write-Output ('ps-line-{0}' -f `$_) }; Write-Output 'CERVTERM_PS_END'"
 Invoke-Capture `
   -Name "powershell-basic" `
-  -Program "powershell.exe" `
-  -Args @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", (ConvertTo-EncodedPowerShellCommand $powershellBasicCommand)) `
+  -Program "cmd.exe" `
+  -Args (New-PowerShellCommandArgs $powershellBasicCommand) `
   -Markers @("CERVTERM_PS_START", "CERVTERM_PS_END")
 
 $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
@@ -129,30 +136,30 @@ Invoke-Capture `
 $altScreenCommand = '$esc=[char]27; Write-Output "CERVTERM_ALT_START"; Write-Output ($esc + ''[?1049hALT_SCREEN_BODY'' + $esc + ''[2J'' + $esc + ''[Hinside-alt-screen'' + $esc + ''[?1049l''); Write-Output "CERVTERM_ALT_END"'
 Invoke-Capture `
   -Name "alternate-screen" `
-  -Program "powershell.exe" `
-  -Args @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", (ConvertTo-EncodedPowerShellCommand $altScreenCommand)) `
+  -Program "cmd.exe" `
+  -Args (New-PowerShellCommandArgs $altScreenCommand) `
   -Markers @("CERVTERM_ALT_START", "inside-alt-screen", "CERVTERM_ALT_END")
 
 $longLine = "CERVTERM_REFLOW_START " + ((1..12 | ForEach-Object { "segment$_" }) -join "-") + " CERVTERM_REFLOW_END"
 $reflowCommand = "Write-Output '$longLine'"
 Invoke-Capture `
   -Name "resize-reflow-40col" `
-  -Program "powershell.exe" `
-  -Args @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", (ConvertTo-EncodedPowerShellCommand $reflowCommand)) `
+  -Program "cmd.exe" `
+  -Args (New-PowerShellCommandArgs $reflowCommand) `
   -Markers @("CERVTERM_REFLOW_START", "CERVTERM_REFLOW_END") `
   -Cols 40
 Invoke-Capture `
   -Name "resize-reflow-100col" `
-  -Program "powershell.exe" `
-  -Args @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", (ConvertTo-EncodedPowerShellCommand $reflowCommand)) `
+  -Program "cmd.exe" `
+  -Args (New-PowerShellCommandArgs $reflowCommand) `
   -Markers @("CERVTERM_REFLOW_START", "CERVTERM_REFLOW_END") `
   -Cols 100
 
 $longSessionCommand = "Write-Output 'CERVTERM_LONG_START'; 1..20 | ForEach-Object { Write-Output ('long-session-line-{0:D2}' -f `$_); Start-Sleep -Milliseconds 75 }; Write-Output 'CERVTERM_LONG_END'"
 Invoke-Capture `
   -Name "long-session" `
-  -Program "powershell.exe" `
-  -Args @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", (ConvertTo-EncodedPowerShellCommand $longSessionCommand)) `
+  -Program "cmd.exe" `
+  -Args (New-PowerShellCommandArgs $longSessionCommand) `
   -Markers @("CERVTERM_LONG_START", "long-session-line-20", "CERVTERM_LONG_END") `
   -Timeout "10s"
 
