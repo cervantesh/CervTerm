@@ -78,7 +78,7 @@ if (Test-Path $WindowsZip) {
   $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $WindowsZip))
   try {
     $entries = $archive.Entries.FullName | ForEach-Object { $_ -replace "\\", "/" }
-    foreach ($required in @("cervterm.exe", "cervterm.lua", "README.md", "CHANGELOG.md", "docs/product-roadmap.md", "docs/assets/cervterm-preview.png", "packaging/winget/README.md")) {
+    foreach ($required in @("cervterm.exe", "cervterm.lua", "README.md", "CHANGELOG.md", "font-sources/NotoColorEmoji.ttf", "font-sources/NotoEmoji-LICENSE.txt", "docs/product-roadmap.md", "docs/assets/cervterm-preview.png", "packaging/winget/README.md")) {
       Add-Check "zip contains $required" ($entries -contains $required) "check $WindowsZip package contents"
     }
   } finally {

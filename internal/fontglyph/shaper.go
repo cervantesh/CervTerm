@@ -75,12 +75,19 @@ func (b *OpenTypeBackend) rasterizeShapedCluster(lf loadedFace, shaped []ShapedG
 }
 
 func (b *OpenTypeBackend) rasterizeShapedBitmapColorCluster(lf loadedFace, shaped []ShapedGlyph, cellSpan int) (RasterizedGlyph, bool) {
-	if len(shaped) != 1 || shaped[0].GlyphID == 0 {
+	if len(shaped) == 0 {
 		return RasterizedGlyph{}, false
 	}
-	bitmap, ok := bitmapColorGlyph(lf, shaped[0].GlyphID, b.ppem)
-	if !ok {
-		return RasterizedGlyph{}, false
+	bitmaps := make([]bitmapGlyph, 0, len(shaped))
+	for _, glyph := range shaped {
+		if glyph.GlyphID == 0 {
+			return RasterizedGlyph{}, false
+		}
+		bitmap, ok := bitmapColorGlyph(lf, glyph.GlyphID, b.ppem)
+		if !ok {
+			return RasterizedGlyph{}, false
+		}
+		bitmaps = append(bitmaps, bitmap)
 	}
 	cellSpan = max(1, cellSpan)
 	canvasW := b.cellW * cellSpan
@@ -88,35 +95,63 @@ func (b *OpenTypeBackend) rasterizeShapedBitmapColorCluster(lf loadedFace, shape
 	img := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
 	draw.Draw(img, img.Bounds(), image.Transparent, image.Point{}, draw.Src)
 
-	srcBounds := bitmap.Image.Bounds()
-	if srcBounds.Dx() <= 0 || srcBounds.Dy() <= 0 {
-		return RasterizedGlyph{}, false
+	advance := 0.0
+	if len(bitmaps) == 1 {
+		if !drawBitmapGlyphFit(img, bitmaps[0], image.Rect(0, 0, canvasW, canvasH)) {
+			return RasterizedGlyph{}, false
+		}
+		advance = shaped[0].XAdvance
+		if advance <= 0 {
+			advance = float64(canvasW)
+		}
+	} else {
+		slotW := max(1, canvasW/len(bitmaps))
+		for i, bitmap := range bitmaps {
+			slot := image.Rect(i*slotW, 0, canvasW, canvasH)
+			if i < len(bitmaps)-1 {
+				slot.Max.X = (i + 1) * slotW
+			}
+			if !drawBitmapGlyphFit(img, bitmap, slot) {
+				return RasterizedGlyph{}, false
+			}
+			advance += shaped[i].XAdvance
+		}
+		if advance <= 0 {
+			advance = float64(canvasW)
+		}
 	}
-	scale := math.Min(float64(canvasW)/float64(srcBounds.Dx()), float64(canvasH)/float64(srcBounds.Dy()))
-	if scale <= 0 {
-		return RasterizedGlyph{}, false
-	}
-	dstW := max(1, int(math.Round(float64(srcBounds.Dx())*scale)))
-	dstH := max(1, int(math.Round(float64(srcBounds.Dy())*scale)))
-	dstX := (canvasW - dstW) / 2
-	dstY := (canvasH - dstH) / 2
-	dst := image.Rect(dstX, dstY, dstX+dstW, dstY+dstH)
-	xdraw.CatmullRom.Scale(img, dst, bitmap.Image, srcBounds, xdraw.Over, nil)
 
-	advance := shaped[0].XAdvance
-	if advance <= 0 {
-		advance = float64(canvasW)
+	if !hasVisibleRGBA(img) {
+		return RasterizedGlyph{}, false
 	}
 	return RasterizedGlyph{
 		Image:    img,
-		Width:    dstW,
-		Height:   dstH,
-		BearingX: dstX,
-		BearingY: canvasH - dstY,
+		Width:    canvasW,
+		Height:   canvasH,
+		BearingX: 0,
+		BearingY: canvasH,
 		AdvanceX: advance,
 		CellSpan: cellSpan,
 		HasColor: true,
 	}, true
+}
+
+func drawBitmapGlyphFit(dst *image.RGBA, bitmap bitmapGlyph, slot image.Rectangle) bool {
+	srcBounds := bitmap.Image.Bounds()
+	if srcBounds.Dx() <= 0 || srcBounds.Dy() <= 0 || slot.Dx() <= 0 || slot.Dy() <= 0 {
+		return false
+	}
+	scale := math.Min(float64(slot.Dx())/float64(srcBounds.Dx()), float64(slot.Dy())/float64(srcBounds.Dy()))
+	if scale <= 0 {
+		return false
+	}
+	dstW := max(1, int(math.Round(float64(srcBounds.Dx())*scale)))
+	dstH := max(1, int(math.Round(float64(srcBounds.Dy())*scale)))
+	dstX := slot.Min.X + (slot.Dx()-dstW)/2
+	dstY := slot.Min.Y + (slot.Dy()-dstH)/2
+	target := image.Rect(dstX, dstY, dstX+dstW, dstY+dstH)
+	xdraw.CatmullRom.Scale(dst, target, bitmap.Image, srcBounds, xdraw.Over, nil)
+	return true
 }
 
 func hasVisibleRGBA(img *image.RGBA) bool {

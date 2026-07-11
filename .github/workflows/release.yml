@@ -22,17 +22,10 @@ jobs:
         run: |
           go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-windows-resource.ps1 -Arch amd64
-      - name: Build Windows directory
+      - name: Build Windows package
         run: |
           $version = "${{ github.ref_name }}"
-          mkdir dist
-          mkdir dist\cervterm-$version-windows-amd64
-          go build -tags glfw -ldflags "-X cervterm/internal/buildinfo.Version=$version" -o dist\cervterm-$version-windows-amd64\cervterm.exe ./cmd/cervterm
-          .\dist\cervterm-$version-windows-amd64\cervterm.exe --print-default-config > dist\cervterm-$version-windows-amd64\cervterm.lua
-          copy README.md dist\cervterm-$version-windows-amd64\README.md
-          copy CHANGELOG.md dist\cervterm-$version-windows-amd64\CHANGELOG.md
-          xcopy /E /I docs dist\cervterm-$version-windows-amd64\docs
-          xcopy /E /I packaging dist\cervterm-$version-windows-amd64\packaging
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-beta.ps1 -Version $version -OutDir dist
       - name: Authenticode sign Windows executable
         env:
           WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
@@ -43,15 +36,16 @@ jobs:
             Write-Host "Code-signing secrets are not configured; skipping Authenticode signing."
             exit 0
           }
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sign-windows-exe.ps1 -ExePath dist\cervterm-$version-windows-amd64\cervterm.exe -PfxBase64 $env:WINDOWS_CODESIGN_PFX_BASE64 -PfxPassword $env:WINDOWS_CODESIGN_PASSWORD
-      - name: Package Windows zip
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sign-windows-exe.ps1 -ExePath dist\cervterm-$version-windows\cervterm.exe -PfxBase64 $env:WINDOWS_CODESIGN_PFX_BASE64 -PfxPassword $env:WINDOWS_CODESIGN_PASSWORD
+      - name: Package signed Windows zip
         run: |
           $version = "${{ github.ref_name }}"
-          Compress-Archive -Path dist\cervterm-$version-windows-amd64\* -DestinationPath dist\cervterm-$version-windows-amd64.zip
+          Remove-Item -Force dist\cervterm-$version-windows.zip -ErrorAction SilentlyContinue
+          Compress-Archive -Path dist\cervterm-$version-windows\* -DestinationPath dist\cervterm-$version-windows.zip
       - name: Release preflight (Windows package)
         run: |
           $version = "${{ github.ref_name }}"
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version $version -OutDir dist -WindowsZip dist\cervterm-$version-windows-amd64.zip
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version $version -OutDir dist -WindowsZip dist\cervterm-$version-windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: cervterm-windows-amd64

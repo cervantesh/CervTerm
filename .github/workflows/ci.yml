@@ -24,19 +24,12 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-windows-resource.ps1 -Arch amd64
       - name: Build Windows beta zip
         run: |
-          mkdir dist
-          mkdir dist\cervterm-windows
-          go build -tags glfw -o dist\cervterm-windows\cervterm.exe ./cmd/cervterm
-          .\dist\cervterm-windows\cervterm.exe --print-default-config > dist\cervterm-windows\cervterm.lua
-          copy README.md dist\cervterm-windows\README.md
-          copy CHANGELOG.md dist\cervterm-windows\CHANGELOG.md
-          xcopy /E /I docs dist\cervterm-windows\docs
-          xcopy /E /I packaging dist\cervterm-windows\packaging
-          Compress-Archive -Path dist\cervterm-windows\* -DestinationPath dist\cervterm-windows.zip
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-beta.ps1 -Version 0.1.0-ci -OutDir dist
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-preflight.ps1 -Version 0.1.0-ci -OutDir dist -WindowsZip dist\cervterm-0.1.0-ci-windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: cervterm-windows-zip
-          path: dist\cervterm-windows.zip
+          path: dist\*.zip
 
   linux-headless:
     runs-on: ubuntu-latest
