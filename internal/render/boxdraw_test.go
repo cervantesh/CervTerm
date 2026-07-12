@@ -83,6 +83,33 @@ func TestBoxGlyphHorizontalAdjacency(t *testing.T) {
 	assertSpans(t, r, true, w)
 }
 
+func TestBoxGlyphHalvesAlignWithQuadrants(t *testing.T) {
+	// At an odd cell size the lower/right halves must split at the same pixel
+	// boundary as the quadrants, so ▄ beside ▟ (or ▐ beside ▛) has no 1px seam.
+	const w, h = float32(11), float32(25)
+	lower, _ := BoxGlyph('▄', w, h)
+	quad, _ := BoxGlyph('▟', w, h) // bottom-left + bottom-right + ... bottom row
+	if lower[0].Y != quadBottomTop(quad) {
+		t.Fatalf("lower half top %v != quadrant bottom top %v", lower[0].Y, quadBottomTop(quad))
+	}
+	right, _ := BoxGlyph('▐', w, h)
+	rq, _ := BoxGlyph('▗', w, h) // bottom-right quadrant
+	if right[0].X != rq[0].X {
+		t.Fatalf("right half left %v != quadrant right left %v", right[0].X, rq[0].X)
+	}
+}
+
+func quadBottomTop(rects []CellRect) float32 {
+	// The bottom-row quadrants start at the split Y — the largest Y among regions.
+	max := float32(0)
+	for _, rc := range rects {
+		if rc.Y > max {
+			max = rc.Y
+		}
+	}
+	return max
+}
+
 func assertSpans(t *testing.T, rects []CellRect, horizontal bool, extent float32) {
 	t.Helper()
 	if !hasRect(t, rects, func(rc CellRect) bool {

@@ -174,6 +174,10 @@ func blockGlyph(r rune, w, h float32) ([]CellRect, bool) {
 	if r == '\u2580' {
 		return []CellRect{{0, 0, w, roundedFraction(h, 4, 8), 1}}, true
 	}
+	if r == '\u2584' { // lower half: split at the same point as the quadrants
+		hh := roundedFraction(h, 4, 8)
+		return []CellRect{{0, hh, w, h - hh, 1}}, true
+	}
 	if r >= '\u2581' && r <= '\u2588' {
 		n := int(r - '\u2580')
 		height := roundedFraction(h, n, 8)
@@ -184,9 +188,9 @@ func blockGlyph(r rune, w, h float32) ([]CellRect, bool) {
 		width := roundedFraction(w, n, 8)
 		return []CellRect{{0, 0, width, h, 1}}, true
 	}
-	if r == '\u2590' {
-		width := roundedFraction(w, 4, 8)
-		return []CellRect{{w - width, 0, width, h, 1}}, true
+	if r == '\u2590' { // right half: split at the same point as the quadrants
+		hw := roundedFraction(w, 4, 8)
+		return []CellRect{{hw, 0, w - hw, h, 1}}, true
 	}
 	if r >= '\u2591' && r <= '\u2593' {
 		return []CellRect{{0, 0, w, h, float32(r-'\u2590') * .25}}, true
