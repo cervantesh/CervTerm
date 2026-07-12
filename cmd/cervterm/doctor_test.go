@@ -22,8 +22,8 @@ func TestRunDoctorPrintsActionableSections(t *testing.T) {
 		"config:",
 		"diagnostics:",
 		"environment:",
-		"text-gamma: 1.40",
-		"text-darken: 0.10",
+		"text-gamma: 1.15",
+		"text-darken: 0.00",
 		"support:",
 	} {
 		if !strings.Contains(output, want) {

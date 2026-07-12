@@ -22,3 +22,4 @@ coverage.out
 # Editor/tool temp files
 .tmp-*
 **/.tmp-*
+.gocache/
