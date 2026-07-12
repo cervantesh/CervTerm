@@ -13,7 +13,7 @@ func TestDefaultsValidate(t *testing.T) {
 	if cfg.Render.Bidi {
 		t.Fatal("render.bidi must default to false")
 	}
-	if cfg.Render.TextGamma != 1.4 || cfg.Render.TextDarken != 0.1 {
+	if cfg.Render.TextGamma != 1.15 || cfg.Render.TextDarken != 0.0 {
 		t.Fatalf("unexpected text coverage defaults: %#v", cfg.Render)
 	}
 }

@@ -39,8 +39,8 @@ return {
     osc52 = %q,
   },
   render = {
-    text_gamma = %.1f,
-    text_darken = %.1f,
+    text_gamma = %.2f,
+    text_darken = %.2f,
     -- Experimental visual reordering for RTL text; logical storage is unchanged.
     bidi = %t,
   },

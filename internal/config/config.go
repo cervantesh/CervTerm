@@ -75,7 +75,7 @@ func Defaults() Config {
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
 		Clipboard: ClipboardConfig{OSC52: "write"},
-		Render:    RenderConfig{Bidi: false, TextGamma: 1.4, TextDarken: 0.1},
+		Render:    RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0},
 		Shell:     ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
 }
