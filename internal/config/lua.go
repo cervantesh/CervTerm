@@ -54,6 +54,8 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 	}
 	if tbl := tableField(root, "render"); tbl != nil {
 		cfg.Render.Bidi = boolField(tbl, "bidi", cfg.Render.Bidi)
+		cfg.Render.TextGamma = numberField(tbl, "text_gamma", cfg.Render.TextGamma)
+		cfg.Render.TextDarken = numberField(tbl, "text_darken", cfg.Render.TextDarken)
 	}
 	if tbl := tableField(root, "shell"); tbl != nil {
 		cfg.Shell.Program = stringField(tbl, "program", cfg.Shell.Program)

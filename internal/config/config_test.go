@@ -13,6 +13,9 @@ func TestDefaultsValidate(t *testing.T) {
 	if cfg.Render.Bidi {
 		t.Fatal("render.bidi must default to false")
 	}
+	if cfg.Render.TextGamma != 1.4 || cfg.Render.TextDarken != 0.1 {
+		t.Fatalf("unexpected text coverage defaults: %#v", cfg.Render)
+	}
 }
 
 func TestValidateRejectsInvalidConfig(t *testing.T) {
@@ -30,5 +33,31 @@ func TestValidateAcceptsBidiFlag(t *testing.T) {
 	cfg.Render.Bidi = true
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("render.bidi should validate: %v", err)
+	}
+}
+
+func TestValidateTextCoverage(t *testing.T) {
+	tests := []struct {
+		name          string
+		gamma, darken float64
+		wantErr       bool
+	}{
+		{"minimums", 0.5, 0, false},
+		{"maximums", 3, 0.5, false},
+		{"defaults", 1.4, 0.1, false},
+		{"gamma too low", 0.49, 0.1, true},
+		{"gamma too high", 3.01, 0.1, true},
+		{"darken too low", 1.4, -0.01, true},
+		{"darken too high", 1.4, 0.51, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Defaults()
+			cfg.Render.TextGamma = tt.gamma
+			cfg.Render.TextDarken = tt.darken
+			if err := cfg.Validate(); (err != nil) != tt.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %t", err, tt.wantErr)
+			}
+		})
 	}
 }

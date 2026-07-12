@@ -82,6 +82,8 @@ func printConfigDoctor(configPath string) {
 	if cfg.Shell.WorkingDirectory != "" {
 		fmt.Printf("  shell-working-directory: %s\n", cfg.Shell.WorkingDirectory)
 	}
+	fmt.Printf("  text-gamma: %.2f\n", cfg.Render.TextGamma)
+	fmt.Printf("  text-darken: %.2f\n", cfg.Render.TextDarken)
 	printFontDoctor(cfg.Font.Family)
 }
 

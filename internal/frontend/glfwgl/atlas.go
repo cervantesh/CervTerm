@@ -8,6 +8,7 @@ import (
 
 	"cervterm/internal/core"
 	"cervterm/internal/fontglyph"
+	"cervterm/internal/render"
 
 	"github.com/go-gl/gl/v2.1/gl"
 )
@@ -44,13 +45,14 @@ type glyphAtlas struct {
 	entries      map[atlasKey]atlasEntry
 	generation   uint64
 	boundTexture uint32
+	coverageLUT  *[256]uint8
 }
 
 func newGlyphAtlas() (*glyphAtlas, error) {
-	return newGlyphAtlasWithSpec(fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96})
+	return newGlyphAtlasWithSpec(fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96}, 1.4, 0.1)
 }
 
-func newGlyphAtlasWithSpec(spec fontglyph.Spec) (*glyphAtlas, error) {
+func newGlyphAtlasWithSpec(spec fontglyph.Spec, textGamma, textDarken float64) (*glyphAtlas, error) {
 	backend, err := fontglyph.NewOpenTypeBackend(spec)
 	if err != nil {
 		return nil, err
@@ -59,6 +61,10 @@ func newGlyphAtlasWithSpec(spec fontglyph.Spec) (*glyphAtlas, error) {
 	a := &glyphAtlas{
 		cellW: cellW, cellH: cellH, baseline: baseline,
 		backend: backend, entries: make(map[atlasKey]atlasEntry), generation: 1,
+	}
+	if textGamma != 1 || textDarken != 0 {
+		lut := render.CoverageLUT(textGamma, textDarken)
+		a.coverageLUT = &lut
 	}
 	for i := range a.pages {
 		a.pages[i].packer = newShelfPacker(atlasPageSize, atlasPageSize)
@@ -165,6 +171,9 @@ func (a *glyphAtlas) tryInsert(key atlasKey, glyph fontglyph.RasterizedGlyph) (a
 			continue
 		}
 		gl.BindTexture(gl.TEXTURE_2D, a.pages[pageIndex].tex)
+		if a.coverageLUT != nil && !glyph.HasColor {
+			render.ApplyCoverageLUT(glyph.Image.Pix, a.coverageLUT)
+		}
 		gl.TexSubImage2D(gl.TEXTURE_2D, 0, int32(x), int32(y), int32(w), int32(h), gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(glyph.Image.Pix))
 		a.boundTexture = a.pages[pageIndex].tex
 		entry := atlasEntry{

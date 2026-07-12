@@ -41,7 +41,7 @@ func (a *App) rebuildForContentScale(scaleX, scaleY float32) {
 	if a.contentScaleX == scaleX && a.contentScaleY == scaleY {
 		return
 	}
-	atlas, err := newGlyphAtlasWithSpec(fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(scaleX, scaleY)})
+	atlas, err := newGlyphAtlasWithSpec(fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(scaleX, scaleY)}, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
 	if err != nil {
 		return
 	}

@@ -55,7 +55,9 @@ type ClipboardConfig struct {
 }
 
 type RenderConfig struct {
-	Bidi bool
+	Bidi       bool
+	TextGamma  float64
+	TextDarken float64
 }
 
 type ShellConfig struct {
@@ -73,7 +75,7 @@ func Defaults() Config {
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
 		Clipboard: ClipboardConfig{OSC52: "write"},
-		Render:    RenderConfig{Bidi: false},
+		Render:    RenderConfig{Bidi: false, TextGamma: 1.4, TextDarken: 0.1},
 		Shell:     ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
 }
@@ -100,6 +102,12 @@ func (c Config) Validate() error {
 	}
 	if c.Clipboard.OSC52 != "write" && c.Clipboard.OSC52 != "off" {
 		errs = append(errs, fmt.Errorf("clipboard.osc52 %q must be write or off", c.Clipboard.OSC52))
+	}
+	if c.Render.TextGamma < 0.5 || c.Render.TextGamma > 3.0 {
+		errs = append(errs, errors.New("render.text_gamma must be between 0.5 and 3.0"))
+	}
+	if c.Render.TextDarken < 0.0 || c.Render.TextDarken > 0.5 {
+		errs = append(errs, errors.New("render.text_darken must be between 0.0 and 0.5"))
 	}
 	for name, value := range map[string]string{"foreground": c.Colors.Foreground, "background": c.Colors.Background, "cursor": c.Colors.Cursor, "selection_background": c.Colors.SelectionBackground} {
 		if !isHexColor(value) {
