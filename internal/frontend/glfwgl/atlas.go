@@ -51,7 +51,7 @@ type glyphAtlas struct {
 
 func newGlyphAtlas() (*glyphAtlas, error) {
 	defaults := config.Defaults().Render
-	return newGlyphAtlasWithSpec(fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96}, defaults.TextGamma, defaults.TextDarken)
+	return newGlyphAtlasWithSpec(fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96, TextRaster: defaults.TextRaster}, defaults.TextGamma, defaults.TextDarken)
 }
 
 func newGlyphAtlasWithSpec(spec fontglyph.Spec, textGamma, textDarken float64) (*glyphAtlas, error) {
@@ -94,6 +94,9 @@ func (a *glyphAtlas) Reset() {
 }
 
 func (a *glyphAtlas) close() {
+	if a.backend != nil {
+		a.backend.Close()
+	}
 	for i := range a.pages {
 		if a.pages[i].tex != 0 {
 			gl.DeleteTextures(1, &a.pages[i].tex)

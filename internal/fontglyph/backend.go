@@ -25,9 +25,10 @@ import (
 // terminal- or renderer-specific concerns so this package can evolve toward a
 // reusable GoGPU-compatible color glyph backend.
 type Spec struct {
-	Family string
-	Size   float64
-	DPI    float64
+	Family     string
+	Size       float64
+	DPI        float64
+	TextRaster string
 }
 
 // RasterizedGlyph is the renderer-neutral output of a font backend.
@@ -62,6 +63,12 @@ type Backend interface {
 	CellMetrics() (width int, height int, baseline int)
 	Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool)
 	RasterizeCluster(cluster string, cellSpan int) (RasterizedGlyph, bool)
+	Close()
+}
+
+type glyphRasterizer interface {
+	RasterizeGlyph(glyphID uint16, cellW, cellH, baseline, cellSpan int) (*image.RGBA, bool)
+	Close()
 }
 
 type OpenTypeBackend struct {
@@ -71,6 +78,7 @@ type OpenTypeBackend struct {
 	baseline int
 	ppem     uint16
 	shaper   Shaper
+	dwRaster glyphRasterizer
 }
 
 type loadedFace struct {
@@ -82,6 +90,7 @@ type loadedFace struct {
 	colr       *colrParser
 	svg        *svgExtractor
 	sourcePath string
+	faceIndex  int
 }
 
 func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
@@ -97,7 +106,9 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 	cellH := max(1, (metrics.Ascent+metrics.Descent).Ceil()+2)
 	baseline := 1 + metrics.Ascent.Ceil()
 	ppem := uint16(max(1, int(math.Round(spec.Size*spec.DPI/72))))
-	return &OpenTypeBackend{faces: faces, cellW: cellW, cellH: cellH, baseline: baseline, ppem: ppem, shaper: newDefaultShaper()}, nil
+	backend := &OpenTypeBackend{faces: faces, cellW: cellW, cellH: cellH, baseline: baseline, ppem: ppem, shaper: newDefaultShaper()}
+	backend.dwRaster = newPlatformTextRasterizer(spec, primary)
+	return backend, nil
 }
 
 func primaryFace(spec Spec) (loadedFace, font.Metrics, error) {
@@ -141,7 +152,7 @@ func loadOpenTypeFaceIndex(data []byte, index int, spec Spec) (loadedFace, font.
 	if err != nil {
 		return loadedFace{}, font.Metrics{}, err
 	}
-	lf := loadedFace{face: face}
+	lf := loadedFace{face: face, faceIndex: index}
 	lf.sfnt = parsed
 	if index == 0 {
 		if tables, err := DetectColorTables(data); err == nil {
@@ -179,6 +190,20 @@ func (b *OpenTypeBackend) CellMetrics() (width int, height int, baseline int) {
 	return b.cellW, b.cellH, b.baseline
 }
 
+func (b *OpenTypeBackend) Close() {
+	if b != nil && b.dwRaster != nil {
+		b.dwRaster.Close()
+		b.dwRaster = nil
+	}
+}
+
+func (b *OpenTypeBackend) TextRasterEngine() string {
+	if b != nil && b.dwRaster != nil {
+		return "directwrite"
+	}
+	return "go"
+}
+
 func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool) {
 	if r == 0 || r < 32 {
 		return RasterizedGlyph{}, false
@@ -196,6 +221,18 @@ func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool
 	}
 	if glyph, ok := b.rasterizeSVGColorGlyph(lf, r, cellSpan, advance); ok {
 		return glyph, true
+	}
+	if b.dwRaster != nil && lf.sfnt == b.faces[0].sfnt {
+		var sfntBuf sfnt.Buffer
+		if glyphID, err := lf.sfnt.GlyphIndex(&sfntBuf, r); err == nil && glyphID != 0 {
+			if img, ok := b.dwRaster.RasterizeGlyph(uint16(glyphID), b.cellW, b.cellH, b.baseline, cellSpan); ok {
+				return RasterizedGlyph{
+					Image: img, Width: (bounds.Max.X - bounds.Min.X).Ceil(), Height: (bounds.Max.Y - bounds.Min.Y).Ceil(),
+					BearingX: bounds.Min.X.Ceil(), BearingY: -bounds.Min.Y.Ceil(), AdvanceX: float64(advance) / 64.0,
+					CellSpan: cellSpan, HasColor: false,
+				}, true
+			}
+		}
 	}
 
 	img := image.NewRGBA(image.Rect(0, 0, b.cellW*cellSpan, b.cellH))
