@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 
+	"cervterm/internal/config"
 	"cervterm/internal/core"
 	"cervterm/internal/fontglyph"
 	"cervterm/internal/render"
@@ -49,7 +50,8 @@ type glyphAtlas struct {
 }
 
 func newGlyphAtlas() (*glyphAtlas, error) {
-	return newGlyphAtlasWithSpec(fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96}, 1.4, 0.1)
+	defaults := config.Defaults().Render
+	return newGlyphAtlasWithSpec(fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96}, defaults.TextGamma, defaults.TextDarken)
 }
 
 func newGlyphAtlasWithSpec(spec fontglyph.Spec, textGamma, textDarken float64) (*glyphAtlas, error) {
