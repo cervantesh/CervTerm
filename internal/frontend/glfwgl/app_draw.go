@@ -112,6 +112,17 @@ func (a *App) draw() {
 			if cell.Attr.Dim {
 				fg = dim(fg)
 			}
+			if rects, ok := render.BoxGlyph(cell.Rune, a.cellW, a.cellH); ok {
+				for _, rc := range rects {
+					c := fg
+					if rc.Alpha < 1 {
+						c.A = uint8(float32(fg.A) * rc.Alpha)
+					}
+					fillRect(x+rc.X, y+rc.Y, rc.W, rc.H, c)
+				}
+				drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)
+				continue
+			}
 			skew := float32(0)
 			if cell.Attr.Italic {
 				skew = 0.2 * a.cellH
