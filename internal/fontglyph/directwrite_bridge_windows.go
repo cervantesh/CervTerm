@@ -13,6 +13,7 @@ import (
 
 const (
 	dwriteFactoryTypeShared              = 0
+	dwriteFactoryTypeIsolated            = 1
 	dwriteFontFaceTypeTrueType           = 1
 	dwriteFontFaceTypeOpenTypeCollection = 2
 )
@@ -77,15 +78,25 @@ type iWriteFactoryVtbl struct {
 	createGdiCompatibleTextLayout  uintptr
 	createEllipsisTrimmingSign     uintptr
 	createTextAnalyzer             uintptr
+	createNumberSubstitution       uintptr
+	createGlyphRunAnalysis         uintptr
 }
 
 func newDirectWriteFactory() (*iWriteFactory, error) {
+	return newDirectWriteFactoryOfType(dwriteFactoryTypeShared)
+}
+
+// newDirectWriteFactoryOfType exists because the shared factory's font-file
+// cache keeps referenced font files locked for the process lifetime; callers
+// that must release file locks on Close (the glyph rasterizer) use an
+// isolated factory instead.
+func newDirectWriteFactoryOfType(factoryType uintptr) (*iWriteFactory, error) {
 	if err := dwriteDLL.Load(); err != nil {
 		return nil, err
 	}
 	var factory *iWriteFactory
 	hr, _, err := procDWriteCreateFactory.Call(
-		dwriteFactoryTypeShared,
+		factoryType,
 		uintptr(unsafe.Pointer(&iidIDWriteFactory)),
 		uintptr(unsafe.Pointer(&factory)),
 	)

@@ -16,6 +16,24 @@ func TestDefaultsValidate(t *testing.T) {
 	if cfg.Render.TextGamma != 1.15 || cfg.Render.TextDarken != 0.0 {
 		t.Fatalf("unexpected text coverage defaults: %#v", cfg.Render)
 	}
+	if cfg.Render.TextRaster != "auto" {
+		t.Fatalf("render.text_raster default = %q, want auto", cfg.Render.TextRaster)
+	}
+}
+
+func TestValidateTextRaster(t *testing.T) {
+	for _, tt := range []struct {
+		value   string
+		wantErr bool
+	}{{"auto", false}, {"go", false}, {"directwrite", true}, {"", true}} {
+		t.Run(tt.value, func(t *testing.T) {
+			cfg := Defaults()
+			cfg.Render.TextRaster = tt.value
+			if err := cfg.Validate(); (err != nil) != tt.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %t", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func TestValidateRejectsInvalidConfig(t *testing.T) {

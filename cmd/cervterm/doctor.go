@@ -84,6 +84,13 @@ func printConfigDoctor(configPath string) {
 	}
 	fmt.Printf("  text-gamma: %.2f\n", cfg.Render.TextGamma)
 	fmt.Printf("  text-darken: %.2f\n", cfg.Render.TextDarken)
+	backend, backendErr := fontglyph.NewOpenTypeBackend(fontglyph.Spec{Family: cfg.Font.Family, Size: cfg.Font.Size, DPI: 96, TextRaster: cfg.Render.TextRaster})
+	if backendErr != nil {
+		fmt.Printf("  text-raster: go (DirectWrite probe failed: %v)\n", backendErr)
+	} else {
+		fmt.Printf("  text-raster: %s\n", backend.TextRasterEngine())
+		backend.Close()
+	}
 	printFontDoctor(cfg.Font.Family)
 }
 
