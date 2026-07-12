@@ -39,6 +39,8 @@ return {
     osc52 = %q,
   },
   render = {
+    text_gamma = %.1f,
+    text_darken = %.1f,
     -- Experimental visual reordering for RTL text; logical storage is unchanged.
     bidi = %t,
   },
@@ -65,6 +67,6 @@ return {
 		cfg.Scrolling.History, cfg.Scrolling.WheelMultiplier, cfg.Scrolling.HideCursorWhenScrolled,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
 		cfg.Clipboard.OSC52,
-		cfg.Render.Bidi,
+		cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.Bidi,
 		cfg.Shell.Program, cfg.Shell.WorkingDirectory)
 }

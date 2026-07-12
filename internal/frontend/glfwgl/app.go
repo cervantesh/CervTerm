@@ -158,7 +158,7 @@ func (a *App) runWindow() error {
 	}
 	sx, sy := w.GetContentScale()
 	a.applyScale(sx, sy)
-	atlas, err := newGlyphAtlasWithSpec(fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(sx, sy)})
+	atlas, err := newGlyphAtlasWithSpec(fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(sx, sy)}, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
 	if err != nil {
 		return err
 	}
