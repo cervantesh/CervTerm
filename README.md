@@ -123,6 +123,8 @@ Glyphs, including color emoji and shaped clusters, share at most two 2048 x 2048
 
 Monochrome text coverage is adjusted with `render.text_gamma` (default `1.15`) and `render.text_darken` (default `0.0`) for stronger antialiased edges and stems. Set them to `1.0` and `0.0` to restore the previous rendering. These settings affect monochrome text only; color emoji are left untouched.
 
+On Windows, `render.text_raster = "auto"` (the default) rasterizes primary-face monochrome glyphs with DirectWrite's hinted, grayscale coverage. Set it to `"go"` to restore the portable Go rasterizer. Color emoji, fallback faces, shaped clusters, and all text on non-Windows platforms continue to use the Go path.
+
 `font.family` resolves installed `.ttf`, `.otf`, and `.ttc` faces from standard system and per-user font directories. Empty values and `Go Mono` keep the embedded font. An unknown or unreadable family logs a warning and safely falls back to Go Mono; `--doctor` shows the configured family and resolved files. Bold and italic variants are discovered for diagnostics, while rendering currently retains synthetic bold and italic transforms.
 
 ## Known limitations
