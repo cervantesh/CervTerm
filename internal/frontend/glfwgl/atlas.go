@@ -4,6 +4,7 @@ package glfwgl
 
 import (
 	"log"
+	"math"
 
 	"cervterm/internal/core"
 	"cervterm/internal/fontglyph"
@@ -195,6 +196,13 @@ func clearAtlasTexture(tex uint32) {
 }
 
 func (a *glyphAtlas) drawEntry(entry atlasEntry, x, y, scale, skew float32) {
+	// Snap the glyph origin to whole pixels. The bitmap is one texel per pixel,
+	// so an integer origin keeps texel-to-pixel 1:1 and the LINEAR filter returns
+	// exact texels; a fractional origin (from HiDPI padding/advance) would blur.
+	// The fractional part is identical for every cell (cellW/cellH are integers),
+	// so rounding preserves uniform spacing.
+	x = float32(math.Round(float64(x)))
+	y = float32(math.Round(float64(y)))
 	w := float32(a.cellW*max(1, entry.cellSpan)) * scale
 	h := float32(a.cellH) * scale
 	if entry.colored {

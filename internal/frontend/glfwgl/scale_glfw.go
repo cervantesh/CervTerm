@@ -4,6 +4,7 @@ package glfwgl
 
 import (
 	"fmt"
+	"math"
 
 	"cervterm/internal/fontglyph"
 
@@ -28,8 +29,12 @@ func (a *App) applyScale(scaleX, scaleY float32) {
 	// Derive uiScale from the same clamped factor as the glyph DPI so chrome
 	// never grows out of proportion with text past the 4x DPI clamp.
 	a.uiScale = float32(effectiveDPI(scaleX, scaleY) / 96)
-	a.paddingX = float32(a.cfg.Window.PaddingX) * a.uiScale
-	a.paddingY = float32(a.cfg.Window.PaddingY) * a.uiScale
+	// Snap the text-grid origin to whole pixels. cellW/cellH are integers, so an
+	// integer origin keeps every glyph quad pixel-aligned; a fractional padding
+	// (e.g. 18*1.25 = 22.5) would draw glyphs on half-pixels and the LINEAR atlas
+	// filter would blur them.
+	a.paddingX = float32(math.Round(float64(a.cfg.Window.PaddingX) * float64(a.uiScale)))
+	a.paddingY = float32(math.Round(float64(a.cfg.Window.PaddingY) * float64(a.uiScale)))
 }
 
 func (a *App) rebuildForContentScale(scaleX, scaleY float32) {
