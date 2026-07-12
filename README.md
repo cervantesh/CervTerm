@@ -125,6 +125,10 @@ Glyphs, including color emoji and shaped clusters, share at most two 2048 x 2048
 
 ## Known limitations
 
+Box-drawing and block-element glyphs render procedurally for seamless joins at
+any font or display scale. Diagonal box glyphs still use the configured font,
+and rounded corners use square light-line joins rather than true arcs.
+
 ### Optional BiDi rendering
 
 Set `render = { bidi = true }` to reorder each terminal row visually with the Unicode Bidirectional Algorithm. It is experimental and defaults to off. Terminal storage and selection remain logical: wrapped rows do not share paragraph context, mixed-direction selections may look discontiguous, and Arabic letters are not contextually joined across cells. Wide-cell pairs and combining marks remain attached while visual ordering is applied.
