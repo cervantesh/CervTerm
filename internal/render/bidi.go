@@ -57,6 +57,12 @@ func visualOrder(cells []core.Cell) ([]int, bool) {
 	return visual, false
 }
 
+// bidiUnits groups each lead cell with its WideContinuation cell. Multi-cell
+// render clusters (ZWJ emoji, flags) whose continuation cells are not marked
+// WideContinuation are treated as separate units; in practice those runes are
+// bidi-class L, so they stay in logical order within their sub-run and remain
+// adjacent under reordering. Extending grouping to render-cluster spans is
+// future work if BiDi graduates from experimental.
 func bidiUnits(cells []core.Cell) []bidiUnit {
 	units := make([]bidiUnit, 0, len(cells))
 	for i := 0; i < len(cells); i++ {
