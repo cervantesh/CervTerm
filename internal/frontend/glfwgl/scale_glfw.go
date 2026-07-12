@@ -25,7 +25,9 @@ func DetectContentScale() string {
 
 func (a *App) applyScale(scaleX, scaleY float32) {
 	a.contentScaleX, a.contentScaleY = scaleX, scaleY
-	a.uiScale = max(float32(1), max(scaleX, scaleY))
+	// Derive uiScale from the same clamped factor as the glyph DPI so chrome
+	// never grows out of proportion with text past the 4x DPI clamp.
+	a.uiScale = float32(effectiveDPI(scaleX, scaleY) / 96)
 	a.paddingX = float32(a.cfg.Window.PaddingX) * a.uiScale
 	a.paddingY = float32(a.cfg.Window.PaddingY) * a.uiScale
 }

@@ -64,11 +64,15 @@ func (a *App) draw() {
 		a.window.SetTitle("CervTerm · " + a.snap.Title)
 	}
 
+	var cursorRowOrder []int
 	for r := 0; r < a.snap.Rows; r++ {
 		rowCells := a.snap.Cells[r*a.snap.Cols : (r+1)*a.snap.Cols]
 		var order []int
 		if a.cfg.Render.Bidi {
 			order = render.VisualOrder(rowCells)
+			if r == a.snap.CursorRow {
+				cursorRowOrder = order
+			}
 		}
 		skippedGlyph := make([]bool, a.snap.Cols)
 		for visualCol := 0; visualCol < a.snap.Cols; visualCol++ {
@@ -140,9 +144,8 @@ func (a *App) draw() {
 
 	if a.snap.CursorVisible {
 		cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
-		if a.cfg.Render.Bidi && cursorRow >= 0 && cursorRow < a.snap.Rows {
-			row := a.snap.Cells[cursorRow*a.snap.Cols : (cursorRow+1)*a.snap.Cols]
-			inverse := render.InversePermutation(render.VisualOrder(row))
+		if cursorRowOrder != nil {
+			inverse := render.InversePermutation(cursorRowOrder)
 			if cursorCol >= 0 && cursorCol < len(inverse) {
 				cursorCol = inverse[cursorCol]
 			}
