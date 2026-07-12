@@ -90,7 +90,10 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 		return nil, err
 	}
 	faces := append([]loadedFace{primary}, loadFallbackFaces(spec)...)
-	cellW := max(1, font.MeasureString(primary.face, "W").Ceil()+2)
+	// Cell width is the font's natural monospace advance. Padding it (the old
+	// +2) letter-spaced every glyph and made text look loose next to other
+	// terminals; monospace glyphs are designed to tile at exactly the advance.
+	cellW := max(1, font.MeasureString(primary.face, "W").Ceil())
 	cellH := max(1, (metrics.Ascent+metrics.Descent).Ceil()+2)
 	baseline := 1 + metrics.Ascent.Ceil()
 	ppem := uint16(max(1, int(math.Round(spec.Size*spec.DPI/72))))
