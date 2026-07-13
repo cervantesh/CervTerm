@@ -112,23 +112,54 @@ func (a *App) updateFPS() {
 	}
 }
 
+// refreshHUDCache rebuilds the cached HUD lines only when an input that shapes
+// them changes, so steady-state frames reuse the composed strings instead of
+// re-running fmt.Sprintf every frame. Rebuild triggers: stats toggled on/off,
+// the 500ms stats window elapsed, cols/rows changed, or the visible notice
+// text differs from what was cached. The notice is independent of showStats, so
+// all four (showStats, notice) combinations are handled.
+func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
+	noticeVisible := a.notice != "" && now.Before(a.noticeUntil)
+	curNotice := ""
+	if noticeVisible {
+		curNotice = a.notice
+	}
+	// Stats numbers only need 500ms freshness (same cadence shouldRedraw uses).
+	// A just-toggled-on panel or a cols/rows change forces an immediate rebuild
+	// so no stale numbers flash before the next window rolls over.
+	statsStale := a.showStats && (!a.hudShowStats ||
+		a.cols != a.hudCols || a.rows != a.hudRows ||
+		now.Sub(a.hudStatsAt) >= 500*time.Millisecond)
+	if !statsStale && curNotice == a.hudNotice && a.showStats == a.hudShowStats {
+		return
+	}
+
+	a.hudLines = a.hudLines[:0]
+	a.hudColors = a.hudColors[:0]
+	if a.showStats {
+		s := a.meter.Snapshot()
+		a.hudLines = append(a.hudLines,
+			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.cfg.Font.Size),
+			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
+		a.hudColors = append(a.hudColors, themeColor(palette.Muted), themeColor(palette.Muted))
+		a.hudStatsAt = now
+	}
+	if noticeVisible {
+		a.hudLines = append(a.hudLines, a.notice)
+		a.hudColors = append(a.hudColors, themeColor(palette.Accent))
+	}
+	a.hudShowStats = a.showStats
+	a.hudNotice = curNotice
+	a.hudCols, a.hudRows = a.cols, a.rows
+}
+
 // drawHUD overlays the optional two-row stats panel (toggled by the stats
 // hotkey) and any transient notice on top of the terminal, so the terminal
 // itself has no permanent chrome.
 func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette, now time.Time) {
-	var lines []string
-	var colors []color.RGBA
-	if a.showStats {
-		s := a.meter.Snapshot()
-		lines = append(lines,
-			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.cfg.Font.Size),
-			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
-		colors = append(colors, themeColor(palette.Muted), themeColor(palette.Muted))
-	}
-	if now.Before(a.noticeUntil) && a.notice != "" {
-		lines = append(lines, a.notice)
-		colors = append(colors, themeColor(palette.Accent))
-	}
+	a.refreshHUDCache(palette, now)
+	lines := a.hudLines
+	colors := a.hudColors
 	if len(lines) == 0 {
 		return
 	}

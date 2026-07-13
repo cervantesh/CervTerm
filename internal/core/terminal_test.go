@@ -458,6 +458,53 @@ func TestTerminalScrollbackViewport(t *testing.T) {
 	}
 }
 
+func TestTerminalScrollViewportReportsMovement(t *testing.T) {
+	newTerm := func() *Terminal {
+		term := NewTerminal(5, 2)
+		for _, s := range []string{"one", "two", "tri"} {
+			for _, r := range s {
+				term.PutRune(r)
+			}
+			term.CarriageReturn()
+			term.NewLine()
+		}
+		if term.ScrollbackLines() != 2 {
+			t.Fatalf("expected 2 scrollback lines, got %d", term.ScrollbackLines())
+		}
+		return term
+	}
+
+	cases := []struct {
+		name       string
+		startAtTop bool // scroll fully into history first
+		lines      int
+		wantMoved  bool
+		wantOffset int
+	}{
+		{name: "clamped at bottom", startAtTop: false, lines: -3, wantMoved: false, wantOffset: 0},
+		{name: "real move back", startAtTop: false, lines: 1, wantMoved: true, wantOffset: 1},
+		{name: "partial clamp back still moves", startAtTop: false, lines: 5, wantMoved: true, wantOffset: 2},
+		{name: "clamped at top", startAtTop: true, lines: 3, wantMoved: false, wantOffset: 2},
+		{name: "real move forward", startAtTop: true, lines: -1, wantMoved: true, wantOffset: 1},
+		{name: "partial clamp forward still moves", startAtTop: true, lines: -5, wantMoved: true, wantOffset: 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			term := newTerm()
+			if tc.startAtTop {
+				term.ScrollViewport(term.ScrollbackLines())
+			}
+			if got := term.ScrollViewport(tc.lines); got != tc.wantMoved {
+				t.Fatalf("ScrollViewport(%d) moved = %v, want %v", tc.lines, got, tc.wantMoved)
+			}
+			if got := term.DisplayOffset(); got != tc.wantOffset {
+				t.Fatalf("offset after ScrollViewport(%d) = %d, want %d", tc.lines, got, tc.wantOffset)
+			}
+		})
+	}
+}
+
 func TestTerminalScrollRegionScrollsOnlyRegion(t *testing.T) {
 	term := NewTerminal(4, 4)
 	for row, text := range []string{"aaaa", "bbbb", "cccc", "dddd"} {
