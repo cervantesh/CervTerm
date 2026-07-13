@@ -39,7 +39,8 @@ return {
     osc52 = %q,
   },
   render = {
-	text_raster = %q,
+    -- go, auto (DirectWrite on Windows), or subpixel (horizontal RGB LCDs)
+    text_raster = %q,
     text_gamma = %.2f,
     text_darken = %.2f,
     -- Experimental visual reordering for RTL text; logical storage is unchanged.

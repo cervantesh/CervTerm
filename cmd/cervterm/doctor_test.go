@@ -32,6 +32,21 @@ func TestRunDoctorPrintsActionableSections(t *testing.T) {
 	}
 }
 
+func TestRunDoctorReportsSubpixelEngine(t *testing.T) {
+	path := t.TempDir() + "/cervterm.lua"
+	if err := os.WriteFile(path, []byte("return { render = { text_raster = 'subpixel' } }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := captureStdout(t, func() {
+		if code := runDoctor(doctorOptions{ConfigPath: path, LogPath: "-"}); code != 0 {
+			t.Fatalf("runDoctor exit code = %d, want 0", code)
+		}
+	})
+	if !strings.Contains(output, "text-raster: subpixel") {
+		t.Fatalf("doctor output missing subpixel engine\n%s", output)
+	}
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout

@@ -188,7 +188,7 @@ func (a *App) drawRune(r rune, x, y float32, c color.RGBA, scale, skew float32) 
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	glColor(c)
-	a.atlas.drawRune(r, x, y, scale, skew)
+	a.atlas.drawRune(r, x, y, c, scale, skew)
 	gl.Disable(gl.TEXTURE_2D)
 }
 
@@ -197,7 +197,7 @@ func (a *App) drawCluster(cluster string, cellSpan int, x, y float32, c color.RG
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	glColor(c)
-	ok := a.atlas.drawCluster(cluster, cellSpan, x, y, scale, skew)
+	ok := a.atlas.drawCluster(cluster, cellSpan, x, y, c, scale, skew)
 	gl.Disable(gl.TEXTURE_2D)
 	return ok
 }
