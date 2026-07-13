@@ -43,7 +43,10 @@ func packageBeta(version, outDir string, reuse bool) error {
 			return err
 		}
 		exe := filepath.Join(pkgDir, "cervterm.exe")
-		cmd := exec.Command("go", "build", "-tags", "glfw", "-ldflags", "-X cervterm/internal/buildinfo.Version="+version, "-o", exe, "./cmd/cervterm")
+		// -s -w strip the symbol table and DWARF; the release binary does not
+		// ship a debugger, and this roughly halves the packaged size.
+		ldflags := "-s -w -X cervterm/internal/buildinfo.Version=" + version
+		cmd := exec.Command("go", "build", "-tags", "glfw", "-trimpath", "-ldflags", ldflags, "-o", exe, "./cmd/cervterm")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {

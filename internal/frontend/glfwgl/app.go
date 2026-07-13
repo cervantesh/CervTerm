@@ -152,6 +152,9 @@ func (a *App) runWindow() error {
 		return err
 	}
 	a.window = w
+	if icons := windowIcons(); len(icons) > 0 {
+		w.SetIcon(icons)
+	}
 	w.MakeContextCurrent()
 	glfw.SwapInterval(1)
 	if err := gl.Init(); err != nil {
