@@ -60,6 +60,7 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Render.StatsHotkey = stringField(tbl, "stats_hotkey", cfg.Render.StatsHotkey)
 		cfg.Render.VSync = boolField(tbl, "vsync", cfg.Render.VSync)
 		cfg.Render.Redraw = stringField(tbl, "redraw", cfg.Render.Redraw)
+		cfg.Render.Damage = stringField(tbl, "damage", cfg.Render.Damage)
 	}
 	if tbl := tableField(root, "shell"); tbl != nil {
 		cfg.Shell.Program = stringField(tbl, "program", cfg.Shell.Program)

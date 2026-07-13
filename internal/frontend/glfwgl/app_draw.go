@@ -10,7 +10,6 @@ import (
 
 	"cervterm/internal/core"
 	"cervterm/internal/render"
-	termsel "cervterm/internal/selection"
 	cervtermtheme "cervterm/internal/theme"
 
 	"github.com/go-gl/gl/v2.1/gl"
@@ -40,8 +39,6 @@ func (a *App) draw() {
 	cursorColor := configColor(a.cfg.Colors.Cursor, themeColor(palette.Accent))
 	selectionColor := configColor(a.cfg.Colors.SelectionBackground, color.RGBA{0x2A, 0x63, 0x77, 0xFF})
 	defaultFG := configColor(a.cfg.Colors.Foreground, rgb(core.DefaultFG))
-	glClearColor(background)
-	gl.Clear(gl.COLOR_BUFFER_BIT)
 	gl.Disable(gl.TEXTURE_2D)
 	a.updateFPS()
 
@@ -49,102 +46,29 @@ func (a *App) draw() {
 	// not here, so on-demand rendering does not delay them to the next repaint.
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)
+	displayOffset := a.term.DisplayOffset()
+	alternateScreen := a.term.AlternateScreenMode()
 	a.mu.Unlock()
+	noticeVisible := a.notice != "" && frameNow.Before(a.noticeUntil)
+	fullRedraw, damagedRows := a.prepareDamage(w, h, displayOffset, alternateScreen, noticeVisible, background)
+	if fullRedraw {
+		glClearColor(background)
+		gl.Clear(gl.COLOR_BUFFER_BIT)
+	}
 
 	var cursorRowOrder []int
-	for r := 0; r < a.snap.Rows; r++ {
-		rowCells := a.snap.Cells[r*a.snap.Cols : (r+1)*a.snap.Cols]
-		var order []int
-		if a.cfg.Render.Bidi {
-			order = render.VisualOrder(rowCells)
-			if r == a.snap.CursorRow {
-				cursorRowOrder = order
-			}
+	rowsDrawn := 0
+	for r, damaged := range damagedRows {
+		if !damaged {
+			continue
 		}
-		// Reuse a single scratch buffer across rows and frames instead of
-		// allocating per row; at uncapped frame rates that alloc dominated churn.
-		if cap(a.skippedGlyph) < a.snap.Cols {
-			a.skippedGlyph = make([]bool, a.snap.Cols)
+		rowsDrawn++
+		if !fullRedraw {
+			fillRect(0, a.paddingY+float32(r)*a.cellH, float32(w), a.cellH, background)
 		}
-		skippedGlyph := a.skippedGlyph[:a.snap.Cols]
-		for i := range skippedGlyph {
-			skippedGlyph[i] = false
-		}
-		for visualCol := 0; visualCol < a.snap.Cols; visualCol++ {
-			logicalCol := visualCol
-			if order != nil {
-				logicalCol = order[visualCol]
-			}
-			cell := rowCells[logicalCol]
-			x := a.paddingX + float32(visualCol)*a.cellW
-			y := a.paddingY + float32(r)*a.cellH
-			if cell.Attr.BG != core.DefaultBG {
-				fillRect(x, y, a.cellW, a.cellH, rgb(cell.Attr.BG))
-			}
-			if a.selectionActive && termsel.Contains(termsel.Range{Start: a.selectionStart, End: a.selectionEnd}, termsel.Point{Row: r, Col: logicalCol}) {
-				fillRect(x, y, a.cellW, a.cellH, selectionColor)
-			}
-			fg := defaultFG
-			if cell.Attr.FG != core.DefaultFG {
-
-				fg = rgb(cell.Attr.FG)
-
-			}
-			bg := background
-			if cell.Attr.BG != core.DefaultBG {
-				bg = rgb(cell.Attr.BG)
-			}
-			if cell.Attr.Inverse {
-				fg, bg = bg, fg
-				fillRect(x, y, a.cellW, a.cellH, bg)
-			}
-			if skippedGlyph[logicalCol] || cell.Rune == ' ' || cell.Rune == 0 || cell.WideContinuation {
-				continue
-			}
-			if cell.Attr.Bold {
-				fg = brighten(fg)
-			}
-			if cell.Attr.Dim {
-				fg = dim(fg)
-			}
-			if rects, ok := render.BoxGlyph(cell.Rune, a.cellW, a.cellH); ok {
-				for _, rc := range rects {
-					c := fg
-					if rc.Alpha < 1 {
-						c.A = uint8(float32(fg.A) * rc.Alpha)
-					}
-					fillRect(x+rc.X, y+rc.Y, rc.W, rc.H, c)
-				}
-				drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)
-				continue
-			}
-			skew := float32(0)
-			if cell.Attr.Italic {
-				skew = 0.2 * a.cellH
-			}
-			if cluster, ok := collectRenderCluster(a.snap.Cells, a.snap.Cols, r, logicalCol); ok {
-				if a.drawCluster(cluster.Text, cluster.CellSpan, x, y, fg, 1, skew) {
-					if cell.Attr.Bold {
-						a.drawCluster(cluster.Text, cluster.CellSpan, x+1, y, fg, 1, skew)
-					}
-					drawTextDecorations(x, y, a.cellW*float32(cluster.CellSpan), a.cellH, fg, cell.Attr)
-					for i := 1; i < cluster.CellSpan && logicalCol+i < a.snap.Cols; i++ {
-						skippedGlyph[logicalCol+i] = true
-					}
-					continue
-				}
-			}
-			a.drawRune(cell.Rune, x, y, fg, 1, skew)
-			if cell.Attr.Bold {
-				a.drawRune(cell.Rune, x+1, y, fg, 1, skew)
-			}
-			for _, combining := range cell.Combining {
-				a.drawRune(combining, x, y, fg, 1, skew)
-				if cell.Attr.Bold {
-					a.drawRune(combining, x+1, y, fg, 1, skew)
-				}
-			}
-			drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)
+		order := a.drawRow(r, background, selectionColor, defaultFG)
+		if r == a.snap.CursorRow {
+			cursorRowOrder = order
 		}
 	}
 
@@ -161,7 +85,9 @@ func (a *App) draw() {
 		a.drawCursor(x, y, cursorColor, frameBlink)
 	}
 
+	a.damage.rowsDrawn = rowsDrawn
 	a.drawHUD(w, h, palette, frameNow)
+	a.recordDamageFrame(w, h, displayOffset, alternateScreen, noticeVisible, background, rowsDrawn)
 
 	// Record exactly what this frame rendered so shouldRedraw detects the next
 	// blink flip / stats-window elapse against the painted state.
@@ -195,7 +121,7 @@ func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette, now time.Time) {
 	if a.showStats {
 		s := a.meter.Snapshot()
 		lines = append(lines,
-			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.cfg.Font.Size),
+			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.cfg.Font.Size),
 			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
 		colors = append(colors, themeColor(palette.Muted), themeColor(palette.Muted))
 	}

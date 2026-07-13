@@ -62,6 +62,7 @@ type RenderConfig struct {
 	StatsHotkey string
 	VSync       bool
 	Redraw      string
+	Damage      string
 }
 
 type ShellConfig struct {
@@ -79,7 +80,7 @@ func Defaults() Config {
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
 		Clipboard: ClipboardConfig{OSC52: "write"},
-		Render:    RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", VSync: true, Redraw: "on_demand"},
+		Render:    RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", VSync: true, Redraw: "on_demand", Damage: "rows"},
 		Shell:     ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
 }
@@ -118,6 +119,9 @@ func (c Config) Validate() error {
 	}
 	if c.Render.Redraw != "on_demand" && c.Render.Redraw != "continuous" {
 		errs = append(errs, fmt.Errorf("render.redraw %q must be on_demand or continuous", c.Render.Redraw))
+	}
+	if c.Render.Damage != "rows" && c.Render.Damage != "frame" {
+		errs = append(errs, fmt.Errorf("render.damage %q must be rows or frame", c.Render.Damage))
 	}
 	for name, value := range map[string]string{"foreground": c.Colors.Foreground, "background": c.Colors.Background, "cursor": c.Colors.Cursor, "selection_background": c.Colors.SelectionBackground} {
 		if !isHexColor(value) {

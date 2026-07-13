@@ -64,6 +64,10 @@ type App struct {
 	fpsTime          time.Time
 	skippedGlyph     []bool // reused per-row scratch buffer to avoid per-frame allocs
 
+	rowHashes, prevHashes, prevPrevHashes []uint64
+	lastCursorRow                         int
+	damage                                damageState
+
 	// On-demand render state. Main-thread only; the PTY reader must not touch
 	// needsRedraw (it wakes the loop with glfw.PostEmptyEvent instead).
 	needsRedraw    bool
