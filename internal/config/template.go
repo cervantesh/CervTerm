@@ -45,6 +45,9 @@ return {
     text_darken = %.2f,
     -- Hotkey that toggles the two-row stats overlay (empty disables it).
     stats_hotkey = %q,
+    -- Cap the frame rate to the monitor refresh. Set false to uncap (higher
+    -- FPS number, more CPU/GPU; useful only for benchmarking).
+    vsync = %t,
     -- Experimental visual reordering for RTL text; logical storage is unchanged.
     bidi = %t,
   },
@@ -76,6 +79,6 @@ return {
 		cfg.Scrolling.History, cfg.Scrolling.WheelMultiplier, cfg.Scrolling.HideCursorWhenScrolled,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
 		cfg.Clipboard.OSC52,
-		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.Bidi,
+		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.VSync, cfg.Render.Bidi,
 		cfg.Shell.Program, cfg.Shell.WorkingDirectory)
 }
