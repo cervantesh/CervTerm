@@ -24,7 +24,3 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 }
 
 type glyphAtlas struct{}
-
-func newGlyphAtlas() (*glyphAtlas, error) { return &glyphAtlas{}, nil }
-
-func (a *glyphAtlas) drawRune(r rune, x, y, scale float32) {}
