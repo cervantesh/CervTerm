@@ -19,6 +19,24 @@ func TestDefaultsValidate(t *testing.T) {
 	if cfg.Render.TextRaster != "go" {
 		t.Fatalf("render.text_raster default = %q, want auto", cfg.Render.TextRaster)
 	}
+	if cfg.Render.Damage != "rows" {
+		t.Fatalf("render.damage default = %q, want rows", cfg.Render.Damage)
+	}
+}
+
+func TestValidateDamage(t *testing.T) {
+	for _, tt := range []struct {
+		value   string
+		wantErr bool
+	}{{"rows", false}, {"frame", false}, {"", true}, {"cell", true}} {
+		t.Run(tt.value, func(t *testing.T) {
+			cfg := Defaults()
+			cfg.Render.Damage = tt.value
+			if err := cfg.Validate(); (err != nil) != tt.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %t", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func TestValidateTextRaster(t *testing.T) {

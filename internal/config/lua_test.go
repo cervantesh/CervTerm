@@ -47,7 +47,7 @@ func TestFromTable(t *testing.T) {
 	if err := state.DoString(`cfg = {
   window = { width = 1300 },
   font = { family = "Go Mono", size = 18 },
-  render = { bidi = true, text_gamma = 2.2, text_darken = 0.25, text_raster = "go" },
+  render = { bidi = true, text_gamma = 2.2, text_darken = 0.25, text_raster = "go", damage = "frame" },
   shell = { args = { "/Q", "/K" }, env = { FOO = "bar" } },
 }`); err != nil {
 		t.Fatalf("DoString failed: %v", err)
@@ -66,6 +66,9 @@ func TestFromTable(t *testing.T) {
 	if cfg.Render.TextRaster != "go" {
 		t.Fatalf("FromTable render.text_raster = %q, want go", cfg.Render.TextRaster)
 	}
+	if cfg.Render.Damage != "frame" {
+		t.Fatalf("FromTable render.damage = %q, want frame", cfg.Render.Damage)
+	}
 	if len(cfg.Shell.Args) != 2 || cfg.Shell.Args[1] != "/K" || cfg.Shell.Env["FOO"] != "bar" {
 		t.Fatalf("FromTable did not apply shell fields: %#v", cfg.Shell)
 	}
@@ -83,7 +86,7 @@ func TestDefaultLuaRoundTrip(t *testing.T) {
 	}
 	cfg := FromTable(Config{}, root)
 	defaults := Defaults()
-	if cfg.Render.TextGamma != defaults.Render.TextGamma || cfg.Render.TextDarken != defaults.Render.TextDarken || cfg.Render.TextRaster != defaults.Render.TextRaster {
+	if cfg.Render.TextGamma != defaults.Render.TextGamma || cfg.Render.TextDarken != defaults.Render.TextDarken || cfg.Render.TextRaster != defaults.Render.TextRaster || cfg.Render.Damage != defaults.Render.Damage {
 		t.Fatalf("round-trip render config = %#v, want %#v", cfg.Render, defaults.Render)
 	}
 }

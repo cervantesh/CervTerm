@@ -52,6 +52,8 @@ return {
     -- idle terminal draws ~0 fps. "continuous" redraws every loop iteration
     -- (the old always-draw behavior; useful for benchmarking or as an escape hatch).
     redraw = %q,
+    -- "frame" is an escape hatch if partial-redraw artifacts appear.
+    damage = %q,
     -- Experimental visual reordering for RTL text; logical storage is unchanged.
     bidi = %t,
   },
@@ -83,6 +85,6 @@ return {
 		cfg.Scrolling.History, cfg.Scrolling.WheelMultiplier, cfg.Scrolling.HideCursorWhenScrolled,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
 		cfg.Clipboard.OSC52,
-		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.VSync, cfg.Render.Redraw, cfg.Render.Bidi,
+		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.VSync, cfg.Render.Redraw, cfg.Render.Damage, cfg.Render.Bidi,
 		cfg.Shell.Program, cfg.Shell.WorkingDirectory)
 }
