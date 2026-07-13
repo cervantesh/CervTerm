@@ -131,12 +131,9 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 			}
 		}
 	}
-	if err := app.startPTY(); err != nil {
-		app.parser.Advance(app.term, []byte("\x1b[96mCervTerm\x1b[0m\r\n\r\n"))
-		app.parser.Advance(app.term, []byte("Local PTY unavailable on this platform/build.\r\n"))
-		app.parser.Advance(app.term, []byte(err.Error()+"\r\n\r\n"))
-		app.parser.Advance(app.term, []byte("Type to test the renderer and parser.\r\n"))
-	}
+	// The PTY spawns later, from runWindow, once the window + glyph atlas exist
+	// and the real initial grid is known — see runWindow. This defer still
+	// nil-checks because a.pty stays nil until then (and on spawn failure).
 	defer func() {
 		if app.pty != nil {
 			_ = app.pty.Close()
@@ -217,6 +214,10 @@ func (a *App) runWindow() error {
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
 	a.installCallbacks()
+	// Spawn the PTY now that cellW/cellH are final, sized to the real initial
+	// grid so no startup resize repaints the shell and duplicates its banner.
+	a.spawnInitialPTY(w)
+
 	// Paint the first frame before any event arrives, and dispatch any term
 	// events produced by pre-loop parser feeds (the no-PTY startup banner).
 	a.needsRedraw = true

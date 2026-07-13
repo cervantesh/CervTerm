@@ -195,12 +195,41 @@ func (a *App) blinkActive() bool {
 	return a.cfg.Cursor.Blink
 }
 
+// spawnInitialPTY sizes the terminal to the real initial grid and starts the
+// PTY, so terminal and ConPTY agree from byte zero and no startup resize
+// repaints the shell banner. Called from runWindow once cellW/cellH are final.
+// The terminal resize holds a.mu, but startPTY runs without it (its reader
+// goroutine and the failure-path parser feed both take a.mu). Seeding
+// a.cols/a.rows makes the loop's first resizeToWindow a no-op.
+func (a *App) spawnInitialPTY(w *glfw.Window) {
+	fbW, fbH := w.GetFramebufferSize()
+	cols, rows := a.gridSize(fbW, fbH)
+	a.mu.Lock()
+	a.term.Resize(cols, rows)
+	a.mu.Unlock()
+	a.cols, a.rows = cols, rows
+	if err := a.startPTY(); err != nil {
+		a.parser.Advance(a.term, []byte("\x1b[96mCervTerm\x1b[0m\r\n\r\n"))
+		a.parser.Advance(a.term, []byte("Local PTY unavailable on this platform/build.\r\n"))
+		a.parser.Advance(a.term, []byte(err.Error()+"\r\n\r\n"))
+		a.parser.Advance(a.term, []byte("Type to test the renderer and parser.\r\n"))
+	}
+}
+
+// gridSize maps a framebuffer size (in pixels) to the terminal grid, applying
+// the padding and cell metrics. Shared by resizeToWindow and the initial PTY
+// spawn in runWindow so the two sites cannot drift.
+func (a *App) gridSize(w, h int) (cols, rows int) {
+	cols = max(2, int((float32(w)-2*a.paddingX)/a.cellW))
+	rows = max(1, int((float32(h)-2*a.paddingY)/a.cellH))
+	return cols, rows
+}
+
 // resizeToWindow reflows the grid when the framebuffer maps to a new col/row
 // count and requests a repaint.
 func (a *App) resizeToWindow() {
 	w, h := a.window.GetFramebufferSize()
-	cols := max(2, int((float32(w)-2*a.paddingX)/a.cellW))
-	rows := max(1, int((float32(h)-2*a.paddingY)/a.cellH))
+	cols, rows := a.gridSize(w, h)
 	if cols == a.cols && rows == a.rows {
 		return
 	}
