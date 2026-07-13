@@ -25,7 +25,7 @@ func TestValidateTextRaster(t *testing.T) {
 	for _, tt := range []struct {
 		value   string
 		wantErr bool
-	}{{"auto", false}, {"go", false}, {"directwrite", true}, {"", true}} {
+	}{{"auto", false}, {"go", false}, {"subpixel", false}, {"directwrite", true}, {"", true}} {
 		t.Run(tt.value, func(t *testing.T) {
 			cfg := Defaults()
 			cfg.Render.TextRaster = tt.value

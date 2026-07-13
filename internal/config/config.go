@@ -110,8 +110,8 @@ func (c Config) Validate() error {
 	if c.Render.TextDarken < 0.0 || c.Render.TextDarken > 0.5 {
 		errs = append(errs, errors.New("render.text_darken must be between 0.0 and 0.5"))
 	}
-	if c.Render.TextRaster != "auto" && c.Render.TextRaster != "go" {
-		errs = append(errs, fmt.Errorf("render.text_raster %q must be auto or go", c.Render.TextRaster))
+	if c.Render.TextRaster != "auto" && c.Render.TextRaster != "go" && c.Render.TextRaster != "subpixel" {
+		errs = append(errs, fmt.Errorf("render.text_raster %q must be auto, go, or subpixel", c.Render.TextRaster))
 	}
 	for name, value := range map[string]string{"foreground": c.Colors.Foreground, "background": c.Colors.Background, "cursor": c.Colors.Cursor, "selection_background": c.Colors.SelectionBackground} {
 		if !isHexColor(value) {

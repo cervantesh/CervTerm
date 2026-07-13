@@ -44,6 +44,7 @@ type RasterizedGlyph struct {
 	AdvanceX float64
 	CellSpan int
 	HasColor bool
+	Subpixel bool
 }
 
 // GlyphInspection reports which font path and raster path CervTerm uses for a cluster.
@@ -72,13 +73,14 @@ type glyphRasterizer interface {
 }
 
 type OpenTypeBackend struct {
-	faces    []loadedFace
-	cellW    int
-	cellH    int
-	baseline int
-	ppem     uint16
-	shaper   Shaper
-	dwRaster glyphRasterizer
+	faces        []loadedFace
+	cellW        int
+	cellH        int
+	baseline     int
+	ppem         uint16
+	shaper       Shaper
+	dwRaster     glyphRasterizer
+	subpixelText bool
 }
 
 type loadedFace struct {
@@ -106,8 +108,10 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 	cellH := max(1, (metrics.Ascent+metrics.Descent).Ceil()+2)
 	baseline := 1 + metrics.Ascent.Ceil()
 	ppem := uint16(max(1, int(math.Round(spec.Size*spec.DPI/72))))
-	backend := &OpenTypeBackend{faces: faces, cellW: cellW, cellH: cellH, baseline: baseline, ppem: ppem, shaper: newDefaultShaper()}
-	backend.dwRaster = newPlatformTextRasterizer(spec, primary)
+	backend := &OpenTypeBackend{faces: faces, cellW: cellW, cellH: cellH, baseline: baseline, ppem: ppem, shaper: newDefaultShaper(), subpixelText: spec.TextRaster == "subpixel"}
+	if !backend.subpixelText {
+		backend.dwRaster = newPlatformTextRasterizer(spec, primary)
+	}
 	return backend, nil
 }
 
@@ -198,6 +202,9 @@ func (b *OpenTypeBackend) Close() {
 }
 
 func (b *OpenTypeBackend) TextRasterEngine() string {
+	if b != nil && b.subpixelText {
+		return "subpixel"
+	}
 	if b != nil && b.dwRaster != nil {
 		return "directwrite"
 	}
@@ -222,9 +229,19 @@ func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool
 	if glyph, ok := b.rasterizeSVGColorGlyph(lf, r, cellSpan, advance); ok {
 		return glyph, true
 	}
+	var sfntBuf sfnt.Buffer
+	glyphID, glyphIndexErr := lf.sfnt.GlyphIndex(&sfntBuf, r)
+	if b.subpixelText && glyphIndexErr == nil && glyphID != 0 {
+		if img, ok := b.rasterizeSubpixel(lf, glyphID, bounds, cellSpan); ok {
+			return RasterizedGlyph{
+				Image: img, Width: (bounds.Max.X - bounds.Min.X).Ceil(), Height: (bounds.Max.Y - bounds.Min.Y).Ceil(),
+				BearingX: bounds.Min.X.Ceil(), BearingY: -bounds.Min.Y.Ceil(), AdvanceX: float64(advance) / 64.0,
+				CellSpan: cellSpan, HasColor: false, Subpixel: true,
+			}, true
+		}
+	}
 	if b.dwRaster != nil && lf.sfnt == b.faces[0].sfnt {
-		var sfntBuf sfnt.Buffer
-		if glyphID, err := lf.sfnt.GlyphIndex(&sfntBuf, r); err == nil && glyphID != 0 {
+		if glyphIndexErr == nil && glyphID != 0 {
 			if img, ok := b.dwRaster.RasterizeGlyph(uint16(glyphID), b.cellW, b.cellH, b.baseline, cellSpan); ok {
 				return RasterizedGlyph{
 					Image: img, Width: (bounds.Max.X - bounds.Min.X).Ceil(), Height: (bounds.Max.Y - bounds.Min.Y).Ceil(),

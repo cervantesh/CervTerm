@@ -3,6 +3,7 @@
 package glfwgl
 
 import (
+	"image/color"
 	"log"
 	"math"
 
@@ -29,6 +30,7 @@ type atlasEntry struct {
 	u0, v0     float32
 	u1, v1     float32
 	colored    bool
+	subpixel   bool
 	cellSpan   int
 	generation uint64
 }
@@ -106,20 +108,20 @@ func (a *glyphAtlas) close() {
 	a.entries = nil
 }
 
-func (a *glyphAtlas) drawRune(r rune, x, y float32, scale, skew float32) {
+func (a *glyphAtlas) drawRune(r rune, x, y float32, fg color.RGBA, scale, skew float32) {
 	entry, ok := a.cachedRune(r)
 	if !ok && r != '?' {
 		entry, ok = a.cachedRune('?')
 	}
 	if ok {
-		a.drawEntry(entry, x, y, scale, skew)
+		a.drawEntry(entry, x, y, fg, scale, skew)
 	}
 }
 
-func (a *glyphAtlas) drawCluster(cluster string, cellSpan int, x, y float32, scale, skew float32) bool {
+func (a *glyphAtlas) drawCluster(cluster string, cellSpan int, x, y float32, fg color.RGBA, scale, skew float32) bool {
 	entry, ok := a.cachedCluster(cluster, cellSpan)
 	if ok {
-		a.drawEntry(entry, x, y, scale, skew)
+		a.drawEntry(entry, x, y, fg, scale, skew)
 	}
 	return ok
 }
@@ -184,7 +186,7 @@ func (a *glyphAtlas) tryInsert(key atlasKey, glyph fontglyph.RasterizedGlyph) (a
 		entry := atlasEntry{
 			page: pageIndex, u0: float32(x) / atlasPageSize, v0: float32(y) / atlasPageSize,
 			u1: float32(x+w) / atlasPageSize, v1: float32(y+h) / atlasPageSize,
-			colored: glyph.HasColor, cellSpan: glyph.CellSpan, generation: a.generation,
+			colored: glyph.HasColor, subpixel: glyph.Subpixel, cellSpan: glyph.CellSpan, generation: a.generation,
 		}
 		a.entries[key] = entry
 		return entry, true
@@ -209,7 +211,7 @@ func clearAtlasTexture(tex uint32) {
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, atlasPageSize, atlasPageSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
 }
 
-func (a *glyphAtlas) drawEntry(entry atlasEntry, x, y, scale, skew float32) {
+func (a *glyphAtlas) drawEntry(entry atlasEntry, x, y float32, fg color.RGBA, scale, skew float32) {
 	// Snap the glyph origin to whole pixels. The bitmap is one texel per pixel,
 	// so an integer origin keeps texel-to-pixel 1:1 and the LINEAR filter returns
 	// exact texels; a fractional origin (from HiDPI padding/advance) would blur.
@@ -227,6 +229,20 @@ func (a *glyphAtlas) drawEntry(entry atlasEntry, x, y, scale, skew float32) {
 		gl.BindTexture(gl.TEXTURE_2D, tex)
 		a.boundTexture = tex
 	}
+	if entry.subpixel {
+		gl.BlendFunc(gl.ZERO, gl.ONE_MINUS_SRC_COLOR)
+		gl.Color4ub(255, 255, 255, 255)
+		a.drawQuad(entry, x, y, w, h, skew)
+		gl.BlendFunc(gl.ONE, gl.ONE)
+		glColor(fg)
+		a.drawQuad(entry, x, y, w, h, skew)
+		gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+		return
+	}
+	a.drawQuad(entry, x, y, w, h, skew)
+}
+
+func (a *glyphAtlas) drawQuad(entry atlasEntry, x, y, w, h, skew float32) {
 	gl.Begin(gl.QUADS)
 	gl.TexCoord2f(entry.u0, entry.v0)
 	gl.Vertex2f(x+skew, y)
