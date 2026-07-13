@@ -166,7 +166,11 @@ func (a *App) runWindow() error {
 	}
 	applyDarkTitleBar(w)
 	w.MakeContextCurrent()
-	glfw.SwapInterval(1)
+	swapInterval := 1
+	if !a.cfg.Render.VSync {
+		swapInterval = 0
+	}
+	glfw.SwapInterval(swapInterval)
 	if err := gl.Init(); err != nil {
 		return err
 	}

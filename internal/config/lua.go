@@ -58,6 +58,7 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Render.TextDarken = numberField(tbl, "text_darken", cfg.Render.TextDarken)
 		cfg.Render.TextRaster = stringField(tbl, "text_raster", cfg.Render.TextRaster)
 		cfg.Render.StatsHotkey = stringField(tbl, "stats_hotkey", cfg.Render.StatsHotkey)
+		cfg.Render.VSync = boolField(tbl, "vsync", cfg.Render.VSync)
 	}
 	if tbl := tableField(root, "shell"); tbl != nil {
 		cfg.Shell.Program = stringField(tbl, "program", cfg.Shell.Program)
