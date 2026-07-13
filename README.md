@@ -119,6 +119,8 @@ Runtime diagnostics are written to stderr and to a local log file by default. Ov
 
 The terminal draws no permanent chrome: text fills the window to the configured padding, the OS title bar is themed dark, and a two-row stats overlay is toggled by `render.stats_hotkey` (default `ctrl+shift+i`; empty to disable).
 
+Rendering is damage-driven by default (`render.redraw = "on_demand"`): the main loop blocks in the OS event wait and repaints only when something visible changed, so an idle terminal draws about the cursor blink rate and near zero with blink and the stats overlay off. Set `render.redraw = "continuous"` to restore the old always-draw loop for benchmarking or as an escape hatch. `render.vsync` still caps the swap rate to the monitor refresh.
+
 The GLFW frontend uses the current monitor content scale to rasterize text and scale window padding and chrome in framebuffer pixels. Moving the window between monitors rebuilds the glyph atlas at the new effective DPI. A GLFW-enabled `--doctor` reports the primary monitor scale and effective DPI; headless builds report that scale detection is unavailable.
 
 Glyphs, including color emoji and shaped clusters, share at most two 2048 x 2048 RGBA atlas pages. ASCII is prewarmed; when both pages fill, CervTerm resets the atlas generation and rasterizes visible glyphs again on demand, keeping GPU texture memory bounded.

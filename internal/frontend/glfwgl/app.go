@@ -7,6 +7,7 @@ import (
 	"math"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cervterm/internal/config"
@@ -62,6 +63,24 @@ type App struct {
 	fpsFrames        uint64
 	fpsTime          time.Time
 	skippedGlyph     []bool // reused per-row scratch buffer to avoid per-frame allocs
+
+	// On-demand render state. Main-thread only; the PTY reader must not touch
+	// needsRedraw (it wakes the loop with glfw.PostEmptyEvent instead).
+	needsRedraw    bool
+	lastBlinkPhase bool
+	lastStatsDraw  time.Time
+	// termEventsPending marks that the parser advanced outside drainIncoming
+	// (no-PTY fallback), so the next loop iteration must still dispatch
+	// title/bell events. Deferring to the loop instead of dispatching inline
+	// keeps a handler's term:write from re-entering event dispatch.
+	termEventsPending bool
+
+	// wakeReady gates the reader's PostEmptyEvent to the window between
+	// glfw.Init succeeding and glfw.Terminate running: the reader starts before
+	// GLFW is initialized and can outlive it, and posting outside that window
+	// panics. A wake skipped around the transitions self-heals within the
+	// loop's 500ms bounded wait.
+	wakeReady atomic.Bool
 
 	selecting         bool
 	selectionActive   bool
@@ -136,10 +155,12 @@ func (a *App) startPTY() error {
 				chunk := make([]byte, n)
 				copy(chunk, buf[:n])
 				a.incoming <- chunk
+				a.wakeMainLoop()
 			}
 			if err != nil {
 				if err != io.EOF {
 					a.incoming <- []byte("\r\n[pty read error: " + err.Error() + "]\r\n")
+					a.wakeMainLoop()
 				}
 				return
 			}
@@ -153,6 +174,10 @@ func (a *App) runWindow() error {
 		return err
 	}
 	defer glfw.Terminate()
+	// Registered after the Terminate defer so it runs first (LIFO): the reader
+	// must stop posting wakes before GLFW tears down.
+	a.wakeReady.Store(true)
+	defer a.wakeReady.Store(false)
 
 	glfw.WindowHint(glfw.ContextVersionMajor, 2)
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
@@ -186,16 +211,12 @@ func (a *App) runWindow() error {
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
 	a.installCallbacks()
+	// Paint the first frame before any event arrives, and dispatch any term
+	// events produced by pre-loop parser feeds (the no-PTY startup banner).
+	a.needsRedraw = true
+	a.termEventsPending = true
 
-	for !w.ShouldClose() {
-		glfw.PollEvents()
-		a.drainIncoming()
-		a.resizeToWindow()
-		a.draw()
-		w.SwapBuffers()
-		a.meter.AddFrame()
-	}
-	return nil
+	return a.runLoop(w)
 }
 
 func (a *App) bracketedPasteMode() bool {
@@ -207,6 +228,12 @@ func (a *App) bracketedPasteMode() bool {
 func (a *App) installCallbacks() {
 	a.window.SetContentScaleCallback(func(_ *glfw.Window, scaleX, scaleY float32) {
 		a.rebuildForContentScale(scaleX, scaleY)
+		a.requestRedraw()
+	})
+	// A framebuffer size change with the same cols/rows (padding remainder,
+	// DPI move) still needs a repaint that resizeToWindow would miss.
+	a.window.SetFramebufferSizeCallback(func(_ *glfw.Window, _, _ int) {
+		a.requestRedraw()
 	})
 	a.window.SetCharCallback(func(_ *glfw.Window, char rune) {
 		if a.suppressNextChar {
@@ -227,6 +254,7 @@ func (a *App) installCallbacks() {
 		if action == glfw.Press && a.statsSpecOK {
 			if spec, ok := specFromGLFW(key, mods); ok && spec == a.statsSpec {
 				a.showStats = !a.showStats
+				a.requestRedraw()
 				return
 			}
 		}
@@ -273,11 +301,13 @@ func (a *App) installCallbacks() {
 			a.selectionActive = false
 			a.selectionStart = point
 			a.selectionEnd = point
+			a.requestRedraw()
 			return
 		}
 		if action == glfw.Release {
 			a.selectionEnd = point
 			a.selecting = false
+			a.requestRedraw()
 			return
 		}
 	})
@@ -290,6 +320,7 @@ func (a *App) installCallbacks() {
 		}
 		a.selectionEnd = a.pointFromPixels(float32(x), float32(y))
 		a.selectionActive = true
+		a.requestRedraw()
 	})
 	a.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {
 		if a.sendMouseWheel(yoff, glfw.ModifierKey(0)) {
@@ -302,6 +333,7 @@ func (a *App) installCallbacks() {
 		a.mu.Lock()
 		a.term.ScrollViewport(rows)
 		a.mu.Unlock()
+		a.requestRedraw()
 	})
 	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
 		a.mu.Lock()
@@ -442,9 +474,13 @@ func (a *App) writeInputBytes(data []byte) {
 		_, _ = a.pty.Write(data)
 		return
 	}
+	// No-PTY fallback: the parser is fed directly, so no PTY echo will come
+	// back to wake the loop — request the repaint and event dispatch here.
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.parser.Advance(a.term, data)
+	a.mu.Unlock()
+	a.requestRedraw()
+	a.termEventsPending = true
 }
 
 func (a *App) writeInput(s string) {
@@ -453,43 +489,8 @@ func (a *App) writeInput(s string) {
 		return
 	}
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.parser.Advance(a.term, []byte(s))
-}
-func (a *App) drainIncoming() {
-	for {
-		select {
-		case data := <-a.incoming:
-			a.mu.Lock()
-			a.parser.Advance(a.term, data)
-			a.mu.Unlock()
-			a.flushReplies()
-			// Fire on_output outside the lock: a handler may call term:write,
-			// which re-enters writeInput and would deadlock on a.mu.
-			if a.scriptRT != nil && a.scriptRT.WantsOutput() {
-				if err := a.scriptRT.FireOutput(a, string(data)); err != nil {
-					a.Notify("script error: " + err.Error())
-				}
-			}
-			a.meter.AddBytes(len(data))
-		default:
-			return
-		}
-	}
-}
-
-func (a *App) resizeToWindow() {
-	w, h := a.window.GetFramebufferSize()
-	cols := max(2, int((float32(w)-2*a.paddingX)/a.cellW))
-	rows := max(1, int((float32(h)-2*a.paddingY)/a.cellH))
-	if cols == a.cols && rows == a.rows {
-		return
-	}
-	a.cols, a.rows = cols, rows
-	a.mu.Lock()
-	a.term.Resize(cols, rows)
 	a.mu.Unlock()
-	if a.pty != nil {
-		_ = a.pty.Resize(ptyio.Size{Rows: uint16(rows), Cols: uint16(cols)})
-	}
+	a.requestRedraw()
+	a.termEventsPending = true
 }

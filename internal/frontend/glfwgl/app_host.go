@@ -15,9 +15,12 @@ func (a *App) WriteInput(s string) {
 	a.writeInput(s)
 }
 
+// Notify runs on the main thread only (script dispatch and drain paths), so it
+// may set the redraw flag directly to paint the notice promptly.
 func (a *App) Notify(msg string) {
 	a.notice = msg
 	a.noticeUntil = time.Now().Add(4 * time.Second)
+	a.requestRedraw()
 }
 
 // flushReplies sends queued parser replies to the PTY outside a.mu. Main

@@ -17,6 +17,16 @@ import (
 )
 
 func (a *App) draw() {
+	// One timestamp and blink phase for the whole frame: sampling time.Now more
+	// than once lets a blink boundary or notice expiry land between samples,
+	// painting one state while recording another and losing the corrective
+	// repaint.
+	frameNow := time.Now()
+	frameBlink := a.blinkPhaseAt(frameNow)
+	if a.notice != "" && frameNow.After(a.noticeUntil) {
+		a.notice = "" // expired: this frame paints without it and stops re-triggering
+	}
+
 	w, h := a.window.GetFramebufferSize()
 	gl.Viewport(0, 0, int32(w), int32(h))
 	gl.MatrixMode(gl.PROJECTION)
@@ -35,23 +45,11 @@ func (a *App) draw() {
 	gl.Disable(gl.TEXTURE_2D)
 	a.updateFPS()
 
+	// Title/bell events are fired in processTermEvents (once per data batch),
+	// not here, so on-demand rendering does not delay them to the next repaint.
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)
 	a.mu.Unlock()
-	if a.snap.Title != a.lastTitle {
-		a.lastTitle = a.snap.Title
-		if a.snap.Title == "" {
-			a.window.SetTitle("CervTerm")
-		} else {
-			a.window.SetTitle("CervTerm · " + a.snap.Title)
-		}
-		a.fireScriptEvent(func() error { return a.scriptRT.FireTitle(a, a.snap.Title) })
-	}
-	// BellCount is monotonic; fire once per bell so bursts are not collapsed.
-	for a.lastBellCount < a.snap.BellCount {
-		a.lastBellCount++
-		a.fireScriptEvent(func() error { return a.scriptRT.FireBell(a) })
-	}
 
 	var cursorRowOrder []int
 	for r := 0; r < a.snap.Rows; r++ {
@@ -160,10 +158,17 @@ func (a *App) draw() {
 		}
 		x := a.paddingX + float32(cursorCol)*a.cellW
 		y := a.paddingY + float32(cursorRow)*a.cellH
-		a.drawCursor(x, y, cursorColor)
+		a.drawCursor(x, y, cursorColor, frameBlink)
 	}
 
-	a.drawHUD(w, h, palette)
+	a.drawHUD(w, h, palette, frameNow)
+
+	// Record exactly what this frame rendered so shouldRedraw detects the next
+	// blink flip / stats-window elapse against the painted state.
+	a.lastBlinkPhase = frameBlink
+	if a.showStats {
+		a.lastStatsDraw = frameNow
+	}
 }
 
 // updateFPS derives a frames-per-second reading from the cumulative frame
@@ -184,7 +189,7 @@ func (a *App) updateFPS() {
 // drawHUD overlays the optional two-row stats panel (toggled by the stats
 // hotkey) and any transient notice on top of the terminal, so the terminal
 // itself has no permanent chrome.
-func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette) {
+func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette, now time.Time) {
 	var lines []string
 	var colors []color.RGBA
 	if a.showStats {
@@ -194,7 +199,7 @@ func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette) {
 			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
 		colors = append(colors, themeColor(palette.Muted), themeColor(palette.Muted))
 	}
-	if time.Now().Before(a.noticeUntil) && a.notice != "" {
+	if now.Before(a.noticeUntil) && a.notice != "" {
 		lines = append(lines, a.notice)
 		colors = append(colors, themeColor(palette.Accent))
 	}
@@ -257,19 +262,11 @@ func (a *App) drawCluster(cluster string, cellSpan int, x, y float32, c color.RG
 	return ok
 }
 
-// cursorBlinkPhase is the raw time-based blink phase, independent of whether
-// the config enables blinking — DECSCUSR blink styles must animate even when
-// the configured cursor is steady.
-func (a *App) cursorBlinkPhase() bool {
-	interval := a.cfg.Cursor.BlinkIntervalMS
-	if interval <= 0 {
-		interval = 1000
-	}
-	period := time.Duration(interval) * time.Millisecond
-	return time.Since(a.blinkStart)%period < period/2
-}
-
-func (a *App) drawCursor(x, y float32, c color.RGBA) {
+// drawCursor renders the cursor using the frame's precomputed blink phase so
+// the painted phase always matches the lastBlinkPhase recorded for this frame.
+// The phase is time-based and independent of the config blink switch —
+// DECSCUSR blink styles must animate even when the configured cursor is steady.
+func (a *App) drawCursor(x, y float32, c color.RGBA, blinkPhase bool) {
 	thickness := cursorThicknessPixels(a.cfg.Cursor.Thickness, a.cellW, a.cellH)
 	shape, blink := a.cfg.Cursor.Shape, a.cfg.Cursor.Blink
 	switch a.snap.CursorStyle {
@@ -280,7 +277,7 @@ func (a *App) drawCursor(x, y float32, c color.RGBA) {
 	case 5, 6:
 		shape, blink = "beam", a.snap.CursorStyle == 5
 	}
-	if blink && !a.cursorBlinkPhase() {
+	if blink && !blinkPhase {
 		return
 	}
 	switch shape {

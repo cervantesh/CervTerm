@@ -61,6 +61,7 @@ type RenderConfig struct {
 	TextRaster  string
 	StatsHotkey string
 	VSync       bool
+	Redraw      string
 }
 
 type ShellConfig struct {
@@ -78,7 +79,7 @@ func Defaults() Config {
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
 		Clipboard: ClipboardConfig{OSC52: "write"},
-		Render:    RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", VSync: true},
+		Render:    RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", VSync: true, Redraw: "on_demand"},
 		Shell:     ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
 }
@@ -114,6 +115,9 @@ func (c Config) Validate() error {
 	}
 	if c.Render.TextRaster != "auto" && c.Render.TextRaster != "go" && c.Render.TextRaster != "subpixel" {
 		errs = append(errs, fmt.Errorf("render.text_raster %q must be auto, go, or subpixel", c.Render.TextRaster))
+	}
+	if c.Render.Redraw != "on_demand" && c.Render.Redraw != "continuous" {
+		errs = append(errs, fmt.Errorf("render.redraw %q must be on_demand or continuous", c.Render.Redraw))
 	}
 	for name, value := range map[string]string{"foreground": c.Colors.Foreground, "background": c.Colors.Background, "cursor": c.Colors.Cursor, "selection_background": c.Colors.SelectionBackground} {
 		if !isHexColor(value) {
