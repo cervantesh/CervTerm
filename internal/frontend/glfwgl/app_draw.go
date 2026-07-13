@@ -33,6 +33,7 @@ func (a *App) draw() {
 	glClearColor(background)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 	gl.Disable(gl.TEXTURE_2D)
+	a.updateFPS()
 
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)
@@ -157,6 +158,21 @@ func (a *App) draw() {
 	a.drawHUD(w, h, palette)
 }
 
+// updateFPS derives a frames-per-second reading from the cumulative frame
+// counter over a ~500ms window. Cheap enough to run every frame.
+func (a *App) updateFPS() {
+	now := time.Now()
+	if a.fpsTime.IsZero() {
+		a.fpsTime, a.fpsFrames = now, a.meter.Frames()
+		return
+	}
+	if d := now.Sub(a.fpsTime); d >= 500*time.Millisecond {
+		cur := a.meter.Frames()
+		a.fps = float64(cur-a.fpsFrames) / d.Seconds()
+		a.fpsFrames, a.fpsTime = cur, now
+	}
+}
+
 // drawHUD overlays the optional two-row stats panel (toggled by the stats
 // hotkey) and any transient notice on top of the terminal, so the terminal
 // itself has no permanent chrome.
@@ -166,7 +182,7 @@ func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette) {
 	if a.showStats {
 		s := a.meter.Snapshot()
 		lines = append(lines,
-			fmt.Sprintf("CervTerm  %dx%d  raster:%s  %s %.0f", a.cols, a.rows, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.cfg.Font.Size),
+			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.cfg.Font.Size),
 			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
 		colors = append(colors, themeColor(palette.Muted), themeColor(palette.Muted))
 	}
