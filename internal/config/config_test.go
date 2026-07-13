@@ -16,7 +16,7 @@ func TestDefaultsValidate(t *testing.T) {
 	if cfg.Render.TextGamma != 1.15 || cfg.Render.TextDarken != 0.0 {
 		t.Fatalf("unexpected text coverage defaults: %#v", cfg.Render)
 	}
-	if cfg.Render.TextRaster != "auto" {
+	if cfg.Render.TextRaster != "go" {
 		t.Fatalf("render.text_raster default = %q, want auto", cfg.Render.TextRaster)
 	}
 }
