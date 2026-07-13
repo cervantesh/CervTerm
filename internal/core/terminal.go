@@ -48,6 +48,15 @@ func (t *Terminal) Resize(cols, rows int) {
 		logicalRows := logicalRowsFromPhysical(physicalRows, wrappedRows)
 		physicalRows, wrappedRows = reflowLogicalRows(logicalRows, cols)
 	}
+	if !t.alternateScreen {
+		// Trailing all-blank rows below the cursor are dropped rather than letting
+		// them force content into scrollback; only real content scrolls to history.
+		keep := min(oldCursorGlobal+1, len(physicalRows))
+		for len(physicalRows) > keep && !wrappedRows[len(wrappedRows)-1] && isBlankRow(physicalRows[len(physicalRows)-1]) {
+			physicalRows = physicalRows[:len(physicalRows)-1]
+			wrappedRows = wrappedRows[:len(wrappedRows)-1]
+		}
+	}
 	visibleStart := max(0, len(physicalRows)-rows)
 	t.rebuildFromPhysicalRows(cols, rows, physicalRows, wrappedRows, oldDisplayOffset)
 

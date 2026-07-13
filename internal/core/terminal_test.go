@@ -149,6 +149,118 @@ func TestTerminalResizePreservesOverlap(t *testing.T) {
 		t.Fatalf("expected reflowed history to preserve one scrollback line, got %d", term.ScrollbackLines())
 	}
 }
+
+func TestTerminalResizeStartupShrinkDropsTrailingBlankRows(t *testing.T) {
+	term := NewTerminal(100, 32)
+
+	term.Resize(77, 23)
+
+	if got := term.ScrollbackLines(); got != 0 {
+		t.Fatalf("startup shrink should not add blank scrollback rows, got %d", got)
+	}
+}
+
+func TestTerminalResizePromptAtTopDoesNotAddHistory(t *testing.T) {
+	term := NewTerminal(100, 32)
+	for _, r := range "C:\\>" {
+		term.PutRune(r)
+	}
+
+	term.Resize(77, 23)
+
+	if got := term.ScrollbackLines(); got != 0 {
+		t.Fatalf("prompt-at-top shrink should not add history, got %d rows", got)
+	}
+	if got := term.PlainText(); got[:4] != "C:\\>" {
+		t.Fatalf("prompt should remain at the top after shrink, got %q", got)
+	}
+}
+
+func TestTerminalResizeFullContentPreservesShrinkHistory(t *testing.T) {
+	term := NewTerminal(4, 4)
+	for row, text := range []string{"aaa", "bbb", "ccc", "ddd"} {
+		term.SetCursor(row, 0)
+		for _, r := range text {
+			term.PutRune(r)
+		}
+	}
+
+	term.Resize(4, 2)
+
+	if got := term.ScrollbackLines(); got != 2 {
+		t.Fatalf("full-content shrink should preserve two history rows, got %d", got)
+	}
+	if got := term.PlainText(); got != "ccc\nddd" {
+		t.Fatalf("full-content shrink visible rows mismatch: %q", got)
+	}
+	view := make([]Cell, term.Cols()*term.Rows())
+	term.ScrollViewport(2)
+	term.CopyView(view)
+	if got := cellsText(view, term.Cols(), term.Rows()); got != "aaa\nbbb" {
+		t.Fatalf("full-content shrink history mismatch: %q", got)
+	}
+}
+
+func TestTerminalResizeCursorAtBottomProtectsHistory(t *testing.T) {
+	term := NewTerminal(5, 6)
+	for row, text := range []string{"one", "two", "tri"} {
+		term.SetCursor(row, 0)
+		for _, r := range text {
+			term.PutRune(r)
+		}
+	}
+	term.SetCursor(5, 0)
+
+	term.Resize(5, 3)
+
+	if got := term.ScrollbackLines(); got != 3 {
+		t.Fatalf("cursor-row protection should preserve three history rows, got %d", got)
+	}
+	if got := term.CursorRow(); got != 2 {
+		t.Fatalf("bottom cursor should remain on the bottom visible row, got %d", got)
+	}
+	view := make([]Cell, term.Cols()*term.Rows())
+	term.ScrollViewport(3)
+	term.CopyView(view)
+	if got := cellsText(view, term.Cols(), term.Rows()); got != "one\ntwo\ntri" {
+		t.Fatalf("cursor-row protection lost history content: %q", got)
+	}
+}
+
+func TestTerminalResizeDoesNotTrimBlankWrappedRow(t *testing.T) {
+	term := NewTerminal(4, 4)
+	term.rowWrapped[3] = true
+
+	term.Resize(4, 2)
+
+	if got := term.ScrollbackLines(); got != 2 {
+		t.Fatalf("blank wrapped row should stop trimming, got %d history rows", got)
+	}
+	if !term.rowWrapped[1] {
+		t.Fatalf("blank wrapped row should retain its wrapped flag")
+	}
+}
+
+func TestTerminalResizeGrowThenShrinkRoundTrip(t *testing.T) {
+	term := NewTerminal(100, 32)
+	for _, r := range "prompt" {
+		term.PutRune(r)
+	}
+	term.Resize(77, 23)
+	term.Resize(100, 32)
+	term.Resize(77, 23)
+
+	if got := term.ScrollbackLines(); got != 0 {
+		t.Fatalf("grow-then-shrink should not invent history, got %d rows", got)
+	}
+	if got := term.PlainText(); got[:6] != "prompt" {
+		t.Fatalf("grow-then-shrink should preserve prompt content, got %q", got)
+	}
+	if got := term.CursorRow(); got != 0 {
+		t.Fatalf("grow-then-shrink should preserve cursor row 0, got %d", got)
+	}
+}
+
 func TestTerminalEraseLineModes(t *testing.T) {
 	term := NewTerminal(6, 2)
 	for _, r := range "abcdef" {

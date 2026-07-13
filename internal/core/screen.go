@@ -48,6 +48,16 @@ func (t *Terminal) PlainText() string {
 
 func (t *Terminal) blank() Cell { return Cell{Rune: ' ', Attr: Attr{FG: DefaultFG, BG: DefaultBG}} }
 
+func isBlankRow(row []Cell) bool {
+	blankAttr := Attr{FG: DefaultFG, BG: DefaultBG}
+	for _, cell := range row {
+		if (cell.Rune != 0 && cell.Rune != ' ') || len(cell.Combining) != 0 || cell.Attr != blankAttr || cell.WideContinuation {
+			return false
+		}
+	}
+	return true
+}
+
 func (t *Terminal) physicalRows() ([][]Cell, []bool) {
 	count := t.scrollbackRows + t.rows
 	rows := make([][]Cell, 0, count)
