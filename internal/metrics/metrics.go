@@ -24,6 +24,10 @@ type Meter struct {
 }
 
 func (m *Meter) AddFrame() { m.frames.Add(1) }
+
+// Frames returns the cumulative frame count without the heavier MemStats read
+// that Snapshot performs, so it can be polled every frame to derive FPS.
+func (m *Meter) Frames() uint64 { return m.frames.Load() }
 func (m *Meter) AddBytes(n int) {
 	if n > 0 {
 		m.bytes.Add(uint64(n))

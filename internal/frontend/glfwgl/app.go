@@ -58,6 +58,9 @@ type App struct {
 	showStats        bool
 	statsSpec        script.Spec
 	statsSpecOK      bool
+	fps              float64
+	fpsFrames        uint64
+	fpsTime          time.Time
 
 	selecting         bool
 	selectionActive   bool
