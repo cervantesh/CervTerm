@@ -81,6 +81,10 @@ The second slice is also implemented: `SimpleShaper` is the default pure-Go back
 3. one emoji ZWJ sequence either shapes to a supported glyph or safely falls back.
 4. atlas upload remains isolated from shaping engine details.
 
+## Run-shaping slice (programming ligatures)
+
+The multi-cell run-shaping slice is now implemented (see docs/ligatures-plan.md). When `font.ligatures = true` and an advanced shaper is active (DirectWrite; SimpleShaper quietly stays off), the frontend detects maximal 2..8-cell runs of programming-symbol characters with identical attrs and shapes them through the existing `Shaper` interface. `RasterizeRun` compares whole-run shaping against per-rune shaping so kerning/GPOS-only changes count as "no ligature" (the grid always wins, and the run is forced to its exact cell span), rasterizes real substitutions into a single run-keyed atlas bitmap, and caches negative results. The cursor's run is left unligated, BiDi-reordered rows are skipped, and all logical state (grid, selection, copy text) is untouched.
+
 ## Current recommendation
 
 For CervTerm's Windows-first beta, **DirectWrite first is now the selected path**. The repository has a Windows-only `DirectWriteShaper` entrypoint selected when `IDWriteFactory` and `IDWriteTextAnalyzer` can be created, preserves `SimpleShaper` fallback behavior, records fallback font source paths, can create `IDWriteFontFace` objects from those paths, and has a typed `IDWriteTextAnalyzer` vtable with verified `AnalyzeScript`, `GetGlyphs`, and `GetGlyphPlacements` method pointers, and implements/verifies minimal text-analysis source/sink callbacks for `AnalyzeScript`. The `GetGlyphs`/`GetGlyphPlacements` wrapper is now active: the missing COM `this` argument and `DWRITE_SCRIPT_ANALYSIS` layout were corrected, the wrapper maps DirectWrite glyph IDs/advances/offsets into `ShapedGlyph`, and tests verify simple DirectWrite shaping plus source-backed Arabic, Indic, Arabic ligature, Indic conjunct, and Segoe UI Emoji ZWJ shaping through `DirectWriteShaper`.

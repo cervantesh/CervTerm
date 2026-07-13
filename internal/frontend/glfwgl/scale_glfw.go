@@ -47,6 +47,8 @@ func (a *App) rebuildForContentScale(scaleX, scaleY float32) {
 	}
 	old := a.atlas
 	a.atlas = atlas
+	// The rebuilt atlas re-probes the shaper (and drops the run caches with it).
+	a.ligaturesActive = a.cfg.Font.Ligatures && atlas.supportsLigatures()
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
 	a.applyScale(scaleX, scaleY)

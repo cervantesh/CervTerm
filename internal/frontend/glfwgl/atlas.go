@@ -46,6 +46,7 @@ type glyphAtlas struct {
 	backend      fontglyph.Backend
 	pages        [atlasPageCount]atlasPage
 	entries      map[atlasKey]atlasEntry
+	runNegative  map[string]uint64 // run key -> generation of a proven no-ligature result
 	generation   uint64
 	boundTexture uint32
 	coverageLUT  *[256]uint8
@@ -90,6 +91,7 @@ func (a *glyphAtlas) Reset() {
 		clearAtlasTexture(a.pages[i].tex)
 	}
 	clear(a.entries)
+	clear(a.runNegative)
 	a.generation++
 	a.boundTexture = 0
 	log.Printf("glyph atlas generation reset: generation=%d", a.generation)
@@ -124,6 +126,53 @@ func (a *glyphAtlas) drawCluster(cluster string, cellSpan int, x, y float32, fg 
 		a.drawEntry(entry, x, y, fg, scale, skew)
 	}
 	return ok
+}
+
+// supportsLigatures reports whether the backend's active shaper can substitute
+// ligature glyphs. Probed once by the App so no per-frame reflection happens.
+func (a *glyphAtlas) supportsLigatures() bool {
+	otb, ok := a.backend.(*fontglyph.OpenTypeBackend)
+	return ok && otb.SupportsLigatures()
+}
+
+// drawRun draws a shaped ligature spanning cellSpan cells, returning false when
+// the run has no ligature so the caller renders it per-cell. Both outcomes are
+// cached (positive as an atlas entry, negative in runNegative) so a run is
+// shaped at most once per atlas generation.
+func (a *glyphAtlas) drawRun(run string, cellSpan int, x, y float32, fg color.RGBA, scale, skew float32) bool {
+	entry, ok := a.cachedRun(run, cellSpan)
+	if ok {
+		a.drawEntry(entry, x, y, fg, scale, skew)
+	}
+	return ok
+}
+
+func (a *glyphAtlas) cachedRun(run string, cellSpan int) (atlasEntry, bool) {
+	if run == "" {
+		return atlasEntry{}, false
+	}
+	cellSpan = max(1, cellSpan)
+	keyText := run + "\x00" + string(rune(cellSpan))
+	key := atlasKey{kind: 'l', text: keyText}
+	if entry, ok := a.currentEntry(key); ok {
+		return entry, true
+	}
+	if gen, ok := a.runNegative[keyText]; ok && entryGenerationValid(gen, a.generation) {
+		return atlasEntry{}, false
+	}
+	otb, ok := a.backend.(*fontglyph.OpenTypeBackend)
+	if !ok {
+		return atlasEntry{}, false
+	}
+	rasterized, ligated := otb.RasterizeRun(run, cellSpan)
+	if !ligated {
+		if a.runNegative == nil {
+			a.runNegative = make(map[string]uint64)
+		}
+		a.runNegative[keyText] = a.generation
+		return atlasEntry{}, false
+	}
+	return a.insertRaster(key, rasterized)
 }
 
 func (a *glyphAtlas) cachedRune(r rune) (atlasEntry, bool) {

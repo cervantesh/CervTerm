@@ -3,11 +3,27 @@
 package glfwgl
 
 import (
+	"math"
+
 	"cervterm/internal/core"
 	"cervterm/internal/input"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
+
+func scrollRowsFromWheelDelta(yoff float64) int {
+	if yoff == 0 {
+		return 0
+	}
+	rows := int(math.Round(yoff * 3))
+	if rows == 0 {
+		if yoff > 0 {
+			return 1
+		}
+		return -1
+	}
+	return rows
+}
 
 func (a *App) mouseMode() core.MouseMode {
 	a.mu.Lock()

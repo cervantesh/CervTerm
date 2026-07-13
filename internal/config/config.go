@@ -26,8 +26,9 @@ type WindowConfig struct {
 }
 
 type FontConfig struct {
-	Family string
-	Size   float64
+	Family    string
+	Size      float64
+	Ligatures bool
 }
 
 type ColorsConfig struct {
@@ -75,7 +76,7 @@ type ShellConfig struct {
 func Defaults() Config {
 	return Config{
 		Window:    WindowConfig{Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6, DynamicTitle: true},
-		Font:      FontConfig{Family: "Go Mono", Size: 14},
+		Font:      FontConfig{Family: "Go Mono", Size: 14, Ligatures: false},
 		Colors:    ColorsConfig{Foreground: "#E6E1D8", Background: "#080B12", Cursor: "#60E8F0", SelectionBackground: "#2A6377"},
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},

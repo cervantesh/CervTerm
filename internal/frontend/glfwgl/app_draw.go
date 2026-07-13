@@ -188,6 +188,16 @@ func (a *App) drawCluster(cluster string, cellSpan int, x, y float32, c color.RG
 	return ok
 }
 
+func (a *App) drawRunGlyph(run string, cellSpan int, x, y float32, c color.RGBA, scale, skew float32) bool {
+	gl.Enable(gl.TEXTURE_2D)
+	gl.Enable(gl.BLEND)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	glColor(c)
+	ok := a.atlas.drawRun(run, cellSpan, x, y, c, scale, skew)
+	gl.Disable(gl.TEXTURE_2D)
+	return ok
+}
+
 // drawCursor renders the cursor using the frame's precomputed blink phase so
 // the painted phase always matches the lastBlinkPhase recorded for this frame.
 // The phase is time-based and independent of the config blink switch —

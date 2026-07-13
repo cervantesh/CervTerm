@@ -4,7 +4,6 @@ package glfwgl
 
 import (
 	"io"
-	"math"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -63,6 +62,7 @@ type App struct {
 	fpsFrames        uint64
 	fpsTime          time.Time
 	skippedGlyph     []bool // reused per-row scratch buffer to avoid per-frame allocs
+	ligaturesActive  bool   // font.ligatures enabled AND the active shaper can substitute
 
 	rowHashes, prevHashes, prevPrevHashes []uint64
 	lastCursorRow                         int
@@ -212,6 +212,8 @@ func (a *App) runWindow() error {
 	}
 	a.atlas = atlas
 	defer func() { a.atlas.close() }()
+	// Probe ligature support once (not per frame): stays off with SimpleShaper.
+	a.ligaturesActive = a.cfg.Font.Ligatures && atlas.supportsLigatures()
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
 	a.installCallbacks()
@@ -457,20 +459,6 @@ func (a *App) pointFromPixels(x, y float32) termsel.Point {
 		col = a.cols - 1
 	}
 	return termsel.Point{Row: row, Col: col}
-}
-
-func scrollRowsFromWheelDelta(yoff float64) int {
-	if yoff == 0 {
-		return 0
-	}
-	rows := int(math.Round(yoff * 3))
-	if rows == 0 {
-		if yoff > 0 {
-			return 1
-		}
-		return -1
-	}
-	return rows
 }
 
 func (a *App) writeInputBytes(data []byte) {

@@ -23,6 +23,13 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 	}
 	skippedGlyph := a.skippedGlyph[:a.snap.Cols]
 	clear(skippedGlyph)
+	// Ligatures work on logical order only, so they stay off for BiDi-reordered
+	// rows (order != nil). cursorCol splits the run under the cursor (§4).
+	ligate := a.ligaturesActive && order == nil
+	cursorCol := -1
+	if a.snap.CursorVisible && a.snap.CursorRow == r {
+		cursorCol = a.snap.CursorCol
+	}
 	for visualCol := 0; visualCol < a.snap.Cols; visualCol++ {
 		logicalCol := visualCol
 		if order != nil {
@@ -72,6 +79,23 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 		skew := float32(0)
 		if cell.Attr.Italic {
 			skew = 0.2 * a.cellH
+		}
+		// A ligature hit draws the whole span once (bold doubling + decorations
+		// over the span) and marks the covered cells; a miss falls through to the
+		// per-cell path. Per-cell backgrounds/selection already painted above.
+		if ligate {
+			if run, ok := detectLigatureRun(rowCells, logicalCol, cursorCol); ok {
+				if a.drawRunGlyph(run.Text, run.CellSpan, x, y, fg, 1, skew) {
+					if cell.Attr.Bold {
+						a.drawRunGlyph(run.Text, run.CellSpan, x+1, y, fg, 1, skew)
+					}
+					drawTextDecorations(x, y, a.cellW*float32(run.CellSpan), a.cellH, fg, cell.Attr)
+					for i := 1; i < run.CellSpan && logicalCol+i < a.snap.Cols; i++ {
+						skippedGlyph[logicalCol+i] = true
+					}
+					continue
+				}
+			}
 		}
 		if cluster, ok := collectRenderCluster(a.snap.Cells, a.snap.Cols, r, logicalCol); ok {
 			if a.drawCluster(cluster.Text, cluster.CellSpan, x, y, fg, 1, skew) {

@@ -31,6 +31,7 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 	if tbl := tableField(root, "font"); tbl != nil {
 		cfg.Font.Family = stringField(tbl, "family", cfg.Font.Family)
 		cfg.Font.Size = numberField(tbl, "size", cfg.Font.Size)
+		cfg.Font.Ligatures = boolField(tbl, "ligatures", cfg.Font.Ligatures)
 	}
 	if tbl := tableField(root, "colors"); tbl != nil {
 		cfg.Colors.Foreground = stringField(tbl, "foreground", cfg.Colors.Foreground)
