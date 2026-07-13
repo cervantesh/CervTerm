@@ -473,8 +473,13 @@ func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearO
 func (t *Terminal) ScrollbackLines() int { return t.scrollbackRows }
 func (t *Terminal) DisplayOffset() int   { return t.displayOffset }
 
-func (t *Terminal) ScrollViewport(lines int) {
+// ScrollViewport shifts the visible window by lines (positive scrolls back
+// into history), clamping to the available scrollback. It reports whether the
+// display offset actually changed so callers can skip a redraw when a wheel
+// tick lands on a clamp and moves nothing.
+func (t *Terminal) ScrollViewport(lines int) bool {
 	maxOffset := t.ScrollbackLines()
+	prev := t.displayOffset
 	t.displayOffset += lines
 	if t.displayOffset < 0 {
 		t.displayOffset = 0
@@ -482,4 +487,5 @@ func (t *Terminal) ScrollViewport(lines int) {
 	if t.displayOffset > maxOffset {
 		t.displayOffset = maxOffset
 	}
+	return t.displayOffset != prev
 }

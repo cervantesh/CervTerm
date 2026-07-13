@@ -3,6 +3,7 @@
 package glfwgl
 
 import (
+	"image/color"
 	"io"
 	"runtime"
 	"sync"
@@ -58,6 +59,12 @@ type App struct {
 	showStats        bool
 	statsSpec        script.Spec
 	statsSpecOK      bool
+	hudLines         []string // cached HUD rows; see refreshHUDCache
+	hudColors        []color.RGBA
+	hudNotice        string
+	hudShowStats     bool
+	hudCols, hudRows int
+	hudStatsAt       time.Time
 	fps              float64
 	fpsFrames        uint64
 	fpsTime          time.Time
@@ -338,9 +345,13 @@ func (a *App) installCallbacks() {
 			return
 		}
 		a.mu.Lock()
-		a.term.ScrollViewport(rows)
+		moved := a.term.ScrollViewport(rows)
 		a.mu.Unlock()
-		a.requestRedraw()
+		// A wheel tick at the clamp moves nothing: skip the redraw so no frame is
+		// drawn (the event still woke the loop; nothing damages).
+		if moved {
+			a.requestRedraw()
+		}
 	})
 	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
 		a.mu.Lock()
