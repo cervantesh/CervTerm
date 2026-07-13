@@ -63,7 +63,15 @@ func (a *App) draw() {
 				cursorRowOrder = order
 			}
 		}
-		skippedGlyph := make([]bool, a.snap.Cols)
+		// Reuse a single scratch buffer across rows and frames instead of
+		// allocating per row; at uncapped frame rates that alloc dominated churn.
+		if cap(a.skippedGlyph) < a.snap.Cols {
+			a.skippedGlyph = make([]bool, a.snap.Cols)
+		}
+		skippedGlyph := a.skippedGlyph[:a.snap.Cols]
+		for i := range skippedGlyph {
+			skippedGlyph[i] = false
+		}
 		for visualCol := 0; visualCol < a.snap.Cols; visualCol++ {
 			logicalCol := visualCol
 			if order != nil {
