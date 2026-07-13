@@ -61,6 +61,7 @@ type App struct {
 	fps              float64
 	fpsFrames        uint64
 	fpsTime          time.Time
+	skippedGlyph     []bool // reused per-row scratch buffer to avoid per-frame allocs
 
 	selecting         bool
 	selectionActive   bool
