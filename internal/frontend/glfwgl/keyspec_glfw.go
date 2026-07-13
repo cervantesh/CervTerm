@@ -4,11 +4,31 @@ package glfwgl
 
 import (
 	"fmt"
+	"log"
+	"strings"
 
 	"cervterm/internal/script"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
+
+// parseStatsHotkey splits a "ctrl+shift+i" chord into a key spec. Empty or
+// unparseable strings disable the stats toggle.
+func parseStatsHotkey(chord string) (script.Spec, bool) {
+	chord = strings.TrimSpace(chord)
+	if chord == "" {
+		return script.Spec{}, false
+	}
+	parts := strings.Split(chord, "+")
+	key := strings.TrimSpace(parts[len(parts)-1])
+	mods := strings.Join(parts[:len(parts)-1], "+")
+	spec, err := script.ParseSpec(key, mods)
+	if err != nil {
+		log.Printf("render.stats_hotkey %q is not a valid chord: %v", chord, err)
+		return script.Spec{}, false
+	}
+	return spec, true
+}
 
 func specFromGLFW(key glfw.Key, mods glfw.ModifierKey) (script.Spec, bool) {
 	name, ok := keyNameFromGLFW(key)

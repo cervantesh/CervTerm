@@ -27,34 +27,12 @@ func (a *App) draw() {
 
 	palette := cervtermtheme.DefaultPalette()
 	background := configColor(a.cfg.Colors.Background, themeColor(palette.Background))
-	panel := themeColor(palette.Surface)
 	cursorColor := configColor(a.cfg.Colors.Cursor, themeColor(palette.Accent))
 	selectionColor := configColor(a.cfg.Colors.SelectionBackground, color.RGBA{0x2A, 0x63, 0x77, 0xFF})
 	defaultFG := configColor(a.cfg.Colors.Foreground, rgb(core.DefaultFG))
 	glClearColor(background)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 	gl.Disable(gl.TEXTURE_2D)
-	s := a.uiScale
-	fillRect(10*s, 10*s, float32(w)-20*s, float32(h)-20*s, panel)
-	fillRect(10*s, 10*s, float32(w)-20*s, 28*s, themeColor(palette.Chrome))
-	fillRect(22*s, 20*s, 9*s, 9*s, themeColor(palette.ANSI[1]))
-	fillRect(38*s, 20*s, 9*s, 9*s, themeColor(palette.ANSI[3]))
-	fillRect(54*s, 20*s, 9*s, 9*s, themeColor(palette.ANSI[2]))
-	fillRect(0, 38*s, float32(w), s, cursorColor)
-
-	if time.Since(a.lastStats) > 500*time.Millisecond {
-		s := a.meter.Snapshot()
-		a.status = fmt.Sprintf("CervTerm · %dx%d · %.1f KB read · heap %.1f MB · mallocs %d · GC %d · last pause %s",
-			a.cols, a.rows, float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause)
-		a.lastStats = time.Now()
-	}
-	statusText := a.status
-	statusColor := themeColor(palette.Muted)
-	if time.Now().Before(a.noticeUntil) {
-		statusText = a.notice
-		statusColor = themeColor(palette.Accent)
-	}
-	a.drawString(statusText, 78*s, 16*s, statusColor, 1)
 
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)
@@ -174,6 +152,49 @@ func (a *App) draw() {
 		x := a.paddingX + float32(cursorCol)*a.cellW
 		y := a.paddingY + float32(cursorRow)*a.cellH
 		a.drawCursor(x, y, cursorColor)
+	}
+
+	a.drawHUD(w, h, palette)
+}
+
+// drawHUD overlays the optional two-row stats panel (toggled by the stats
+// hotkey) and any transient notice on top of the terminal, so the terminal
+// itself has no permanent chrome.
+func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette) {
+	var lines []string
+	var colors []color.RGBA
+	if a.showStats {
+		s := a.meter.Snapshot()
+		lines = append(lines,
+			fmt.Sprintf("CervTerm  %dx%d  raster:%s  %s %.0f", a.cols, a.rows, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.cfg.Font.Size),
+			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
+		colors = append(colors, themeColor(palette.Muted), themeColor(palette.Muted))
+	}
+	if time.Now().Before(a.noticeUntil) && a.notice != "" {
+		lines = append(lines, a.notice)
+		colors = append(colors, themeColor(palette.Accent))
+	}
+	if len(lines) == 0 {
+		return
+	}
+
+	widest := 0
+	for _, ln := range lines {
+		if n := len([]rune(ln)); n > widest {
+			widest = n
+		}
+	}
+	pad := 6 * a.uiScale
+	bx, by := pad, pad
+	bw := float32(widest)*a.cellW + 2*pad
+	bh := float32(len(lines))*a.cellH + 2*pad
+	gl.Disable(gl.TEXTURE_2D)
+	gl.Enable(gl.BLEND)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	fillRect(bx, by, bw, bh, color.RGBA{0x10, 0x14, 0x1C, 0xF0})
+	fillRect(bx, by, bw, max(1, a.uiScale), themeColor(palette.Accent))
+	for i, ln := range lines {
+		a.drawString(ln, bx+pad, by+pad+float32(i)*a.cellH, colors[i], 1)
 	}
 }
 
