@@ -101,7 +101,7 @@ Generate a complete editable template with `--print-default-config`. A minimal e
 
 ```lua
 return {
-  window = { width = 1100, height = 720, padding_x = 18, padding_y = 44 },
+  window = { width = 1100, height = 720, padding_x = 6, padding_y = 6 },
   font = { family = "Go Mono", size = 14 },
   shell = { program = "cmd.exe", args = {} },
 }
@@ -116,6 +116,8 @@ return {
 Runtime diagnostics are written to stderr and to a local log file by default. Override the location with `--log-file path/to/cervterm.log` or `CERVTERM_LOG_FILE`; use `--log-file -` to keep diagnostics on stderr only. Run `--doctor` to print the effective log path, config discovery state, environment hints, and support checklist. Unexpected panics are captured with a stack trace before CervTerm exits.
 
 ## Display scaling
+
+The terminal draws no permanent chrome: text fills the window to the configured padding, the OS title bar is themed dark, and a two-row stats overlay is toggled by `render.stats_hotkey` (default `ctrl+shift+i`; empty to disable).
 
 The GLFW frontend uses the current monitor content scale to rasterize text and scale window padding and chrome in framebuffer pixels. Moving the window between monitors rebuilds the glyph atlas at the new effective DPI. A GLFW-enabled `--doctor` reports the primary monitor scale and effective DPI; headless builds report that scale detection is unavailable.
 

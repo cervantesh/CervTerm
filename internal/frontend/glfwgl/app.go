@@ -55,6 +55,9 @@ type App struct {
 	lastBellCount    int
 	blinkStart       time.Time
 	pendingReplies   [][]byte
+	showStats        bool
+	statsSpec        script.Spec
+	statsSpecOK      bool
 
 	selecting         bool
 	selectionActive   bool
@@ -84,6 +87,9 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 		cellH:      16,
 		uiScale:    1,
 		blinkStart: time.Now(),
+	}
+	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {
+		app.statsSpec, app.statsSpecOK = spec, true
 	}
 	// Replies queue up and flush after Advance returns so the PTY write never
 	// happens while a.mu is held (a blocked write must not stall the drain
@@ -155,6 +161,7 @@ func (a *App) runWindow() error {
 	if icons := windowIcons(); len(icons) > 0 {
 		w.SetIcon(icons)
 	}
+	applyDarkTitleBar(w)
 	w.MakeContextCurrent()
 	glfw.SwapInterval(1)
 	if err := gl.Init(); err != nil {
@@ -208,6 +215,12 @@ func (a *App) installCallbacks() {
 		}
 		if a.dispatchScriptKey(key, mods, action == glfw.Press) {
 			return
+		}
+		if action == glfw.Press && a.statsSpecOK {
+			if spec, ok := specFromGLFW(key, mods); ok && spec == a.statsSpec {
+				a.showStats = !a.showStats
+				return
+			}
 		}
 
 		if a.handleClipboardKey(key, mods) {
@@ -460,7 +473,7 @@ func (a *App) drainIncoming() {
 func (a *App) resizeToWindow() {
 	w, h := a.window.GetFramebufferSize()
 	cols := max(2, int((float32(w)-2*a.paddingX)/a.cellW))
-	rows := max(1, int((float32(h)-a.paddingY-18*a.uiScale)/a.cellH))
+	rows := max(1, int((float32(h)-2*a.paddingY)/a.cellH))
 	if cols == a.cols && rows == a.rows {
 		return
 	}

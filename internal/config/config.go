@@ -55,10 +55,11 @@ type ClipboardConfig struct {
 }
 
 type RenderConfig struct {
-	Bidi       bool
-	TextGamma  float64
-	TextDarken float64
-	TextRaster string
+	Bidi        bool
+	TextGamma   float64
+	TextDarken  float64
+	TextRaster  string
+	StatsHotkey string
 }
 
 type ShellConfig struct {
@@ -70,13 +71,13 @@ type ShellConfig struct {
 
 func Defaults() Config {
 	return Config{
-		Window:    WindowConfig{Width: 1100, Height: 720, PaddingX: 18, PaddingY: 44, DynamicTitle: true},
+		Window:    WindowConfig{Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6, DynamicTitle: true},
 		Font:      FontConfig{Family: "Go Mono", Size: 14},
 		Colors:    ColorsConfig{Foreground: "#E6E1D8", Background: "#080B12", Cursor: "#60E8F0", SelectionBackground: "#2A6377"},
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
 		Clipboard: ClipboardConfig{OSC52: "write"},
-		Render:    RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go"},
+		Render:    RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i"},
 		Shell:     ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
 }
