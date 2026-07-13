@@ -17,6 +17,11 @@ return {
   font = {
     family = %q,
     size = %.1f,
+    -- Render programming ligatures (-> => != === etc.) when the font provides
+    -- them (Fira Code, Cascadia Code, JetBrains Mono). No effect with fonts
+    -- that lack ligatures (e.g. the default Go Mono). Render-only: grid,
+    -- selection, and copied text are unchanged.
+    ligatures = %t,
   },
   colors = {
     foreground = %q,
@@ -80,7 +85,7 @@ return {
   -- },
 }
 `, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY, cfg.Window.DynamicTitle,
-		cfg.Font.Family, cfg.Font.Size,
+		cfg.Font.Family, cfg.Font.Size, cfg.Font.Ligatures,
 		cfg.Colors.Foreground, cfg.Colors.Background, cfg.Colors.Cursor, cfg.Colors.SelectionBackground,
 		cfg.Scrolling.History, cfg.Scrolling.WheelMultiplier, cfg.Scrolling.HideCursorWhenScrolled,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,

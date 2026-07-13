@@ -46,7 +46,7 @@ func TestFromTable(t *testing.T) {
 	defer state.Close()
 	if err := state.DoString(`cfg = {
   window = { width = 1300 },
-  font = { family = "Go Mono", size = 18 },
+  font = { family = "Go Mono", size = 18, ligatures = true },
   render = { bidi = true, text_gamma = 2.2, text_darken = 0.25, text_raster = "go", damage = "frame" },
   shell = { args = { "/Q", "/K" }, env = { FOO = "bar" } },
 }`); err != nil {
@@ -59,6 +59,9 @@ func TestFromTable(t *testing.T) {
 	}
 	if !cfg.Render.Bidi {
 		t.Fatal("FromTable did not apply render.bidi")
+	}
+	if !cfg.Font.Ligatures {
+		t.Fatal("FromTable did not apply font.ligatures")
 	}
 	if cfg.Render.TextGamma != 2.2 || cfg.Render.TextDarken != 0.25 {
 		t.Fatalf("FromTable did not apply text coverage fields: %#v", cfg.Render)

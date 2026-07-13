@@ -133,6 +133,8 @@ Text uses unhinted, typeface-faithful rasterization by default (`render.text_ras
 
 `font.family` resolves installed `.ttf`, `.otf`, and `.ttc` faces from standard system and per-user font directories. Empty values and `Go Mono` keep the embedded font. An unknown or unreadable family logs a warning and safely falls back to Go Mono; `--doctor` shows the configured family and resolved files. Bold and italic variants are discovered for diagnostics, while rendering currently retains synthetic bold and italic transforms.
 
+`font.ligatures` (default `false`, opt-in) renders programming ligatures (`->`, `=>`, `!=`, `===`, ...) as render-only GSUB substitutions across cells when the configured font provides them (Fira Code, Cascadia Code, JetBrains Mono) and an advanced shaper is active; the logical grid, selection, and copied text are unchanged, and the run under the cursor stays unligated.
+
 ## Known limitations
 
 Box-drawing and block-element glyphs render procedurally for seamless joins at

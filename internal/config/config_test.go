@@ -22,6 +22,9 @@ func TestDefaultsValidate(t *testing.T) {
 	if cfg.Render.Damage != "rows" {
 		t.Fatalf("render.damage default = %q, want rows", cfg.Render.Damage)
 	}
+	if cfg.Font.Ligatures {
+		t.Fatal("font.ligatures must default to false")
+	}
 }
 
 func TestValidateDamage(t *testing.T) {
