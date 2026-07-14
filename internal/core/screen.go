@@ -281,6 +281,76 @@ func reflowLogicalRows(logicalRows [][]Cell, cols int) ([][]Cell, []bool) {
 	return physicalRows, wrappedRows
 }
 
+// physicalAnchor maps a global physical row to the logical line index and the
+// character offset within that line that begins it. Used to remember the scroll
+// position before a reflow so it can be restored afterwards.
+func physicalAnchor(physicalRows [][]Cell, wrappedRows []bool, target int) (line, char int) {
+	logicalLine, accum := 0, 0
+	for i := range physicalRows {
+		if i == target {
+			return logicalLine, accum
+		}
+		accum += len(trimmedCellRow(physicalRows[i]))
+		if i >= len(wrappedRows) || !wrappedRows[i] {
+			logicalLine++
+			accum = 0
+		}
+	}
+	return logicalLine, accum
+}
+
+// physicalForAnchor is the inverse of physicalAnchor: it returns the global
+// physical row that renders the given logical line + character offset in a
+// (possibly reflowed) layout. Clamps to the last row when the anchor is past
+// the end.
+func physicalForAnchor(physicalRows [][]Cell, wrappedRows []bool, line, char int) int {
+	logicalLine, accum := 0, 0
+	for i := range physicalRows {
+		segLen := len(trimmedCellRow(physicalRows[i]))
+		wrapped := i < len(wrappedRows) && wrappedRows[i]
+		if logicalLine == line && (char < accum+segLen || !wrapped) {
+			return i
+		}
+		if logicalLine > line {
+			return i
+		}
+		accum += segLen
+		if !wrapped {
+			logicalLine++
+			accum = 0
+		}
+	}
+	if len(physicalRows) == 0 {
+		return 0
+	}
+	return len(physicalRows) - 1
+}
+
+// ScrollViewport shifts the visible window by lines (positive scrolls back into
+// history), clamping to the available scrollback. It reports whether the display
+// offset actually changed so callers can skip a redraw when a wheel tick lands
+// on a clamp and moves nothing.
+func (t *Terminal) ScrollViewport(lines int) bool {
+	maxOffset := t.ScrollbackLines()
+	prev := t.displayOffset
+	t.displayOffset += lines
+	if t.displayOffset < 0 {
+		t.displayOffset = 0
+	}
+	if t.displayOffset > maxOffset {
+		t.displayOffset = maxOffset
+	}
+	return t.displayOffset != prev
+}
+
+// anchoredDisplayOffset returns the display offset that keeps the logical
+// (line, char) anchor at the viewport top after a reflow to rows visible rows.
+func anchoredDisplayOffset(physicalRows [][]Cell, wrappedRows []bool, line, char, rows int) int {
+	newScrollback := max(0, len(physicalRows)-rows)
+	newTop := physicalForAnchor(physicalRows, wrappedRows, line, char)
+	return max(0, min(newScrollback-newTop, newScrollback))
+}
+
 func paddedCellRow(row []Cell, cols int, blank Cell) []Cell {
 	out := make([]Cell, cols)
 	for i := range out {
