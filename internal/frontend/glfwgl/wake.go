@@ -10,15 +10,22 @@ const (
 )
 
 // nextWake returns how long the event wait may sleep before a time-driven
-// redraw is due. The only time-driven redraws are cursor blink, transient
-// notice expiry, and the stats HUD refresh; everything else wakes the loop via
-// an OS event or PostEmptyEvent. The result is clamped to [minWake, maxWake] so
-// a missed wake self-heals within maxWake and a tight blink never spins.
+// redraw or timer is due. The time-driven wakeups are cursor blink, transient
+// notice expiry, the stats HUD refresh, and the next script timer deadline;
+// everything else wakes the loop via an OS event or PostEmptyEvent. The result
+// is clamped to [minWake, maxWake] so a missed wake self-heals within maxWake
+// and a tight blink never spins.
+//
+// timerDeadline is the soonest script timer deadline (zero when there are no
+// timers, which leaves the wait unchanged — no timers cost nothing). A past-due
+// deadline yields a negative remainder that the final clamp pins to minWake, so
+// an overdue timer fires on the very next iteration.
 //
 // This function is pure (no glfw/gl state) so the default `go test ./...` suite
 // covers the boundary math.
 func nextWake(now time.Time, blinkActive bool, blinkStart time.Time,
-	blinkPeriod time.Duration, noticeUntil time.Time, statsShown bool) time.Duration {
+	blinkPeriod time.Duration, noticeUntil time.Time, statsShown bool,
+	timerDeadline time.Time) time.Duration {
 	wake := maxWake
 
 	// Blink flips at every half-period boundary. Compute the time to the next
@@ -48,6 +55,14 @@ func nextWake(now time.Time, blinkActive bool, blinkStart time.Time,
 	// the intent survives a future change to maxWake.)
 	if statsShown && wake > maxWake {
 		wake = maxWake
+	}
+
+	// A due script timer bounds the sleep exactly like blink/notice do. A zero
+	// deadline means no timers are scheduled, so the wait is untouched.
+	if !timerDeadline.IsZero() {
+		if until := timerDeadline.Sub(now); until < wake {
+			wake = until
+		}
 	}
 
 	if wake < minWake {

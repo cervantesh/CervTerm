@@ -47,6 +47,14 @@ and receives the `term` handle first:
   handler throttles rendering.
 - `title(term, title)`: fires when the program changes the window title (OSC 0/2).
 - `bell(term)`: fires when a `BEL` control executes.
+- `resize(term, cols, rows)`: fires when the terminal grid dimensions change,
+  including the initial size and any `term:set_font_size` rebuild.
+- `focus(term, focused)`: fires when the window gains (`true`) or loses (`false`)
+  focus.
+- `scroll(term, offset)`: fires when the viewport scroll offset changes, with the
+  post-clamp offset (rows above the live bottom). Wheel bursts are coalesced, so
+  the handler fires once per loop iteration with the final offset, not once per
+  tick, and it never fires from inside a frame draw.
 
 ```lua
 return {
@@ -56,6 +64,9 @@ return {
     end,
     title = function(term, title) term:notify("title: " .. title) end,
     bell = function(term) term:notify("ding") end,
+    resize = function(term, cols, rows) term:notify(cols .. "x" .. rows) end,
+    focus = function(term, focused) term:notify(focused and "focused" or "blurred") end,
+    scroll = function(term, offset) term:notify("scroll " .. offset) end,
   },
 }
 ```
@@ -83,6 +94,8 @@ All row and column numbers at the Lua boundary are 1-based.
 | `term:set_title(s)` | Sets the terminal title. A later OSC 0/2 title from the running program may replace it. |
 | `term:line(n)` | Returns visible row `n` with trailing blanks trimmed, or `""` when out of range. |
 | `term:line_wrapped(n)` | Returns whether visible row `n` wraps into the next row; returns `false` when out of range. |
+| `term:font_size()` | Returns the active font size in points. |
+| `term:set_font_size(pts)` | Sets the font size (clamped to 6..72), rebuilding the glyph atlas and reflowing the grid. |
 
 `write`, `notify`, `copy`, and `set_title` require string arguments. This
 keybinding copies the current selection, falling back to the cursor line when
@@ -110,6 +123,64 @@ action = function(term)
   local row = select(1, term:cursor())
   term:notify("row " .. row .. "/" .. rows .. ": " .. term:line(row))
 end
+```
+
+## Timers
+
+The `cervterm` module (the same one that provides Teal types) exposes three
+module-level timer functions. Require it once at the top of your config:
+
+```lua
+local cervterm = require("cervterm")
+```
+
+- `cervterm.after(ms, fn)`: runs `fn(term)` once after `ms` milliseconds and
+  returns a timer id. It removes itself after firing.
+- `cervterm.every(ms, fn)`: runs `fn(term)` every `ms` milliseconds and returns a
+  timer id. Each tick reschedules from the moment it fired (deadlines do not
+  accumulate drift).
+- `cervterm.cancel(id)`: cancels the timer with that id. A repeating handler may
+  cancel its own id from inside the callback.
+
+Timers run on the main loop thread under the same watchdog as keybindings and
+events. They integrate with the on-demand render loop: a scheduled timer bounds
+the event wait exactly like the cursor blink does, so a `cervterm.every` clock
+keeps ticking while the terminal is idle without any busy polling — and with no
+timers scheduled, an idle terminal still draws ~0 fps. If an `every` handler
+errors or times out repeatedly, its `script error:` notice is shown once (not
+once per tick) until the handler next succeeds.
+
+This status clock rewrites the window title every second, even when nothing else
+is happening:
+
+```lua
+local cervterm = require("cervterm")
+
+cervterm.every(1000, function(term)
+  term:set_title(os.date("%H:%M:%S"))
+end)
+
+return {
+  font = { family = "Go Mono", size = 14 },
+}
+```
+
+## Zoom
+
+`term:set_font_size` rebuilds the glyph atlas and reflows the grid live, so it is
+the building block for zoom keybindings. Font sizes are clamped to 6..72.
+
+```lua
+return {
+  keys = {
+    { key = "equal", mods = "ctrl", action = function(term)
+        term:set_font_size(term:font_size() + 1)
+      end },
+    { key = "minus", mods = "ctrl", action = function(term)
+        term:set_font_size(term:font_size() - 1)
+      end },
+  },
+}
 ```
 
 ## Teal

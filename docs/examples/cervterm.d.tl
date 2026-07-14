@@ -14,11 +14,19 @@ local record cervterm
     set_title: function(Term, string)
     line: function(Term, integer): string
     line_wrapped: function(Term, integer): boolean
+    font_size: function(Term): number
+    set_font_size: function(Term, number)
   end
   record Events
     output: function(Term, string)
     title: function(Term, string)
     bell: function(Term)
+    resize: function(Term, integer, integer)
+    focus: function(Term, boolean)
+    scroll: function(Term, integer)
   end
+  after: function(integer, function(Term)): integer
+  every: function(integer, function(Term)): integer
+  cancel: function(integer)
 end
 return cervterm

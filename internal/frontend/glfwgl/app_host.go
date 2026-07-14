@@ -57,6 +57,9 @@ func (a *App) Scroll(lines int) bool {
 	a.mu.Unlock()
 	if moved {
 		a.requestRedraw()
+		// Defer events.scroll: this runs inside a handler, so it must not re-enter
+		// Lua dispatch. The loop drains the pending offset next iteration.
+		a.markScrollEvent()
 	}
 	return moved
 }
@@ -67,6 +70,7 @@ func (a *App) ScrollToBottom() {
 	a.mu.Unlock()
 	if moved {
 		a.requestRedraw()
+		a.markScrollEvent()
 	}
 }
 
@@ -164,4 +168,19 @@ func (a *App) LineWrapped(row int) (bool, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.term.LineWrapped(row)
+}
+
+// FontSize returns the active font size in points.
+func (a *App) FontSize() float64 { return a.cfg.Font.Size }
+
+// SetFontSize changes the font size and rebuilds the atlas + grid at the current
+// content scale. pts arrives already clamped to 6..72 by the Lua boundary. Runs
+// on the main thread with the GL context current (dispatched from a key/timer
+// handler); rebuildAtlasAndGrid documents that requirement.
+func (a *App) SetFontSize(pts float64) {
+	if pts == a.cfg.Font.Size {
+		return
+	}
+	a.cfg.Font.Size = pts
+	a.rebuildAtlasAndGrid(a.contentScaleX, a.contentScaleY)
 }

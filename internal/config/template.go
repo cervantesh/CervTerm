@@ -77,12 +77,22 @@ return {
   --       term:notify("saludo enviado")
   --     end,
   --   },
+  --   -- Runtime zoom (font size is clamped to 6..72):
+  --   { key = "equal", mods = "ctrl", action = function(term) term:set_font_size(term:font_size() + 1) end },
+  --   { key = "minus", mods = "ctrl", action = function(term) term:set_font_size(term:font_size() - 1) end },
   -- },
   -- events = {
   --   output = function(term, data) end,
   --   title = function(term, title) end,
   --   bell = function(term) term:notify("ding") end,
+  --   resize = function(term, cols, rows) end,
+  --   focus = function(term, focused) end,
+  --   scroll = function(term, offset) end,
   -- },
+  -- Timers integrate with the on-demand wake loop (no busy polling). Register
+  -- them at the top of the file, before "return {":
+  --   local cervterm = require("cervterm")
+  --   cervterm.every(1000, function(term) term:set_title(os.date("%%H:%%M:%%S")) end)
 }
 `, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY, cfg.Window.DynamicTitle,
 		cfg.Font.Family, cfg.Font.Size, cfg.Font.Ligatures,

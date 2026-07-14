@@ -21,6 +21,9 @@ type eventHandlers struct {
 	output *lua.LFunction
 	title  *lua.LFunction
 	bell   *lua.LFunction
+	resize *lua.LFunction
+	focus  *lua.LFunction
+	scroll *lua.LFunction
 }
 
 // Runtime owns a persistent Lua state and must only be used from the thread that
@@ -30,6 +33,7 @@ type Runtime struct {
 	state           *lua.LState
 	bindings        []Binding
 	events          eventHandlers
+	timers          *timerTable
 	dispatchTimeout time.Duration
 }
 
@@ -43,8 +47,12 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 		luaPath = generated
 	}
 	state := lua.NewState(lua.Options{SkipOpenLibs: false})
+	// The timer table is shared between the cervterm module's after/every/cancel
+	// closures and the Runtime returned below, so a timer registered while the
+	// config file runs is already scheduled before the loop starts.
+	tmrs := &timerTable{}
 	state.PreloadModule("cervterm", func(state *lua.LState) int {
-		state.Push(state.NewTable())
+		state.Push(buildModule(state, tmrs))
 		return 1
 	})
 	if err := state.DoFile(luaPath); err != nil {
@@ -68,7 +76,7 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 		state.Close()
 		return base, nil, err
 	}
-	return cfg, &Runtime{state: state, bindings: bindings, events: events, dispatchTimeout: time.Second}, nil
+	return cfg, &Runtime{state: state, bindings: bindings, events: events, timers: tmrs, dispatchTimeout: time.Second}, nil
 }
 
 func (r *Runtime) Bindings() []Spec {
@@ -114,6 +122,30 @@ func (r *Runtime) FireBell(host Host) error {
 		return nil
 	}
 	return r.callProtected("events.bell", r.events.bell, host)
+}
+
+// FireResize runs the on-resize handler with the new grid dimensions.
+func (r *Runtime) FireResize(host Host, cols, rows int) error {
+	if r.events.resize == nil {
+		return nil
+	}
+	return r.callProtected("events.resize", r.events.resize, host, lua.LNumber(cols), lua.LNumber(rows))
+}
+
+// FireFocus runs the on-focus handler with the new focus state.
+func (r *Runtime) FireFocus(host Host, focused bool) error {
+	if r.events.focus == nil {
+		return nil
+	}
+	return r.callProtected("events.focus", r.events.focus, host, lua.LBool(focused))
+}
+
+// FireScroll runs the on-scroll handler with the post-clamp viewport offset.
+func (r *Runtime) FireScroll(host Host, offset int) error {
+	if r.events.scroll == nil {
+		return nil
+	}
+	return r.callProtected("events.scroll", r.events.scroll, host, lua.LNumber(offset))
 }
 
 // callProtected invokes fn with a fresh term handle plus extra args under a
@@ -198,6 +230,9 @@ func loadEvents(root *lua.LTable) (eventHandlers, error) {
 		{"output", &handlers.output},
 		{"title", &handlers.title},
 		{"bell", &handlers.bell},
+		{"resize", &handlers.resize},
+		{"focus", &handlers.focus},
+		{"scroll", &handlers.scroll},
 	} {
 		value := table.RawGetString(entry.name)
 		if value == lua.LNil {

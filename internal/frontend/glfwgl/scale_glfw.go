@@ -41,6 +41,17 @@ func (a *App) rebuildForContentScale(scaleX, scaleY float32) {
 	if a.contentScaleX == scaleX && a.contentScaleY == scaleY {
 		return
 	}
+	a.rebuildAtlasAndGrid(scaleX, scaleY)
+}
+
+// rebuildAtlasAndGrid rebuilds the glyph atlas and cell metrics for the current
+// cfg.Font.Size at the given content scale, then reflows the grid (which
+// resizes the PTY and requests a full repaint). It touches GL, so it must run
+// on the main thread with the context current. Both callers satisfy that: the
+// content-scale GLFW callback runs on the loop thread, and term:set_font_size is
+// dispatched from a key or timer handler, which also run on the loop thread
+// between frames — never inside draw().
+func (a *App) rebuildAtlasAndGrid(scaleX, scaleY float32) {
 	atlas, err := newGlyphAtlasWithSpec(fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(scaleX, scaleY), TextRaster: a.cfg.Render.TextRaster}, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
 	if err != nil {
 		return
