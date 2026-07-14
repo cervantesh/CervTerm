@@ -44,6 +44,16 @@ func (t *Terminal) Resize(cols, rows int) {
 	oldCursorGlobal := t.scrollbackRows + t.cursorRow
 	oldDisplayOffset := t.displayOffset
 	physicalRows, wrappedRows := t.physicalRows()
+
+	// Width change while scrolled up: remember the logical anchor at the viewport
+	// top so reflow doesn't make the content jump. At the bottom (offset 0) the
+	// viewport keeps following the prompt, so it is not anchored.
+	anchor := cols != oldCols && oldDisplayOffset > 0
+	anchorLine, anchorChar := 0, 0
+	if anchor {
+		anchorLine, anchorChar = physicalAnchor(physicalRows, wrappedRows, t.scrollbackRows-oldDisplayOffset)
+	}
+
 	if cols != oldCols {
 		logicalRows := logicalRowsFromPhysical(physicalRows, wrappedRows)
 		physicalRows, wrappedRows = reflowLogicalRows(logicalRows, cols)
@@ -58,7 +68,11 @@ func (t *Terminal) Resize(cols, rows int) {
 		}
 	}
 	visibleStart := max(0, len(physicalRows)-rows)
-	t.rebuildFromPhysicalRows(cols, rows, physicalRows, wrappedRows, oldDisplayOffset)
+	newDisplayOffset := oldDisplayOffset
+	if anchor {
+		newDisplayOffset = anchoredDisplayOffset(physicalRows, wrappedRows, anchorLine, anchorChar, rows)
+	}
+	t.rebuildFromPhysicalRows(cols, rows, physicalRows, wrappedRows, newDisplayOffset)
 
 	if cols == oldCols {
 		t.cursorRow = max(0, min(rows-1, oldCursorGlobal-visibleStart))
@@ -472,20 +486,3 @@ func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearO
 }
 func (t *Terminal) ScrollbackLines() int { return t.scrollbackRows }
 func (t *Terminal) DisplayOffset() int   { return t.displayOffset }
-
-// ScrollViewport shifts the visible window by lines (positive scrolls back
-// into history), clamping to the available scrollback. It reports whether the
-// display offset actually changed so callers can skip a redraw when a wheel
-// tick lands on a clamp and moves nothing.
-func (t *Terminal) ScrollViewport(lines int) bool {
-	maxOffset := t.ScrollbackLines()
-	prev := t.displayOffset
-	t.displayOffset += lines
-	if t.displayOffset < 0 {
-		t.displayOffset = 0
-	}
-	if t.displayOffset > maxOffset {
-		t.displayOffset = maxOffset
-	}
-	return t.displayOffset != prev
-}

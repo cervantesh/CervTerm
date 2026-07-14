@@ -622,3 +622,47 @@ func cellsText(cells []Cell, cols, rows int) string {
 	}
 	return out
 }
+
+func firstVisibleLetter(s string) rune {
+	for _, r := range s {
+		if r != ' ' && r != '\n' {
+			return r
+		}
+	}
+	return 0
+}
+
+func TestTerminalResizePreservesScrolledAnchor(t *testing.T) {
+	term := NewTerminal(5, 3)
+	writeLine := func(s string) {
+		for _, r := range s {
+			term.PutRune(r)
+		}
+		term.CarriageReturn()
+		term.NewLine()
+	}
+	for _, s := range []string{"AAAAAAAA", "BBBBBBBB", "CCCCCCCC", "DDDDDDDD", "EEEEEEEE", "FFFFFFFF"} {
+		writeLine(s)
+	}
+	// Scroll up into history so the viewport top is a wrapped segment.
+	term.ScrollViewport(6)
+	view := make([]Cell, term.Cols()*term.Rows())
+	term.CopyView(view)
+	before := cellsText(view, term.Cols(), term.Rows())
+	topBefore := firstVisibleLetter(before)
+
+	// Widen (zoom out): wrapped lines unwrap. The same logical line must stay at
+	// the viewport top rather than jumping.
+	term.Resize(10, 3)
+	view = make([]Cell, term.Cols()*term.Rows())
+	term.CopyView(view)
+	after := cellsText(view, term.Cols(), term.Rows())
+	topAfter := firstVisibleLetter(after)
+
+	if topBefore == 0 {
+		t.Fatalf("setup: no visible content before resize: %q", before)
+	}
+	if topBefore != topAfter {
+		t.Fatalf("reflow jumped: top line before=%q (%c) after=%q (%c)", before, topBefore, after, topAfter)
+	}
+}
