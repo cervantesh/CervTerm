@@ -22,6 +22,8 @@ type zoomBindings struct {
 	in, out, reset       script.Spec
 	inOK, outOK, resetOK bool
 	base                 float64
+	pending              float64 // coalesced target size; applied once per loop
+	pendingSet           bool
 }
 
 // initZoomHotkeys parses the configured zoom chords and records the base font
@@ -52,9 +54,9 @@ func (a *App) handleZoomKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	case a.zoom.resetOK && spec == a.zoom.reset:
 		a.applyFontSize(a.zoom.base)
 	case a.zoom.inOK && spec == a.zoom.in:
-		a.applyFontSize(a.cfg.Font.Size + zoomFontStep)
+		a.applyFontSize(a.zoomTarget() + zoomFontStep)
 	case a.zoom.outOK && spec == a.zoom.out:
-		a.applyFontSize(a.cfg.Font.Size - zoomFontStep)
+		a.applyFontSize(a.zoomTarget() - zoomFontStep)
 	default:
 		return false
 	}
@@ -76,16 +78,29 @@ func (a *App) handleZoomWheel(yoff float64) bool {
 		return false
 	}
 	if yoff > 0 {
-		a.applyFontSize(a.cfg.Font.Size + zoomFontStep)
+		a.applyFontSize(a.zoomTarget() + zoomFontStep)
 	} else {
-		a.applyFontSize(a.cfg.Font.Size - zoomFontStep)
+		a.applyFontSize(a.zoomTarget() - zoomFontStep)
 	}
 	return true
 }
 
-// applyFontSize clamps pts to the zoom bounds and rebuilds when it changes.
-// SetFontSize is a no-op when the size is unchanged, so a zoom at the clamp
-// limit does nothing.
+// zoomTarget is the size the next relative zoom step builds on: the pending
+// (not-yet-applied) target when a burst is in flight, otherwise the live size.
+// This lets several wheel ticks in one frame compound instead of collapsing to
+// a single step.
+func (a *App) zoomTarget() float64 {
+	if a.zoom.pendingSet {
+		return a.zoom.pending
+	}
+	return a.cfg.Font.Size
+}
+
+// applyFontSize clamps pts to the zoom bounds and records it as the pending
+// target instead of rebuilding immediately. A fast burst of wheel ticks fires
+// this many times per frame; applyPendingZoom then rebuilds the atlas once per
+// loop iteration, so rapid zooming can't thrash the (expensive) atlas rebuild.
+// Reads a.cfg.Font.Size for the current size so accumulated steps compound.
 func (a *App) applyFontSize(pts float64) {
 	if pts < zoomFontMin {
 		pts = zoomFontMin
@@ -93,7 +108,19 @@ func (a *App) applyFontSize(pts float64) {
 	if pts > zoomFontMax {
 		pts = zoomFontMax
 	}
-	a.SetFontSize(pts)
+	a.zoom.pending, a.zoom.pendingSet = pts, true
+	a.requestRedraw()
+}
+
+// applyPendingZoom performs at most one atlas/grid rebuild per loop iteration
+// for the coalesced zoom target. Called from the loop on the main thread with
+// the GL context current. SetFontSize is a no-op when the size is unchanged.
+func (a *App) applyPendingZoom() {
+	if !a.zoom.pendingSet {
+		return
+	}
+	a.zoom.pendingSet = false
+	a.SetFontSize(a.zoom.pending)
 }
 
 // handleScrollKey scrolls the scrollback viewport for Shift+PageUp/PageDown and

@@ -10,6 +10,37 @@ import (
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
+func TestZoomCoalescesAndCompounds(t *testing.T) {
+	a := &App{}
+	a.cfg.Font.Size = 14
+
+	// A burst of wheel-up ticks before any rebuild must compound, not collapse
+	// into one step, and must not touch the live font size (rebuild is deferred).
+	for i := 0; i < 5; i++ {
+		a.applyFontSize(a.zoomTarget() + zoomFontStep)
+	}
+	if a.cfg.Font.Size != 14 {
+		t.Fatalf("live font size changed before applyPendingZoom: %v", a.cfg.Font.Size)
+	}
+	if !a.zoom.pendingSet || a.zoom.pending != 14+5*zoomFontStep {
+		t.Fatalf("expected pending %v, got %v (set=%v)", 14+5*zoomFontStep, a.zoom.pending, a.zoom.pendingSet)
+	}
+
+	// Zooming past the max clamps.
+	for i := 0; i < 200; i++ {
+		a.applyFontSize(a.zoomTarget() + zoomFontStep)
+	}
+	if a.zoom.pending != zoomFontMax {
+		t.Fatalf("expected clamp to %v, got %v", zoomFontMax, a.zoom.pending)
+	}
+
+	// zoomTarget falls back to the live size once nothing is pending.
+	a.zoom.pendingSet = false
+	if got := a.zoomTarget(); got != a.cfg.Font.Size {
+		t.Fatalf("zoomTarget should fall back to live size %v, got %v", a.cfg.Font.Size, got)
+	}
+}
+
 func TestHandleScrollKeyShiftOnly(t *testing.T) {
 	a := &App{term: core.NewTerminal(20, 10)}
 	for i := 0; i < 100; i++ {
