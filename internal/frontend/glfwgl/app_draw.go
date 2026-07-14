@@ -59,6 +59,7 @@ func (a *App) draw() {
 			a.searchViewRow = vr
 		}
 	}
+	a.prepareStatusBand(w)
 	noticeVisible := a.notice != "" && frameNow.Before(a.noticeUntil)
 	fullRedraw, damagedRows := a.prepareDamage(w, h, displayOffset, alternateScreen, noticeVisible, background)
 	if fullRedraw {
@@ -97,6 +98,7 @@ func (a *App) draw() {
 
 	a.damage.rowsDrawn = rowsDrawn
 	a.drawHUD(w, h, palette, frameNow)
+	a.drawStatusBand(w, palette)
 	a.drawSearchBar(w, h, palette)
 	a.recordDamageFrame(w, h, displayOffset, alternateScreen, noticeVisible, background, rowsDrawn)
 

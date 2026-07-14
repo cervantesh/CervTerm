@@ -31,5 +31,7 @@ local record cervterm
   after: function(integer, function(Term)): integer
   every: function(integer, function(Term)): integer
   cancel: function(integer)
+  -- Set or replace an ordered status segment; empty text removes it.
+  status: function(string, string)
 end
 return cervterm

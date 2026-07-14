@@ -46,7 +46,7 @@ type App struct {
 	uiScale          float32
 	contentScaleX    float32
 	contentScaleY    float32
-	status           string
+	status           statusState
 	scriptRT         *script.Runtime
 	notice           string
 	noticeUntil      time.Time
