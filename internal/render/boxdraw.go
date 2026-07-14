@@ -170,6 +170,11 @@ func drawDoubleArms(a arms, w, h, light float32) []CellRect {
 	return out
 }
 
+// blockQuadrants maps the quadrant block runes (U+2596..U+259F) to a 4-bit
+// region mask. Package-level so blockGlyph — called for every rendered cell —
+// does not allocate a fresh map per call.
+var blockQuadrants = map[rune]uint8{'▖': 4, '▗': 8, '▘': 1, '▙': 13, '▚': 9, '▛': 7, '▜': 11, '▝': 2, '▞': 6, '▟': 14}
+
 func blockGlyph(r rune, w, h float32) ([]CellRect, bool) {
 	if r == '\u2580' {
 		return []CellRect{{0, 0, w, roundedFraction(h, 4, 8), 1}}, true
@@ -202,8 +207,7 @@ func blockGlyph(r rune, w, h float32) ([]CellRect, bool) {
 		width := roundedFraction(w, 1, 8)
 		return []CellRect{{w - width, 0, width, h, 1}}, true
 	}
-	quadrants := map[rune]uint8{'\u2596': 4, '\u2597': 8, '\u2598': 1, '\u2599': 13, '\u259a': 9, '\u259b': 7, '\u259c': 11, '\u259d': 2, '\u259e': 6, '\u259f': 14}
-	mask, ok := quadrants[r]
+	mask, ok := blockQuadrants[r]
 	if !ok {
 		return nil, false
 	}

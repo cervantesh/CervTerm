@@ -25,9 +25,12 @@ func detectLinks(cells []core.Cell, cols, rows int) []linkRegion {
 		return nil
 	}
 	var links []linkRegion
+	// Reused across rows so scanning the whole grid every frame (during scroll)
+	// doesn't allocate a fresh pair of slices per row.
+	runes := make([]rune, 0, cols)
+	colOf := make([]int, 0, cols)
 	for row := 0; row < rows; row++ {
-		runes := make([]rune, 0, cols)
-		colOf := make([]int, 0, cols)
+		runes, colOf = runes[:0], colOf[:0]
 		for col := 0; col < cols; col++ {
 			cell := cells[row*cols+col]
 			if cell.WideContinuation {
