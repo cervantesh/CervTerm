@@ -77,10 +77,10 @@ func (tt *timerTable) nextDeadline() (time.Time, bool) {
 	return best, found
 }
 
-// buildModule returns the cervterm module table exposing after/every/cancel.
+// buildModule returns the cervterm module table exposing after/every/cancel/status.
 // Called from PreloadModule during Load; the closures capture the shared
-// timerTable, which the Runtime then owns.
-func buildModule(state *lua.LState, tt *timerTable) *lua.LTable {
+// timer and status tables, which the Runtime then owns.
+func buildModule(state *lua.LState, tt *timerTable, statuses *statusTable) *lua.LTable {
 	mod := state.NewTable()
 	mod.RawSetString("after", state.NewFunction(func(l *lua.LState) int {
 		ms := l.CheckInt(1)
@@ -99,6 +99,10 @@ func buildModule(state *lua.LState, tt *timerTable) *lua.LTable {
 	}))
 	mod.RawSetString("cancel", state.NewFunction(func(l *lua.LState) int {
 		tt.cancel(l.CheckInt(1))
+		return 0
+	}))
+	mod.RawSetString("status", state.NewFunction(func(l *lua.LState) int {
+		statuses.set(l.CheckString(1), l.CheckString(2))
 		return 0
 	}))
 	return mod

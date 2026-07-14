@@ -28,6 +28,8 @@ type damageState struct {
 	searchMatchRow    int
 	searchMatchCol    int
 	searchMatchLen    int
+	statusSeq         int
+	statusGeometry    statusGeometry
 	background        color.RGBA
 	damagedRows       []bool
 	rowsDrawn         int
@@ -53,6 +55,7 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 		a.searching != a.damage.searching || a.searchHasMatch != a.damage.searchHasMatch ||
 		a.searchMatchRow != a.damage.searchMatchRow || a.searchMatchCol != a.damage.searchMatchCol ||
 		a.searchMatchLen != a.damage.searchMatchLen ||
+		a.status.seq != a.damage.statusSeq || a.status.geometry != a.damage.statusGeometry ||
 		background != a.damage.background
 	historySizeMismatch := (len(a.prevHashes) > 0 && len(a.prevHashes) != rows) ||
 		(len(a.prevPrevHashes) > 0 && len(a.prevPrevHashes) != rows)
@@ -87,6 +90,13 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 		markDamagedRow(damaged, a.lastCursorRow)
 		markDamagedRow(damaged, a.snap.CursorRow)
 	}
+	// A steady status overlay does not force a full frame, but any frame that is
+	// drawn must repaint the terminal rows beneath it before redrawing the band.
+	if a.status.geometry.visible {
+		for row := a.status.geometry.firstRow; row <= a.status.geometry.lastRow; row++ {
+			markDamagedRow(damaged, row)
+		}
+	}
 	return fullRedraw, damaged
 }
 
@@ -104,6 +114,7 @@ func (a *App) recordDamageFrame(w, h, displayOffset int, alternateScreen, notice
 	a.damage.searching, a.damage.searchHasMatch = a.searching, a.searchHasMatch
 	a.damage.searchMatchRow, a.damage.searchMatchCol = a.searchMatchRow, a.searchMatchCol
 	a.damage.searchMatchLen = a.searchMatchLen
+	a.damage.statusSeq, a.damage.statusGeometry = a.status.seq, a.status.geometry
 	a.damage.background = background
 	a.damage.rowsDrawn = rowsDrawn
 }

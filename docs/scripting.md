@@ -181,6 +181,31 @@ return {
 }
 ```
 
+## Status segments
+
+`cervterm.status(id, text)` sets a persistent status segment in the top-right
+status band. Segments remain in first-registration order and are joined with
+` · `. Setting an existing id replaces its text without moving it; setting its
+text to an empty string removes it. The band is hidden when no segments remain
+and long content is truncated to the window width with a leading `…`.
+
+Combine status segments with timers for information that updates while the
+terminal is otherwise idle. This example adds a clock and removes it later:
+
+```lua
+local cervterm = require("cervterm")
+
+cervterm.every(1000, function(term)
+  cervterm.status("clock", os.date("%H:%M:%S"))
+end)
+
+cervterm.after(60000, function(term)
+  cervterm.status("clock", "")
+end)
+
+return {}
+```
+
 ## Zoom
 
 `term:set_font_size` rebuilds the glyph atlas and reflows the grid live, so it is

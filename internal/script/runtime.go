@@ -35,6 +35,7 @@ type Runtime struct {
 	bindings        []Binding
 	events          eventHandlers
 	timers          *timerTable
+	statuses        *statusTable
 	dispatchTimeout time.Duration
 }
 
@@ -48,12 +49,13 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 		luaPath = generated
 	}
 	state := lua.NewState(lua.Options{SkipOpenLibs: false})
-	// The timer table is shared between the cervterm module's after/every/cancel
-	// closures and the Runtime returned below, so a timer registered while the
-	// config file runs is already scheduled before the loop starts.
+	// The timer/status tables are shared between the cervterm module closures and
+	// the Runtime returned below, so registrations made while the config file
+	// runs are already visible before the loop starts.
 	tmrs := &timerTable{}
+	statuses := &statusTable{}
 	state.PreloadModule("cervterm", func(state *lua.LState) int {
-		state.Push(buildModule(state, tmrs))
+		state.Push(buildModule(state, tmrs, statuses))
 		return 1
 	})
 	if err := state.DoFile(luaPath); err != nil {
@@ -77,7 +79,7 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 		state.Close()
 		return base, nil, err
 	}
-	return cfg, &Runtime{state: state, bindings: bindings, events: events, timers: tmrs, dispatchTimeout: time.Second}, nil
+	return cfg, &Runtime{state: state, bindings: bindings, events: events, timers: tmrs, statuses: statuses, dispatchTimeout: time.Second}, nil
 }
 
 func (r *Runtime) Bindings() []Spec {
