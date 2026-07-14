@@ -74,8 +74,13 @@ type App struct {
 	ligaturesActive  bool   // font.ligatures enabled AND the active shaper can substitute
 
 	rowHashes, prevHashes, prevPrevHashes []uint64
-	lastCursorRow                         int
-	damage                                damageState
+	// Cursor rows of the last two rendered frames. The cursor is drawn outside
+	// the hash-based row damage, so it needs the same buffer-age-2 treatment as
+	// content: with a double-buffered back buffer alternating between the N-1 and
+	// N-2 images, clearing only the N-1 cursor row leaves a ghost on the older
+	// buffer. Marking both prior cursor rows damaged repaints the stale cell.
+	lastCursorRow, prevCursorRow int
+	damage                       damageState
 
 	// On-demand render state. Main-thread only; the PTY reader must not touch
 	// needsRedraw (it wakes the loop with glfw.PostEmptyEvent instead).
