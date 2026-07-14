@@ -9,7 +9,7 @@ import (
 )
 
 func TestCollectRenderClusterCombiningMark(t *testing.T) {
-	cells := []core.Cell{{Rune: 'e', Combining: []rune{'\u0301'}}}
+	cells := []core.Cell{core.NewCellWithCombining('e', core.Attr{}, '\u0301')}
 	cluster, ok := collectRenderCluster(cells, 1, 0, 0)
 	if !ok {
 		t.Fatalf("expected combining cluster")
@@ -21,7 +21,7 @@ func TestCollectRenderClusterCombiningMark(t *testing.T) {
 
 func TestCollectRenderClusterZWJEmojiSequence(t *testing.T) {
 	cells := []core.Cell{
-		{Rune: '\U0001F468', Combining: []rune{zeroWidthJoiner}},
+		core.NewCellWithCombining('\U0001F468', core.Attr{}, zeroWidthJoiner),
 		{WideContinuation: true},
 		{Rune: '\U0001F469'},
 		{WideContinuation: true},

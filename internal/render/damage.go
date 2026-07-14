@@ -20,8 +20,9 @@ func HashRows(dst []uint64, cells []core.Cell, cols int) {
 		hash := fnvOffset64
 		for _, cell := range cells[row*cols : (row+1)*cols] {
 			hash = hashUint32(hash, uint32(cell.Rune))
-			hash = hashUint32(hash, uint32(len(cell.Combining)))
-			for _, combining := range cell.Combining {
+			marks := cell.Combining()
+			hash = hashUint32(hash, uint32(len(marks)))
+			for _, combining := range marks {
 				hash = hashUint32(hash, uint32(combining))
 			}
 			hash = hashRGB(hash, cell.Attr.FG)

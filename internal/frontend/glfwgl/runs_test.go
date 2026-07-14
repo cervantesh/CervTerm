@@ -84,7 +84,7 @@ func TestDetectLigatureRunLengthBounds(t *testing.T) {
 
 func TestDetectLigatureRunSkipsWideAndCombining(t *testing.T) {
 	cells := symbolCells("->")
-	cells[1].Combining = []rune{'́'}
+	cells[1].AppendCombining('́')
 	if _, ok := detectLigatureRun(cells, 0, -1); ok {
 		t.Fatalf("combining marks must break the run")
 	}

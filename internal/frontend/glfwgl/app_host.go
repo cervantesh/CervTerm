@@ -163,7 +163,7 @@ func (a *App) Line(row int) (string, bool) {
 			r = ' '
 		}
 		b.WriteRune(r)
-		for _, c := range cells[i].Combining {
+		for _, c := range cells[i].Combining() {
 			b.WriteRune(c)
 		}
 	}

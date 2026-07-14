@@ -36,7 +36,7 @@ func TestHashRowsAttributeOnlyChangeCounts(t *testing.T) {
 }
 
 func TestHashRowsEqualRowsHaveEqualHashes(t *testing.T) {
-	row := []core.Cell{{Rune: 'a', Combining: []rune{'\u0301'}, Attr: core.Attr{Italic: true}}, {Rune: 'b'}}
+	row := []core.Cell{core.NewCellWithCombining('a', core.Attr{Italic: true}, '\u0301'), {Rune: 'b'}}
 	cells := append(append([]core.Cell{}, row...), row...)
 	hashes := make([]uint64, 2)
 	HashRows(hashes, cells, 2)

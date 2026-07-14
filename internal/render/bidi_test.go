@@ -53,10 +53,10 @@ func TestVisualOrderFastPath(t *testing.T) {
 func TestVisualOrderKeepsCellData(t *testing.T) {
 	cells := cellsFromString("אב")
 	cells[0].Attr.Bold = true
-	cells[0].Combining = []rune{'\u05b0'}
+	cells[0].AppendCombining('\u05b0')
 	order := VisualOrder(cells)
 	visual := []core.Cell{cells[order[0]], cells[order[1]]}
-	if visual[1].Rune != 'א' || !visual[1].Attr.Bold || len(visual[1].Combining) != 1 {
+	if visual[1].Rune != 'א' || !visual[1].Attr.Bold || len(visual[1].Combining()) != 1 {
 		t.Fatalf("cell attributes or combining marks did not travel: %#v", visual)
 	}
 }

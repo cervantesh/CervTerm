@@ -117,7 +117,7 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 		if cell.Attr.Bold {
 			a.drawRune(cell.Rune, x+1, y, fg, 1, skew)
 		}
-		for _, combining := range cell.Combining {
+		for _, combining := range cell.Combining() {
 			a.drawRune(combining, x, y, fg, 1, skew)
 			if cell.Attr.Bold {
 				a.drawRune(combining, x+1, y, fg, 1, skew)

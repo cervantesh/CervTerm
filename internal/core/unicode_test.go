@@ -38,7 +38,7 @@ func TestTerminalCombiningRuneAttachesToPreviousCell(t *testing.T) {
 	term.PutRune('x')
 
 	cells := term.Cells()
-	if len(cells[0].Combining) != 1 || cells[0].Combining[0] != '\u0301' {
+	if len(cells[0].Combining()) != 1 || cells[0].Combining()[0] != '\u0301' {
 		t.Fatalf("combining mark not attached: %#v", cells[0])
 	}
 	if term.CursorCol() != 2 {

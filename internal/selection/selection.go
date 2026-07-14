@@ -116,7 +116,7 @@ func writeCellText(b *strings.Builder, cell core.Cell) {
 		return
 	}
 	b.WriteRune(cell.Rune)
-	for _, r := range cell.Combining {
+	for _, r := range cell.Combining() {
 		b.WriteRune(r)
 	}
 }
