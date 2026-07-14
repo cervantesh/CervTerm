@@ -59,6 +59,7 @@ func (a *App) draw() {
 			a.searchViewRow = vr
 		}
 	}
+	a.refreshLinks()
 	a.prepareStatusBand(w)
 	noticeVisible := a.notice != "" && frameNow.Before(a.noticeUntil)
 	fullRedraw, damagedRows := a.prepareDamage(w, h, displayOffset, alternateScreen, noticeVisible, background)
@@ -97,6 +98,7 @@ func (a *App) draw() {
 	}
 
 	a.damage.rowsDrawn = rowsDrawn
+	a.drawLinkUnderline(cursorColor)
 	a.drawOverlays()
 	a.drawHUD(w, h, palette, frameNow)
 	a.drawStatusBand(w, palette)
