@@ -29,7 +29,7 @@ func collectRenderCluster(cells []core.Cell, cols int, row int, col int) (render
 		return renderCluster{}, false
 	}
 
-	shouldCluster := len(cell.Combining) > 0 || unicodecluster.ShouldShapeRune(cell.Rune)
+	shouldCluster := cell.HasCombining() || unicodecluster.ShouldShapeRune(cell.Rune)
 	if !shouldCluster {
 		return renderCluster{}, false
 	}
@@ -43,7 +43,7 @@ func collectRenderCluster(cells []core.Cell, cols int, row int, col int) (render
 	}
 
 	for endCol < cols {
-		joined := unicodecluster.ContainsZeroWidthJoiner(cell.Combining)
+		joined := unicodecluster.ContainsZeroWidthJoiner(cell.Combining())
 		nextIdx := row*cols + endCol
 		if nextIdx < 0 || nextIdx >= len(cells) {
 			break
@@ -75,7 +75,7 @@ func collectRenderCluster(cells []core.Cell, cols int, row int, col int) (render
 
 func writeCellText(b *strings.Builder, cell core.Cell) {
 	b.WriteRune(cell.Rune)
-	for _, r := range cell.Combining {
+	for _, r := range cell.Combining() {
 		b.WriteRune(r)
 	}
 }

@@ -66,7 +66,7 @@ func detectLigatureRun(cells []core.Cell, col, cursorCol int) (ligatureRun, bool
 }
 
 func ligatureCandidateCell(cell core.Cell) bool {
-	if cell.WideContinuation || len(cell.Combining) > 0 {
+	if cell.WideContinuation || cell.HasCombining() {
 		return false
 	}
 	if core.RuneWidth(cell.Rune) != 1 {

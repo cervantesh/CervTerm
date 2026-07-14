@@ -235,7 +235,7 @@ func (t *Terminal) addCombiningRune(r rune) {
 	if t.cells[idx].Rune == 0 || t.cells[idx].Rune == ' ' {
 		return
 	}
-	t.cells[idx].Combining = append(t.cells[idx].Combining, r)
+	t.cells[idx].AppendCombining(r)
 }
 
 func (t *Terminal) NewLine() {

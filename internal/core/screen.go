@@ -74,7 +74,7 @@ func (t *Terminal) blank() Cell { return Cell{Rune: ' ', Attr: Attr{FG: DefaultF
 func isBlankRow(row []Cell) bool {
 	blankAttr := Attr{FG: DefaultFG, BG: DefaultBG}
 	for _, cell := range row {
-		if (cell.Rune != 0 && cell.Rune != ' ') || len(cell.Combining) != 0 || cell.Attr != blankAttr || cell.WideContinuation {
+		if (cell.Rune != 0 && cell.Rune != ' ') || cell.HasCombining() || cell.Attr != blankAttr || cell.WideContinuation {
 			return false
 		}
 	}
@@ -199,9 +199,7 @@ func cloneCellRow(row []Cell) []Cell {
 	out := make([]Cell, len(row))
 	copy(out, row)
 	for i := range out {
-		if len(out[i].Combining) > 0 {
-			out[i].Combining = append([]rune(nil), out[i].Combining...)
-		}
+		out[i].combining = out[i].CloneCombining()
 	}
 	return out
 }
@@ -221,7 +219,7 @@ func writeCellText(b *strings.Builder, cell Cell) {
 		return
 	}
 	b.WriteRune(cell.Rune)
-	for _, r := range cell.Combining {
+	for _, r := range cell.combining {
 		b.WriteRune(r)
 	}
 }
