@@ -7,9 +7,30 @@ import (
 
 	"cervterm/internal/core"
 	"cervterm/internal/input"
+	termsel "cervterm/internal/selection"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
+
+// pointFromPixels maps a window pixel to the grid cell under it, clamped to the
+// visible grid.
+func (a *App) pointFromPixels(x, y float32) termsel.Point {
+	col := int((x - a.paddingX) / a.cellW)
+	row := int((y - a.paddingY) / a.cellH)
+	if row < 0 {
+		row = 0
+	}
+	if col < 0 {
+		col = 0
+	}
+	if row >= a.rows {
+		row = a.rows - 1
+	}
+	if col >= a.cols {
+		col = a.cols - 1
+	}
+	return termsel.Point{Row: row, Col: col}
+}
 
 func scrollRowsFromWheelDelta(yoff float64) int {
 	if yoff == 0 {

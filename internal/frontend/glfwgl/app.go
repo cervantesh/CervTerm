@@ -62,6 +62,7 @@ type App struct {
 	statsSpec        script.Spec
 	statsSpecOK      bool
 	zoom             zoomBindings
+	link             linkState
 	hudLines         []string // cached HUD rows; see refreshHUDCache
 	hudColors        []color.RGBA
 	hudNotice        string
@@ -366,12 +367,19 @@ func (a *App) installCallbacks() {
 			a.selectionActive = false
 			a.selectionStart = point
 			a.selectionEnd = point
+			a.clearHover()
 			a.requestRedraw()
 			return
 		}
 		if action == glfw.Release {
 			a.selectionEnd = point
 			a.selecting = false
+			// A plain click (no drag → selectionActive stays false) over a URL
+			// opens it; a drag is a text selection and never opens a link.
+			if !a.selectionActive && a.handleLinkClick(point) {
+				a.requestRedraw()
+				return
+			}
 			a.requestRedraw()
 			return
 		}
@@ -381,6 +389,7 @@ func (a *App) installCallbacks() {
 			return
 		}
 		if !a.selecting {
+			a.updateHover(x, y)
 			return
 		}
 		a.selectionEnd = a.pointFromPixels(float32(x), float32(y))
@@ -449,24 +458,6 @@ func (a *App) copySelectionToClipboard() bool {
 	}
 	a.SetClipboard(text)
 	return true
-}
-
-func (a *App) pointFromPixels(x, y float32) termsel.Point {
-	col := int((x - a.paddingX) / a.cellW)
-	row := int((y - a.paddingY) / a.cellH)
-	if row < 0 {
-		row = 0
-	}
-	if col < 0 {
-		col = 0
-	}
-	if row >= a.rows {
-		row = a.rows - 1
-	}
-	if col >= a.cols {
-		col = a.cols - 1
-	}
-	return termsel.Point{Row: row, Col: col}
 }
 
 func (a *App) writeInputBytes(data []byte) {

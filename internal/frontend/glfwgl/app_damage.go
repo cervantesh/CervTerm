@@ -31,6 +31,10 @@ type damageState struct {
 	statusSeq         int
 	statusGeometry    statusGeometry
 	overlaySeq        int
+	hoverActive       bool
+	hoverRow          int
+	hoverStartCol     int
+	hoverEndCol       int
 	background        color.RGBA
 	damagedRows       []bool
 	rowsDrawn         int
@@ -58,6 +62,10 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 		a.searchMatchLen != a.damage.searchMatchLen ||
 		a.status.seq != a.damage.statusSeq || a.status.geometry != a.damage.statusGeometry ||
 		a.overlays.seq != a.damage.overlaySeq ||
+		a.link.hoverActive != a.damage.hoverActive ||
+		a.link.hover.row != a.damage.hoverRow ||
+		a.link.hover.startCol != a.damage.hoverStartCol ||
+		a.link.hover.endCol != a.damage.hoverEndCol ||
 		background != a.damage.background
 	historySizeMismatch := (len(a.prevHashes) > 0 && len(a.prevHashes) != rows) ||
 		(len(a.prevPrevHashes) > 0 && len(a.prevPrevHashes) != rows)
@@ -108,6 +116,11 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 	// frame, but its covered rows must repaint the terminal beneath before the
 	// overlay recomposites (a seq change already forced this frame full above).
 	a.markOverlayDamage(damaged, rows)
+	// A steady hover underline does not force full frames, but its row must
+	// repaint each frame so the underline survives the alternating back buffer.
+	if a.link.hoverActive {
+		markDamagedRow(damaged, a.link.hover.row)
+	}
 	return fullRedraw, damaged
 }
 
@@ -127,6 +140,10 @@ func (a *App) recordDamageFrame(w, h, displayOffset int, alternateScreen, notice
 	a.damage.searchMatchLen = a.searchMatchLen
 	a.damage.statusSeq, a.damage.statusGeometry = a.status.seq, a.status.geometry
 	a.damage.overlaySeq = a.overlays.seq
+	a.damage.hoverActive = a.link.hoverActive
+	a.damage.hoverRow = a.link.hover.row
+	a.damage.hoverStartCol = a.link.hover.startCol
+	a.damage.hoverEndCol = a.link.hover.endCol
 	a.damage.background = background
 	a.damage.rowsDrawn = rowsDrawn
 }
