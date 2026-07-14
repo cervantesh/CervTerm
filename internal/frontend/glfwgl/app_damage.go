@@ -89,7 +89,12 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 		for row, hash := range a.rowHashes {
 			damaged[row] = hash != a.prevHashes[row] || hash != a.prevPrevHashes[row]
 		}
+		// Mark the cursor rows of both prior rendered frames, not just the last:
+		// the back buffer we are drawing into may be the N-2 image, whose cursor
+		// sat at prevCursorRow. Omitting it leaves a ghost cursor (e.g. after the
+		// startup banner) on the alternating buffer.
 		markDamagedRow(damaged, a.lastCursorRow)
+		markDamagedRow(damaged, a.prevCursorRow)
 		markDamagedRow(damaged, a.snap.CursorRow)
 	}
 	// A steady status overlay does not force a full frame, but any frame that is
@@ -108,7 +113,7 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 
 func (a *App) recordDamageFrame(w, h, displayOffset int, alternateScreen, noticeVisible bool, background color.RGBA, rowsDrawn int) {
 	a.prevPrevHashes, a.prevHashes, a.rowHashes = a.prevHashes, a.rowHashes, a.prevPrevHashes
-	a.lastCursorRow = a.snap.CursorRow
+	a.prevCursorRow, a.lastCursorRow = a.lastCursorRow, a.snap.CursorRow
 	a.damage.valid = true
 	a.damage.framebufferWidth, a.damage.framebufferHeight = w, h
 	a.damage.contentScaleX, a.damage.contentScaleY = a.contentScaleX, a.contentScaleY
