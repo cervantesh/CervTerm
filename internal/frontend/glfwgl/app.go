@@ -397,6 +397,12 @@ func (a *App) installCallbacks() {
 		a.requestRedraw()
 	})
 	a.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {
+		// Ctrl+wheel zooms (font size), taking priority over app mouse reporting —
+		// the standard terminal shortcut. GLFW does not pass modifiers to the
+		// scroll callback, so query the live Ctrl state.
+		if a.handleZoomWheel(yoff) {
+			return
+		}
 		if a.sendMouseWheel(yoff, glfw.ModifierKey(0)) {
 			return
 		}
