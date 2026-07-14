@@ -47,8 +47,18 @@ func (a *App) draw() {
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)
 	displayOffset := a.term.DisplayOffset()
+	scrollbackRows := a.term.ScrollbackLines()
 	alternateScreen := a.term.AlternateScreenMode()
 	a.mu.Unlock()
+	// Convert the match's global (physical-row) index to a viewport row using the
+	// same convention as CopyView: the top visible global row is
+	// scrollbackRows-displayOffset (trap 2). Off-screen matches yield -1.
+	a.searchViewRow = -1
+	if a.searchHasMatch {
+		if vr := a.searchMatchRow - (scrollbackRows - displayOffset); vr >= 0 && vr < a.snap.Rows {
+			a.searchViewRow = vr
+		}
+	}
 	noticeVisible := a.notice != "" && frameNow.Before(a.noticeUntil)
 	fullRedraw, damagedRows := a.prepareDamage(w, h, displayOffset, alternateScreen, noticeVisible, background)
 	if fullRedraw {
@@ -87,6 +97,7 @@ func (a *App) draw() {
 
 	a.damage.rowsDrawn = rowsDrawn
 	a.drawHUD(w, h, palette, frameNow)
+	a.drawSearchBar(w, h, palette)
 	a.recordDamageFrame(w, h, displayOffset, alternateScreen, noticeVisible, background, rowsDrawn)
 
 	// Record exactly what this frame rendered so shouldRedraw detects the next
@@ -182,6 +193,45 @@ func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette, now time.Time) {
 	for i, ln := range lines {
 		a.drawString(ln, bx+pad, by+pad+float32(i)*a.cellH, colors[i], 1)
 	}
+}
+
+// searchHighlightColor tints the current match cells under the glyphs, a warm
+// amber distinct from the cool selection fill so the two never read as the same.
+var searchHighlightColor = color.RGBA{0x7A, 0x5C, 0x12, 0xFF}
+
+// drawSearchBar renders the modal search overlay at the bottom of the window,
+// mirroring drawHUD's translucent-fill + accent-line + drawString style. It is
+// drawn only while the bar is open; closing repaints a clean frame (the search
+// state is in the damage global-fallback list).
+func (a *App) drawSearchBar(w, h int, palette cervtermtheme.Palette) {
+	if !a.searching {
+		return
+	}
+	label := "buscar: " + string(a.searchQuery)
+	info := ""
+	switch {
+	case len(a.searchQuery) == 0:
+		info = ""
+	case a.searchHasMatch:
+		info = "  [enter: siguiente]"
+	default:
+		info = "  sin resultados"
+	}
+	line := label + info
+
+	pad := 6 * a.uiScale
+	bh := a.cellH + 2*pad
+	by := float32(h) - bh
+	gl.Disable(gl.TEXTURE_2D)
+	gl.Enable(gl.BLEND)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	fillRect(0, by, float32(w), bh, color.RGBA{0x10, 0x14, 0x1C, 0xF0})
+	fillRect(0, by, float32(w), max(1, a.uiScale), themeColor(palette.Accent))
+	textColor := themeColor(palette.Accent)
+	if len(a.searchQuery) > 0 && !a.searchHasMatch {
+		textColor = themeColor(palette.Muted)
+	}
+	a.drawString(line, pad, by+pad, textColor, 1)
 }
 
 func drawTextDecorations(x, y, w, h float32, c color.RGBA, attr core.Attr) {

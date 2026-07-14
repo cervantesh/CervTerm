@@ -101,6 +101,18 @@ type App struct {
 	// loop's 500ms bounded wait.
 	wakeReady atomic.Bool
 
+	// Modal scrollback search state. All fields are main-thread only. While
+	// searching is true, key and char callbacks route to the search bar and
+	// nothing reaches the PTY (app_search.go). Match position is stored in the
+	// global (physical-row) index space; draw() converts it to a viewport row.
+	searching      bool
+	searchQuery    []rune
+	searchHasMatch bool
+	searchMatchRow int // global row (scrollback+live index space)
+	searchMatchCol int // start cell column of the match
+	searchMatchLen int // match length in runes (highlight cell span, v1)
+	searchViewRow  int // frame-local: match's viewport row, or -1 when off-screen
+
 	selecting         bool
 	selectionActive   bool
 	selectionStart    termsel.Point
@@ -262,12 +274,26 @@ func (a *App) installCallbacks() {
 			a.suppressNextChar = false
 			return
 		}
+		// While the search bar is open, printable input edits the query and never
+		// reaches the PTY (trap 1). closeSearch restores this callback's normal
+		// flow exactly by clearing a.searching.
+		if a.searching {
+			a.searchAppendRune(char)
+			return
+		}
 		if encoded, ok := input.Encode(input.Event{Rune: char}); ok {
 			a.writeInputBytes(encoded)
 		}
 	})
 	a.window.SetKeyCallback(func(_ *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		if action != glfw.Press && action != glfw.Repeat {
+			return
+		}
+		// Search owns the keyboard while open: the ctrl+shift+f chord toggles the
+		// bar (fixed v1) and, while searching, every key routes to search handling
+		// and nothing reaches the PTY (trap 1) — checked before script keys and
+		// the stats toggle so those chords cannot leak through the bar.
+		if a.handleSearchKey(key, mods) {
 			return
 		}
 		if a.dispatchScriptKey(key, mods, action == glfw.Press) {

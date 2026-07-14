@@ -27,6 +27,8 @@ type fakeHost struct {
 	wrapped      map[int]bool
 	fontSize     float64
 	fontSizes    []float64
+	searches     []string
+	searchResult bool
 }
 
 func (h *fakeHost) WriteInput(data string) { h.writes = append(h.writes, data) }
@@ -59,6 +61,10 @@ func (h *fakeHost) LineWrapped(row int) (bool, bool) {
 		return false, false
 	}
 	return h.wrapped[row], true
+}
+func (h *fakeHost) Search(query string) bool {
+	h.searches = append(h.searches, query)
+	return h.searchResult
 }
 func (h *fakeHost) FontSize() float64 { return h.fontSize }
 func (h *fakeHost) SetFontSize(pts float64) {

@@ -17,6 +17,7 @@ local record cervterm
     line_wrapped: function(Term, integer): boolean
     font_size: function(Term): number
     set_font_size: function(Term, number)
+    search: function(Term, string): boolean
   end
   record Events
     output: function(Term, string)

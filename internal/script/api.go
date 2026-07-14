@@ -26,6 +26,7 @@ type Host interface {
 	LineWrapped(row int) (bool, bool)
 	FontSize() float64
 	SetFontSize(pts float64)
+	Search(query string) bool
 }
 
 // fontSizeMin and fontSizeMax bound term:set_font_size. Clamping at the Lua
@@ -131,6 +132,11 @@ func termTable(state *lua.LState, host Host) *lua.LTable {
 		pts := math.Max(fontSizeMin, math.Min(fontSizeMax, float64(state.CheckNumber(2))))
 		host.SetFontSize(pts)
 		return 0
+	}))
+	tbl.RawSetString("search", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		state.Push(lua.LBool(host.Search(state.CheckString(2))))
+		return 1
 	}))
 	return tbl
 }
