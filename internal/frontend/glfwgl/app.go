@@ -61,6 +61,7 @@ type App struct {
 	showStats        bool
 	statsSpec        script.Spec
 	statsSpecOK      bool
+	zoom             zoomBindings
 	hudLines         []string // cached HUD rows; see refreshHUDCache
 	hudColors        []color.RGBA
 	hudNotice        string
@@ -151,6 +152,7 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {
 		app.statsSpec, app.statsSpecOK = spec, true
 	}
+	app.initZoomHotkeys()
 	// Replies queue up and flush after Advance returns so the PTY write never
 	// happens while a.mu is held (a blocked write must not stall the drain
 	// loop mid-parse). All access is main-thread only.
@@ -311,6 +313,15 @@ func (a *App) installCallbacks() {
 				a.requestRedraw()
 				return
 			}
+		}
+		// Built-in zoom and Shift+scroll bindings. Checked after script keys so a
+		// user's Lua binding can still override, and before the PTY encode path so
+		// the chords are consumed rather than sent to the shell.
+		if a.handleZoomKey(key, mods) {
+			return
+		}
+		if a.handleScrollKey(key, mods) {
+			return
 		}
 
 		if a.handleClipboardKey(key, mods) {

@@ -96,6 +96,12 @@ func keyNameFromGLFW(key glfw.Key) (string, bool) {
 		return "minus", true
 	case glfw.KeyEqual:
 		return "equal", true
+	case glfw.KeyKPAdd:
+		return "kp_add", true
+	case glfw.KeyKPSubtract:
+		return "kp_subtract", true
+	case glfw.KeyKP0:
+		return "kp_0", true
 	case glfw.KeyComma:
 		return "comma", true
 	case glfw.KeyPeriod:
