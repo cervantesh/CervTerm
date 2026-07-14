@@ -255,7 +255,12 @@ func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool
 	img := image.NewRGBA(image.Rect(0, 0, b.cellW*cellSpan, b.cellH))
 	draw.Draw(img, img.Bounds(), image.Transparent, image.Point{}, draw.Src)
 
-	dotX := fixed.I(1) - bounds.Min.X
+	// Center the glyph's advance box within the cell instead of jamming its ink
+	// to the left edge. cellW is the font's monospace advance, so for narrow,
+	// font-centered glyphs (period, colon, comma, quotes) this restores their
+	// designed position; the old left-align (fixed.I(1) - bounds.Min.X) left a
+	// near-full-cell gap after them that read as an extra space.
+	dotX := (fixed.I(b.cellW*cellSpan) - advance) / 2
 	dotY := fixed.I(b.baseline)
 	d := &font.Drawer{
 		Dst:  img,
