@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"cervterm/internal/applog"
@@ -60,6 +62,16 @@ func main() {
 		defer logFile.Close()
 	}
 	defer applog.RecoverAndExit("glfw main")
+	// Opt-in profiling endpoint: CERVTERM_PPROF=localhost:6060 exposes
+	// /debug/pprof. Off by default, zero cost when unset.
+	if addr := os.Getenv("CERVTERM_PPROF"); addr != "" {
+		go func() {
+			log.Printf("pprof listening on http://%s/debug/pprof/", addr)
+			if err := http.ListenAndServe(addr, nil); err != nil {
+				log.Printf("pprof server stopped: %v", err)
+			}
+		}()
+	}
 	for _, warning := range fontglyph.DiagnoseEmojiFonts().Warnings {
 		log.Printf("emoji coverage warning: %s", warning)
 	}

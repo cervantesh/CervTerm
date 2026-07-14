@@ -72,14 +72,16 @@ type glyphRasterizer interface {
 }
 
 type OpenTypeBackend struct {
-	faces        []loadedFace
-	cellW        int
-	cellH        int
-	baseline     int
-	ppem         uint16
-	shaper       Shaper
-	dwRaster     glyphRasterizer
-	subpixelText bool
+	faces           []loadedFace
+	fallbackSpec    Spec // spec for lazily-loaded fallback faces
+	fallbacksLoaded bool
+	cellW           int
+	cellH           int
+	baseline        int
+	ppem            uint16
+	shaper          Shaper
+	dwRaster        glyphRasterizer
+	subpixelText    bool
 }
 
 type loadedFace struct {
@@ -99,7 +101,10 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 	if err != nil {
 		return nil, err
 	}
-	faces := append([]loadedFace{primary}, loadFallbackFaces(spec)...)
+	// Fallback faces (CJK, and the ~24 MB color-emoji font) are loaded lazily on
+	// the first glyph the primary font can't cover — most sessions never render
+	// one, so they never pay the memory. See ensureFallbacks.
+	faces := []loadedFace{primary}
 	// Cell width is the font's natural monospace advance. Padding it (the old
 	// +2) letter-spaced every glyph and made text look loose next to other
 	// terminals; monospace glyphs are designed to tile at exactly the advance.
@@ -107,7 +112,7 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 	cellH := max(1, (metrics.Ascent+metrics.Descent).Ceil()+2)
 	baseline := 1 + metrics.Ascent.Ceil()
 	ppem := uint16(max(1, int(math.Round(spec.Size*spec.DPI/72))))
-	backend := &OpenTypeBackend{faces: faces, cellW: cellW, cellH: cellH, baseline: baseline, ppem: ppem, shaper: newDefaultShaper(), subpixelText: spec.TextRaster == "subpixel"}
+	backend := &OpenTypeBackend{faces: faces, fallbackSpec: spec, cellW: cellW, cellH: cellH, baseline: baseline, ppem: ppem, shaper: newDefaultShaper(), subpixelText: spec.TextRaster == "subpixel"}
 	if !backend.subpixelText {
 		backend.dwRaster = newPlatformTextRasterizer(spec, primary)
 	}
@@ -407,6 +412,19 @@ func (b *OpenTypeBackend) rasterizeBitmapColorGlyph(lf loadedFace, r rune, cellS
 }
 
 func (b *OpenTypeBackend) faceForRune(r rune) (loadedFace, fixed.Rectangle26_6, fixed.Int26_6, bool) {
+	if face, bounds, advance, ok := b.searchRune(r); ok {
+		return face, bounds, advance, true
+	}
+	// The primary (and any already-loaded fallback) couldn't cover r; load the
+	// fallback fonts now and retry once.
+	if !b.fallbacksLoaded {
+		b.ensureFallbacks()
+		return b.searchRune(r)
+	}
+	return loadedFace{}, fixed.Rectangle26_6{}, 0, false
+}
+
+func (b *OpenTypeBackend) searchRune(r rune) (loadedFace, fixed.Rectangle26_6, fixed.Int26_6, bool) {
 	for _, face := range b.faces {
 		bounds, advance, ok := face.face.GlyphBounds(r)
 		if ok {
@@ -420,6 +438,16 @@ func (b *OpenTypeBackend) faceForRune(r rune) (loadedFace, fixed.Rectangle26_6, 
 		}
 	}
 	return loadedFace{}, fixed.Rectangle26_6{}, 0, false
+}
+
+// ensureFallbacks appends the fallback faces to b.faces on first use. Idempotent
+// and main-thread only (glyph lookup runs during draw prep on the loop thread).
+func (b *OpenTypeBackend) ensureFallbacks() {
+	if b.fallbacksLoaded {
+		return
+	}
+	b.fallbacksLoaded = true
+	b.faces = append(b.faces, loadFallbackFaces(b.fallbackSpec)...)
 }
 
 func (b *OpenTypeBackend) faceHasColorGlyph(face loadedFace, r rune) bool {
@@ -510,6 +538,7 @@ func (b *OpenTypeBackend) preferredEmojiFace() (loadedFace, bool) {
 }
 
 func (b *OpenTypeBackend) notoColorEmojiFace() (loadedFace, bool) {
+	b.ensureFallbacks() // emoji lives in a fallback font
 	for _, face := range b.faces {
 		if isNotoColorEmojiFace(face) {
 			return face, true
@@ -519,6 +548,7 @@ func (b *OpenTypeBackend) notoColorEmojiFace() (loadedFace, bool) {
 }
 
 func (b *OpenTypeBackend) segoeEmojiFace() (loadedFace, bool) {
+	b.ensureFallbacks()
 	for _, face := range b.faces {
 		if isSegoeEmojiFace(face) {
 			return face, true
