@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/ActiveState/termtest/conpty"
+	"cervterm/internal/pty/conpty"
 )
 
 type localSession struct {
