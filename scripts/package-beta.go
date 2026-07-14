@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -46,6 +47,12 @@ func packageBeta(version, outDir string, reuse bool) error {
 		// -s -w strip the symbol table and DWARF; the release binary does not
 		// ship a debugger, and this roughly halves the packaged size.
 		ldflags := "-s -w -X cervterm/internal/buildinfo.Version=" + version
+		if runtime.GOOS == "windows" {
+			// -H=windowsgui: link as a GUI subsystem binary so Explorer/shortcut
+			// launches don't allocate a console window behind CervTerm's own
+			// window. Diagnostics still go to the log file (see internal/applog).
+			ldflags += " -H=windowsgui"
+		}
 		cmd := exec.Command("go", "build", "-tags", "glfw", "-trimpath", "-ldflags", ldflags, "-o", exe, "./cmd/cervterm")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
