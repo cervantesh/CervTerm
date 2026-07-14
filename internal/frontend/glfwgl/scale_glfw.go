@@ -52,20 +52,25 @@ func (a *App) rebuildForContentScale(scaleX, scaleY float32) {
 // dispatched from a key or timer handler, which also run on the loop thread
 // between frames — never inside draw().
 func (a *App) rebuildAtlasAndGrid(scaleX, scaleY float32) {
-	atlas, err := newGlyphAtlasWithSpec(fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(scaleX, scaleY), TextRaster: a.cfg.Render.TextRaster}, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
-	if err != nil {
-		return
+	spec := fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(scaleX, scaleY), TextRaster: a.cfg.Render.TextRaster}
+	if a.atlas != nil {
+		// Reuse the existing atlas (and its GL textures) instead of allocating a
+		// fresh one every zoom step; only the font backend and glyph cache change.
+		if !a.atlas.reconfigure(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken) {
+			return
+		}
+	} else {
+		atlas, err := newGlyphAtlasWithSpec(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+		if err != nil {
+			return
+		}
+		a.atlas = atlas
 	}
-	old := a.atlas
-	a.atlas = atlas
-	// The rebuilt atlas re-probes the shaper (and drops the run caches with it).
-	a.ligaturesActive = a.cfg.Font.Ligatures && atlas.supportsLigatures()
-	a.cellW = float32(atlas.cellW)
-	a.cellH = float32(atlas.cellH)
+	// The atlas re-probes the shaper (and drops the run caches with it).
+	a.ligaturesActive = a.cfg.Font.Ligatures && a.atlas.supportsLigatures()
+	a.cellW = float32(a.atlas.cellW)
+	a.cellH = float32(a.atlas.cellH)
 	a.applyScale(scaleX, scaleY)
 	a.cols, a.rows = 0, 0
-	if old != nil {
-		old.close()
-	}
 	a.resizeToWindow()
 }
