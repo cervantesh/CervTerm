@@ -85,6 +85,13 @@ type App struct {
 	// title/bell events. Deferring to the loop instead of dispatching inline
 	// keeps a handler's term:write from re-entering event dispatch.
 	termEventsPending bool
+	// Deferred resize/scroll event state, drained once per loop iteration by
+	// fireLifecycleEvents. Marked (not fired) at the mutation site because
+	// term:scroll / term:set_font_size run inside a handler; firing there would
+	// re-enter Lua dispatch (traps 3 & 5).
+	resizeEventPending, scrollEventPending bool
+	resizeEventCols, resizeEventRows       int
+	scrollEventOffset                      int
 
 	// wakeReady gates the reader's PostEmptyEvent to the window between
 	// glfw.Init succeeding and glfw.Terminate running: the reader starts before
@@ -351,9 +358,14 @@ func (a *App) installCallbacks() {
 		// drawn (the event still woke the loop; nothing damages).
 		if moved {
 			a.requestRedraw()
+			a.markScrollEvent()
 		}
 	})
 	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
+		// The script focus event is independent of the terminal's focus-report
+		// mode. The callback runs on the loop thread (not inside a handler), so
+		// firing inline cannot re-enter Lua dispatch.
+		a.fireScriptEvent(func() error { return a.scriptRT.FireFocus(a, focused) })
 		a.mu.Lock()
 		enabled := a.term.FocusEventsMode()
 		a.mu.Unlock()
@@ -366,59 +378,6 @@ func (a *App) installCallbacks() {
 			a.writeInput("\x1b[O")
 		}
 	})
-}
-
-// fireScriptEvent runs a terminal-event handler when a runtime is present,
-// surfacing any script error as a transient notice. Called on the main thread.
-func (a *App) fireScriptEvent(fire func() error) {
-	if a.scriptRT == nil {
-		return
-	}
-	if err := fire(); err != nil {
-		a.Notify("script error: " + err.Error())
-	}
-}
-
-func (a *App) dispatchScriptKey(key glfw.Key, mods glfw.ModifierKey, dispatch bool) bool {
-	if a.scriptRT == nil {
-		return false
-	}
-	spec, ok := specFromGLFW(key, mods)
-	if !ok {
-		return false
-	}
-	for i, binding := range a.scriptRT.Bindings() {
-		if binding == spec {
-			if dispatch {
-				if err := a.scriptRT.Dispatch(i, a); err != nil {
-					a.Notify("script error: " + err.Error())
-				}
-			}
-			a.suppressNextChar = scriptKeyProducesChar(key, mods)
-			return true
-		}
-	}
-	return false
-}
-
-func scriptKeyProducesChar(key glfw.Key, mods glfw.ModifierKey) bool {
-	if mods&(glfw.ModControl|glfw.ModAlt|glfw.ModSuper) != 0 {
-		return false
-	}
-	if key >= glfw.KeyA && key <= glfw.KeyZ {
-		return true
-	}
-	if key >= glfw.Key0 && key <= glfw.Key9 {
-		return true
-	}
-	switch key {
-	case glfw.KeySpace, glfw.KeyMinus, glfw.KeyEqual, glfw.KeyComma, glfw.KeyPeriod,
-		glfw.KeySlash, glfw.KeyBackslash, glfw.KeySemicolon, glfw.KeyApostrophe,
-		glfw.KeyGraveAccent:
-		return true
-	default:
-		return false
-	}
 }
 
 func (a *App) handleClipboardKey(key glfw.Key, mods glfw.ModifierKey) bool {

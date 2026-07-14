@@ -17,6 +17,7 @@ func TestNextWake(t *testing.T) {
 		blinkPeriod time.Duration
 		noticeUntil time.Time
 		statsShown  bool
+		timer       time.Time
 		want        time.Duration
 	}{
 		{
@@ -111,11 +112,46 @@ func TestNextWake(t *testing.T) {
 			blinkPeriod: blinkPeriod,
 			want:        500 * time.Millisecond,
 		},
+		{
+			name:        "timer sooner than blink boundary wins",
+			now:         base.Add(300 * time.Millisecond),
+			blinkActive: true,
+			blinkStart:  base,
+			blinkPeriod: blinkPeriod,                    // 200ms to next blink boundary
+			timer:       base.Add(350 * time.Millisecond), // 50ms out
+			want:        50 * time.Millisecond,
+		},
+		{
+			name:        "past-due timer clamps to minWake",
+			now:         base.Add(300 * time.Millisecond),
+			blinkActive: false,
+			blinkStart:  base,
+			blinkPeriod: blinkPeriod,
+			timer:       base.Add(100 * time.Millisecond), // already past
+			want:        1 * time.Millisecond,
+		},
+		{
+			name:        "zero timer deadline leaves the wait unchanged",
+			now:         base,
+			blinkActive: false,
+			blinkStart:  base,
+			blinkPeriod: blinkPeriod,
+			want:        500 * time.Millisecond,
+		},
+		{
+			name:        "timer later than blink boundary does not extend the wait",
+			now:         base.Add(300 * time.Millisecond),
+			blinkActive: true,
+			blinkStart:  base,
+			blinkPeriod: blinkPeriod,                    // 200ms to next blink boundary
+			timer:       base.Add(900 * time.Millisecond), // 600ms out, ignored
+			want:        200 * time.Millisecond,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := nextWake(tc.now, tc.blinkActive, tc.blinkStart, tc.blinkPeriod, tc.noticeUntil, tc.statsShown)
+			got := nextWake(tc.now, tc.blinkActive, tc.blinkStart, tc.blinkPeriod, tc.noticeUntil, tc.statsShown, tc.timer)
 			if got != tc.want {
 				t.Fatalf("nextWake = %v, want %v", got, tc.want)
 			}

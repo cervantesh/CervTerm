@@ -44,6 +44,8 @@ func (a *App) runContinuousLoop(w *glfw.Window) error {
 		consumed := a.drainIncoming()
 		a.processTermEvents(consumed)
 		a.resizeToWindow()
+		a.fireDueTimers(time.Now())
+		a.fireLifecycleEvents()
 		a.draw()
 		w.SwapBuffers()
 		a.meter.AddFrame()
@@ -60,6 +62,8 @@ func (a *App) runOnDemandLoop(w *glfw.Window) error {
 		consumed := a.drainIncoming()
 		a.processTermEvents(consumed)
 		a.resizeToWindow()
+		a.fireDueTimers(time.Now())
+		a.fireLifecycleEvents()
 		if a.shouldRedraw(time.Now()) {
 			a.draw()
 			w.SwapBuffers()
@@ -159,7 +163,15 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 	if a.needsRedraw {
 		return minWake
 	}
-	return nextWake(now, a.blinkActive(), a.blinkStart, a.blinkPeriod(), a.noticeUntil, a.showStats)
+	// A pending timer bounds the wait. Zero (no timers, or no runtime) leaves
+	// nextWake unchanged, so an idle terminal with no timers still costs nothing.
+	var timerDeadline time.Time
+	if a.scriptRT != nil {
+		if deadline, ok := a.scriptRT.NextTimerDeadline(); ok {
+			timerDeadline = deadline
+		}
+	}
+	return nextWake(now, a.blinkActive(), a.blinkStart, a.blinkPeriod(), a.noticeUntil, a.showStats, timerDeadline)
 }
 
 // blinkPeriod is the full cursor blink period; the phase flips every half.
@@ -208,6 +220,8 @@ func (a *App) spawnInitialPTY(w *glfw.Window) {
 	a.term.Resize(cols, rows)
 	a.mu.Unlock()
 	a.cols, a.rows = cols, rows
+	// Fire events.resize for the initial grid; the first loop iteration drains it.
+	a.markResizeEvent(cols, rows)
 	if err := a.startPTY(); err != nil {
 		a.parser.Advance(a.term, []byte("\x1b[96mCervTerm\x1b[0m\r\n\r\n"))
 		a.parser.Advance(a.term, []byte("Local PTY unavailable on this platform/build.\r\n"))
@@ -240,5 +254,6 @@ func (a *App) resizeToWindow() {
 	if a.pty != nil {
 		_ = a.pty.Resize(ptyio.Size{Rows: uint16(rows), Cols: uint16(cols)})
 	}
+	a.markResizeEvent(cols, rows)
 	a.requestRedraw()
 }

@@ -24,6 +24,8 @@ type fakeHost struct {
 	title        string
 	lines        map[int]string
 	wrapped      map[int]bool
+	fontSize     float64
+	fontSizes    []float64
 }
 
 func (h *fakeHost) WriteInput(data string) { h.writes = append(h.writes, data) }
@@ -55,6 +57,11 @@ func (h *fakeHost) LineWrapped(row int) (bool, bool) {
 		return false, false
 	}
 	return h.wrapped[row], true
+}
+func (h *fakeHost) FontSize() float64 { return h.fontSize }
+func (h *fakeHost) SetFontSize(pts float64) {
+	h.fontSize = pts
+	h.fontSizes = append(h.fontSizes, pts)
 }
 
 func TestLoadAndDispatch(t *testing.T) {
@@ -156,6 +163,9 @@ func TestFireEvents(t *testing.T) {
     output = function(term, data) term:notify("out:" .. data) end,
     title = function(term, title) term:notify("title:" .. title) end,
     bell = function(term) term:notify("bell") end,
+    resize = function(term, cols, rows) term:notify(string.format("resize:%dx%d", cols, rows)) end,
+    focus = function(term, focused) term:notify("focus:" .. tostring(focused)) end,
+    scroll = function(term, offset) term:notify(string.format("scroll:%d", offset)) end,
   },
 }`)
 	_, rt, err := Load(path, config.Defaults())
@@ -176,8 +186,17 @@ func TestFireEvents(t *testing.T) {
 	if err := rt.FireBell(host); err != nil {
 		t.Fatalf("FireBell: %v", err)
 	}
+	if err := rt.FireResize(host, 80, 24); err != nil {
+		t.Fatalf("FireResize: %v", err)
+	}
+	if err := rt.FireFocus(host, true); err != nil {
+		t.Fatalf("FireFocus: %v", err)
+	}
+	if err := rt.FireScroll(host, 12); err != nil {
+		t.Fatalf("FireScroll: %v", err)
+	}
 	got := strings.Join(host.notices, "|")
-	if got != "out:ls\r|title:shell|bell" {
+	if got != "out:ls\r|title:shell|bell|resize:80x24|focus:true|scroll:12" {
 		t.Fatalf("notices = %q", got)
 	}
 }
@@ -193,7 +212,10 @@ func TestFireWithoutHandlersIsNoop(t *testing.T) {
 		t.Fatal("WantsOutput should be false without an output handler")
 	}
 	host := &fakeHost{}
-	for _, err := range []error{rt.FireOutput(host, "x"), rt.FireTitle(host, "x"), rt.FireBell(host)} {
+	for _, err := range []error{
+		rt.FireOutput(host, "x"), rt.FireTitle(host, "x"), rt.FireBell(host),
+		rt.FireResize(host, 1, 1), rt.FireFocus(host, true), rt.FireScroll(host, 0),
+	} {
 		if err != nil {
 			t.Fatalf("no-op fire returned error: %v", err)
 		}

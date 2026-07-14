@@ -1,6 +1,10 @@
 package script
 
-import lua "github.com/yuin/gopher-lua"
+import (
+	"math"
+
+	lua "github.com/yuin/gopher-lua"
+)
 
 // Host is the terminal surface exposed to Lua handlers. Read methods use 0-based
 // row/column indices; the Lua boundary converts to 1-based.
@@ -19,7 +23,16 @@ type Host interface {
 	SetTitle(title string)
 	Line(row int) (string, bool)
 	LineWrapped(row int) (bool, bool)
+	FontSize() float64
+	SetFontSize(pts float64)
 }
+
+// fontSizeMin and fontSizeMax bound term:set_font_size. Clamping at the Lua
+// boundary keeps the frontend from having to re-validate and matches the plan.
+const (
+	fontSizeMin = 6.0
+	fontSizeMax = 72.0
+)
 
 func termTable(state *lua.LState, host Host) *lua.LTable {
 	tbl := state.NewTable()
@@ -101,6 +114,17 @@ func termTable(state *lua.LState, host Host) *lua.LTable {
 		wrapped, _ := host.LineWrapped(row - 1)
 		state.Push(lua.LBool(wrapped))
 		return 1
+	}))
+	tbl.RawSetString("font_size", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		state.Push(lua.LNumber(host.FontSize()))
+		return 1
+	}))
+	tbl.RawSetString("set_font_size", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		pts := math.Max(fontSizeMin, math.Min(fontSizeMax, float64(state.CheckNumber(2))))
+		host.SetFontSize(pts)
+		return 0
 	}))
 	return tbl
 }
