@@ -440,18 +440,11 @@ func (a *App) handleClipboardKey(key glfw.Key, mods glfw.ModifierKey) bool {
 }
 
 func (a *App) copySelectionToClipboard() bool {
-	if !a.selectionActive {
-		return false
-	}
-	a.mu.Lock()
-	render.Capture(&a.snap, a.term)
-	a.mu.Unlock()
-
-	text := termsel.Text(a.snap, termsel.Range{Start: a.selectionStart, End: a.selectionEnd})
+	text := a.Selection()
 	if text == "" {
 		return false
 	}
-	a.window.SetClipboardString(text)
+	a.SetClipboard(text)
 	return true
 }
 

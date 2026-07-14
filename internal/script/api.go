@@ -7,10 +7,18 @@ import lua "github.com/yuin/gopher-lua"
 type Host interface {
 	WriteInput(data string)
 	Notify(message string)
+	Selection() string
+	SetClipboard(text string)
+	Clipboard() string
+	Scroll(lines int) bool
+	ScrollToBottom()
+	ScrollbackLen() int
 	Size() (cols, rows int)
 	Cursor() (row, col int)
 	Title() string
+	SetTitle(title string)
 	Line(row int) (string, bool)
+	LineWrapped(row int) (bool, bool)
 }
 
 func termTable(state *lua.LState, host Host) *lua.LTable {
@@ -24,6 +32,36 @@ func termTable(state *lua.LState, host Host) *lua.LTable {
 		state.CheckTypes(1, lua.LTTable)
 		host.Notify(state.CheckString(2))
 		return 0
+	}))
+	tbl.RawSetString("selection", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		state.Push(lua.LString(host.Selection()))
+		return 1
+	}))
+	tbl.RawSetString("copy", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		host.SetClipboard(state.CheckString(2))
+		return 0
+	}))
+	tbl.RawSetString("clipboard", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		state.Push(lua.LString(host.Clipboard()))
+		return 1
+	}))
+	tbl.RawSetString("scroll", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		state.Push(lua.LBool(host.Scroll(state.CheckInt(2))))
+		return 1
+	}))
+	tbl.RawSetString("scroll_to_bottom", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		host.ScrollToBottom()
+		return 0
+	}))
+	tbl.RawSetString("scrollback", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		state.Push(lua.LNumber(host.ScrollbackLen()))
+		return 1
 	}))
 	tbl.RawSetString("size", state.NewFunction(func(state *lua.LState) int {
 		state.CheckTypes(1, lua.LTTable)
@@ -44,12 +82,24 @@ func termTable(state *lua.LState, host Host) *lua.LTable {
 		state.Push(lua.LString(host.Title()))
 		return 1
 	}))
+	tbl.RawSetString("set_title", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		host.SetTitle(state.CheckString(2))
+		return 0
+	}))
 	tbl.RawSetString("line", state.NewFunction(func(state *lua.LState) int {
 		state.CheckTypes(1, lua.LTTable)
 		row := state.CheckInt(2)
 		// Out-of-range rows yield "" so the Lua return type is always a string.
 		text, _ := host.Line(row - 1)
 		state.Push(lua.LString(text))
+		return 1
+	}))
+	tbl.RawSetString("line_wrapped", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		row := state.CheckInt(2)
+		wrapped, _ := host.LineWrapped(row - 1)
+		state.Push(lua.LBool(wrapped))
 		return 1
 	}))
 	return tbl
