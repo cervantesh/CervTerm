@@ -47,6 +47,7 @@ func (a *App) runContinuousLoop(w *glfw.Window) error {
 		a.fireDueTimers(time.Now())
 		a.fireLifecycleEvents()
 		a.syncStatusSegments()
+		a.syncOverlays()
 		a.draw()
 		w.SwapBuffers()
 		a.meter.AddFrame()
@@ -66,6 +67,7 @@ func (a *App) runOnDemandLoop(w *glfw.Window) error {
 		a.fireDueTimers(time.Now())
 		a.fireLifecycleEvents()
 		a.syncStatusSegments()
+		a.syncOverlays()
 		if a.shouldRedraw(time.Now()) {
 			a.draw()
 			w.SwapBuffers()

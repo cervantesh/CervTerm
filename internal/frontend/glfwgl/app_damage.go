@@ -30,6 +30,7 @@ type damageState struct {
 	searchMatchLen    int
 	statusSeq         int
 	statusGeometry    statusGeometry
+	overlaySeq        int
 	background        color.RGBA
 	damagedRows       []bool
 	rowsDrawn         int
@@ -56,6 +57,7 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 		a.searchMatchRow != a.damage.searchMatchRow || a.searchMatchCol != a.damage.searchMatchCol ||
 		a.searchMatchLen != a.damage.searchMatchLen ||
 		a.status.seq != a.damage.statusSeq || a.status.geometry != a.damage.statusGeometry ||
+		a.overlays.seq != a.damage.overlaySeq ||
 		background != a.damage.background
 	historySizeMismatch := (len(a.prevHashes) > 0 && len(a.prevHashes) != rows) ||
 		(len(a.prevPrevHashes) > 0 && len(a.prevPrevHashes) != rows)
@@ -97,6 +99,10 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 			markDamagedRow(damaged, row)
 		}
 	}
+	// Same rationale for overlays: a steady visible overlay does not force a full
+	// frame, but its covered rows must repaint the terminal beneath before the
+	// overlay recomposites (a seq change already forced this frame full above).
+	a.markOverlayDamage(damaged, rows)
 	return fullRedraw, damaged
 }
 
@@ -115,6 +121,7 @@ func (a *App) recordDamageFrame(w, h, displayOffset int, alternateScreen, notice
 	a.damage.searchMatchRow, a.damage.searchMatchCol = a.searchMatchRow, a.searchMatchCol
 	a.damage.searchMatchLen = a.searchMatchLen
 	a.damage.statusSeq, a.damage.statusGeometry = a.status.seq, a.status.geometry
+	a.damage.overlaySeq = a.overlays.seq
 	a.damage.background = background
 	a.damage.rowsDrawn = rowsDrawn
 }
