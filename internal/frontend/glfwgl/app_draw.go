@@ -97,6 +97,7 @@ func (a *App) draw() {
 	}
 
 	a.damage.rowsDrawn = rowsDrawn
+	a.drawOverlays()
 	a.drawHUD(w, h, palette, frameNow)
 	a.drawStatusBand(w, palette)
 	a.drawSearchBar(w, h, palette)

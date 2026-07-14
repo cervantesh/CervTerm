@@ -206,6 +206,73 @@ end)
 return {}
 ```
 
+## Overlays
+
+`cervterm.overlay(id)` returns a retained, cell-addressed display list drawn on
+top of the terminal. Scripts build primitives into a pending list and publish
+them atomically with `commit`; the render pass is pure Go over the committed
+scene, so an idle overlay costs nothing and Lua never runs inside a frame.
+
+Handle methods:
+
+- `ov:rect(col, row, w, h, color)`: filled rectangle spanning `w`×`h` cells.
+- `ov:text(col, row, s, color)`: single line; wide/emoji runes span the same
+  cells they would as terminal text.
+- `ov:hline(col, row, w, color)`: thin horizontal rule along the top of the row,
+  spanning `w` cells.
+- `ov:vline(col, row, h, color)`: thin vertical rule along the left of the
+  column, spanning `h` cells.
+- `ov:clear()`: empty the pending list.
+- `ov:commit()`: atomically swap the pending list into view — nothing shows
+  half-built.
+- `ov:show()` / `ov:hide()`: toggle visibility without rebuilding.
+- `ov:destroy()`: remove the overlay and repaint the cells beneath it.
+
+Coordinates are 1-based cells, so overlays survive zoom and resize. Colors are
+`#RRGGBB` or `#RRGGBBAA` (alpha last; omitted means opaque). Primitives outside
+the grid are clipped silently; an invalid color or coordinate drops that
+primitive with a single notice and never breaks the scene. Each overlay holds up
+to 512 primitives.
+
+This example paints a small git panel and refreshes it every second:
+
+```lua
+local cervterm = require("cervterm")
+
+local panel = cervterm.overlay("git-panel")
+
+cervterm.every(1000, function(term)
+  local cols = term:size()
+  local left = cols - 19
+
+  panel:clear()
+  panel:rect(left, 1, 20, 4, "#10141CF0")     -- translucent card
+  panel:hline(left, 1, 20, "#2A6377")         -- top accent rule
+  panel:text(left + 1, 2, "rama: main", "#60E8F0")
+  panel:text(left + 1, 3, "+12 -3", "#8AE234")
+  panel:commit()
+end)
+
+return {}
+```
+
+Toggle it from a keybinding:
+
+```lua
+local cervterm = require("cervterm")
+
+local shown = true
+return {
+  keys = {
+    { key = "g", mods = "ctrl+shift", action = function()
+        local panel = cervterm.overlay("git-panel")
+        shown = not shown
+        if shown then panel:show() else panel:hide() end
+      end },
+  },
+}
+```
+
 ## Zoom
 
 `term:set_font_size` rebuilds the glyph atlas and reflows the grid live, so it is
@@ -305,5 +372,5 @@ User config is the user's own file and is not sandboxed. Filesystem and network
 permission controls are future work for third-party plugin support.
 
 Event handlers observe only: an `output` handler cannot rewrite or suppress the
-bytes shown. This slice does not add hot reload, command palettes, overlays, key
-repeat dispatch, multiple handlers per event, or multi-chord sequences.
+bytes shown. This slice does not add hot reload, command palettes, key repeat
+dispatch, multiple handlers per event, or multi-chord sequences.

@@ -47,6 +47,7 @@ type App struct {
 	contentScaleX    float32
 	contentScaleY    float32
 	status           statusState
+	overlays         overlayRender
 	scriptRT         *script.Runtime
 	notice           string
 	noticeUntil      time.Time

@@ -36,6 +36,7 @@ type Runtime struct {
 	events          eventHandlers
 	timers          *timerTable
 	statuses        *statusTable
+	overlays        *overlayStore
 	dispatchTimeout time.Duration
 }
 
@@ -54,8 +55,9 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 	// runs are already visible before the loop starts.
 	tmrs := &timerTable{}
 	statuses := &statusTable{}
+	overlays := &overlayStore{}
 	state.PreloadModule("cervterm", func(state *lua.LState) int {
-		state.Push(buildModule(state, tmrs, statuses))
+		state.Push(buildModule(state, tmrs, statuses, overlays))
 		return 1
 	})
 	if err := state.DoFile(luaPath); err != nil {
@@ -79,7 +81,7 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 		state.Close()
 		return base, nil, err
 	}
-	return cfg, &Runtime{state: state, bindings: bindings, events: events, timers: tmrs, statuses: statuses, dispatchTimeout: time.Second}, nil
+	return cfg, &Runtime{state: state, bindings: bindings, events: events, timers: tmrs, statuses: statuses, overlays: overlays, dispatchTimeout: time.Second}, nil
 }
 
 func (r *Runtime) Bindings() []Spec {
