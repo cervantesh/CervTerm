@@ -44,6 +44,10 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 		if a.selectionActive && termsel.Contains(termsel.Range{Start: a.selectionStart, End: a.selectionEnd}, termsel.Point{Row: r, Col: logicalCol}) {
 			fillRect(x, y, a.cellW, a.cellH, selectionColor)
 		}
+		if a.searchHasMatch && r == a.searchViewRow &&
+			logicalCol >= a.searchMatchCol && logicalCol < a.searchMatchCol+a.searchMatchLen {
+			fillRect(x, y, a.cellW, a.cellH, searchHighlightColor)
+		}
 		fg := defaultFG
 		if cell.Attr.FG != core.DefaultFG {
 			fg = rgb(cell.Attr.FG)

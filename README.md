@@ -11,6 +11,7 @@ CervTerm is not a finished daily-driver terminal yet, but it already includes:
 - Windows ConPTY backend and Unix PTY backend behind build tags.
 - GLFW/OpenGL frontend.
 - Scrollback, alternate screen, resize reflow, selection/copy/paste, and bracketed paste.
+- Scrollback search: `ctrl+shift+f` opens a search bar (Enter jumps to the next match upward, Esc closes); also scriptable via `term:search`.
 - VT parsing for common cursor, erase, color, scroll-region, insert/delete, input-mode, mouse-mode, and title sequences.
 - Keyboard encoding for navigation keys, F1-F12, and Ctrl/Alt/Shift modifiers.
 - SGR mouse press/release/wheel/drag encoding, including modifiers.

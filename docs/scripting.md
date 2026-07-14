@@ -100,6 +100,18 @@ All row and column numbers at the Lua boundary are 1-based.
 | `term:line_wrapped(n)` | Returns whether visible row `n` wraps into the next row; returns `false` when out of range. |
 | `term:font_size()` | Returns the active font size in points. |
 | `term:set_font_size(pts)` | Sets the font size (clamped to 6..72), rebuilding the glyph atlas and reflowing the grid. |
+| `term:search(query)` | Jumps to the first (bottom-most) case-insensitive match for `query` across scrollback and the live screen, scrolls it into view and highlights it; returns whether a match was found. Non-interactive counterpart to the search bar. An empty query is a no-op and returns `false`. |
+
+### Interactive search
+
+Press `ctrl+shift+f` to open the scrollback search bar (a bottom overlay). Type a
+query, then press Enter to jump to the next match upward (the first jump starts
+from the bottom of the live screen); the match row scrolls into view and is
+highlighted. Backspace edits the query and Escape closes the bar and returns to
+the terminal. While the bar is open, no keystrokes reach the shell. The hotkey is
+a fixed `ctrl+shift+f` chord in v1 (configurable in a later release). Search is a
+plain, case-insensitive substring match within a single physical row; a match
+that straddles a wrapped-line boundary is not found in v1.
 
 `write`, `notify`, `copy`, and `set_title` require string arguments. This
 keybinding copies the current selection, falling back to the cursor line when

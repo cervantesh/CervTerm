@@ -176,6 +176,30 @@ func (a *App) LineWrapped(row int) (bool, bool) {
 	return a.term.LineWrapped(row)
 }
 
+// Search jumps to the first (bottom-most) match for query and scrolls it into
+// view, returning whether a match was found. It is the non-interactive,
+// scriptable counterpart to the ctrl+shift+f bar: it records the match cells so
+// draw highlights them, but does not open the modal UI. Main-thread only.
+func (a *App) Search(query string) bool {
+	if query == "" {
+		return false
+	}
+	a.mu.Lock()
+	from := a.term.ScrollbackLines() + a.term.Rows()
+	row, col, ok := a.term.SearchBackward(query, from)
+	if ok {
+		a.searchMatchRow, a.searchMatchCol = row, col
+		a.searchMatchLen = len([]rune(query))
+		a.searchHasMatch = true
+		a.scrollGlobalRowIntoView(row)
+	}
+	a.mu.Unlock()
+	if ok {
+		a.requestRedraw()
+	}
+	return ok
+}
+
 // FontSize returns the active font size in points.
 func (a *App) FontSize() float64 { return a.cfg.Font.Size }
 
