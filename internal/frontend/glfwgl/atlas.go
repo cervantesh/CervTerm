@@ -97,6 +97,32 @@ func (a *glyphAtlas) Reset() {
 	log.Printf("glyph atlas generation reset: generation=%d", a.generation)
 }
 
+// reconfigure re-points the atlas at a new font spec (size/DPI/family) while
+// reusing the existing GL textures instead of allocating a fresh
+// atlasPageCount×atlasPageSize² pair per zoom step. The glyph cache is cleared
+// and ASCII re-prewarmed at the new size. Returns false (leaving the atlas
+// unchanged) if the new backend could not be built.
+func (a *glyphAtlas) reconfigure(spec fontglyph.Spec, textGamma, textDarken float64) bool {
+	backend, err := fontglyph.NewOpenTypeBackend(spec)
+	if err != nil {
+		return false
+	}
+	if a.backend != nil {
+		a.backend.Close()
+	}
+	a.backend = backend
+	a.cellW, a.cellH, a.baseline = backend.CellMetrics()
+	if textGamma != 1 || textDarken != 0 {
+		lut := render.CoverageLUT(textGamma, textDarken)
+		a.coverageLUT = &lut
+	} else {
+		a.coverageLUT = nil
+	}
+	a.Reset() // clears the packer + textures + entries in place (keeps the textures)
+	a.prewarmASCII()
+	return true
+}
+
 func (a *glyphAtlas) close() {
 	if a.backend != nil {
 		a.backend.Close()
