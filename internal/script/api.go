@@ -20,6 +20,7 @@ type Host interface {
 	Size() (cols, rows int)
 	Cursor() (row, col int)
 	Title() string
+	Cwd() string
 	SetTitle(title string)
 	Line(row int) (string, bool)
 	LineWrapped(row int) (bool, bool)
@@ -93,6 +94,11 @@ func termTable(state *lua.LState, host Host) *lua.LTable {
 	tbl.RawSetString("title", state.NewFunction(func(state *lua.LState) int {
 		state.CheckTypes(1, lua.LTTable)
 		state.Push(lua.LString(host.Title()))
+		return 1
+	}))
+	tbl.RawSetString("cwd", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		state.Push(lua.LString(host.Cwd()))
 		return 1
 	}))
 	tbl.RawSetString("set_title", state.NewFunction(func(state *lua.LState) int {

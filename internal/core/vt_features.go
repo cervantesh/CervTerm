@@ -144,6 +144,3 @@ func (t *Terminal) FocusEventsMode() bool { return t.focusEvents }
 func (t *Terminal) SetFocusEventsMode(v bool) {
 	t.focusEvents = v
 }
-
-func (t *Terminal) SetWorkingDirectoryURL(s string) { t.workingDirectory = s }
-func (t *Terminal) WorkingDirectoryURL() string     { return t.workingDirectory }

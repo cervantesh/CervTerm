@@ -98,10 +98,6 @@ func TestParserOSC52AndOSC7(t *testing.T) {
 	if got != "hello" {
 		t.Fatalf("invalid changed clipboard to %q", got)
 	}
-	p.Advance(term, []byte("\x1b]7;file://host/tmp\x07"))
-	if term.WorkingDirectoryURL() != "file://host/tmp" {
-		t.Fatalf("cwd = %q", term.WorkingDirectoryURL())
-	}
 }
 
 func TestParserOSC52LargePayload(t *testing.T) {

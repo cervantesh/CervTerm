@@ -12,6 +12,7 @@ func TestCaptureCopiesTerminalStateWithoutAliasing(t *testing.T) {
 		term.PutRune(r)
 	}
 	term.SetTitle("demo")
+	term.SetCwd(`/work/demo`)
 
 	var snap Snapshot
 	Capture(&snap, term)
@@ -24,6 +25,9 @@ func TestCaptureCopiesTerminalStateWithoutAliasing(t *testing.T) {
 	}
 	if snap.Title != "demo" {
 		t.Fatalf("unexpected title: %q", snap.Title)
+	}
+	if snap.Cwd != "/work/demo" {
+		t.Fatalf("unexpected cwd: %q", snap.Cwd)
 	}
 	if got := string([]rune{snap.Cells[0].Rune, snap.Cells[1].Rune}); got != "ab" {
 		t.Fatalf("unexpected cells: %q", got)
