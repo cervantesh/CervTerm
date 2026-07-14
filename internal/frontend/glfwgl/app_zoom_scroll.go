@@ -64,6 +64,25 @@ func (a *App) handleZoomKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	return true
 }
 
+// handleZoomWheel zooms on Ctrl+wheel (up = in, down = out), the standard
+// terminal gesture. Returns true when Ctrl was held so the caller skips the
+// normal scroll/mouse-report path. GLFW omits modifiers from the scroll
+// callback, so the live Ctrl key state is queried.
+func (a *App) handleZoomWheel(yoff float64) bool {
+	if a.window == nil || yoff == 0 {
+		return false
+	}
+	if a.window.GetKey(glfw.KeyLeftControl) != glfw.Press && a.window.GetKey(glfw.KeyRightControl) != glfw.Press {
+		return false
+	}
+	if yoff > 0 {
+		a.applyFontSize(a.cfg.Font.Size + zoomFontStep)
+	} else {
+		a.applyFontSize(a.cfg.Font.Size - zoomFontStep)
+	}
+	return true
+}
+
 // applyFontSize clamps pts to the zoom bounds and rebuilds when it changes.
 // SetFontSize is a no-op when the size is unchanged, so a zoom at the clamp
 // limit does nothing.
