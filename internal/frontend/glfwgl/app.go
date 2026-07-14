@@ -53,6 +53,7 @@ type App struct {
 	suppressNextChar bool
 	lastStats        time.Time
 	lastTitle        string
+	lastCwd          string
 	lastBellCount    int
 	blinkStart       time.Time
 	pendingReplies   [][]byte

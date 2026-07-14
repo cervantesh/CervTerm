@@ -20,6 +20,7 @@ type Binding struct {
 type eventHandlers struct {
 	output *lua.LFunction
 	title  *lua.LFunction
+	cwd    *lua.LFunction
 	bell   *lua.LFunction
 	resize *lua.LFunction
 	focus  *lua.LFunction
@@ -114,6 +115,14 @@ func (r *Runtime) FireTitle(host Host, title string) error {
 		return nil
 	}
 	return r.callProtected("events.title", r.events.title, host, lua.LString(title))
+}
+
+// FireCwd runs the on-cwd handler with the new working directory.
+func (r *Runtime) FireCwd(host Host, dir string) error {
+	if r.events.cwd == nil {
+		return nil
+	}
+	return r.callProtected("events.cwd", r.events.cwd, host, lua.LString(dir))
 }
 
 // FireBell runs the on-bell handler.
@@ -229,6 +238,7 @@ func loadEvents(root *lua.LTable) (eventHandlers, error) {
 	}{
 		{"output", &handlers.output},
 		{"title", &handlers.title},
+		{"cwd", &handlers.cwd},
 		{"bell", &handlers.bell},
 		{"resize", &handlers.resize},
 		{"focus", &handlers.focus},

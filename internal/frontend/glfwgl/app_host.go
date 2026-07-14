@@ -96,7 +96,7 @@ func (a *App) flushReplies() {
 	}
 }
 
-// Size, Cursor, Title, and Line expose read-only terminal state to Lua handlers.
+// Size, Cursor, Title, Cwd, and Line expose read-only terminal state to Lua handlers.
 // They are called on the main loop thread while the handler runs; the lock guards
 // against future concurrent access and matches the other term accessors.
 
@@ -116,6 +116,12 @@ func (a *App) Title() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.term.Title()
+}
+
+func (a *App) Cwd() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.term.Cwd()
 }
 
 func (a *App) SetTitle(title string) {

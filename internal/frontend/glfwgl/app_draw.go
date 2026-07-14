@@ -42,7 +42,7 @@ func (a *App) draw() {
 	gl.Disable(gl.TEXTURE_2D)
 	a.updateFPS()
 
-	// Title/bell events are fired in processTermEvents (once per data batch),
+	// Title/cwd/bell events are fired in processTermEvents (once per data batch),
 	// not here, so on-demand rendering does not delay them to the next repaint.
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)

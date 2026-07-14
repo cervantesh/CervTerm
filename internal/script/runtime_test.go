@@ -22,6 +22,7 @@ type fakeHost struct {
 	curRow       int
 	curCol       int
 	title        string
+	cwd          string
 	lines        map[int]string
 	wrapped      map[int]bool
 	fontSize     float64
@@ -47,6 +48,7 @@ func (h *fakeHost) ScrollbackLen() int {
 func (h *fakeHost) Size() (int, int)      { return h.cols, h.rows }
 func (h *fakeHost) Cursor() (int, int)    { return h.curRow, h.curCol }
 func (h *fakeHost) Title() string         { return h.title }
+func (h *fakeHost) Cwd() string           { return h.cwd }
 func (h *fakeHost) SetTitle(title string) { h.title = title }
 func (h *fakeHost) Line(row int) (string, bool) {
 	text, ok := h.lines[row]
@@ -162,6 +164,7 @@ func TestFireEvents(t *testing.T) {
   events = {
     output = function(term, data) term:notify("out:" .. data) end,
     title = function(term, title) term:notify("title:" .. title) end,
+    cwd = function(term, dir) term:notify("cwd:" .. dir) end,
     bell = function(term) term:notify("bell") end,
     resize = function(term, cols, rows) term:notify(string.format("resize:%dx%d", cols, rows)) end,
     focus = function(term, focused) term:notify("focus:" .. tostring(focused)) end,
@@ -183,6 +186,9 @@ func TestFireEvents(t *testing.T) {
 	if err := rt.FireTitle(host, "shell"); err != nil {
 		t.Fatalf("FireTitle: %v", err)
 	}
+	if err := rt.FireCwd(host, "/work/demo"); err != nil {
+		t.Fatalf("FireCwd: %v", err)
+	}
 	if err := rt.FireBell(host); err != nil {
 		t.Fatalf("FireBell: %v", err)
 	}
@@ -196,7 +202,7 @@ func TestFireEvents(t *testing.T) {
 		t.Fatalf("FireScroll: %v", err)
 	}
 	got := strings.Join(host.notices, "|")
-	if got != "out:ls\r|title:shell|bell|resize:80x24|focus:true|scroll:12" {
+	if got != "out:ls\r|title:shell|cwd:/work/demo|bell|resize:80x24|focus:true|scroll:12" {
 		t.Fatalf("notices = %q", got)
 	}
 }
@@ -213,7 +219,7 @@ func TestFireWithoutHandlersIsNoop(t *testing.T) {
 	}
 	host := &fakeHost{}
 	for _, err := range []error{
-		rt.FireOutput(host, "x"), rt.FireTitle(host, "x"), rt.FireBell(host),
+		rt.FireOutput(host, "x"), rt.FireTitle(host, "x"), rt.FireCwd(host, "x"), rt.FireBell(host),
 		rt.FireResize(host, 1, 1), rt.FireFocus(host, true), rt.FireScroll(host, 0),
 	} {
 		if err != nil {

@@ -62,6 +62,8 @@ type Terminal struct {
 	hasSavedCursor    bool
 	attr              Attr
 	title             string
+	cwd               string
+	cwdSeq            int
 	bellCount         int
 	bracketedPaste    bool
 	alternateScreen   bool
@@ -80,5 +82,4 @@ type Terminal struct {
 	activeCharset     int
 	cursorStyle       int
 	focusEvents       bool
-	workingDirectory  string
 }

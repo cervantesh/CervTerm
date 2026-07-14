@@ -103,10 +103,10 @@ func (a *App) drainIncoming() bool {
 	}
 }
 
-// processTermEvents fires title/bell handlers on the main thread. It runs every
+// processTermEvents fires title/cwd/bell handlers on the main thread. It runs every
 // loop iteration but only captures a snapshot when the parser advanced — via
 // drainIncoming or via the no-PTY fallback (termEventsPending) — so
-// bells/titles fire promptly even when draw() is skipped by on-demand
+// bells/titles/cwd changes fire promptly even when draw() is skipped by on-demand
 // rendering. draw() renders the already-captured snapshot. The pending flag is
 // cleared before handlers run: a handler's term:write re-arms it for the next
 // iteration instead of re-entering dispatch.
@@ -129,6 +129,10 @@ func (a *App) processTermEvents(consumed bool) {
 			a.window.SetTitle("CervTerm · " + a.snap.Title)
 		}
 		a.fireScriptEvent(func() error { return a.scriptRT.FireTitle(a, a.snap.Title) })
+	}
+	if a.snap.Cwd != a.lastCwd {
+		a.lastCwd = a.snap.Cwd
+		a.fireScriptEvent(func() error { return a.scriptRT.FireCwd(a, a.snap.Cwd) })
 	}
 	// BellCount is monotonic; fire once per bell so bursts are not collapsed.
 	for a.lastBellCount < a.snap.BellCount {

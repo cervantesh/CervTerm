@@ -11,6 +11,7 @@ local record cervterm
     size: function(Term): integer, integer
     cursor: function(Term): integer, integer
     title: function(Term): string
+    cwd: function(Term): string
     set_title: function(Term, string)
     line: function(Term, integer): string
     line_wrapped: function(Term, integer): boolean
@@ -20,6 +21,7 @@ local record cervterm
   record Events
     output: function(Term, string)
     title: function(Term, string)
+    cwd: function(Term, string)
     bell: function(Term)
     resize: function(Term, integer, integer)
     focus: function(Term, boolean)

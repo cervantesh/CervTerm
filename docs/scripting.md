@@ -46,6 +46,8 @@ and receives the `term` handle first:
   bytes as a string. This runs on every output chunk, so keep it fast — a slow
   handler throttles rendering.
 - `title(term, title)`: fires when the program changes the window title (OSC 0/2).
+- `cwd(term, dir)`: fires when the program reports a new working directory with
+  OSC 7. Invalid or empty OSC 7 payloads are ignored.
 - `bell(term)`: fires when a `BEL` control executes.
 - `resize(term, cols, rows)`: fires when the terminal grid dimensions change,
   including the initial size and any `term:set_font_size` rebuild.
@@ -63,6 +65,7 @@ return {
       if data:find("error") then term:notify("saw an error") end
     end,
     title = function(term, title) term:notify("title: " .. title) end,
+    cwd = function(term, dir) term:notify("cwd: " .. dir) end,
     bell = function(term) term:notify("ding") end,
     resize = function(term, cols, rows) term:notify(cols .. "x" .. rows) end,
     focus = function(term, focused) term:notify(focused and "focused" or "blurred") end,
@@ -91,6 +94,7 @@ All row and column numbers at the Lua boundary are 1-based.
 | `term:size()` | Returns `cols, rows`. |
 | `term:cursor()` | Returns the cursor `row, col`. |
 | `term:title()` | Returns the current terminal title. |
+| `term:cwd()` | Returns the last working directory reported by OSC 7, or `""` before one is received. |
 | `term:set_title(s)` | Sets the terminal title. A later OSC 0/2 title from the running program may replace it. |
 | `term:line(n)` | Returns visible row `n` with trailing blanks trimmed, or `""` when out of range. |
 | `term:line_wrapped(n)` | Returns whether visible row `n` wraps into the next row; returns `false` when out of range. |
@@ -182,6 +186,47 @@ return {
   },
 }
 ```
+
+## Working directory tracking
+
+CervTerm learns the shell's current directory from OSC 7. Add this to your
+PowerShell profile (`$PROFILE`):
+
+```powershell
+function prompt {
+  $location = $ExecutionContext.SessionState.Path.CurrentLocation
+  $uri = [Uri]::new($location.Path).AbsoluteUri
+  Write-Host "`e]7;$uri`a" -NoNewline
+  "PS $location> "
+}
+```
+
+`[Uri]::new(...).AbsoluteUri` produces a real `file:///C:/...` URI and
+percent-encodes spaces and UTF-8 path characters. For bash, add this to
+`~/.bashrc`:
+
+```bash
+__cervterm_uri_path() {
+  local LC_ALL=C input=$1 output= char hex i
+  for ((i = 0; i < ${#input}; i++)); do
+    char=${input:i:1}
+    case $char in
+      [a-zA-Z0-9._~/:+-]) output+=$char ;;
+      *) printf -v hex '%%%02X' "'$char"; output+=$hex ;;
+    esac
+  done
+  printf '%s' "$output"
+}
+
+__cervterm_osc7() {
+  printf '\033]7;file://%s\007' "$(__cervterm_uri_path "$PWD")"
+}
+PROMPT_COMMAND=__cervterm_osc7
+```
+
+If `PROMPT_COMMAND` already contains hooks, compose `__cervterm_osc7` with them
+instead of replacing them. The byte-oriented encoder percent-escapes spaces,
+reserved characters, and UTF-8 path bytes before emitting the OSC sequence.
 
 ## Teal
 

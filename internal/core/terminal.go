@@ -107,7 +107,7 @@ func (t *Terminal) Reset() {
 	t.SelectCharset(0)
 	t.SetCursorStyle(0)
 	t.resetTabStops()
-	t.SetWorkingDirectoryURL("")
+	t.SetCwd("")
 }
 
 func (t *Terminal) ClearLine(row int) {
