@@ -26,6 +26,29 @@ func (t *Terminal) CopyView(dst []Cell) {
 	}
 }
 
+// LineWrapped reports whether a row in the current viewport wraps into the
+// next row. Row indices are 0-based.
+func (t *Terminal) LineWrapped(row int) (bool, bool) {
+	if row < 0 || row >= t.rows {
+		return false, false
+	}
+
+	globalRow := t.scrollbackRows - t.displayOffset + row
+	if globalRow < t.scrollbackRows {
+		sourceRow := (t.scrollbackStart + globalRow) % maxScrollbackRows
+		if len(t.scrollbackWrapped) != maxScrollbackRows {
+			return false, true
+		}
+		return t.scrollbackWrapped[sourceRow], true
+	}
+
+	currentRow := globalRow - t.scrollbackRows
+	if currentRow >= len(t.rowWrapped) {
+		return false, true
+	}
+	return t.rowWrapped[currentRow], true
+}
+
 func (t *Terminal) PlainText() string {
 	var b strings.Builder
 	b.Grow(t.rows * (t.cols + 1))

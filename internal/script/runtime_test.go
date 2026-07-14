@@ -11,24 +11,50 @@ import (
 )
 
 type fakeHost struct {
-	writes  []string
-	notices []string
-	cols    int
-	rows    int
-	curRow  int
-	curCol  int
-	title   string
-	lines   map[int]string
+	writes       []string
+	notices      []string
+	selection    string
+	clipboard    string
+	scrollback   int
+	scrollOffset int
+	cols         int
+	rows         int
+	curRow       int
+	curCol       int
+	title        string
+	lines        map[int]string
+	wrapped      map[int]bool
 }
 
 func (h *fakeHost) WriteInput(data string) { h.writes = append(h.writes, data) }
 func (h *fakeHost) Notify(message string)  { h.notices = append(h.notices, message) }
-func (h *fakeHost) Size() (int, int)       { return h.cols, h.rows }
-func (h *fakeHost) Cursor() (int, int)     { return h.curRow, h.curCol }
-func (h *fakeHost) Title() string          { return h.title }
+func (h *fakeHost) Selection() string      { return h.selection }
+func (h *fakeHost) SetClipboard(text string) {
+	h.clipboard = text
+}
+func (h *fakeHost) Clipboard() string { return h.clipboard }
+func (h *fakeHost) Scroll(lines int) bool {
+	previous := h.scrollOffset
+	h.scrollOffset = max(0, min(h.scrollOffset+lines, h.scrollback))
+	return h.scrollOffset != previous
+}
+func (h *fakeHost) ScrollToBottom() { h.scrollOffset = 0 }
+func (h *fakeHost) ScrollbackLen() int {
+	return h.scrollback
+}
+func (h *fakeHost) Size() (int, int)      { return h.cols, h.rows }
+func (h *fakeHost) Cursor() (int, int)    { return h.curRow, h.curCol }
+func (h *fakeHost) Title() string         { return h.title }
+func (h *fakeHost) SetTitle(title string) { h.title = title }
 func (h *fakeHost) Line(row int) (string, bool) {
 	text, ok := h.lines[row]
 	return text, ok
+}
+func (h *fakeHost) LineWrapped(row int) (bool, bool) {
+	if row < 0 || row >= h.rows {
+		return false, false
+	}
+	return h.wrapped[row], true
 }
 
 func TestLoadAndDispatch(t *testing.T) {
@@ -273,6 +299,128 @@ func TestTermReadState(t *testing.T) {
 	want := "80x24 @3,6 t=sh l=[hello] oob=[]"
 	if got := strings.Join(host.notices, ""); got != want {
 		t.Fatalf("notice = %q, want %q", got, want)
+	}
+}
+
+func TestTermSelectionEmptyAndNonempty(t *testing.T) {
+	path := writeScriptConfig(t, `return {
+  keys = {
+    { key = "s", action = function(term) term:notify("[" .. term:selection() .. "]") end },
+  },
+}`)
+	_, rt, err := Load(path, config.Defaults())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer rt.Close()
+	host := &fakeHost{}
+	if err := rt.Dispatch(0, host); err != nil {
+		t.Fatalf("empty selection Dispatch failed: %v", err)
+	}
+	host.selection = "selected text"
+	if err := rt.Dispatch(0, host); err != nil {
+		t.Fatalf("nonempty selection Dispatch failed: %v", err)
+	}
+	if got := strings.Join(host.notices, "|"); got != "[]|[selected text]" {
+		t.Fatalf("selection notices = %q", got)
+	}
+}
+
+func TestTermClipboardRoundtrip(t *testing.T) {
+	path := writeScriptConfig(t, `return {
+  keys = {
+    { key = "c", action = function(term)
+        term:copy("from lua")
+        term:notify(term:clipboard())
+      end },
+  },
+}`)
+	_, rt, err := Load(path, config.Defaults())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer rt.Close()
+	host := &fakeHost{}
+	if err := rt.Dispatch(0, host); err != nil {
+		t.Fatalf("Dispatch failed: %v", err)
+	}
+	if host.clipboard != "from lua" || strings.Join(host.notices, "") != "from lua" {
+		t.Fatalf("clipboard roundtrip = %q, notices = %#v", host.clipboard, host.notices)
+	}
+}
+
+func TestTermScrollBindings(t *testing.T) {
+	path := writeScriptConfig(t, `return {
+  keys = {
+    { key = "s", action = function(term)
+        term:notify(string.format("%s,%s,%s:%d",
+          tostring(term:scroll(3)), tostring(term:scroll(3)),
+          tostring(term:scroll(-1)), term:scrollback()))
+        term:scroll_to_bottom()
+      end },
+  },
+}`)
+	_, rt, err := Load(path, config.Defaults())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer rt.Close()
+	host := &fakeHost{scrollback: 3}
+	if err := rt.Dispatch(0, host); err != nil {
+		t.Fatalf("Dispatch failed: %v", err)
+	}
+	if got := strings.Join(host.notices, ""); got != "true,false,true:3" {
+		t.Fatalf("scroll results = %q", got)
+	}
+	if host.scrollOffset != 0 {
+		t.Fatalf("scroll_to_bottom offset = %d, want 0", host.scrollOffset)
+	}
+}
+
+func TestTermSetTitleRoundtrip(t *testing.T) {
+	path := writeScriptConfig(t, `return {
+  keys = {
+    { key = "t", action = function(term)
+        term:set_title("lua title")
+        term:notify(term:title())
+      end },
+  },
+}`)
+	_, rt, err := Load(path, config.Defaults())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer rt.Close()
+	host := &fakeHost{title: "old"}
+	if err := rt.Dispatch(0, host); err != nil {
+		t.Fatalf("Dispatch failed: %v", err)
+	}
+	if host.title != "lua title" || strings.Join(host.notices, "") != "lua title" {
+		t.Fatalf("title roundtrip = %q, notices = %#v", host.title, host.notices)
+	}
+}
+
+func TestTermLineWrappedUsesOneBasedRows(t *testing.T) {
+	path := writeScriptConfig(t, `return {
+  keys = {
+    { key = "w", action = function(term)
+        term:notify(string.format("%s,%s,%s",
+          tostring(term:line_wrapped(1)), tostring(term:line_wrapped(2)),
+          tostring(term:line_wrapped(99))))
+      end },
+  },
+}`)
+	_, rt, err := Load(path, config.Defaults())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	defer rt.Close()
+	host := &fakeHost{rows: 2, wrapped: map[int]bool{0: true}}
+	if err := rt.Dispatch(0, host); err != nil {
+		t.Fatalf("Dispatch failed: %v", err)
+	}
+	if got := strings.Join(host.notices, ""); got != "true,false,false" {
+		t.Fatalf("line_wrapped results = %q", got)
 	}
 }
 

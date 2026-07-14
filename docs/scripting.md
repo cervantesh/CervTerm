@@ -65,21 +65,44 @@ a `script error:` notice and does not stop the runtime.
 
 ## Term API
 
-`term:write(s)` writes bytes to the PTY. In fallback renderer mode, it feeds the
-same bytes to the terminal parser.
+All row and column numbers at the Lua boundary are 1-based.
 
-`term:notify(s)` shows a transient notice in the status line area for about four
-seconds.
+| Method | Result or effect |
+|---|---|
+| `term:write(s)` | Writes bytes to the PTY. In fallback renderer mode, feeds the same bytes to the terminal parser. |
+| `term:notify(s)` | Shows a transient notice in the status line area for about four seconds. |
+| `term:selection()` | Returns the current selected text, or `""` when there is no selection. |
+| `term:copy(s)` | Writes `s` to the OS clipboard. |
+| `term:clipboard()` | Returns text from the OS clipboard. |
+| `term:scroll(lines)` | Scrolls the viewport into history for positive values and toward the bottom for negative values; returns whether it moved. |
+| `term:scroll_to_bottom()` | Returns the viewport to the live bottom. |
+| `term:scrollback()` | Returns the number of history rows. |
+| `term:size()` | Returns `cols, rows`. |
+| `term:cursor()` | Returns the cursor `row, col`. |
+| `term:title()` | Returns the current terminal title. |
+| `term:set_title(s)` | Sets the terminal title. A later OSC 0/2 title from the running program may replace it. |
+| `term:line(n)` | Returns visible row `n` with trailing blanks trimmed, or `""` when out of range. |
+| `term:line_wrapped(n)` | Returns whether visible row `n` wraps into the next row; returns `false` when out of range. |
 
-Both write and notify require strings.
+`write`, `notify`, `copy`, and `set_title` require string arguments. This
+keybinding copies the current selection, falling back to the cursor line when
+the selection is empty:
 
-Handlers can also read terminal state:
-
-- `term:size()` returns `cols, rows`.
-- `term:cursor()` returns the cursor `row, col` (1-based).
-- `term:title()` returns the current title string.
-- `term:line(n)` returns the text of visible row `n` (1-based, trailing blanks
-  trimmed), or an empty string when `n` is outside the screen.
+```lua
+{
+  key = "c",
+  mods = "ctrl+shift",
+  action = function(term)
+    local text = term:selection()
+    if text == "" then
+      local row = select(1, term:cursor())
+      text = term:line(row)
+    end
+    term:copy(text)
+    term:notify("copied " .. #text .. " characters")
+  end,
+}
+```
 
 ```lua
 action = function(term)

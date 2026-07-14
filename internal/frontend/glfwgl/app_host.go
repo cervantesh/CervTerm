@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"cervterm/internal/core"
+	"cervterm/internal/render"
+	termsel "cervterm/internal/selection"
 )
 
 // App's script.Host implementation: the terminal surface Lua handlers see.
@@ -21,6 +23,57 @@ func (a *App) Notify(msg string) {
 	a.notice = msg
 	a.noticeUntil = time.Now().Add(4 * time.Second)
 	a.requestRedraw()
+}
+
+func (a *App) Selection() string {
+	if !a.selectionActive {
+		return ""
+	}
+	// Script handlers run on the main thread between frames, never inside
+	// draw(), so reusing a.snap is safe while the terminal snapshot is captured
+	// under a.mu.
+	a.mu.Lock()
+	render.Capture(&a.snap, a.term)
+	a.mu.Unlock()
+	return termsel.Text(a.snap, termsel.Range{Start: a.selectionStart, End: a.selectionEnd})
+}
+
+func (a *App) SetClipboard(text string) {
+	if a.window != nil {
+		a.window.SetClipboardString(text)
+	}
+}
+
+func (a *App) Clipboard() string {
+	if a.window == nil {
+		return ""
+	}
+	return a.window.GetClipboardString()
+}
+
+func (a *App) Scroll(lines int) bool {
+	a.mu.Lock()
+	moved := a.term.ScrollViewport(lines)
+	a.mu.Unlock()
+	if moved {
+		a.requestRedraw()
+	}
+	return moved
+}
+
+func (a *App) ScrollToBottom() {
+	a.mu.Lock()
+	moved := a.term.ScrollViewport(-a.term.ScrollbackLines())
+	a.mu.Unlock()
+	if moved {
+		a.requestRedraw()
+	}
+}
+
+func (a *App) ScrollbackLen() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.term.ScrollbackLines()
 }
 
 // flushReplies sends queued parser replies to the PTY outside a.mu. Main
@@ -61,6 +114,21 @@ func (a *App) Title() string {
 	return a.term.Title()
 }
 
+func (a *App) SetTitle(title string) {
+	a.mu.Lock()
+	changed := a.term.Title() != title
+	if changed {
+		a.term.SetTitle(title)
+	}
+	a.mu.Unlock()
+	if changed {
+		// Re-arm terminal event processing so this follows the same title update
+		// and script dispatch path as an OSC 0/2 title change.
+		a.termEventsPending = true
+		a.requestRedraw()
+	}
+}
+
 func (a *App) Line(row int) (string, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -90,4 +158,10 @@ func (a *App) Line(row int) (string, bool) {
 		}
 	}
 	return b.String(), true
+}
+
+func (a *App) LineWrapped(row int) (bool, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.term.LineWrapped(row)
 }
