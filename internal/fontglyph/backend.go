@@ -15,7 +15,6 @@ import (
 	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gomono"
-	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
 	"golang.org/x/text/unicode/norm"
@@ -115,25 +114,26 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 	return backend, nil
 }
 
+func embeddedGoMono(spec Spec) (loadedFace, font.Metrics, error) {
+	return loadCachedFaceIndex("embedded:gomono", 0, spec, func() ([]byte, error) { return gomono.TTF, nil })
+}
+
 func primaryFace(spec Spec) (loadedFace, font.Metrics, error) {
 	if isEmbeddedFamily(spec.Family) {
-		return loadOpenTypeFace(gomono.TTF, spec)
+		return embeddedGoMono(spec)
 	}
 	resolution := ResolveSystemFont(spec.Family)
 	if !resolution.Found {
 		log.Printf("configured font family %q not found; falling back to Go Mono", spec.Family)
-		return loadOpenTypeFace(gomono.TTF, spec)
+		return embeddedGoMono(spec)
 	}
 	log.Printf("configured font family %q resolved to %s face %d", spec.Family, resolution.Regular, resolution.FaceIndex)
-	data, err := os.ReadFile(resolution.Regular)
+	face, metrics, err := loadCachedFaceIndex(resolution.Regular, resolution.FaceIndex, spec, func() ([]byte, error) {
+		return os.ReadFile(resolution.Regular)
+	})
 	if err != nil {
-		log.Printf("configured font family %q could not be loaded from %s: %v; falling back to Go Mono", spec.Family, resolution.Regular, err)
-		return loadOpenTypeFace(gomono.TTF, spec)
-	}
-	face, metrics, err := loadOpenTypeFaceIndex(data, resolution.FaceIndex, spec)
-	if err != nil {
-		log.Printf("configured font family %q could not be parsed from %s: %v; falling back to Go Mono", spec.Family, resolution.Regular, err)
-		return loadOpenTypeFace(gomono.TTF, spec)
+		log.Printf("configured font family %q could not be loaded/parsed from %s: %v; falling back to Go Mono", spec.Family, resolution.Regular, err)
+		return embeddedGoMono(spec)
 	}
 	face.sourcePath = resolution.Regular
 	return face, metrics, nil
@@ -143,51 +143,20 @@ func loadOpenTypeFace(data []byte, spec Spec) (loadedFace, font.Metrics, error) 
 	return loadOpenTypeFaceIndex(data, 0, spec)
 }
 
+// loadOpenTypeFaceIndex parses data and builds a face without caching. Used by
+// direct callers (and tests) that already hold the font bytes; the cached path
+// used for zoom lives in loadCachedFaceIndex.
 func loadOpenTypeFaceIndex(data []byte, index int, spec Spec) (loadedFace, font.Metrics, error) {
-	collection, err := opentype.ParseCollection(data)
+	pf, err := parseFontData(data, index)
 	if err != nil {
 		return loadedFace{}, font.Metrics{}, err
 	}
-	parsed, err := collection.Font(index)
+	lf, metrics, err := faceFromParsed(pf, spec)
 	if err != nil {
 		return loadedFace{}, font.Metrics{}, err
 	}
-	face, err := opentype.NewFace(parsed, &opentype.FaceOptions{Size: spec.Size, DPI: spec.DPI, Hinting: font.HintingFull})
-	if err != nil {
-		return loadedFace{}, font.Metrics{}, err
-	}
-	lf := loadedFace{face: face, faceIndex: index}
-	lf.sfnt = parsed
-	if index == 0 {
-		if tables, err := DetectColorTables(data); err == nil {
-			lf.tables = tables
-			if tables.HasSbix && lf.sfnt != nil {
-				if sbixData, ok, err := getSFNTTable(data, "sbix"); err == nil && ok {
-					lf.sbix, _ = newSbixExtractor(sbixData, lf.sfnt.NumGlyphs())
-				}
-			}
-			if tables.HasCBDT && tables.HasCBLC {
-				cbdtData, hasCBDT, cbdtErr := getSFNTTable(data, "CBDT")
-				cblcData, hasCBLC, cblcErr := getSFNTTable(data, "CBLC")
-				if cbdtErr == nil && cblcErr == nil && hasCBDT && hasCBLC {
-					lf.cbdt, _ = newCBDTExtractor(cbdtData, cblcData)
-				}
-			}
-			if tables.HasRenderableLayerColor() {
-				colrData, hasCOLR, colrErr := getSFNTTable(data, "COLR")
-				cpalData, hasCPAL, cpalErr := getSFNTTable(data, "CPAL")
-				if colrErr == nil && cpalErr == nil && hasCOLR && hasCPAL {
-					lf.colr, _ = newCOLRParser(colrData, cpalData)
-				}
-			}
-			if tables.HasSVG {
-				if svgData, ok, err := getSFNTTable(data, "SVG "); err == nil && ok {
-					lf.svg, _ = newSVGExtractor(svgData)
-				}
-			}
-		}
-	}
-	return lf, face.Metrics(), nil
+	lf.faceIndex = index
+	return lf, metrics, nil
 }
 
 func (b *OpenTypeBackend) CellMetrics() (width int, height int, baseline int) {
@@ -600,15 +569,12 @@ func DiagnoseEmojiFonts() EmojiFontDiagnostics {
 func loadFallbackFaces(spec Spec) []loadedFace {
 	var faces []loadedFace
 	for _, path := range fallbackFontPaths() {
-		data, err := os.ReadFile(path)
+		face, _, err := loadCachedFaceIndex(path, 0, spec, func() ([]byte, error) { return os.ReadFile(path) })
 		if err != nil {
 			continue
 		}
-		face, _, err := loadOpenTypeFace(data, spec)
 		face.sourcePath = path
-		if err == nil {
-			faces = append(faces, face)
-		}
+		faces = append(faces, face)
 	}
 	return faces
 }
