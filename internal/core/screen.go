@@ -300,14 +300,17 @@ func logicalRowsFromPhysical(rows [][]Cell, wrappedRows []bool) [][]Cell {
 	logicalRows := make([][]Cell, 0, len(rows))
 	var current []Cell
 	for i, row := range rows {
-		trimmed := trimmedCellRow(row)
-		if len(trimmed) > 0 {
-			current = append(current, trimmed...)
-		}
 		wrapped := i < len(wrappedRows) && wrappedRows[i]
 		if wrapped {
+			// A wrapped row continues onto the next one, so its trailing spaces are
+			// interior alignment of the logical line (e.g. columns in `dir`/`ls`
+			// output), not padding. Keep the row in full — trimming here collapsed
+			// those runs every time content was rewrapped through a narrow width.
+			current = append(current, row...)
 			continue
 		}
+		// Last row of the logical line: its trailing blanks are display padding.
+		current = append(current, trimmedCellRow(row)...)
 		logicalRows = append(logicalRows, cloneCellRow(current))
 		current = nil
 	}
