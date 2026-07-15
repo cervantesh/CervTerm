@@ -20,7 +20,7 @@ func newTestSearch(t *testing.T, lines string) (*searchController, *int) {
 	parser.Advance(term, []byte(lines))
 	redraws := 0
 	sc := &searchController{}
-	sc.init(term, &sync.Mutex{}, func() { redraws++ })
+	sc.init(newLockedTerminal(term, &sync.Mutex{}), func() { redraws++ })
 	return sc, &redraws
 }
 
@@ -55,6 +55,57 @@ func TestSearchControllerEmptyQueryIsNoOp(t *testing.T) {
 	sc.next()
 	if sc.hasMatch {
 		t.Fatal("empty query must clear hasMatch and not search")
+	}
+}
+
+// fakeSearchTerminal is a searchTerminal port double: no terminal, no lock. Its
+// existence is the point of the port — the controller is now testable without a
+// core.Terminal at all.
+type fakeSearchTerminal struct {
+	row, col int
+	ok       bool
+	calls    []struct {
+		query   string
+		hasPrev bool
+		prevRow int
+	}
+}
+
+func (f *fakeSearchTerminal) SearchUpward(query string, hasPrev bool, prevRow int) (int, int, bool) {
+	f.calls = append(f.calls, struct {
+		query   string
+		hasPrev bool
+		prevRow int
+	}{query, hasPrev, prevRow})
+	return f.row, f.col, f.ok
+}
+
+// TestSearchControllerDrivesPort pins that next() feeds the port the right
+// from-row convention (no prior match on the first jump, prevRow after) and
+// records the returned match — exercised entirely through the fake port.
+func TestSearchControllerDrivesPort(t *testing.T) {
+	fake := &fakeSearchTerminal{row: 7, col: 2, ok: true}
+	sc := &searchController{}
+	sc.init(fake, func() {})
+
+	sc.query = []rune("hi")
+	sc.next()
+	if len(fake.calls) != 1 || fake.calls[0].hasPrev {
+		t.Fatalf("first next() must query with hasPrev=false; calls=%+v", fake.calls)
+	}
+	if !sc.hasMatch || sc.matchRow != 7 || sc.matchCol != 2 || sc.matchLen != 2 {
+		t.Fatalf("match not recorded: has=%t row=%d col=%d len=%d", sc.hasMatch, sc.matchRow, sc.matchCol, sc.matchLen)
+	}
+
+	sc.next()
+	if !fake.calls[1].hasPrev || fake.calls[1].prevRow != 7 {
+		t.Fatalf("second next() must search above the current match (prevRow=7); got %+v", fake.calls[1])
+	}
+
+	fake.ok = false
+	sc.next()
+	if sc.hasMatch {
+		t.Fatal("a miss must clear hasMatch")
 	}
 }
 

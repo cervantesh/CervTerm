@@ -102,6 +102,7 @@ type App struct {
 	// loop's 500ms bounded wait.
 	wakeReady atomic.Bool
 
+	lterm       *lockedTerminal
 	search      searchController
 	selection   selectionState
 	mouseReport mouseReportState
@@ -153,8 +154,10 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 		}
 	}()
 	// Wire the search controller's explicit dependencies now that the App (and its
-	// terminal and mutex) exists.
-	app.search.init(app.term, &app.mu, app.requestRedraw)
+	// terminal and mutex) exists. The lockedTerminal adapter owns the locking; the
+	// controller only sees the searchTerminal port.
+	app.lterm = newLockedTerminal(app.term, &app.mu)
+	app.search.init(app.lterm, app.requestRedraw)
 	return app.runWindow()
 }
 
