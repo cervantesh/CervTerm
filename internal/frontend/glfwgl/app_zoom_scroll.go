@@ -26,6 +26,7 @@ type zoomBindings struct {
 	base                 float64
 	pending              float64   // coalesced target size; applied once the burst settles
 	pendingSet           bool
+	applyLead            bool      // fire the first step of a fresh burst on the next loop pass
 	deadline             time.Time // apply the pending size once now passes this (debounce)
 }
 
@@ -108,7 +109,10 @@ const zoomDebounce = 70 * time.Millisecond
 
 // applyFontSize clamps pts to the zoom bounds and records it as the pending
 // target, pushing the debounce deadline out so a continuing burst keeps
-// coalescing. applyPendingZoom fires the actual rebuild once the burst settles.
+// coalescing. The first step of a fresh burst also arms applyLead so the
+// rebuild fires on the very next loop pass instead of waiting out the debounce —
+// otherwise a zoom gesture shows nothing until the user stops (a ~70ms freeze
+// that reads as a hang). applyPendingZoom fires the actual rebuild(s).
 func (a *App) applyFontSize(pts float64) {
 	if pts < zoomFontMin {
 		pts = zoomFontMin
@@ -116,16 +120,33 @@ func (a *App) applyFontSize(pts float64) {
 	if pts > zoomFontMax {
 		pts = zoomFontMax
 	}
+	if !a.zoom.pendingSet {
+		a.zoom.applyLead = true
+	}
 	a.zoom.pending, a.zoom.pendingSet = pts, true
 	a.zoom.deadline = time.Now().Add(zoomDebounce)
 	a.requestRedraw()
 }
 
-// applyPendingZoom fires the coalesced zoom rebuild once the target has been
-// stable for zoomDebounce (the burst settled). Called from the loop on the main
-// thread with the GL context current. SetFontSize is a no-op when unchanged.
+// applyPendingZoom drives the debounced zoom rebuild from the loop on the main
+// thread with the GL context current. The leading edge (applyLead) rebuilds
+// immediately so the first step of a burst is visible at once; it leaves the
+// burst in flight so later steps still coalesce onto one trailing rebuild when
+// the target has been stable for zoomDebounce. A burst therefore resizes ConPTY
+// at most twice (leading + trailing, always >= zoomDebounce apart), never at
+// every intermediate size — the async-repaint interleaving that garbles
+// scrollback needs several PTY resizes in flight at once. SetFontSize is a no-op
+// when the size is unchanged, so a lone step's trailing pass costs nothing.
 func (a *App) applyPendingZoom() {
-	if !a.zoom.pendingSet || time.Now().Before(a.zoom.deadline) {
+	if !a.zoom.pendingSet {
+		return
+	}
+	if a.zoom.applyLead {
+		a.zoom.applyLead = false
+		a.SetFontSize(a.zoom.pending)
+		return
+	}
+	if time.Now().Before(a.zoom.deadline) {
 		return
 	}
 	a.zoom.pendingSet = false
