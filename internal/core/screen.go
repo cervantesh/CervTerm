@@ -198,8 +198,15 @@ func (t *Terminal) fillBlank(cells []Cell) {
 func cloneCellRow(row []Cell) []Cell {
 	out := make([]Cell, len(row))
 	copy(out, row)
+	// Give each cell an independent combining pointer so the clone never aliases
+	// the source's marks. (Appends copy-on-write, so this is belt-and-braces for
+	// the alt-screen save path, which is not hot.)
 	for i := range out {
-		out[i].combining = out[i].CloneCombining()
+		if marks := out[i].CloneCombining(); marks != nil {
+			out[i].combining = &marks
+		} else {
+			out[i].combining = nil
+		}
 	}
 	return out
 }
@@ -219,7 +226,7 @@ func writeCellText(b *strings.Builder, cell Cell) {
 		return
 	}
 	b.WriteRune(cell.Rune)
-	for _, r := range cell.combining {
+	for _, r := range cell.Combining() {
 		b.WriteRune(r)
 	}
 }
