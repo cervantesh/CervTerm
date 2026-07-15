@@ -37,6 +37,13 @@ func (a *App) draw() {
 	}
 
 	w, h := a.window.GetFramebufferSize()
+	// Drive the renderer's Resize hook on a real size change (and on the first frame,
+	// since lastFB* are seeded to -1) so a swapchain/drawable backend recreates before
+	// the frame; BeginFrame then just re-establishes the coordinate space.
+	if w != a.lastFBW || h != a.lastFBH {
+		a.r.Resize(w, h)
+		a.lastFBW, a.lastFBH = w, h
+	}
 	a.r.BeginFrame(w, h)
 
 	palette := cervtermtheme.DefaultPalette()
