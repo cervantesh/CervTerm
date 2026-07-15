@@ -89,22 +89,44 @@ func (r *vulkanRenderer) Resize(widthPx, heightPx int) {
 	// TODO: mark swapchain out-of-date; recreateSwapchain() before next frame.
 }
 
-func (r *vulkanRenderer) BeginFrame(clear color.RGBA) {
-	// TODO: acquire next image (wait inFlight fence), begin command buffer,
-	// begin render pass with clear color, reset the per-frame vertex writer.
+// PARTIAL-REDRAW HAZARD (must solve before this backend is correct): the frontend
+// repaints only damaged rows and relies on the previous frame's pixels surviving in
+// the drawable. Swapchain images ROTATE — an acquired image holds an OLDER or
+// undefined frame, not the one just presented. A naive BeginFrame that render-passes
+// straight into the acquired image will corrupt partial frames. Fix: keep a persistent
+// offscreen color target, draw every frame (full or partial) into it, and blit/copy it
+// to the acquired swapchain image before present. Clear() clears THAT target, not the
+// swapchain image.
+func (r *vulkanRenderer) BeginFrame(widthPx, heightPx int) {
+	// TODO: acquire next image (wait inFlight fence), begin command buffer, begin
+	// render pass (no clear), set viewport/scissor to (widthPx, heightPx), reset
+	// the per-frame vertex writer.
+}
+
+func (r *vulkanRenderer) Clear(c color.RGBA) {
+	// TODO: clear the current render target/attachment to c (e.g. vkCmdClearAttachments).
 }
 
 func (r *vulkanRenderer) FillRect(x, y, w, h float32, c color.RGBA) {
 	// TODO: append two triangles (a quad) with color c to the solid vertex batch.
 }
 
-func (r *vulkanRenderer) DrawGlyph(page int, x, y, w, h, u0, v0, u1, v1 float32, c color.RGBA) {
-	// TODO: append a textured quad (page's descriptor set) to the glyph batch.
+func (r *vulkanRenderer) DrawGlyph(page int, mode GlyphMode, x, y, w, h, skew float32, u0, v0, u1, v1 float32, c color.RGBA) {
+	// TODO: append a textured quad (page's descriptor set) to the glyph batch,
+	// selecting the blend/tint per mode (mask/color/subpixel).
 }
 
-func (r *vulkanRenderer) UploadAtlasPage(page int, rgba []byte, widthPx, heightPx int) {
-	// TODO: staging buffer → vkCmdCopyBufferToImage → transition to shader-read;
-	// (re)create the page's descriptor set.
+func (r *vulkanRenderer) ConfigureAtlas(pageCount, sizePx int) {
+	// TODO: (re)create pageCount sizePx×sizePx images + views + descriptor sets.
+}
+
+func (r *vulkanRenderer) UploadAtlasRegion(page, x, y, w, h int, rgba []byte) {
+	// TODO: staging buffer → vkCmdCopyBufferToImage into page at (x,y);
+	// transition to shader-read.
+}
+
+func (r *vulkanRenderer) ClearAtlasPage(page int) {
+	// TODO: drain in-flight draws (fence/vkDeviceWaitIdle), then clear page's image.
 }
 
 func (r *vulkanRenderer) EndFrame() {

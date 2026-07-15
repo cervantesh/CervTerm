@@ -58,21 +58,41 @@ func (r *metalRenderer) Resize(widthPx, heightPx int) {
 	// TODO: update layer.drawableSize.
 }
 
-func (r *metalRenderer) BeginFrame(clear color.RGBA) {
-	// TODO: nextDrawable, command buffer, render command encoder with a clear
-	// load action; reset the per-frame vertex writer.
+// PARTIAL-REDRAW HAZARD (must solve before this backend is correct): the frontend
+// repaints only damaged rows and relies on the previous frame's pixels surviving in
+// the drawable. CAMetalLayer drawables ROTATE — nextDrawable returns an OLDER or
+// undefined frame, not the one just presented. Rendering straight into it will corrupt
+// partial frames. Fix: keep a persistent offscreen MTLTexture, draw every frame into
+// it, and blit it to the acquired drawable before present. Clear() clears THAT target.
+func (r *metalRenderer) BeginFrame(widthPx, heightPx int) {
+	// TODO: nextDrawable, command buffer, render command encoder with a load (not
+	// clear) load action; set viewport to (widthPx, heightPx); reset the per-frame
+	// vertex writer.
+}
+
+func (r *metalRenderer) Clear(c color.RGBA) {
+	// TODO: clear the current drawable to c (clear load action / clear encoder).
 }
 
 func (r *metalRenderer) FillRect(x, y, w, h float32, c color.RGBA) {
 	// TODO: append a colored quad to the solid batch.
 }
 
-func (r *metalRenderer) DrawGlyph(page int, x, y, w, h, u0, v0, u1, v1 float32, c color.RGBA) {
-	// TODO: append a textured quad (page's texture) to the glyph batch.
+func (r *metalRenderer) DrawGlyph(page int, mode GlyphMode, x, y, w, h, skew float32, u0, v0, u1, v1 float32, c color.RGBA) {
+	// TODO: append a textured quad (page's texture) to the glyph batch, selecting
+	// the blend/tint per mode (mask/color/subpixel).
 }
 
-func (r *metalRenderer) UploadAtlasPage(page int, rgba []byte, widthPx, heightPx int) {
-	// TODO: texture.ReplaceRegion with the page pixels.
+func (r *metalRenderer) ConfigureAtlas(pageCount, sizePx int) {
+	// TODO: (re)create pageCount sizePx×sizePx textures.
+}
+
+func (r *metalRenderer) UploadAtlasRegion(page, x, y, w, h int, rgba []byte) {
+	// TODO: texture.ReplaceRegion for page's sub-rect at (x,y).
+}
+
+func (r *metalRenderer) ClearAtlasPage(page int) {
+	// TODO: drain in-flight work (waitUntilCompleted), then clear page's texture.
 }
 
 func (r *metalRenderer) EndFrame() {
