@@ -3,20 +3,28 @@
 package glfwgl
 
 import (
+	"sync"
+
+	"cervterm/internal/core"
+
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
 // Interactive scrollback search (Slice 2). The hotkey is a fixed ctrl+shift+f
 // chord in v1 (configurable later). While the bar is open the key and char
 // callbacks route here and the PTY sees nothing (trap 1); closing restores the
-// live input flow exactly by clearing a.search.active.
+// live input flow exactly by clearing search.active.
 
-// searchState holds the modal scrollback search state. All fields are
-// main-thread only. While active is true, key and char callbacks route to the
-// search bar and nothing reaches the PTY (app_search.go). Match position is
-// stored in the global (physical-row) index space; draw() converts it to a
-// viewport row.
-type searchState struct {
+// searchController owns the modal scrollback search: its state plus the three
+// App services it needs, injected as explicit dependencies (the terminal to
+// query, the shared mutex that guards it against the PTY reader, and a redraw
+// signal) rather than a back-pointer to the whole App. That keeps search logic
+// in one place and testable in isolation with a real core.Terminal.
+//
+// All fields are main-thread only. While active is true, key and char callbacks
+// route to the search bar and nothing reaches the PTY. Match position is stored
+// in the global (physical-row) index space; draw() converts it to a viewport row.
+type searchController struct {
 	active   bool
 	query    []rune
 	hasMatch bool
@@ -24,16 +32,28 @@ type searchState struct {
 	matchCol int // start cell column of the match
 	matchLen int // match length in runes (highlight cell span, v1)
 	viewRow  int // frame-local: match's viewport row, or -1 when off-screen
+
+	term   *core.Terminal
+	mu     *sync.Mutex
+	redraw func()
 }
 
-// handleSearchKey processes the search hotkey and, while the bar is open, all
-// keyboard input. It returns true when it consumed the key so the caller stops
-// before script keys, the stats toggle, clipboard, and PTY encoding.
-func (a *App) handleSearchKey(key glfw.Key, mods glfw.ModifierKey) bool {
+// init wires the App services the controller depends on. Called once after the
+// App is constructed, before the render loop starts.
+func (s *searchController) init(term *core.Terminal, mu *sync.Mutex, redraw func()) {
+	s.term = term
+	s.mu = mu
+	s.redraw = redraw
+}
+
+// handleKey processes the search hotkey and, while the bar is open, all keyboard
+// input. It returns true when it consumed the key so the caller stops before
+// script keys, the stats toggle, clipboard, and PTY encoding.
+func (s *searchController) handleKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	isChord := key == glfw.KeyF && mods&glfw.ModControl != 0 && mods&glfw.ModShift != 0
-	if !a.search.active {
+	if !s.active {
 		if isChord {
-			a.openSearch()
+			s.open()
 			return true
 		}
 		return false
@@ -41,91 +61,91 @@ func (a *App) handleSearchKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	// Bar open: consume every key so nothing (incl. ctrl+c) reaches the PTY.
 	switch key {
 	case glfw.KeyEscape:
-		a.closeSearch()
+		s.close()
 	case glfw.KeyEnter, glfw.KeyKPEnter:
-		a.searchNext()
+		s.next()
 	case glfw.KeyBackspace:
-		a.searchBackspace()
+		s.backspace()
 	}
 	return true
 }
 
-func (a *App) openSearch() {
-	a.search.active = true
-	a.search.query = a.search.query[:0]
-	a.search.hasMatch = false
-	a.requestRedraw()
+func (s *searchController) open() {
+	s.active = true
+	s.query = s.query[:0]
+	s.hasMatch = false
+	s.redraw()
 }
 
-// closeSearch returns to the live view input flow. It leaves the viewport where
-// the last match scrolled it; the user scrolls back to the bottom as usual.
-func (a *App) closeSearch() {
-	a.search.active = false
-	a.search.hasMatch = false
-	a.requestRedraw()
+// close returns to the live view input flow. It leaves the viewport where the
+// last match scrolled it; the user scrolls back to the bottom as usual.
+func (s *searchController) close() {
+	s.active = false
+	s.hasMatch = false
+	s.redraw()
 }
 
-// searchAppendRune adds a printable rune to the query. Editing is rune-based, so
+// appendRune adds a printable rune to the query. Editing is rune-based, so
 // multibyte input is never split (trap 4). Control runes are ignored.
-func (a *App) searchAppendRune(r rune) {
+func (s *searchController) appendRune(r rune) {
 	if r < 0x20 || r == 0x7f {
 		return
 	}
-	a.search.query = append(a.search.query, r)
-	a.requestRedraw()
+	s.query = append(s.query, r)
+	s.redraw()
 }
 
-func (a *App) searchBackspace() {
-	if len(a.search.query) > 0 {
-		a.search.query = a.search.query[:len(a.search.query)-1]
+func (s *searchController) backspace() {
+	if len(s.query) > 0 {
+		s.query = s.query[:len(s.query)-1]
 	}
-	a.requestRedraw()
+	s.redraw()
 }
 
-// searchNext jumps to the next match upward. The first jump searches from the
-// bottom of the live screen; subsequent jumps search strictly above the current
-// match (trap: from-row convention matches core.SearchBackward). An empty query
-// is a no-op (trap 5).
-func (a *App) searchNext() {
-	if len(a.search.query) == 0 {
-		a.search.hasMatch = false
-		a.requestRedraw()
+// next jumps to the next match upward. The first jump searches from the bottom
+// of the live screen; subsequent jumps search strictly above the current match
+// (trap: from-row convention matches core.SearchBackward). An empty query is a
+// no-op (trap 5).
+func (s *searchController) next() {
+	if len(s.query) == 0 {
+		s.hasMatch = false
+		s.redraw()
 		return
 	}
-	a.mu.Lock()
-	from := a.term.ScrollbackLines() + a.term.Rows()
-	if a.search.hasMatch {
-		from = a.search.matchRow
+	s.mu.Lock()
+	from := s.term.ScrollbackLines() + s.term.Rows()
+	if s.hasMatch {
+		from = s.matchRow
 	}
-	row, col, ok := a.term.SearchBackward(string(a.search.query), from)
+	row, col, ok := s.term.SearchBackward(string(s.query), from)
 	if ok {
-		a.search.matchRow, a.search.matchCol = row, col
-		a.search.matchLen = len(a.search.query)
-		a.search.hasMatch = true
-		a.scrollGlobalRowIntoView(row)
+		s.matchRow, s.matchCol = row, col
+		s.matchLen = len(s.query)
+		s.hasMatch = true
+		s.scrollGlobalRowIntoView(row)
 	} else {
-		a.search.hasMatch = false
+		s.hasMatch = false
 	}
-	a.mu.Unlock()
-	a.requestRedraw()
+	s.mu.Unlock()
+	s.redraw()
 }
 
 // scrollGlobalRowIntoView adjusts the display offset so the given global
 // (physical-row) index is visible, centering it when a jump is needed. Must be
-// called with a.mu held. Uses the same global-row/DisplayOffset convention as
-// core.Resize and CopyView (trap 2): the viewport shows global rows
-// [scrollbackRows-displayOffset, +rows-1].
-func (a *App) scrollGlobalRowIntoView(g int) {
-	if _, ok := a.term.GlobalRowToViewport(g); ok {
+// called with the terminal mutex held. Uses the same global-row/DisplayOffset
+// convention as core.Resize and CopyView (trap 2): the viewport shows global
+// rows [scrollbackRows-displayOffset, +rows-1].
+func (s *searchController) scrollGlobalRowIntoView(g int) {
+	if _, ok := s.term.GlobalRowToViewport(g); ok {
 		return // already visible
 	}
-	scrollbackRows := a.term.ScrollbackLines()
-	curOffset := a.term.DisplayOffset()
-	targetTop := g - a.term.Rows()/2
+	scrollbackRows := s.term.ScrollbackLines()
+	curOffset := s.term.DisplayOffset()
+	targetTop := g - s.term.Rows()/2
 	if targetTop < 0 {
 		targetTop = 0
 	}
 	// ScrollViewport moves relative to the current offset and clamps to
 	// [0, scrollbackRows]; a positive delta scrolls back into history.
-	a.term.ScrollViewport((scrollbackRows - targetTop) - curOffset)
+	s.term.ScrollViewport((scrollbackRows - targetTop) - curOffset)
 }
