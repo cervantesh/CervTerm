@@ -71,7 +71,7 @@ func (a *App) rebuildAtlasGridVisual(scaleX, scaleY float32) bool {
 			return false
 		}
 	} else {
-		atlas, err := newGlyphAtlasWithSpec(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+		atlas, err := newGlyphAtlasWithSpec(a.r, spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
 		if err != nil {
 			return false
 		}

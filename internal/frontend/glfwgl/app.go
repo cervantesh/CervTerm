@@ -12,6 +12,7 @@ import (
 	"cervterm/internal/config"
 	"cervterm/internal/core"
 	"cervterm/internal/fontglyph"
+	"cervterm/internal/frontend/gpu"
 	"cervterm/internal/input"
 	"cervterm/internal/metrics"
 	ptyio "cervterm/internal/pty"
@@ -34,7 +35,14 @@ type App struct {
 	mu       sync.Mutex
 	incoming chan []byte
 	window   *glfw.Window
+	r        gpu.Renderer
 	atlas    *glyphAtlas
+
+	// Last framebuffer size handed to the renderer; draw() calls r.Resize only when
+	// it changes, so a backend recreates its swapchain/drawable on real size changes
+	// (and once on the first frame — seeded to -1 in RunWithOptions) rather than
+	// every frame.
+	lastFBW, lastFBH int
 
 	cols, rows       int
 	cellW            float32
@@ -220,9 +228,15 @@ func (a *App) runWindow() error {
 	if err := gl.Init(); err != nil {
 		return err
 	}
+	// The GL context is current; build the renderer now so the atlas (which owns
+	// the page geometry) can configure its textures in its own constructor.
+	a.r = newGLRenderer(w)
+	// -1 (not 0) so the first draw always drives Resize, even if the initial
+	// framebuffer is 0x0 (0 is a valid size, so it cannot double as the sentinel).
+	a.lastFBW, a.lastFBH = -1, -1
 	sx, sy := w.GetContentScale()
 	a.applyScale(sx, sy)
-	atlas, err := newGlyphAtlasWithSpec(fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(sx, sy), TextRaster: a.cfg.Render.TextRaster}, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+	atlas, err := newGlyphAtlasWithSpec(a.r, fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(sx, sy), TextRaster: a.cfg.Render.TextRaster}, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
 	if err != nil {
 		return err
 	}
