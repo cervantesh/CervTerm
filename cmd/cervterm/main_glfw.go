@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -63,14 +64,19 @@ func main() {
 	}
 	defer applog.RecoverAndExit("glfw main")
 	// Opt-in profiling endpoint: CERVTERM_PPROF=localhost:6060 exposes
-	// /debug/pprof. Off by default, zero cost when unset.
+	// /debug/pprof. Only loopback addresses are accepted; off by default.
 	if addr := os.Getenv("CERVTERM_PPROF"); addr != "" {
-		go func() {
-			log.Printf("pprof listening on http://%s/debug/pprof/", addr)
-			if err := http.ListenAndServe(addr, nil); err != nil {
-				log.Printf("pprof server stopped: %v", err)
-			}
-		}()
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil || (host != "localhost" && host != "127.0.0.1" && host != "::1") {
+			log.Printf("pprof: refusing non-loopback bind %q; use a loopback address like 127.0.0.1:6060", addr)
+		} else {
+			go func() {
+				log.Printf("pprof listening on http://%s/debug/pprof/", addr)
+				if err := http.ListenAndServe(addr, nil); err != nil {
+					log.Printf("pprof server stopped: %v", err)
+				}
+			}()
+		}
 	}
 	for _, warning := range fontglyph.DiagnoseEmojiFonts().Warnings {
 		log.Printf("emoji coverage warning: %s", warning)
