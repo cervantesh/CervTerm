@@ -260,20 +260,40 @@ func (a *App) gridSize(w, h int) (cols, rows int) {
 }
 
 // resizeToWindow reflows the grid when the framebuffer maps to a new col/row
-// count and requests a repaint.
+// count and requests a repaint. It reflows the local grid and notifies ConPTY
+// together — the right coupling for window resizes, which the OS already
+// rate-limits. Zoom takes the two halves separately (resizeGridToWindow every
+// step for frame-by-frame feedback, resizePTYToGrid once at burst settle).
 func (a *App) resizeToWindow() {
+	if a.resizeGridToWindow() {
+		a.resizePTYToGrid()
+	}
+}
+
+// resizeGridToWindow reflows the local terminal grid to the framebuffer's
+// current col/row count and requests a repaint. It does NOT touch the PTY.
+// Returns whether the grid dimensions changed.
+func (a *App) resizeGridToWindow() bool {
 	w, h := a.window.GetFramebufferSize()
 	cols, rows := a.gridSize(w, h)
 	if cols == a.cols && rows == a.rows {
-		return
+		return false
 	}
 	a.cols, a.rows = cols, rows
 	a.mu.Lock()
 	a.term.Resize(cols, rows)
 	a.mu.Unlock()
-	if a.pty != nil {
-		_ = a.pty.Resize(ptyio.Size{Rows: uint16(rows), Cols: uint16(cols)})
-	}
 	a.markResizeEvent(cols, rows)
 	a.requestRedraw()
+	return true
+}
+
+// resizePTYToGrid notifies ConPTY of the current grid dimensions. Kept separate
+// from the local reflow so zoom can coalesce it to one call per burst: ConPTY
+// repaints its viewport asynchronously on every resize, and several in flight at
+// once interleave over the next grid → duplicated/garbled scrollback.
+func (a *App) resizePTYToGrid() {
+	if a.pty != nil {
+		_ = a.pty.Resize(ptyio.Size{Rows: uint16(a.rows), Cols: uint16(a.cols)})
+	}
 }

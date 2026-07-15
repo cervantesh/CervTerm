@@ -4,6 +4,7 @@ package glfwgl
 
 import (
 	"testing"
+	"time"
 
 	"cervterm/internal/core"
 
@@ -41,37 +42,25 @@ func TestZoomCoalescesAndCompounds(t *testing.T) {
 	}
 }
 
-func TestZoomLeadingEdgeArmsThenCoalesces(t *testing.T) {
+func TestZoomArmsDebounceWithoutApplyingLiveSize(t *testing.T) {
 	a := &App{}
 	a.cfg.Font.Size = 14
 
-	// The first step of a fresh burst arms the leading-edge apply so the loop
-	// rebuilds at once instead of waiting out the debounce (which reads as a hang).
+	// applyFontSize only records the target + a future PTY-resize deadline and
+	// asks for a redraw; the visual rebuild happens on the loop thread (needs GL)
+	// so the live font size must not change here.
 	a.applyFontSize(15)
-	if !a.zoom.applyLead {
-		t.Fatalf("first step of a burst should arm applyLead")
+	if a.cfg.Font.Size != 14 {
+		t.Fatalf("applyFontSize must not change the live size, got %v", a.cfg.Font.Size)
 	}
 	if !a.zoom.pendingSet || a.zoom.pending != 15 {
 		t.Fatalf("pending not recorded: set=%v pending=%v", a.zoom.pendingSet, a.zoom.pending)
 	}
-
-	// The loop consumes the leading apply, leaving the burst in flight. Further
-	// steps must not re-arm the leading edge: they coalesce onto one trailing
-	// rebuild so ConPTY is resized at most twice per burst.
-	a.zoom.applyLead = false
-	a.applyFontSize(16)
-	if a.zoom.applyLead {
-		t.Fatalf("mid-burst step must not re-arm applyLead")
+	if !a.needsRedraw {
+		t.Fatalf("a zoom step should request a redraw")
 	}
-	if a.zoom.pending != 16 {
-		t.Fatalf("mid-burst step should update pending, got %v", a.zoom.pending)
-	}
-
-	// Once the burst settles, the next step is a fresh burst and re-arms the edge.
-	a.zoom.pendingSet = false
-	a.applyFontSize(17)
-	if !a.zoom.applyLead {
-		t.Fatalf("a new burst after settle should re-arm applyLead")
+	if !a.zoom.deadline.After(time.Now()) {
+		t.Fatalf("a zoom step should push the PTY-resize deadline into the future")
 	}
 }
 
