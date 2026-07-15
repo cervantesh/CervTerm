@@ -173,6 +173,14 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 	if a.needsRedraw {
 		return minWake
 	}
+	// A debounced zoom must wake the loop when its deadline arrives so the coalesced
+	// rebuild fires even if no other event does.
+	if a.zoom.pendingSet {
+		if d := a.zoom.deadline.Sub(now); d > 0 {
+			return max(minWake, d)
+		}
+		return minWake
+	}
 	// A pending timer bounds the wait. Zero (no timers, or no runtime) leaves
 	// nextWake unchanged, so an idle terminal with no timers still costs nothing.
 	var timerDeadline time.Time
