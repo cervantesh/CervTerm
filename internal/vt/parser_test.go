@@ -17,7 +17,7 @@ func TestParserTextAndSGR(t *testing.T) {
 	if got != want {
 		t.Fatalf("plain text mismatch\nwant: %q\n got: %q", want, got)
 	}
-	cell := term.Cells()[1*term.Cols()]
+	cell := copyCells(term)[1*term.Cols()]
 	if cell.Attr.FG != core.ANSIColor(1) {
 		t.Fatalf("expected red fg, got %#v", cell.Attr.FG)
 	}
@@ -28,7 +28,7 @@ func TestParserBrightAndDefaultSGR(t *testing.T) {
 	var p Parser
 
 	p.Advance(term, []byte("\x1b[94mF\x1b[103mB\x1b[39;49mD"))
-	cells := term.Cells()
+	cells := copyCells(term)
 
 	if cells[0].Attr.FG != core.ANSIColor(12) {
 		t.Fatalf("expected bright blue fg, got %#v", cells[0].Attr.FG)
@@ -46,7 +46,7 @@ func TestParserExtendedSGRColors(t *testing.T) {
 	var p Parser
 
 	p.Advance(term, []byte("\x1b[38;5;196mR\x1b[48;5;21mB\x1b[38;2;12;34;56mT\x1b[48;2;200;150;100mQ"))
-	cells := term.Cells()
+	cells := copyCells(term)
 
 	if cells[0].Attr.FG != (core.RGB{R: 255, G: 0, B: 0}) {
 		t.Fatalf("expected 256-color red fg, got %#v", cells[0].Attr.FG)
@@ -66,7 +66,7 @@ func TestParserAdditionalSGRAttributes(t *testing.T) {
 	term := core.NewTerminal(20, 2)
 	var p Parser
 	p.Advance(term, []byte("\x1b[3;4;7;9mX\x1b[23;24;27;29mY"))
-	cells := term.Cells()
+	cells := copyCells(term)
 	if !cells[0].Attr.Italic || !cells[0].Attr.Underline || !cells[0].Attr.Inverse || !cells[0].Attr.Strikethrough {
 		t.Fatalf("expected all additional attrs on first cell, got %#v", cells[0].Attr)
 	}
@@ -406,8 +406,8 @@ func FuzzParserAdvanceDoesNotPanic(f *testing.F) {
 		if term.CursorCol() < 0 || term.CursorCol() >= term.Cols() {
 			t.Fatalf("cursor col out of bounds: %d cols=%d", term.CursorCol(), term.Cols())
 		}
-		if len(term.Cells()) != term.Rows()*term.Cols() {
-			t.Fatalf("cell length = %d, want %d", len(term.Cells()), term.Rows()*term.Cols())
+		if len(copyCells(term)) != term.Rows()*term.Cols() {
+			t.Fatalf("cell length = %d, want %d", len(copyCells(term)), term.Rows()*term.Cols())
 		}
 	})
 }
@@ -440,4 +440,12 @@ func TestParserGoldenRecordings(t *testing.T) {
 			}
 		})
 	}
+}
+
+// copyCells returns a defensive copy of the current screen cells for assertions
+// (replaces the removed core.Terminal.Cells() accessor).
+func copyCells(t *core.Terminal) []core.Cell {
+	c := make([]core.Cell, t.Cols()*t.Rows())
+	t.CopyView(c)
+	return c
 }

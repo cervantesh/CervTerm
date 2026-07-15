@@ -8,7 +8,7 @@ func TestTerminalWideRuneOccupiesTwoCells(t *testing.T) {
 	term.PutRune('好')
 	term.PutRune('B')
 
-	cells := term.Cells()
+	cells := copyCells(term)
 	if cells[0].Rune != 'A' || cells[1].Rune != '好' || !cells[2].WideContinuation || cells[3].Rune != 'B' {
 		t.Fatalf("unexpected wide-cell layout: %#v", cells[:4])
 	}
@@ -37,7 +37,7 @@ func TestTerminalCombiningRuneAttachesToPreviousCell(t *testing.T) {
 	term.PutRune('\u0301')
 	term.PutRune('x')
 
-	cells := term.Cells()
+	cells := copyCells(term)
 	if len(cells[0].Combining()) != 1 || cells[0].Combining()[0] != '\u0301' {
 		t.Fatalf("combining mark not attached: %#v", cells[0])
 	}
