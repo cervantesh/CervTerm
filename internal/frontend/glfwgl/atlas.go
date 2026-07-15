@@ -22,7 +22,9 @@ const (
 
 type atlasKey struct {
 	kind byte
-	text string
+	r    rune   // single-rune glyphs (kind 'r'); 0 for clusters/runs
+	span int32  // cell span for clusters/runs (kind 'c'/'l'); 0 for single runes
+	text string // cluster/run text (kind 'c'/'l'); "" for single runes
 }
 
 type atlasEntry struct {
@@ -46,7 +48,7 @@ type glyphAtlas struct {
 	backend      fontglyph.Backend
 	pages        [atlasPageCount]atlasPage
 	entries      map[atlasKey]atlasEntry
-	runNegative  map[string]uint64 // run key -> generation of a proven no-ligature result
+	runNegative  map[atlasKey]uint64 // run key -> generation of a proven no-ligature result
 	generation   uint64
 	boundTexture uint32
 	coverageLUT  *[256]uint8
@@ -178,12 +180,11 @@ func (a *glyphAtlas) cachedRun(run string, cellSpan int) (atlasEntry, bool) {
 		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	keyText := run + "\x00" + string(rune(cellSpan))
-	key := atlasKey{kind: 'l', text: keyText}
+	key := atlasKey{kind: 'l', text: run, span: int32(cellSpan)}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
-	if gen, ok := a.runNegative[keyText]; ok && entryGenerationValid(gen, a.generation) {
+	if gen, ok := a.runNegative[key]; ok && entryGenerationValid(gen, a.generation) {
 		return atlasEntry{}, false
 	}
 	otb, ok := a.backend.(*fontglyph.OpenTypeBackend)
@@ -193,16 +194,18 @@ func (a *glyphAtlas) cachedRun(run string, cellSpan int) (atlasEntry, bool) {
 	rasterized, ligated := otb.RasterizeRun(run, cellSpan)
 	if !ligated {
 		if a.runNegative == nil {
-			a.runNegative = make(map[string]uint64)
+			a.runNegative = make(map[atlasKey]uint64)
 		}
-		a.runNegative[keyText] = a.generation
+		a.runNegative[key] = a.generation
 		return atlasEntry{}, false
 	}
 	return a.insertRaster(key, rasterized)
 }
 
 func (a *glyphAtlas) cachedRune(r rune) (atlasEntry, bool) {
-	key := atlasKey{kind: 'r', text: string(r)}
+	// Key on the rune directly; the old atlasKey{text: string(r)} allocated a
+	// string on every glyph lookup — i.e. per visible cell per frame.
+	key := atlasKey{kind: 'r', r: r}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
@@ -219,7 +222,7 @@ func (a *glyphAtlas) cachedCluster(cluster string, cellSpan int) (atlasEntry, bo
 		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	key := atlasKey{kind: 'c', text: cluster + "\x00" + string(rune(cellSpan))}
+	key := atlasKey{kind: 'c', text: cluster, span: int32(cellSpan)}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
