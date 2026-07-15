@@ -7,8 +7,18 @@ type Attr struct {
 }
 
 type Cell struct {
+	// noCompare keeps Cell non-comparable (it always was, via the old []rune
+	// field). A pointer combining field would otherwise make Cell comparable and
+	// invite future `==` that compares pointer identity, not mark content. Zero
+	// size; placed first so it adds no padding (a zero-size field last would).
+	noCompare [0]func()
+	// combining points to the cell's stacked zero-width marks, or nil (the common
+	// case). A pointer (8 B on 64-bit) instead of a slice header (24 B) keeps Cell
+	// at 32 B on 64-bit — the shrink that this and the accessor seam existed for.
+	// Cells are copied by value constantly (scrollback, snapshots); mutation goes
+	// through AppendCombining, which copies-on-write so a copy is never disturbed.
+	combining        *[]rune
 	Rune             rune
-	combining        []rune // zero-width marks stacked on Rune; nil for the common case
 	Attr             Attr
 	WideContinuation bool
 }
@@ -16,28 +26,38 @@ type Cell struct {
 // Combining returns the cell's stacked zero-width marks, or nil. The backing
 // slice is owned by the cell — callers must not mutate it (append via
 // AppendCombining, which copies-on-write).
-func (c Cell) Combining() []rune { return c.combining }
+func (c Cell) Combining() []rune {
+	if c.combining == nil {
+		return nil
+	}
+	return *c.combining
+}
 
 // HasCombining reports whether the cell carries any zero-width marks.
-func (c Cell) HasCombining() bool { return len(c.combining) > 0 }
+func (c Cell) HasCombining() bool { return c.combining != nil && len(*c.combining) > 0 }
 
 // AppendCombining stacks r onto the cell's marks with copy-on-write semantics:
-// it never grows a shared backing array, so a value copy of this cell (e.g. one
-// already captured into scrollback or a render snapshot) is never mutated.
+// it installs a fresh slice behind a fresh pointer, so a value copy of this cell
+// (one already captured into scrollback or a render snapshot, sharing the old
+// pointer) is never mutated.
 func (c *Cell) AppendCombining(r rune) {
-	next := make([]rune, len(c.combining)+1)
-	copy(next, c.combining)
-	next[len(c.combining)] = r
-	c.combining = next
+	var cur []rune
+	if c.combining != nil {
+		cur = *c.combining
+	}
+	next := make([]rune, len(cur)+1)
+	copy(next, cur)
+	next[len(cur)] = r
+	c.combining = &next
 }
 
 // CloneCombining returns an independent copy of the cell's marks (nil stays
 // nil), for snapshots that must not alias the live backing slice.
 func (c Cell) CloneCombining() []rune {
-	if len(c.combining) == 0 {
+	if c.combining == nil || len(*c.combining) == 0 {
 		return nil
 	}
-	return append([]rune(nil), c.combining...)
+	return append([]rune(nil), *c.combining...)
 }
 
 // NewCellWithCombining builds a cell carrying the given marks. The only way to
@@ -46,7 +66,8 @@ func (c Cell) CloneCombining() []rune {
 func NewCellWithCombining(r rune, attr Attr, marks ...rune) Cell {
 	c := Cell{Rune: r, Attr: attr}
 	if len(marks) > 0 {
-		c.combining = append([]rune(nil), marks...)
+		m := append([]rune(nil), marks...)
+		c.combining = &m
 	}
 	return c
 }

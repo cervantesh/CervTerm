@@ -1,6 +1,37 @@
 package core
 
-import "testing"
+import (
+	"testing"
+	"unsafe"
+)
+
+// TestCellSizeBudget pins the shrink win from docs/cell-memory-plan.md: Cell is
+// held by the live grid, the scrollback ring, and every render snapshot, and is
+// scanned in full each frame — a field reorder (or a stray large field) that
+// re-bloats it must fail here.
+func TestCellSizeBudget(t *testing.T) {
+	if got := unsafe.Sizeof(Cell{}); got > 32 {
+		t.Fatalf("Cell is %d bytes; keep it <= 32 (see docs/cell-memory-plan.md)", got)
+	}
+}
+
+// TestAppendCombiningCopyOnWrite is the distinguishing COW test that is only
+// observable now that combining is a *[]rune: a value copy shares the pointer,
+// so without copy-on-write a live append would mutate the copy. (Reverting
+// AppendCombining to `*c.combining = append(*c.combining, r)` fails this.)
+func TestAppendCombiningCopyOnWrite(t *testing.T) {
+	live := NewCellWithCombining('e', Attr{}, 'a')
+	snap := live // value copy — shares the *[]rune pointer
+
+	live.AppendCombining('b')
+
+	if got := snap.Combining(); len(got) != 1 || got[0] != 'a' {
+		t.Fatalf("copy-on-write violated: snapshot observed the live append: %q", got)
+	}
+	if got := live.Combining(); len(got) != 2 || got[1] != 'b' {
+		t.Fatalf("live append lost: %q", got)
+	}
+}
 
 // TestCombiningSnapshotFrozenAfterAppend drives the real capture path: CopyView
 // copies cells shallowly (sharing the combining backing), so a later combining
