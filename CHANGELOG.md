@@ -27,6 +27,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Windows packaging metadata: manifest, version info, resource script, SVG icon source, and generated `.ico`.
 ### Changed
 
+- OSC 52 clipboard write is now OFF by default (was "write"); set `clipboard.osc52 = "write"` to restore. Clipboard reads via OSC 52 remain denied. Fixes #61.
 - Split terminal core into smaller files to keep touched files under 500 lines.
 - Preserved mouse modifiers during SGR drag reports.
 - Expanded README with build/run/configuration and limitation guidance.
