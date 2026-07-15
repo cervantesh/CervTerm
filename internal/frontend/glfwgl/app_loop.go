@@ -129,10 +129,10 @@ func (a *App) processTermEvents(consumed bool) {
 	a.mu.Unlock()
 	if a.snap.Title != a.lastTitle {
 		a.lastTitle = a.snap.Title
-		if a.snap.Title == "" {
-			a.window.SetTitle("CervTerm")
-		} else {
+		if a.cfg.Window.DynamicTitle && a.snap.Title != "" {
 			a.window.SetTitle("CervTerm · " + a.snap.Title)
+		} else {
+			a.window.SetTitle("CervTerm")
 		}
 		a.fireScriptEvent(func() error { return a.scriptRT.FireTitle(a, a.snap.Title) })
 	}
