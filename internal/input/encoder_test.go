@@ -118,6 +118,12 @@ func TestEncodePaste(t *testing.T) {
 	if string(got) != want {
 		t.Fatalf("bracketed paste mismatch: want %q got %q", want, string(got))
 	}
+
+	got = EncodePaste("a\x1b[201~b", true)
+	want = "\x1b[200~ab\x1b[201~"
+	if string(got) != want {
+		t.Fatalf("embedded end marker was not filtered: want %q got %q", want, string(got))
+	}
 }
 
 func TestClipboardShortcut(t *testing.T) {
