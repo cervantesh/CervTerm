@@ -35,6 +35,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 ### Fixed
 
 - Windows: the shell now inherits the full parent environment (PATH, etc.); external programs (git, node, python, npx…) launch correctly, and `shell.env` from config now applies on Windows too. (#70)
+- Windows: CervTerm now advertises ANSI color support (`ANSICON`) so console apps that gate coloring on it (Django, colorama/supports-color CLIs) emit color instead of monochrome. CervTerm already rendered ANSI; the apps just weren't emitting it.
 - Zoom animates frame by frame while only the ConPTY resize is debounced, so rapid zoom no longer garbles or duplicates scrollback. (#59)
 - Scrollback view stays pinned to content while output streams in. (#57)
 
