@@ -45,24 +45,35 @@ func (a *App) rebuildForContentScale(scaleX, scaleY float32) {
 }
 
 // rebuildAtlasAndGrid rebuilds the glyph atlas and cell metrics for the current
-// cfg.Font.Size at the given content scale, then reflows the grid (which
-// resizes the PTY and requests a full repaint). It touches GL, so it must run
-// on the main thread with the context current. Both callers satisfy that: the
-// content-scale GLFW callback runs on the loop thread, and term:set_font_size is
-// dispatched from a key or timer handler, which also run on the loop thread
-// between frames — never inside draw().
+// cfg.Font.Size at the given content scale, then reflows the grid AND resizes the
+// PTY. Used by one-shot callers (content-scale changes, term:set_font_size) where
+// the PTY resize need not be coalesced. Zoom instead calls rebuildAtlasGridVisual
+// per step and defers the PTY resize (see applyPendingZoom).
 func (a *App) rebuildAtlasAndGrid(scaleX, scaleY float32) {
+	if a.rebuildAtlasGridVisual(scaleX, scaleY) {
+		a.resizePTYToGrid()
+	}
+}
+
+// rebuildAtlasGridVisual rebuilds the glyph atlas + cell metrics for the current
+// cfg.Font.Size at the given content scale and reflows the LOCAL grid, WITHOUT
+// resizing the PTY. It touches GL, so it must run on the main thread with the
+// context current; every caller (content-scale GLFW callback, the zoom apply in
+// applyPendingZoom, term:set_font_size dispatch) runs on the loop thread between
+// frames — never inside draw(). Returns false (leaving state unchanged) when the
+// backend for the new spec could not be built.
+func (a *App) rebuildAtlasGridVisual(scaleX, scaleY float32) bool {
 	spec := fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(scaleX, scaleY), TextRaster: a.cfg.Render.TextRaster}
 	if a.atlas != nil {
 		// Reuse the existing atlas (and its GL textures) instead of allocating a
 		// fresh one every zoom step; only the font backend and glyph cache change.
 		if !a.atlas.reconfigure(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken) {
-			return
+			return false
 		}
 	} else {
 		atlas, err := newGlyphAtlasWithSpec(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
 		if err != nil {
-			return
+			return false
 		}
 		a.atlas = atlas
 	}
@@ -72,5 +83,5 @@ func (a *App) rebuildAtlasAndGrid(scaleX, scaleY float32) {
 	a.cellH = float32(a.atlas.cellH)
 	a.applyScale(scaleX, scaleY)
 	a.cols, a.rows = 0, 0
-	a.resizeToWindow()
+	return a.resizeGridToWindow()
 }

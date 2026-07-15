@@ -24,10 +24,10 @@ type zoomBindings struct {
 	in, out, reset       script.Spec
 	inOK, outOK, resetOK bool
 	base                 float64
-	pending              float64   // coalesced target size; applied once the burst settles
+	pending              float64   // latest target size; the visual is rebuilt toward this every step
 	pendingSet           bool
-	applyLead            bool      // fire the first step of a fresh burst on the next loop pass
-	deadline             time.Time // apply the pending size once now passes this (debounce)
+	ptyDirty             bool      // grid changed since ConPTY was last told; resize it at burst settle
+	deadline             time.Time // resize the PTY once now passes this (debounce)
 }
 
 // initZoomHotkeys parses the configured zoom chords and records the base font
@@ -100,19 +100,19 @@ func (a *App) zoomTarget() float64 {
 	return a.cfg.Font.Size
 }
 
-// zoomDebounce is how long the coalesced zoom target must be stable before the
-// atlas/grid/PTY rebuild fires. A burst (wheel spin, Ctrl+= key-repeat) resizes
-// the PTY at every intermediate size otherwise, and ConPTY's async repaint of
-// each size interleaves over the next grid → duplicated/garbled scrollback. One
-// rebuild at the settled size means one PTY resize and one repaint.
+// zoomDebounce is how long the zoom target must be stable before ConPTY is
+// resized to the settled grid. The atlas/grid VISUAL rebuild is not debounced —
+// it runs every step so the zoom animates frame by frame. Only the PTY resize is
+// coalesced: ConPTY repaints its viewport asynchronously on every resize, and
+// several in flight at once interleave over the next grid → duplicated/garbled
+// scrollback. Debouncing the PTY resize means one resize and one repaint per
+// burst while the on-screen font still tracks the wheel.
 const zoomDebounce = 70 * time.Millisecond
 
-// applyFontSize clamps pts to the zoom bounds and records it as the pending
-// target, pushing the debounce deadline out so a continuing burst keeps
-// coalescing. The first step of a fresh burst also arms applyLead so the
-// rebuild fires on the very next loop pass instead of waiting out the debounce —
-// otherwise a zoom gesture shows nothing until the user stops (a ~70ms freeze
-// that reads as a hang). applyPendingZoom fires the actual rebuild(s).
+// applyFontSize clamps pts to the zoom bounds and records it as the latest
+// target, pushing the PTY-resize deadline out so a continuing burst keeps
+// coalescing that one resize. applyPendingZoom does the per-step visual rebuild
+// and the settled PTY resize on the loop thread.
 func (a *App) applyFontSize(pts float64) {
 	if pts < zoomFontMin {
 		pts = zoomFontMin
@@ -120,37 +120,36 @@ func (a *App) applyFontSize(pts float64) {
 	if pts > zoomFontMax {
 		pts = zoomFontMax
 	}
-	if !a.zoom.pendingSet {
-		a.zoom.applyLead = true
-	}
 	a.zoom.pending, a.zoom.pendingSet = pts, true
 	a.zoom.deadline = time.Now().Add(zoomDebounce)
 	a.requestRedraw()
 }
 
-// applyPendingZoom drives the debounced zoom rebuild from the loop on the main
-// thread with the GL context current. The leading edge (applyLead) rebuilds
-// immediately so the first step of a burst is visible at once; it leaves the
-// burst in flight so later steps still coalesce onto one trailing rebuild when
-// the target has been stable for zoomDebounce. A burst therefore resizes ConPTY
-// at most twice (leading + trailing, always >= zoomDebounce apart), never at
-// every intermediate size — the async-repaint interleaving that garbles
-// scrollback needs several PTY resizes in flight at once. SetFontSize is a no-op
-// when the size is unchanged, so a lone step's trailing pass costs nothing.
+// applyPendingZoom drives zoom from the loop on the main thread with the GL
+// context current. Every pass it rebuilds the atlas + local grid toward the
+// latest target (no PTY resize), so a burst animates frame by frame instead of
+// freezing until the user stops. Once the target has been stable for
+// zoomDebounce it resizes ConPTY once to the settled grid — the async-repaint
+// interleaving that garbles scrollback needs several PTY resizes in flight at
+// once, which one settled resize never produces.
 func (a *App) applyPendingZoom() {
 	if !a.zoom.pendingSet {
 		return
 	}
-	if a.zoom.applyLead {
-		a.zoom.applyLead = false
-		a.SetFontSize(a.zoom.pending)
-		return
+	if a.cfg.Font.Size != a.zoom.pending {
+		a.cfg.Font.Size = a.zoom.pending
+		if a.rebuildAtlasGridVisual(a.contentScaleX, a.contentScaleY) {
+			a.zoom.ptyDirty = true
+		}
 	}
 	if time.Now().Before(a.zoom.deadline) {
 		return
 	}
 	a.zoom.pendingSet = false
-	a.SetFontSize(a.zoom.pending)
+	if a.zoom.ptyDirty {
+		a.zoom.ptyDirty = false
+		a.resizePTYToGrid()
+	}
 }
 
 // handleScrollKey scrolls the scrollback viewport for Shift+PageUp/PageDown and
