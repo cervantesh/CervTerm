@@ -34,7 +34,7 @@ func (a *App) Selection() string {
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)
 	a.mu.Unlock()
-	return termsel.Text(a.snap, termsel.Range{Start: a.selectionStart, End: a.selectionEnd})
+	return termsel.Text(a.snap.Cells, a.snap.Cols, a.snap.Rows, termsel.Range{Start: a.selectionStart, End: a.selectionEnd})
 }
 
 func (a *App) SetClipboard(text string) {
