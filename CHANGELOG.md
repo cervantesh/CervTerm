@@ -25,9 +25,22 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - SVG text/tspan layout handling with font-size, text-anchor, and dominant-baseline support.
 - Redistributable SVG text fixture table and vttest capture workflow notes/script.
 - Windows packaging metadata: manifest, version info, resource script, SVG icon source, and generated `.ico`.
+### Security
+
+- OSC 52 clipboard write is now OFF by default (was "write"); set `clipboard.osc52 = "write"` to restore. Clipboard reads via OSC 52 remain denied. (#61)
+- Bracketed paste strips any embedded `ESC[201~` end marker so a hostile clipboard cannot break out of bracketed mode into command input. (#62)
+- The pprof endpoint (`CERVTERM_PPROF`) now refuses non-loopback binds, so `/debug/pprof` is not exposed on the network. (#63)
+- The diagnostic log file is created `0600` (dir `0700`) instead of world-readable. (#64)
+
+### Fixed
+
+- Windows: the shell now inherits the full parent environment (PATH, etc.); external programs (git, node, python, npx…) launch correctly, and `shell.env` from config now applies on Windows too. (#70)
+- Zoom animates frame by frame while only the ConPTY resize is debounced, so rapid zoom no longer garbles or duplicates scrollback. (#59)
+- Scrollback view stays pinned to content while output streams in. (#57)
+
 ### Changed
 
-- OSC 52 clipboard write is now OFF by default (was "write"); set `clipboard.osc52 = "write"` to restore. Clipboard reads via OSC 52 remain denied. Fixes #61.
+- The window title now honors `window.dynamic_title`; when disabled it stays "CervTerm" instead of reflecting host-controlled OSC 0/2 titles. (#65)
 - Split terminal core into smaller files to keep touched files under 500 lines.
 - Preserved mouse modifiers during SGR drag reports.
 - Expanded README with build/run/configuration and limitation guidance.
