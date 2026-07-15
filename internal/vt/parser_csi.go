@@ -63,7 +63,7 @@ func (p *Parser) dispatchCSI(t *core.Terminal, action byte) {
 		p.dispatchTBC(t)
 	case 'q':
 		if p.csiInter == ' ' {
-			t.SetCursorStyle(p.param(0, 0))
+			t.SetCursorStyle(core.CursorStyle(p.param(0, 0)))
 		}
 	case 'r':
 		if p.paramCount == 0 {

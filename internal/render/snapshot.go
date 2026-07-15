@@ -11,7 +11,7 @@ type Snapshot struct {
 	Cols, Rows           int
 	CursorRow, CursorCol int
 	CursorVisible        bool
-	CursorStyle          int
+	CursorStyle          core.CursorStyle
 	Title                string
 	Cwd                  string
 	BellCount            int

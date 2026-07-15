@@ -354,7 +354,7 @@ func TestTerminalAttributes(t *testing.T) {
 	term.SetBold(true)
 	term.PutRune('x')
 
-	cell := term.Cells()[0]
+	cell := copyCells(term)[0]
 	if cell.Rune != 'x' || cell.Attr.FG != ANSIColor(2) || cell.Attr.BG != ANSIColor(4) || !cell.Attr.Bold {
 		t.Fatalf("unexpected cell: %#v", cell)
 	}
@@ -719,4 +719,13 @@ func TestTerminalResizePreservesScrolledAnchor(t *testing.T) {
 	if topBefore != topAfter {
 		t.Fatalf("reflow jumped: top line before=%q (%c) after=%q (%c)", before, topBefore, after, topAfter)
 	}
+}
+
+// copyCells returns a defensive copy of the current screen cells for assertions
+// (replaces the removed Terminal.Cells() accessor, which handed out the live
+// backing slice).
+func copyCells(t *Terminal) []Cell {
+	c := make([]Cell, t.Cols()*t.Rows())
+	t.CopyView(c)
+	return c
 }

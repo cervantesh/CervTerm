@@ -136,8 +136,8 @@ func (t *Terminal) resizeTabStops(oldCols, newCols int) {
 	}
 }
 
-func (t *Terminal) SetCursorStyle(style int) { t.cursorStyle = style }
-func (t *Terminal) CursorStyle() int         { return t.cursorStyle }
+func (t *Terminal) SetCursorStyle(style CursorStyle) { t.cursorStyle = style }
+func (t *Terminal) CursorStyle() CursorStyle         { return t.cursorStyle }
 
 func (t *Terminal) FocusEventsMode() bool { return t.focusEvents }
 
