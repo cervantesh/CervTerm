@@ -302,13 +302,16 @@ func (a *App) drawRunGlyph(run string, cellSpan int, x, y float32, c color.RGBA,
 func (a *App) drawCursor(x, y float32, c color.RGBA, blinkPhase bool) {
 	thickness := cursorThicknessPixels(a.cfg.Cursor.Thickness, a.cellW, a.cellH)
 	shape, blink := a.cfg.Cursor.Shape, a.cfg.Cursor.Blink
-	switch a.snap.CursorStyle {
-	case 1, 2:
-		shape, blink = "block", a.snap.CursorStyle == 1
-	case 3, 4:
-		shape, blink = "underline", a.snap.CursorStyle == 3
-	case 5, 6:
-		shape, blink = "beam", a.snap.CursorStyle == 5
+	switch a.snap.CursorStyle.Shape() {
+	case core.CursorShapeBlock:
+		shape = "block"
+	case core.CursorShapeUnderline:
+		shape = "underline"
+	case core.CursorShapeBar:
+		shape = "beam"
+	}
+	if b, ok := a.snap.CursorStyle.Blink(); ok {
+		blink = b
 	}
 	if blink && !blinkPhase {
 		return

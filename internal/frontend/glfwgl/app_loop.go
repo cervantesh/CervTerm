@@ -218,11 +218,8 @@ func (a *App) blinkActive() bool {
 	if !a.snap.CursorVisible {
 		return false
 	}
-	switch a.snap.CursorStyle {
-	case 1, 3, 5:
-		return true
-	case 2, 4, 6:
-		return false
+	if b, ok := a.snap.CursorStyle.Blink(); ok {
+		return b
 	}
 	return a.cfg.Cursor.Blink
 }

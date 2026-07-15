@@ -28,8 +28,6 @@ func (t *Terminal) SetTitle(s string) { t.title = s }
 func (t *Terminal) BellCount() int { return t.bellCount }
 func (t *Terminal) Bell()          { t.bellCount++ }
 
-func (t *Terminal) Cells() []Cell { return t.cells }
-
 func (t *Terminal) Clear() {
 	blank := t.blank()
 	for i := range t.cells {
@@ -64,7 +62,7 @@ func (t *Terminal) Reset() {
 	t.DesignateCharset(0, CharsetASCII)
 	t.DesignateCharset(1, CharsetASCII)
 	t.SelectCharset(0)
-	t.SetCursorStyle(0)
+	t.SetCursorStyle(CursorStyleDefault)
 	t.resetTabStops()
 	t.SetCwd("")
 }
