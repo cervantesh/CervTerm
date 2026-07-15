@@ -41,6 +41,9 @@ return {
     thickness = %.2f,
   },
   clipboard = {
+    -- "off" (safe default) ignores OSC 52 writes from the PTY. "write" allows
+    -- remote content to overwrite the clipboard (clipboard hijacking risk).
+    -- Clipboard reads via OSC 52 are always denied.
     osc52 = %q,
   },
   render = {

@@ -25,6 +25,24 @@ func TestDefaultsValidate(t *testing.T) {
 	if cfg.Font.Ligatures {
 		t.Fatal("font.ligatures must default to false")
 	}
+	if cfg.Clipboard.OSC52 != "off" {
+		t.Fatalf("clipboard.osc52 default = %q, want off", cfg.Clipboard.OSC52)
+	}
+}
+
+func TestValidateOSC52(t *testing.T) {
+	for _, tt := range []struct {
+		value   string
+		wantErr bool
+	}{{"write", false}, {"off", false}, {"read", true}, {"", true}, {"ask", true}} {
+		t.Run(tt.value, func(t *testing.T) {
+			cfg := Defaults()
+			cfg.Clipboard.OSC52 = tt.value
+			if err := cfg.Validate(); (err != nil) != tt.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %t", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func TestValidateDamage(t *testing.T) {
