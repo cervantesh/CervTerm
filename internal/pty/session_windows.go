@@ -51,7 +51,15 @@ func NewLocalWithOptions(rows, cols uint16, opts Options) (Session, error) {
 		args = append([]string{shell}, args...)
 	}
 
-	_, handle, err := cp.Spawn(shell, args, nil)
+	// Pass the full parent environment (PATH etc.) to the child, mirroring the
+	// Unix path. conpty.Spawn treats a nil ProcAttr as an EMPTY environment (only
+	// SYSTEMROOT survives), which leaves the shell without a PATH — every external
+	// program (git, node, python, npx...) then fails to launch.
+	env := append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	for key, value := range opts.Env {
+		env = append(env, key+"="+value)
+	}
+	_, handle, err := cp.Spawn(shell, args, &syscall.ProcAttr{Env: env})
 	if err != nil {
 		_ = cp.Close()
 		return nil, err
