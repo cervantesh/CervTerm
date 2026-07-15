@@ -107,7 +107,7 @@ func (a *App) drawLinkUnderline(c color.RGBA) {
 	x := a.paddingX + float32(l.startCol)*a.cellW
 	y := a.paddingY + float32(l.row)*a.cellH + a.cellH - thickness
 	w := float32(l.endCol-l.startCol+1) * a.cellW
-	fillRect(x, y, w, thickness, c)
+	a.fillRect(x, y, w, thickness, c)
 }
 
 // openURL launches the OS default handler for a URL. On Windows this goes

@@ -10,9 +10,8 @@ import (
 	"cervterm/internal/config"
 	"cervterm/internal/core"
 	"cervterm/internal/fontglyph"
+	"cervterm/internal/frontend/gpu"
 	"cervterm/internal/render"
-
-	"github.com/go-gl/gl/v2.1/gl"
 )
 
 const (
@@ -38,7 +37,6 @@ type atlasEntry struct {
 }
 
 type atlasPage struct {
-	tex    uint32
 	packer shelfPacker
 }
 
@@ -46,20 +44,20 @@ type glyphAtlas struct {
 	cellW, cellH int
 	baseline     int
 	backend      fontglyph.Backend
+	r            gpu.Renderer
 	pages        [atlasPageCount]atlasPage
 	entries      map[atlasKey]atlasEntry
 	runNegative  map[atlasKey]uint64 // run key -> generation of a proven no-ligature result
 	generation   uint64
-	boundTexture uint32
 	coverageLUT  *[256]uint8
 }
 
-func newGlyphAtlas() (*glyphAtlas, error) {
+func newGlyphAtlas(r gpu.Renderer) (*glyphAtlas, error) {
 	defaults := config.Defaults().Render
-	return newGlyphAtlasWithSpec(fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96, TextRaster: defaults.TextRaster}, defaults.TextGamma, defaults.TextDarken)
+	return newGlyphAtlasWithSpec(r, fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96, TextRaster: defaults.TextRaster}, defaults.TextGamma, defaults.TextDarken)
 }
 
-func newGlyphAtlasWithSpec(spec fontglyph.Spec, textGamma, textDarken float64) (*glyphAtlas, error) {
+func newGlyphAtlasWithSpec(r gpu.Renderer, spec fontglyph.Spec, textGamma, textDarken float64) (*glyphAtlas, error) {
 	backend, err := fontglyph.NewOpenTypeBackend(spec)
 	if err != nil {
 		return nil, err
@@ -67,7 +65,7 @@ func newGlyphAtlasWithSpec(spec fontglyph.Spec, textGamma, textDarken float64) (
 	cellW, cellH, baseline := backend.CellMetrics()
 	a := &glyphAtlas{
 		cellW: cellW, cellH: cellH, baseline: baseline,
-		backend: backend, entries: make(map[atlasKey]atlasEntry), generation: 1,
+		backend: backend, r: r, entries: make(map[atlasKey]atlasEntry), generation: 1,
 	}
 	if textGamma != 1 || textDarken != 0 {
 		lut := render.CoverageLUT(textGamma, textDarken)
@@ -75,8 +73,10 @@ func newGlyphAtlasWithSpec(spec fontglyph.Spec, textGamma, textDarken float64) (
 	}
 	for i := range a.pages {
 		a.pages[i].packer = newShelfPacker(atlasPageSize, atlasPageSize)
-		a.pages[i].tex = createAtlasTexture()
 	}
+	// The atlas owns the page geometry (atlasPageCount/atlasPageSize), so it
+	// configures the renderer's atlas textures here rather than the app.
+	r.ConfigureAtlas(atlasPageCount, atlasPageSize)
 	a.prewarmASCII()
 	return a, nil
 }
@@ -95,18 +95,16 @@ func (a *glyphAtlas) Reset() {
 	// race those still-pending draws — a well-behaved driver serializes the read
 	// before the write, but many do not, and the earlier-drawn glyphs (higher rows,
 	// i.e. the ones "further back") sample cleared/overwritten texels and vanish.
-	// gl.Finish drains the pipeline so every pending draw completes against the old
-	// atlas before we touch it. Reset is rare (zoom reconfigure or atlas overflow),
-	// so the full stall is not a hot-path cost.
-	gl.Finish()
+	// ClearAtlasPage drains the pipeline (glFinish) so every pending draw completes
+	// against the old atlas before we touch it. Reset is rare (zoom reconfigure or
+	// atlas overflow), so the full stall is not a hot-path cost.
 	for i := range a.pages {
 		a.pages[i].packer.Reset()
-		clearAtlasTexture(a.pages[i].tex)
+		a.r.ClearAtlasPage(i)
 	}
 	clear(a.entries)
 	clear(a.runNegative)
 	a.generation++
-	a.boundTexture = 0
 	log.Printf("glyph atlas generation reset: generation=%d", a.generation)
 }
 
@@ -140,12 +138,8 @@ func (a *glyphAtlas) close() {
 	if a.backend != nil {
 		a.backend.Close()
 	}
-	for i := range a.pages {
-		if a.pages[i].tex != 0 {
-			gl.DeleteTextures(1, &a.pages[i].tex)
-			a.pages[i].tex = 0
-		}
-	}
+	// The renderer owns the atlas textures now; Destroy releases them.
+	a.r.Destroy()
 	a.entries = nil
 }
 
@@ -266,12 +260,10 @@ func (a *glyphAtlas) tryInsert(key atlasKey, glyph fontglyph.RasterizedGlyph) (a
 		if !ok {
 			continue
 		}
-		gl.BindTexture(gl.TEXTURE_2D, a.pages[pageIndex].tex)
 		if a.coverageLUT != nil && !glyph.HasColor {
 			render.ApplyCoverageLUT(glyph.Image.Pix, a.coverageLUT)
 		}
-		gl.TexSubImage2D(gl.TEXTURE_2D, 0, int32(x), int32(y), int32(w), int32(h), gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(glyph.Image.Pix))
-		a.boundTexture = a.pages[pageIndex].tex
+		a.r.UploadAtlasRegion(pageIndex, x, y, w, h, glyph.Image.Pix)
 		entry := atlasEntry{
 			page: pageIndex, u0: float32(x) / atlasPageSize, v0: float32(y) / atlasPageSize,
 			u1: float32(x+w) / atlasPageSize, v1: float32(y+h) / atlasPageSize,
@@ -281,23 +273,6 @@ func (a *glyphAtlas) tryInsert(key atlasKey, glyph fontglyph.RasterizedGlyph) (a
 		return entry, true
 	}
 	return atlasEntry{}, false
-}
-
-func createAtlasTexture() uint32 {
-	var tex uint32
-	gl.GenTextures(1, &tex)
-	gl.BindTexture(gl.TEXTURE_2D, tex)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, atlasPageSize, atlasPageSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
-	return tex
-}
-
-func clearAtlasTexture(tex uint32) {
-	gl.BindTexture(gl.TEXTURE_2D, tex)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, atlasPageSize, atlasPageSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
 }
 
 func (a *glyphAtlas) drawEntry(entry atlasEntry, x, y float32, fg color.RGBA, scale, skew float32) {
@@ -310,36 +285,17 @@ func (a *glyphAtlas) drawEntry(entry atlasEntry, x, y float32, fg color.RGBA, sc
 	y = float32(math.Round(float64(y)))
 	w := float32(a.cellW*max(1, entry.cellSpan)) * scale
 	h := float32(a.cellH) * scale
-	if entry.colored {
-		gl.Color4ub(255, 255, 255, 255)
-	}
-	tex := a.pages[entry.page].tex
-	if a.boundTexture != tex {
-		gl.BindTexture(gl.TEXTURE_2D, tex)
-		a.boundTexture = tex
-	}
+	// The renderer owns tint/blend/binding; the atlas only selects the glyph mode.
+	// The subpixel two-pass, colored white-tint, and skew semantics live in
+	// glRenderer.DrawGlyph (bit-identical to the former inline GL emit). Precedence
+	// matches the original drawEntry: subpixel wins over colored — the old code set
+	// the colored white tint first but the subpixel branch ran (and returned) with
+	// its own two-pass colors, so a colored+subpixel glyph took the subpixel path.
+	mode := gpu.GlyphMask
 	if entry.subpixel {
-		gl.BlendFunc(gl.ZERO, gl.ONE_MINUS_SRC_COLOR)
-		gl.Color4ub(255, 255, 255, 255)
-		a.drawQuad(entry, x, y, w, h, skew)
-		gl.BlendFunc(gl.ONE, gl.ONE)
-		glColor(fg)
-		a.drawQuad(entry, x, y, w, h, skew)
-		gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-		return
+		mode = gpu.GlyphSubpixel
+	} else if entry.colored {
+		mode = gpu.GlyphColor
 	}
-	a.drawQuad(entry, x, y, w, h, skew)
-}
-
-func (a *glyphAtlas) drawQuad(entry atlasEntry, x, y, w, h, skew float32) {
-	gl.Begin(gl.QUADS)
-	gl.TexCoord2f(entry.u0, entry.v0)
-	gl.Vertex2f(x+skew, y)
-	gl.TexCoord2f(entry.u1, entry.v0)
-	gl.Vertex2f(x+w+skew, y)
-	gl.TexCoord2f(entry.u1, entry.v1)
-	gl.Vertex2f(x+w, y+h)
-	gl.TexCoord2f(entry.u0, entry.v1)
-	gl.Vertex2f(x, y+h)
-	gl.End()
+	a.r.DrawGlyph(entry.page, mode, x, y, w, h, skew, entry.u0, entry.v0, entry.u1, entry.v1, fg)
 }
