@@ -185,29 +185,26 @@ func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
 // itself has no permanent chrome.
 func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette, now time.Time) {
 	a.refreshHUDCache(palette, now)
-	lines := a.hud.lines
-	colors := a.hud.colors
-	if len(lines) == 0 {
+	a.paint(hudLayout(a.hud.lines, a.hud.colors, a.cellW, a.cellH, a.uiScale, themeColor(palette.Accent)))
+}
+
+// paint executes a draw-list, translating each command into the corresponding
+// GL call. It sets up the translucent-blend state once for the whole list; the
+// alpha in chromeBoxColor requires BLEND to remain enabled here.
+func (a *App) paint(cmds []drawCmd) {
+	if len(cmds) == 0 {
 		return
 	}
-
-	widest := 0
-	for _, ln := range lines {
-		if n := len([]rune(ln)); n > widest {
-			widest = n
-		}
-	}
-	pad := 6 * a.uiScale
-	bx, by := pad, pad
-	bw := float32(widest)*a.cellW + 2*pad
-	bh := float32(len(lines))*a.cellH + 2*pad
 	gl.Disable(gl.TEXTURE_2D)
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	fillRect(bx, by, bw, bh, color.RGBA{0x10, 0x14, 0x1C, 0xF0})
-	fillRect(bx, by, bw, max(1, a.uiScale), themeColor(palette.Accent))
-	for i, ln := range lines {
-		a.drawString(ln, bx+pad, by+pad+float32(i)*a.cellH, colors[i], 1)
+	for _, c := range cmds {
+		switch c.kind {
+		case cmdRect:
+			fillRect(c.x, c.y, c.w, c.h, c.col)
+		case cmdText:
+			a.drawString(c.text, c.x, c.y, c.col, 1)
+		}
 	}
 }
 
@@ -220,34 +217,7 @@ var searchHighlightColor = color.RGBA{0x7A, 0x5C, 0x12, 0xFF}
 // drawn only while the bar is open; closing repaints a clean frame (the search
 // state is in the damage global-fallback list).
 func (a *App) drawSearchBar(w, h int, palette cervtermtheme.Palette) {
-	if !a.search.active {
-		return
-	}
-	label := "buscar: " + string(a.search.query)
-	info := ""
-	switch {
-	case len(a.search.query) == 0:
-		info = ""
-	case a.search.hasMatch:
-		info = "  [enter: siguiente]"
-	default:
-		info = "  sin resultados"
-	}
-	line := label + info
-
-	pad := 6 * a.uiScale
-	bh := a.cellH + 2*pad
-	by := float32(h) - bh
-	gl.Disable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	fillRect(0, by, float32(w), bh, color.RGBA{0x10, 0x14, 0x1C, 0xF0})
-	fillRect(0, by, float32(w), max(1, a.uiScale), themeColor(palette.Accent))
-	textColor := themeColor(palette.Accent)
-	if len(a.search.query) > 0 && !a.search.hasMatch {
-		textColor = themeColor(palette.Muted)
-	}
-	a.drawString(line, pad, by+pad, textColor, 1)
+	a.paint(searchBarLayout(a.search.active, string(a.search.query), a.search.hasMatch, w, h, a.cellH, a.uiScale, themeColor(palette.Accent), themeColor(palette.Muted)))
 }
 
 func drawTextDecorations(x, y, w, h float32, c color.RGBA, attr core.Attr) {
