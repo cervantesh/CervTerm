@@ -5,7 +5,6 @@ package glfwgl
 import (
 	"image/color"
 
-	"cervterm/internal/core"
 	"cervterm/internal/render"
 	termsel "cervterm/internal/selection"
 )
@@ -38,7 +37,7 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 		cell := rowCells[logicalCol]
 		x := a.paddingX + float32(visualCol)*a.cellW
 		y := a.paddingY + float32(r)*a.cellH
-		if cell.Attr.BG != core.DefaultBG {
+		if cell.Attr.HasExplicitBG() {
 			fillRect(x, y, a.cellW, a.cellH, rgb(cell.Attr.BG))
 		}
 		if a.selectionActive && termsel.Contains(termsel.Range{Start: a.selectionStart, End: a.selectionEnd}, termsel.Point{Row: r, Col: logicalCol}) {
@@ -49,11 +48,11 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 			fillRect(x, y, a.cellW, a.cellH, searchHighlightColor)
 		}
 		fg := defaultFG
-		if cell.Attr.FG != core.DefaultFG {
+		if cell.Attr.HasExplicitFG() {
 			fg = rgb(cell.Attr.FG)
 		}
 		bg := background
-		if cell.Attr.BG != core.DefaultBG {
+		if cell.Attr.HasExplicitBG() {
 			bg = rgb(cell.Attr.BG)
 		}
 		if cell.Attr.Inverse {

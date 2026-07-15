@@ -4,10 +4,14 @@ import (
 	"testing"
 
 	"cervterm/internal/core"
-	"cervterm/internal/render"
 )
 
-func snapshotFromLines(cols int, lines ...string) render.Snapshot {
+type gridFixture struct {
+	Cells      []core.Cell
+	Cols, Rows int
+}
+
+func snapshotFromLines(cols int, lines ...string) gridFixture {
 	term := core.NewTerminal(cols, len(lines))
 	for row, line := range lines {
 		term.SetCursor(row, 0)
@@ -15,9 +19,9 @@ func snapshotFromLines(cols int, lines ...string) render.Snapshot {
 			term.PutRune(r)
 		}
 	}
-	var snap render.Snapshot
-	render.Capture(&snap, term)
-	return snap
+	cells := make([]core.Cell, term.Cols()*term.Rows())
+	term.CopyView(cells)
+	return gridFixture{Cells: cells, Cols: term.Cols(), Rows: term.Rows()}
 }
 
 func TestNormalizeOrdersEndpoints(t *testing.T) {
@@ -43,7 +47,7 @@ func TestContainsInclusiveEndpoints(t *testing.T) {
 
 func TestTextSingleLineTrimsOnlySelectionEnd(t *testing.T) {
 	snap := snapshotFromLines(12, "hello world")
-	got := Text(snap, Range{Start: Point{Row: 0, Col: 1}, End: Point{Row: 0, Col: 4}})
+	got := Text(snap.Cells, snap.Cols, snap.Rows, Range{Start: Point{Row: 0, Col: 1}, End: Point{Row: 0, Col: 4}})
 	if got != "ello" {
 		t.Fatalf("selection text mismatch: %q", got)
 	}
@@ -51,7 +55,7 @@ func TestTextSingleLineTrimsOnlySelectionEnd(t *testing.T) {
 
 func TestTextMultiLineTrimsTrailingSpaces(t *testing.T) {
 	snap := snapshotFromLines(8, "alpha", "beta", "gamma")
-	got := Text(snap, Range{Start: Point{Row: 0, Col: 2}, End: Point{Row: 2, Col: 1}})
+	got := Text(snap.Cells, snap.Cols, snap.Rows, Range{Start: Point{Row: 0, Col: 2}, End: Point{Row: 2, Col: 1}})
 	want := "pha\nbeta\nga"
 	if got != want {
 		t.Fatalf("selection text mismatch: want %q got %q", want, got)
@@ -60,7 +64,7 @@ func TestTextMultiLineTrimsTrailingSpaces(t *testing.T) {
 
 func TestTextClampsOutOfBounds(t *testing.T) {
 	snap := snapshotFromLines(4, "abcd")
-	got := Text(snap, Range{Start: Point{Row: -3, Col: -2}, End: Point{Row: 9, Col: 9}})
+	got := Text(snap.Cells, snap.Cols, snap.Rows, Range{Start: Point{Row: -3, Col: -2}, End: Point{Row: 9, Col: 9}})
 	if got != "abcd" {
 		t.Fatalf("clamped selection mismatch: %q", got)
 	}
@@ -68,7 +72,7 @@ func TestTextClampsOutOfBounds(t *testing.T) {
 
 func TestTextSkipsWideContinuationAndPreservesCombining(t *testing.T) {
 	snap := snapshotFromLines(8, "A好e\u0301Z")
-	got := Text(snap, Range{Start: Point{Row: 0, Col: 0}, End: Point{Row: 0, Col: 5}})
+	got := Text(snap.Cells, snap.Cols, snap.Rows, Range{Start: Point{Row: 0, Col: 0}, End: Point{Row: 0, Col: 5}})
 	if got != "A好e\u0301Z" {
 		t.Fatalf("unicode selection mismatch: %q", got)
 	}
