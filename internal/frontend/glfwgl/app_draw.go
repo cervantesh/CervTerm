@@ -47,18 +47,17 @@ func (a *App) draw() {
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)
 	displayOffset := a.term.DisplayOffset()
-	scrollbackRows := a.term.ScrollbackLines()
 	alternateScreen := a.term.AlternateScreenMode()
-	a.mu.Unlock()
-	// Convert the match's global (physical-row) index to a viewport row using the
-	// same convention as CopyView: the top visible global row is
-	// scrollbackRows-displayOffset (trap 2). Off-screen matches yield -1.
+	// Convert the match's global (physical-row) index to a viewport row via the
+	// canonical GlobalRowToViewport (same convention as CopyView, trap 2).
+	// Off-screen matches yield -1. Done under the lock since it reads term state.
 	a.searchViewRow = -1
 	if a.searchHasMatch {
-		if vr := a.searchMatchRow - (scrollbackRows - displayOffset); vr >= 0 && vr < a.snap.Rows {
+		if vr, ok := a.term.GlobalRowToViewport(a.searchMatchRow); ok {
 			a.searchViewRow = vr
 		}
 	}
+	a.mu.Unlock()
 	a.refreshLinks()
 	a.prepareStatusBand(w)
 	noticeVisible := a.notice != "" && frameNow.Before(a.noticeUntil)

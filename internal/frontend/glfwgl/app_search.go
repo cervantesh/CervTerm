@@ -101,14 +101,12 @@ func (a *App) searchNext() {
 // core.Resize and CopyView (trap 2): the viewport shows global rows
 // [scrollbackRows-displayOffset, +rows-1].
 func (a *App) scrollGlobalRowIntoView(g int) {
-	scrollbackRows := a.term.ScrollbackLines()
-	rows := a.term.Rows()
-	curOffset := a.term.DisplayOffset()
-	top := scrollbackRows - curOffset
-	if g >= top && g < top+rows {
+	if _, ok := a.term.GlobalRowToViewport(g); ok {
 		return // already visible
 	}
-	targetTop := g - rows/2
+	scrollbackRows := a.term.ScrollbackLines()
+	curOffset := a.term.DisplayOffset()
+	targetTop := g - a.term.Rows()/2
 	if targetTop < 0 {
 		targetTop = 0
 	}
