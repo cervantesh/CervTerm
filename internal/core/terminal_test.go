@@ -458,6 +458,60 @@ func TestTerminalScrollbackViewport(t *testing.T) {
 	}
 }
 
+// TestTerminalScrollbackPinsViewDuringOutput checks that new output appended
+// while the user is scrolled back holds the viewport on the same content
+// (matching xterm) instead of letting it drift toward the live edge. A view at
+// the live tail (offset 0) must still auto-follow new output.
+func TestTerminalScrollbackPinsViewDuringOutput(t *testing.T) {
+	term := NewTerminal(5, 2)
+	writeLine := func(s string) {
+		for _, r := range s {
+			term.PutRune(r)
+		}
+		term.CarriageReturn()
+		term.NewLine()
+	}
+	writeLine("one")
+	writeLine("two")
+	writeLine("tri")
+	view := make([]Cell, term.Cols()*term.Rows())
+
+	// Scroll to the oldest content, then keep producing output.
+	term.ScrollViewport(term.ScrollbackLines())
+	if term.DisplayOffset() != 2 {
+		t.Fatalf("setup: expected offset 2, got %d", term.DisplayOffset())
+	}
+	term.CopyView(view)
+	if got := cellsText(view, term.Cols(), term.Rows()); got != "one\ntwo" {
+		t.Fatalf("setup view mismatch: %q", got)
+	}
+
+	// One more line: the offset advances in lockstep so the same rows stay
+	// visible instead of sliding to "two\ntri".
+	writeLine("fou")
+	if term.DisplayOffset() != 3 {
+		t.Fatalf("offset should advance with new output, got %d", term.DisplayOffset())
+	}
+	term.CopyView(view)
+	if got := cellsText(view, term.Cols(), term.Rows()); got != "one\ntwo" {
+		t.Fatalf("view drifted during output: %q", got)
+	}
+
+	// Return to the live tail: output there must auto-follow, not pin.
+	term.ScrollViewport(-term.ScrollbackLines())
+	if term.DisplayOffset() != 0 {
+		t.Fatalf("expected live tail, got %d", term.DisplayOffset())
+	}
+	writeLine("fiv")
+	if term.DisplayOffset() != 0 {
+		t.Fatalf("live tail must stay at 0, got %d", term.DisplayOffset())
+	}
+	term.CopyView(view)
+	if got := cellsText(view, term.Cols(), term.Rows()); got != "fiv\n" {
+		t.Fatalf("live tail should follow output, got %q", got)
+	}
+}
+
 func TestTerminalScrollViewportReportsMovement(t *testing.T) {
 	newTerm := func() *Terminal {
 		term := NewTerminal(5, 2)

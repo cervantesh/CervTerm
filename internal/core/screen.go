@@ -445,6 +445,16 @@ func (t *Terminal) appendScrollbackLine(line []Cell, wrapped bool) {
 	copy(t.scrollback[writeRow*t.cols:(writeRow+1)*t.cols], line)
 	t.scrollbackWrapped[writeRow] = wrapped
 
+	// Pin the viewport to the same content while the user is scrolled back: a new
+	// line shifts every visible row one step toward the live edge, so advance the
+	// offset in lockstep to hold the view still (matching xterm). displayOffset ==
+	// 0 (live tail) is left untouched so ordinary output still auto-follows. The
+	// clamp below keeps it within the scrollback depth; at the ring's capacity the
+	// oldest line the user was viewing is evicted, and the clamp lets the view
+	// drift by exactly that one line, which is unavoidable.
+	if t.displayOffset > 0 {
+		t.displayOffset++
+	}
 	if t.displayOffset > t.ScrollbackLines() {
 		t.displayOffset = t.ScrollbackLines()
 	}
