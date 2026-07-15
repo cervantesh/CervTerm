@@ -38,14 +38,14 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 		x := a.paddingX + float32(visualCol)*a.cellW
 		y := a.paddingY + float32(r)*a.cellH
 		if cell.Attr.HasExplicitBG() {
-			fillRect(x, y, a.cellW, a.cellH, rgb(cell.Attr.BG))
+			a.fillRect(x, y, a.cellW, a.cellH, rgb(cell.Attr.BG))
 		}
 		if a.selection.active && termsel.Contains(termsel.Range{Start: a.selection.start, End: a.selection.end}, termsel.Point{Row: r, Col: logicalCol}) {
-			fillRect(x, y, a.cellW, a.cellH, selectionColor)
+			a.fillRect(x, y, a.cellW, a.cellH, selectionColor)
 		}
 		if a.search.hasMatch && r == a.search.viewRow &&
 			logicalCol >= a.search.matchCol && logicalCol < a.search.matchCol+a.search.matchLen {
-			fillRect(x, y, a.cellW, a.cellH, searchHighlightColor)
+			a.fillRect(x, y, a.cellW, a.cellH, searchHighlightColor)
 		}
 		fg := defaultFG
 		if cell.Attr.HasExplicitFG() {
@@ -57,7 +57,7 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 		}
 		if cell.Attr.Inverse {
 			fg, bg = bg, fg
-			fillRect(x, y, a.cellW, a.cellH, bg)
+			a.fillRect(x, y, a.cellW, a.cellH, bg)
 		}
 		if skippedGlyph[logicalCol] || cell.Rune == ' ' || cell.Rune == 0 || cell.WideContinuation {
 			continue
@@ -74,9 +74,9 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 				if rc.Alpha < 1 {
 					c.A = uint8(float32(fg.A) * rc.Alpha)
 				}
-				fillRect(x+rc.X, y+rc.Y, rc.W, rc.H, c)
+				a.fillRect(x+rc.X, y+rc.Y, rc.W, rc.H, c)
 			}
-			drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)
+			a.drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)
 			continue
 		}
 		skew := float32(0)
@@ -92,7 +92,7 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 					if cell.Attr.Bold {
 						a.drawRunGlyph(run.Text, run.CellSpan, x+1, y, fg, 1, skew)
 					}
-					drawTextDecorations(x, y, a.cellW*float32(run.CellSpan), a.cellH, fg, cell.Attr)
+					a.drawTextDecorations(x, y, a.cellW*float32(run.CellSpan), a.cellH, fg, cell.Attr)
 					for i := 1; i < run.CellSpan && logicalCol+i < a.snap.Cols; i++ {
 						skippedGlyph[logicalCol+i] = true
 					}
@@ -105,7 +105,7 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 				if cell.Attr.Bold {
 					a.drawCluster(cluster.Text, cluster.CellSpan, x+1, y, fg, 1, skew)
 				}
-				drawTextDecorations(x, y, a.cellW*float32(cluster.CellSpan), a.cellH, fg, cell.Attr)
+				a.drawTextDecorations(x, y, a.cellW*float32(cluster.CellSpan), a.cellH, fg, cell.Attr)
 				for i := 1; i < cluster.CellSpan && logicalCol+i < a.snap.Cols; i++ {
 					skippedGlyph[logicalCol+i] = true
 				}
@@ -122,7 +122,7 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 				a.drawRune(combining, x+1, y, fg, 1, skew)
 			}
 		}
-		drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)
+		a.drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)
 	}
 	return order
 }

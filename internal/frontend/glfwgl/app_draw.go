@@ -11,8 +11,6 @@ import (
 	"cervterm/internal/core"
 	"cervterm/internal/render"
 	cervtermtheme "cervterm/internal/theme"
-
-	"github.com/go-gl/gl/v2.1/gl"
 )
 
 // hudCache holds the cached HUD rows and the inputs they were built from; see
@@ -39,19 +37,13 @@ func (a *App) draw() {
 	}
 
 	w, h := a.window.GetFramebufferSize()
-	gl.Viewport(0, 0, int32(w), int32(h))
-	gl.MatrixMode(gl.PROJECTION)
-	gl.LoadIdentity()
-	gl.Ortho(0, float64(w), float64(h), 0, -1, 1)
-	gl.MatrixMode(gl.MODELVIEW)
-	gl.LoadIdentity()
+	a.r.BeginFrame(w, h)
 
 	palette := cervtermtheme.DefaultPalette()
 	background := configColor(a.cfg.Colors.Background, themeColor(palette.Background))
 	cursorColor := configColor(a.cfg.Colors.Cursor, themeColor(palette.Accent))
 	selectionColor := configColor(a.cfg.Colors.SelectionBackground, color.RGBA{0x2A, 0x63, 0x77, 0xFF})
 	defaultFG := configColor(a.cfg.Colors.Foreground, rgb(core.DefaultFG))
-	gl.Disable(gl.TEXTURE_2D)
 	a.updateFPS()
 
 	// Title/cwd/bell events are fired in processTermEvents (once per data batch),
@@ -75,8 +67,7 @@ func (a *App) draw() {
 	noticeVisible := a.notice != "" && frameNow.Before(a.noticeUntil)
 	fullRedraw, damagedRows := a.prepareDamage(w, h, displayOffset, alternateScreen, noticeVisible, background)
 	if fullRedraw {
-		glClearColor(background)
-		gl.Clear(gl.COLOR_BUFFER_BIT)
+		a.r.Clear(background)
 	}
 
 	var cursorRowOrder []int
@@ -87,7 +78,7 @@ func (a *App) draw() {
 		}
 		rowsDrawn++
 		if !fullRedraw {
-			fillRect(0, a.paddingY+float32(r)*a.cellH, float32(w), a.cellH, background)
+			a.fillRect(0, a.paddingY+float32(r)*a.cellH, float32(w), a.cellH, background)
 		}
 		order := a.drawRow(r, background, selectionColor, defaultFG)
 		if r == a.snap.CursorRow {
@@ -189,19 +180,16 @@ func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette, now time.Time) {
 }
 
 // paint executes a draw-list, translating each command into the corresponding
-// GL call. It sets up the translucent-blend state once for the whole list; the
-// alpha in chromeBoxColor requires BLEND to remain enabled here.
+// renderer call. The renderer owns the translucent-blend state (BLEND stays
+// enabled), which the alpha in chromeBoxColor relies on.
 func (a *App) paint(cmds []drawCmd) {
 	if len(cmds) == 0 {
 		return
 	}
-	gl.Disable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	for _, c := range cmds {
 		switch c.kind {
 		case cmdRect:
-			fillRect(c.x, c.y, c.w, c.h, c.col)
+			a.fillRect(c.x, c.y, c.w, c.h, c.col)
 		case cmdText:
 			a.drawString(c.text, c.x, c.y, c.col, 1)
 		}
@@ -220,12 +208,12 @@ func (a *App) drawSearchBar(w, h int, palette cervtermtheme.Palette) {
 	a.paint(searchBarLayout(a.search.active, string(a.search.query), a.search.hasMatch, w, h, a.cellH, a.uiScale, themeColor(palette.Accent), themeColor(palette.Muted)))
 }
 
-func drawTextDecorations(x, y, w, h float32, c color.RGBA, attr core.Attr) {
+func (a *App) drawTextDecorations(x, y, w, h float32, c color.RGBA, attr core.Attr) {
 	if attr.Underline {
-		fillRect(x, y+h-2, w, 1, c)
+		a.fillRect(x, y+h-2, w, 1, c)
 	}
 	if attr.Strikethrough {
-		fillRect(x, y+h*0.55, w, 1, c)
+		a.fillRect(x, y+h*0.55, w, 1, c)
 	}
 }
 
@@ -237,32 +225,15 @@ func (a *App) drawString(s string, x, y float32, c color.RGBA, scale float32) {
 }
 
 func (a *App) drawRune(r rune, x, y float32, c color.RGBA, scale, skew float32) {
-	gl.Enable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	glColor(c)
 	a.atlas.drawRune(r, x, y, c, scale, skew)
-	gl.Disable(gl.TEXTURE_2D)
 }
 
 func (a *App) drawCluster(cluster string, cellSpan int, x, y float32, c color.RGBA, scale, skew float32) bool {
-	gl.Enable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	glColor(c)
-	ok := a.atlas.drawCluster(cluster, cellSpan, x, y, c, scale, skew)
-	gl.Disable(gl.TEXTURE_2D)
-	return ok
+	return a.atlas.drawCluster(cluster, cellSpan, x, y, c, scale, skew)
 }
 
 func (a *App) drawRunGlyph(run string, cellSpan int, x, y float32, c color.RGBA, scale, skew float32) bool {
-	gl.Enable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	glColor(c)
-	ok := a.atlas.drawRun(run, cellSpan, x, y, c, scale, skew)
-	gl.Disable(gl.TEXTURE_2D)
-	return ok
+	return a.atlas.drawRun(run, cellSpan, x, y, c, scale, skew)
 }
 
 // drawCursor renders the cursor using the frame's precomputed blink phase so
@@ -288,11 +259,11 @@ func (a *App) drawCursor(x, y float32, c color.RGBA, blinkPhase bool) {
 	}
 	switch shape {
 	case "block":
-		fillRect(x, y, a.cellW, a.cellH, c)
+		a.fillRect(x, y, a.cellW, a.cellH, c)
 	case "beam":
-		fillRect(x, y, thickness, a.cellH, c)
+		a.fillRect(x, y, thickness, a.cellH, c)
 	default:
-		fillRect(x, y+a.cellH-thickness, a.cellW, thickness, c)
+		a.fillRect(x, y+a.cellH-thickness, a.cellW, thickness, c)
 	}
 }
 
@@ -328,21 +299,8 @@ func configColor(hex string, fallback color.RGBA) color.RGBA {
 	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
 }
 
-func glClearColor(c color.RGBA) {
-	gl.ClearColor(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, 1)
-}
-func glColor(c color.RGBA) {
-	gl.Color4f(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, float32(c.A)/255)
-}
-
-func fillRect(x, y, w, h float32, c color.RGBA) {
-	glColor(c)
-	gl.Begin(gl.QUADS)
-	gl.Vertex2f(x, y)
-	gl.Vertex2f(x+w, y)
-	gl.Vertex2f(x+w, y+h)
-	gl.Vertex2f(x, y+h)
-	gl.End()
+func (a *App) fillRect(x, y, w, h float32, c color.RGBA) {
+	a.r.FillRect(x, y, w, h, c)
 }
 
 func themeColor(c cervtermtheme.Color) color.RGBA { return color.RGBA{c.R, c.G, c.B, 0xFF} }
