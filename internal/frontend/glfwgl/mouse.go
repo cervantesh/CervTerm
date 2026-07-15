@@ -12,6 +12,22 @@ import (
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
+// selectionState holds the text-selection state. Main-thread only.
+type selectionState struct {
+	dragging bool // a drag is in progress
+	active   bool // a selection exists
+	start    termsel.Point
+	end      termsel.Point
+}
+
+// mouseReportState holds the in-flight mouse-reporting state (button held down
+// for drag reports). Main-thread only.
+type mouseReportState struct {
+	down   bool
+	button input.MouseButton
+	mods   input.Mod
+}
+
 // pointFromPixels maps a window pixel to the grid cell under it, clamped to the
 // visible grid.
 func (a *App) pointFromPixels(x, y float32) termsel.Point {
@@ -66,11 +82,11 @@ func (a *App) sendMouseButton(button glfw.MouseButton, action glfw.Action, mods 
 	mouseAction := input.MousePress
 	if action == glfw.Release {
 		mouseAction = input.MouseRelease
-		a.mouseReportDown = false
+		a.mouseReport.down = false
 	} else if action == glfw.Press {
-		a.mouseReportDown = true
-		a.mouseReportButton = mouseButton
-		a.mouseReportMods = mouseModsFromGLFW(mods)
+		a.mouseReport.down = true
+		a.mouseReport.button = mouseButton
+		a.mouseReport.mods = mouseModsFromGLFW(mods)
 	} else {
 		return false
 	}
@@ -87,9 +103,9 @@ func (a *App) sendMouseMove(x, y float64) bool {
 	if !mode.ButtonEventTracking && !mode.AnyEventTracking {
 		return false
 	}
-	button := a.mouseReportButton
-	mods := a.mouseReportMods
-	if !a.mouseReportDown {
+	button := a.mouseReport.button
+	mods := a.mouseReport.mods
+	if !a.mouseReport.down {
 		if !mode.AnyEventTracking {
 			return false
 		}

@@ -3,7 +3,6 @@
 package glfwgl
 
 import (
-	"image/color"
 	"io"
 	"runtime"
 	"sync"
@@ -18,7 +17,6 @@ import (
 	ptyio "cervterm/internal/pty"
 	"cervterm/internal/render"
 	"cervterm/internal/script"
-	termsel "cervterm/internal/selection"
 	"cervterm/internal/vt"
 
 	"github.com/go-gl/gl/v2.1/gl"
@@ -63,12 +61,7 @@ type App struct {
 	statsSpecOK      bool
 	zoom             zoomBindings
 	link             linkState
-	hudLines         []string // cached HUD rows; see refreshHUDCache
-	hudColors        []color.RGBA
-	hudNotice        string
-	hudShowStats     bool
-	hudCols, hudRows int
-	hudStatsAt       time.Time
+	hud              hudCache
 	fps              float64
 	fpsFrames        uint64
 	fpsTime          time.Time
@@ -109,25 +102,9 @@ type App struct {
 	// loop's 500ms bounded wait.
 	wakeReady atomic.Bool
 
-	// Modal scrollback search state. All fields are main-thread only. While
-	// searching is true, key and char callbacks route to the search bar and
-	// nothing reaches the PTY (app_search.go). Match position is stored in the
-	// global (physical-row) index space; draw() converts it to a viewport row.
-	searching      bool
-	searchQuery    []rune
-	searchHasMatch bool
-	searchMatchRow int // global row (scrollback+live index space)
-	searchMatchCol int // start cell column of the match
-	searchMatchLen int // match length in runes (highlight cell span, v1)
-	searchViewRow  int // frame-local: match's viewport row, or -1 when off-screen
-
-	selecting         bool
-	selectionActive   bool
-	selectionStart    termsel.Point
-	selectionEnd      termsel.Point
-	mouseReportDown   bool
-	mouseReportButton input.MouseButton
-	mouseReportMods   input.Mod
+	search      searchState
+	selection   selectionState
+	mouseReport mouseReportState
 }
 
 func Run() error {
@@ -285,8 +262,8 @@ func (a *App) installCallbacks() {
 		}
 		// While the search bar is open, printable input edits the query and never
 		// reaches the PTY (trap 1). closeSearch restores this callback's normal
-		// flow exactly by clearing a.searching.
-		if a.searching {
+		// flow exactly by clearing a.search.active.
+		if a.search.active {
 			a.searchAppendRune(char)
 			return
 		}
@@ -363,20 +340,20 @@ func (a *App) installCallbacks() {
 		x, y := a.window.GetCursorPos()
 		point := a.pointFromPixels(float32(x), float32(y))
 		if action == glfw.Press {
-			a.selecting = true
-			a.selectionActive = false
-			a.selectionStart = point
-			a.selectionEnd = point
+			a.selection.dragging = true
+			a.selection.active = false
+			a.selection.start = point
+			a.selection.end = point
 			a.clearHover()
 			a.requestRedraw()
 			return
 		}
 		if action == glfw.Release {
-			a.selectionEnd = point
-			a.selecting = false
+			a.selection.end = point
+			a.selection.dragging = false
 			// A plain click (no drag → selectionActive stays false) over a URL
 			// opens it; a drag is a text selection and never opens a link.
-			if !a.selectionActive && a.handleLinkClick(point) {
+			if !a.selection.active && a.handleLinkClick(point) {
 				a.requestRedraw()
 				return
 			}
@@ -388,12 +365,12 @@ func (a *App) installCallbacks() {
 		if a.sendMouseMove(x, y) {
 			return
 		}
-		if !a.selecting {
+		if !a.selection.dragging {
 			a.updateHover(x, y)
 			return
 		}
-		a.selectionEnd = a.pointFromPixels(float32(x), float32(y))
-		a.selectionActive = true
+		a.selection.end = a.pointFromPixels(float32(x), float32(y))
+		a.selection.active = true
 		a.requestRedraw()
 	})
 	a.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {

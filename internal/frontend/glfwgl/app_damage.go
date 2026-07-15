@@ -54,12 +54,12 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 		a.contentScaleX != a.damage.contentScaleX || a.contentScaleY != a.damage.contentScaleY ||
 		a.snap.Cols != a.damage.cols || displayOffset != a.damage.displayOffset ||
 		alternateScreen != a.damage.alternateScreen ||
-		a.selectionActive != a.damage.selectionActive ||
-		a.selectionStart != a.damage.selectionStart || a.selectionEnd != a.damage.selectionEnd ||
+		a.selection.active != a.damage.selectionActive ||
+		a.selection.start != a.damage.selectionStart || a.selection.end != a.damage.selectionEnd ||
 		a.showStats != a.damage.showStats || noticeVisible != a.damage.noticeVisible ||
-		a.searching != a.damage.searching || a.searchHasMatch != a.damage.searchHasMatch ||
-		a.searchMatchRow != a.damage.searchMatchRow || a.searchMatchCol != a.damage.searchMatchCol ||
-		a.searchMatchLen != a.damage.searchMatchLen ||
+		a.search.active != a.damage.searching || a.search.hasMatch != a.damage.searchHasMatch ||
+		a.search.matchRow != a.damage.searchMatchRow || a.search.matchCol != a.damage.searchMatchCol ||
+		a.search.matchLen != a.damage.searchMatchLen ||
 		a.status.seq != a.damage.statusSeq || a.status.geometry != a.damage.statusGeometry ||
 		a.overlays.seq != a.damage.overlaySeq ||
 		a.link.hoverActive != a.damage.hoverActive ||
@@ -75,7 +75,7 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 	// appear/move/clear transitions are caught by stateChanged above (the match
 	// coords are tracked there), and between transitions the highlight persists
 	// via normal row damage, so a scripted search never pins full-frame redraws.
-	global := stateChanged || historySizeMismatch || a.selectionActive || a.cfg.Render.Bidi || a.showStats || noticeVisible || a.searching || a.cfg.Render.Damage == "frame"
+	global := stateChanged || historySizeMismatch || a.selection.active || a.cfg.Render.Bidi || a.showStats || noticeVisible || a.search.active || a.cfg.Render.Damage == "frame"
 	fullRedraw := global || len(a.prevHashes) == 0 || len(a.prevPrevHashes) == 0
 	if global {
 		a.prevHashes = a.prevHashes[:0]
@@ -132,12 +132,12 @@ func (a *App) recordDamageFrame(w, h, displayOffset int, alternateScreen, notice
 	a.damage.contentScaleX, a.damage.contentScaleY = a.contentScaleX, a.contentScaleY
 	a.damage.cols = a.snap.Cols
 	a.damage.displayOffset, a.damage.alternateScreen = displayOffset, alternateScreen
-	a.damage.selectionActive = a.selectionActive
-	a.damage.selectionStart, a.damage.selectionEnd = a.selectionStart, a.selectionEnd
+	a.damage.selectionActive = a.selection.active
+	a.damage.selectionStart, a.damage.selectionEnd = a.selection.start, a.selection.end
 	a.damage.showStats, a.damage.noticeVisible = a.showStats, noticeVisible
-	a.damage.searching, a.damage.searchHasMatch = a.searching, a.searchHasMatch
-	a.damage.searchMatchRow, a.damage.searchMatchCol = a.searchMatchRow, a.searchMatchCol
-	a.damage.searchMatchLen = a.searchMatchLen
+	a.damage.searching, a.damage.searchHasMatch = a.search.active, a.search.hasMatch
+	a.damage.searchMatchRow, a.damage.searchMatchCol = a.search.matchRow, a.search.matchCol
+	a.damage.searchMatchLen = a.search.matchLen
 	a.damage.statusSeq, a.damage.statusGeometry = a.status.seq, a.status.geometry
 	a.damage.overlaySeq = a.overlays.seq
 	a.damage.hoverActive = a.link.hoverActive
