@@ -40,11 +40,11 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 		if cell.Attr.HasExplicitBG() {
 			fillRect(x, y, a.cellW, a.cellH, rgb(cell.Attr.BG))
 		}
-		if a.selectionActive && termsel.Contains(termsel.Range{Start: a.selectionStart, End: a.selectionEnd}, termsel.Point{Row: r, Col: logicalCol}) {
+		if a.selection.active && termsel.Contains(termsel.Range{Start: a.selection.start, End: a.selection.end}, termsel.Point{Row: r, Col: logicalCol}) {
 			fillRect(x, y, a.cellW, a.cellH, selectionColor)
 		}
-		if a.searchHasMatch && r == a.searchViewRow &&
-			logicalCol >= a.searchMatchCol && logicalCol < a.searchMatchCol+a.searchMatchLen {
+		if a.search.hasMatch && r == a.search.viewRow &&
+			logicalCol >= a.search.matchCol && logicalCol < a.search.matchCol+a.search.matchLen {
 			fillRect(x, y, a.cellW, a.cellH, searchHighlightColor)
 		}
 		fg := defaultFG

@@ -25,7 +25,7 @@ func (a *App) Notify(msg string) {
 }
 
 func (a *App) Selection() string {
-	if !a.selectionActive {
+	if !a.selection.active {
 		return ""
 	}
 	// Script handlers run on the main thread between frames, never inside
@@ -34,7 +34,7 @@ func (a *App) Selection() string {
 	a.mu.Lock()
 	render.Capture(&a.snap, a.term)
 	a.mu.Unlock()
-	return termsel.Text(a.snap.Cells, a.snap.Cols, a.snap.Rows, termsel.Range{Start: a.selectionStart, End: a.selectionEnd})
+	return termsel.Text(a.snap.Cells, a.snap.Cols, a.snap.Rows, termsel.Range{Start: a.selection.start, End: a.selection.end})
 }
 
 func (a *App) SetClipboard(text string) {
@@ -172,9 +172,9 @@ func (a *App) Search(query string) bool {
 	from := a.term.ScrollbackLines() + a.term.Rows()
 	row, col, ok := a.term.SearchBackward(query, from)
 	if ok {
-		a.searchMatchRow, a.searchMatchCol = row, col
-		a.searchMatchLen = len([]rune(query))
-		a.searchHasMatch = true
+		a.search.matchRow, a.search.matchCol = row, col
+		a.search.matchLen = len([]rune(query))
+		a.search.hasMatch = true
 		a.scrollGlobalRowIntoView(row)
 	}
 	a.mu.Unlock()

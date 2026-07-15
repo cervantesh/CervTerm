@@ -9,14 +9,29 @@ import (
 // Interactive scrollback search (Slice 2). The hotkey is a fixed ctrl+shift+f
 // chord in v1 (configurable later). While the bar is open the key and char
 // callbacks route here and the PTY sees nothing (trap 1); closing restores the
-// live input flow exactly by clearing a.searching.
+// live input flow exactly by clearing a.search.active.
+
+// searchState holds the modal scrollback search state. All fields are
+// main-thread only. While active is true, key and char callbacks route to the
+// search bar and nothing reaches the PTY (app_search.go). Match position is
+// stored in the global (physical-row) index space; draw() converts it to a
+// viewport row.
+type searchState struct {
+	active   bool
+	query    []rune
+	hasMatch bool
+	matchRow int // global row (scrollback+live index space)
+	matchCol int // start cell column of the match
+	matchLen int // match length in runes (highlight cell span, v1)
+	viewRow  int // frame-local: match's viewport row, or -1 when off-screen
+}
 
 // handleSearchKey processes the search hotkey and, while the bar is open, all
 // keyboard input. It returns true when it consumed the key so the caller stops
 // before script keys, the stats toggle, clipboard, and PTY encoding.
 func (a *App) handleSearchKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	isChord := key == glfw.KeyF && mods&glfw.ModControl != 0 && mods&glfw.ModShift != 0
-	if !a.searching {
+	if !a.search.active {
 		if isChord {
 			a.openSearch()
 			return true
@@ -36,17 +51,17 @@ func (a *App) handleSearchKey(key glfw.Key, mods glfw.ModifierKey) bool {
 }
 
 func (a *App) openSearch() {
-	a.searching = true
-	a.searchQuery = a.searchQuery[:0]
-	a.searchHasMatch = false
+	a.search.active = true
+	a.search.query = a.search.query[:0]
+	a.search.hasMatch = false
 	a.requestRedraw()
 }
 
 // closeSearch returns to the live view input flow. It leaves the viewport where
 // the last match scrolled it; the user scrolls back to the bottom as usual.
 func (a *App) closeSearch() {
-	a.searching = false
-	a.searchHasMatch = false
+	a.search.active = false
+	a.search.hasMatch = false
 	a.requestRedraw()
 }
 
@@ -56,13 +71,13 @@ func (a *App) searchAppendRune(r rune) {
 	if r < 0x20 || r == 0x7f {
 		return
 	}
-	a.searchQuery = append(a.searchQuery, r)
+	a.search.query = append(a.search.query, r)
 	a.requestRedraw()
 }
 
 func (a *App) searchBackspace() {
-	if len(a.searchQuery) > 0 {
-		a.searchQuery = a.searchQuery[:len(a.searchQuery)-1]
+	if len(a.search.query) > 0 {
+		a.search.query = a.search.query[:len(a.search.query)-1]
 	}
 	a.requestRedraw()
 }
@@ -72,24 +87,24 @@ func (a *App) searchBackspace() {
 // match (trap: from-row convention matches core.SearchBackward). An empty query
 // is a no-op (trap 5).
 func (a *App) searchNext() {
-	if len(a.searchQuery) == 0 {
-		a.searchHasMatch = false
+	if len(a.search.query) == 0 {
+		a.search.hasMatch = false
 		a.requestRedraw()
 		return
 	}
 	a.mu.Lock()
 	from := a.term.ScrollbackLines() + a.term.Rows()
-	if a.searchHasMatch {
-		from = a.searchMatchRow
+	if a.search.hasMatch {
+		from = a.search.matchRow
 	}
-	row, col, ok := a.term.SearchBackward(string(a.searchQuery), from)
+	row, col, ok := a.term.SearchBackward(string(a.search.query), from)
 	if ok {
-		a.searchMatchRow, a.searchMatchCol = row, col
-		a.searchMatchLen = len(a.searchQuery)
-		a.searchHasMatch = true
+		a.search.matchRow, a.search.matchCol = row, col
+		a.search.matchLen = len(a.search.query)
+		a.search.hasMatch = true
 		a.scrollGlobalRowIntoView(row)
 	} else {
-		a.searchHasMatch = false
+		a.search.hasMatch = false
 	}
 	a.mu.Unlock()
 	a.requestRedraw()

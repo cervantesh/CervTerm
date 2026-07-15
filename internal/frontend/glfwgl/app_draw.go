@@ -15,6 +15,18 @@ import (
 	"github.com/go-gl/gl/v2.1/gl"
 )
 
+// hudCache holds the cached HUD rows and the inputs they were built from; see
+// refreshHUDCache. Main-thread only.
+type hudCache struct {
+	lines     []string // cached HUD rows
+	colors    []color.RGBA
+	notice    string
+	showStats bool
+	cols      int
+	rows      int
+	statsAt   time.Time
+}
+
 func (a *App) draw() {
 	// One timestamp and blink phase for the whole frame: sampling time.Now more
 	// than once lets a blink boundary or notice expiry land between samples,
@@ -51,10 +63,10 @@ func (a *App) draw() {
 	// Convert the match's global (physical-row) index to a viewport row via the
 	// canonical GlobalRowToViewport (same convention as CopyView, trap 2).
 	// Off-screen matches yield -1. Done under the lock since it reads term state.
-	a.searchViewRow = -1
-	if a.searchHasMatch {
-		if vr, ok := a.term.GlobalRowToViewport(a.searchMatchRow); ok {
-			a.searchViewRow = vr
+	a.search.viewRow = -1
+	if a.search.hasMatch {
+		if vr, ok := a.term.GlobalRowToViewport(a.search.matchRow); ok {
+			a.search.viewRow = vr
 		}
 	}
 	a.mu.Unlock()
@@ -142,30 +154,30 @@ func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
 	// Stats numbers only need 500ms freshness (same cadence shouldRedraw uses).
 	// A just-toggled-on panel or a cols/rows change forces an immediate rebuild
 	// so no stale numbers flash before the next window rolls over.
-	statsStale := a.showStats && (!a.hudShowStats ||
-		a.cols != a.hudCols || a.rows != a.hudRows ||
-		now.Sub(a.hudStatsAt) >= 500*time.Millisecond)
-	if !statsStale && curNotice == a.hudNotice && a.showStats == a.hudShowStats {
+	statsStale := a.showStats && (!a.hud.showStats ||
+		a.cols != a.hud.cols || a.rows != a.hud.rows ||
+		now.Sub(a.hud.statsAt) >= 500*time.Millisecond)
+	if !statsStale && curNotice == a.hud.notice && a.showStats == a.hud.showStats {
 		return
 	}
 
-	a.hudLines = a.hudLines[:0]
-	a.hudColors = a.hudColors[:0]
+	a.hud.lines = a.hud.lines[:0]
+	a.hud.colors = a.hud.colors[:0]
 	if a.showStats {
 		s := a.meter.Snapshot()
-		a.hudLines = append(a.hudLines,
+		a.hud.lines = append(a.hud.lines,
 			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.cfg.Font.Size),
 			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
-		a.hudColors = append(a.hudColors, themeColor(palette.Muted), themeColor(palette.Muted))
-		a.hudStatsAt = now
+		a.hud.colors = append(a.hud.colors, themeColor(palette.Muted), themeColor(palette.Muted))
+		a.hud.statsAt = now
 	}
 	if noticeVisible {
-		a.hudLines = append(a.hudLines, a.notice)
-		a.hudColors = append(a.hudColors, themeColor(palette.Accent))
+		a.hud.lines = append(a.hud.lines, a.notice)
+		a.hud.colors = append(a.hud.colors, themeColor(palette.Accent))
 	}
-	a.hudShowStats = a.showStats
-	a.hudNotice = curNotice
-	a.hudCols, a.hudRows = a.cols, a.rows
+	a.hud.showStats = a.showStats
+	a.hud.notice = curNotice
+	a.hud.cols, a.hud.rows = a.cols, a.rows
 }
 
 // drawHUD overlays the optional two-row stats panel (toggled by the stats
@@ -173,8 +185,8 @@ func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
 // itself has no permanent chrome.
 func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette, now time.Time) {
 	a.refreshHUDCache(palette, now)
-	lines := a.hudLines
-	colors := a.hudColors
+	lines := a.hud.lines
+	colors := a.hud.colors
 	if len(lines) == 0 {
 		return
 	}
@@ -208,15 +220,15 @@ var searchHighlightColor = color.RGBA{0x7A, 0x5C, 0x12, 0xFF}
 // drawn only while the bar is open; closing repaints a clean frame (the search
 // state is in the damage global-fallback list).
 func (a *App) drawSearchBar(w, h int, palette cervtermtheme.Palette) {
-	if !a.searching {
+	if !a.search.active {
 		return
 	}
-	label := "buscar: " + string(a.searchQuery)
+	label := "buscar: " + string(a.search.query)
 	info := ""
 	switch {
-	case len(a.searchQuery) == 0:
+	case len(a.search.query) == 0:
 		info = ""
-	case a.searchHasMatch:
+	case a.search.hasMatch:
 		info = "  [enter: siguiente]"
 	default:
 		info = "  sin resultados"
@@ -232,7 +244,7 @@ func (a *App) drawSearchBar(w, h int, palette cervtermtheme.Palette) {
 	fillRect(0, by, float32(w), bh, color.RGBA{0x10, 0x14, 0x1C, 0xF0})
 	fillRect(0, by, float32(w), max(1, a.uiScale), themeColor(palette.Accent))
 	textColor := themeColor(palette.Accent)
-	if len(a.searchQuery) > 0 && !a.searchHasMatch {
+	if len(a.search.query) > 0 && !a.search.hasMatch {
 		textColor = themeColor(palette.Muted)
 	}
 	a.drawString(line, pad, by+pad, textColor, 1)
