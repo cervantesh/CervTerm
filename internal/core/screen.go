@@ -105,51 +105,6 @@ func (t *Terminal) physicalRows() ([][]Cell, []bool) {
 	return rows, wrapped
 }
 
-// scrollbackPhysicalRows returns only the frozen history rows. The wrapped flag
-// of the LAST row is forced false so the scrollback↔screen seam is cut: reflow
-// then treats history and live screen as independent groups and never moves a
-// wrapped logical line across the seam. Moving it either way is wrong under
-// ConPTY — pulling the prefix into the viewport reintroduces the loss bug, and
-// pushing the live tail into history duplicates it when ConPTY repaints the
-// viewport — so we cut instead. Cost: a line that happened to wrap across the
-// seam at resize time is split into two logical lines (not rejoined).
-func (t *Terminal) scrollbackPhysicalRows() ([][]Cell, []bool) {
-	rows := make([][]Cell, 0, t.scrollbackRows)
-	wrapped := make([]bool, 0, t.scrollbackRows)
-	for row := 0; row < t.scrollbackRows; row++ {
-		sourceRow := (t.scrollbackStart + row) % maxScrollbackRows
-		start := sourceRow * t.cols
-		rows = append(rows, cloneCellRow(t.scrollback[start:start+t.cols]))
-		if len(t.scrollbackWrapped) == maxScrollbackRows {
-			wrapped = append(wrapped, t.scrollbackWrapped[sourceRow])
-		} else {
-			wrapped = append(wrapped, false)
-		}
-	}
-	if n := len(wrapped); n > 0 {
-		wrapped[n-1] = false // cut the seam
-	}
-	return rows, wrapped
-}
-
-// screenPhysicalRows returns only the live screen rows (t.cells) with their wrap
-// flags — the shell-owned region that ConPTY repaints on resize.
-func (t *Terminal) screenPhysicalRows() ([][]Cell, []bool) {
-	rows := make([][]Cell, 0, t.rows)
-	wrapped := make([]bool, 0, t.rows)
-	for row := 0; row < t.rows; row++ {
-		start := row * t.cols
-		rows = append(rows, cloneCellRow(t.cells[start:start+t.cols]))
-		wrapped = append(wrapped, row < len(t.rowWrapped) && t.rowWrapped[row])
-	}
-	return rows, wrapped
-}
-
-// reflowGroup rewraps one group (history or live screen) to a new width.
-func reflowGroup(rows [][]Cell, wrapped []bool, cols int) ([][]Cell, []bool) {
-	return reflowLogicalRows(logicalRowsFromPhysical(rows, wrapped), cols)
-}
-
 func concatRows(a, b [][]Cell) [][]Cell {
 	out := make([][]Cell, 0, len(a)+len(b))
 	out = append(out, a...)
@@ -302,11 +257,18 @@ func logicalRowsFromPhysical(rows [][]Cell, wrappedRows []bool) [][]Cell {
 	for i, row := range rows {
 		wrapped := i < len(wrappedRows) && wrappedRows[i]
 		if wrapped {
-			// A wrapped row continues onto the next one, so its trailing spaces are
+			// A wrapped row continues onto the next one, so its trailing SPACES are
 			// interior alignment of the logical line (e.g. columns in `dir`/`ls`
-			// output), not padding. Keep the row in full — trimming here collapsed
-			// those runs every time content was rewrapped through a narrow width.
-			current = append(current, row...)
+			// output), not padding — keep them (trimming collapsed those runs when
+			// content was rewrapped narrow). But drop trailing UNWRITTEN cells
+			// (Rune==0): a genuine auto-wrapped row is full of written cells, so the
+			// only Rune==0 tail comes from a char-split boundary head being padded to
+			// the ring width; keeping it would splice fake spaces mid-word.
+			r := row
+			for len(r) > 0 && r[len(r)-1].Rune == 0 && !r[len(r)-1].WideContinuation {
+				r = r[:len(r)-1]
+			}
+			current = append(current, r...)
 			continue
 		}
 		// Last row of the logical line: its trailing blanks are display padding.
@@ -350,8 +312,13 @@ func physicalAnchor(physicalRows [][]Cell, wrappedRows []bool, target int) (line
 		if i == target {
 			return logicalLine, accum
 		}
-		accum += len(trimmedCellRow(physicalRows[i]))
-		if i >= len(wrappedRows) || !wrappedRows[i] {
+		// A wrapped row contributes its full width to the logical line (its trailing
+		// cells are interior alignment, kept by logicalRowsFromPhysical); a
+		// non-wrapped row ends the line, so its char count is irrelevant (accum
+		// resets). Counting the full width keeps this consistent with the reflow.
+		if i < len(wrappedRows) && wrappedRows[i] {
+			accum += len(physicalRows[i])
+		} else {
 			logicalLine++
 			accum = 0
 		}
@@ -366,8 +333,11 @@ func physicalAnchor(physicalRows [][]Cell, wrappedRows []bool, target int) (line
 func physicalForAnchor(physicalRows [][]Cell, wrappedRows []bool, line, char int) int {
 	logicalLine, accum := 0, 0
 	for i := range physicalRows {
-		segLen := len(trimmedCellRow(physicalRows[i]))
 		wrapped := i < len(wrappedRows) && wrappedRows[i]
+		segLen := len(trimmedCellRow(physicalRows[i]))
+		if wrapped {
+			segLen = len(physicalRows[i]) // full width; consistent with physicalAnchor
+		}
 		if logicalLine == line && (char < accum+segLen || !wrapped) {
 			return i
 		}
@@ -403,36 +373,19 @@ func (t *Terminal) ScrollViewport(lines int) bool {
 	return t.displayOffset != prev
 }
 
-// cursorForAnchor maps a logical (line, char) anchor to a physical row/column in
-// a (reflowed) layout — the inverse of physicalAnchor for the cursor. The column
-// is clamped to the row width; ConPTY repositions the cursor after a resize, but
-// core stays sensible standalone (Unix ptys, tests).
-func cursorForAnchor(rows [][]Cell, wrapped []bool, line, char, cols int) (row, col int) {
-	row = physicalForAnchor(rows, wrapped, line, char)
-	accum := 0
-	for i := 0; i < row && i < len(rows); i++ {
-		accum += len(trimmedCellRow(rows[i]))
-		if i >= len(wrapped) || !wrapped[i] {
-			accum = 0
-		}
+// splitRowAt divides a physical row into head (row[:k]) and tail (row[k:]) as
+// independent copies. Used when a logical line straddles the scrollback/live
+// boundary: the straddling row is split at the exact char so history cells never
+// enter the viewport (which ConPTY would overwrite → loss) and live cells never
+// freeze into history (→ duplication).
+func splitRowAt(row []Cell, k int) (head, tail []Cell) {
+	if k < 0 {
+		k = 0
 	}
-	col = char - accum
-	if col < 0 {
-		col = 0
-	} else if col > cols-1 {
-		col = cols - 1
+	if k > len(row) {
+		k = len(row)
 	}
-	return row, col
-}
-
-// anchoredOffsetSeparated returns the display offset that keeps the logical
-// (line, char) anchor at the viewport top after a separated reflow. The
-// scrollback count is the real len(sb): on a grow the live group can be shorter
-// than rows, which the old len(physical)-rows formula underestimated.
-func anchoredOffsetSeparated(sb [][]Cell, sbW []bool, live [][]Cell, liveW []bool, line, char int) int {
-	newTop := physicalForAnchor(concatRows(sb, live), concatBools(sbW, liveW), line, char)
-	newScrollback := len(sb)
-	return max(0, min(newScrollback-newTop, newScrollback))
+	return append([]Cell(nil), row[:k]...), append([]Cell(nil), row[k:]...)
 }
 
 func paddedCellRow(row []Cell, cols int, blank Cell) []Cell {

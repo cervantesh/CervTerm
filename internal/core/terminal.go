@@ -47,54 +47,98 @@ func (t *Terminal) Resize(cols, rows int) {
 	t.resizePrimary(cols, rows)
 }
 
-// resizePrimary reflows the primary screen. History (scrollback) and the live
-// screen are reflowed as SEPARATE groups so a shrink can spill live content into
-// history, but a grow never pulls history back into the viewport. That asymmetry
-// is deliberate: under ConPTY the shell repaints the whole viewport on every
-// resize, so anything we pull up would be overwritten with blanks and lost. The
-// grown viewport stays top-anchored with blank rows below, which the shell fills.
+// resizePrimary reflows the primary screen. It reflows the COMBINED stream
+// (history + live screen) so wrapped logical lines rejoin at any width — the
+// scrollback ring never stores a permanent cut, so lines that wrapped across the
+// history/live boundary heal on a later widen instead of staying shredded.
+//
+// The history/live split is then made at a logical boundary anchor (where the
+// shell's screen began), NOT at "the bottom `rows` rows": that is what keeps a
+// grow from pulling history into the viewport (where ConPTY's repaint would
+// overwrite it → the loss bug this whole path fixes). When a logical line
+// straddles that boundary, the straddling row is split at the exact char so
+// history cells never enter the viewport and live cells never freeze into
+// history (→ duplication).
 func (t *Terminal) resizePrimary(cols, rows int) {
 	oldCols, oldOffset := t.cols, t.displayOffset
+	sbCount := t.scrollbackRows
 
-	sb, sbW := t.scrollbackPhysicalRows()
-	live, liveW := t.screenPhysicalRows()
+	combined, combinedW := t.physicalRows() // history + live, real wrap flags (no cut)
 
-	// Cursor anchor, in logical coordinates of the live group.
-	curLine, curStart := physicalAnchor(live, liveW, t.cursorRow)
-	curChar := curStart + t.cursorCol
+	// Cursor anchor within the LIVE group (the shell owns it): logical line+char
+	// measured from the top of the live screen, so it survives the reflow.
+	livePre, livePreW := combined[sbCount:], combinedW[sbCount:]
+	cLine, cStart := physicalAnchor(livePre, livePreW, t.cursorRow)
+	cChar := cStart + t.cursorCol
 
-	// Viewport-top anchor, in combined coordinates, only while scrolled up.
+	// Boundary anchor (where the live screen begins) and, if scrolled up, the
+	// viewport-top anchor — in COMBINED logical coordinates.
+	boundLine, boundChar := physicalAnchor(combined, combinedW, sbCount)
 	anchored := oldOffset > 0
 	var topLine, topChar int
 	if anchored {
-		topLine, topChar = physicalAnchor(concatRows(sb, live), concatBools(sbW, liveW), len(sb)-oldOffset)
+		topLine, topChar = physicalAnchor(combined, combinedW, sbCount-oldOffset)
 	}
 
+	reflowed, reflowedW := combined, combinedW
 	if cols != oldCols {
-		sb, sbW = reflowGroup(sb, sbW, cols)
-		live, liveW = reflowGroup(live, liveW, cols)
+		reflowed, reflowedW = reflowLogicalRows(logicalRowsFromPhysical(combined, combinedW), cols)
 	}
 
-	curRow, curCol := cursorForAnchor(live, liveW, curLine, curChar, cols)
+	// Split reflowed into history / live at the boundary anchor.
+	b := physicalForAnchor(reflowed, reflowedW, boundLine, boundChar)
+	sb := append([][]Cell(nil), reflowed[:b]...)
+	sbW := append([]bool(nil), reflowedW[:b]...)
+	live := append([][]Cell(nil), reflowed[b:]...)
+	liveW := append([]bool(nil), reflowedW[b:]...)
+	straddle := false
+	if b < len(reflowed) {
+		if bLine, bStart := physicalAnchor(reflowed, reflowedW, b); bLine == boundLine && bStart < boundChar {
+			// A line straddles the boundary: split row b at the char. The head goes to
+			// history, kept wrapped so it rejoins the tail on a later reflow, and padded
+			// with ZERO cells (Rune==0) so its ring-width padding is dropped on re-read
+			// instead of spliced mid-word (real alignment spaces are Rune==' ').
+			straddle = true
+			head, tail := splitRowAt(reflowed[b], boundChar-bStart)
+			headFull := make([]Cell, cols)
+			copy(headFull, head)
+			sb = append(sb, headFull)
+			sbW = append(sbW, true)
+			live[0] = tail
+		}
+	}
+	if straddle {
+		// Re-reflow the live group so the short tail merges into clean rows: a short
+		// wrapped grid row would otherwise splice its space padding mid-word on the
+		// next reflow. Only on a straddle — otherwise live is already clean chunks and
+		// re-reflowing would drop edge-case flags (e.g. a blank wrapped row).
+		live, liveW = reflowLogicalRows(logicalRowsFromPhysical(live, liveW), cols)
+	}
 
-	// Drop trailing all-blank rows below the cursor (local to the live group) so
-	// they don't spill into history; only real content scrolls to scrollback.
+	// Map the cursor anchor into the (re-reflowed) live group.
+	curRow := physicalForAnchor(live, liveW, cLine, cChar)
+	_, curRowStart := physicalAnchor(live, liveW, curRow)
+	curCol := cChar - curRowStart
+	if curRow < 0 {
+		curRow = 0
+	}
+	if curCol < 0 {
+		curCol = 0
+	}
+
+	// Drop trailing all-blank rows below the cursor so they don't spill to history.
 	keep := curRow + 1
 	for len(live) > keep && !liveW[len(liveW)-1] && isBlankRow(live[len(live)-1]) {
 		live = live[:len(live)-1]
 		liveW = liveW[:len(liveW)-1]
 	}
 
-	// Shrink: live content that no longer fits spills into history, top-first.
-	// Grow: push <= 0, so nothing moves and the live group stays top-anchored.
+	// Shrink: live content that no longer fits spills into history, top-first,
+	// keeping its natural wrap flags so the lines heal on a later widen. Grow:
+	// push <= 0, nothing moves, the live group stays top-anchored.
 	if push := len(live) - rows; push > 0 {
 		sb = append(sb, live[:push]...)
 		sbW = append(sbW, liveW[:push]...)
-		// Re-cut the seam at the NEW scrollback↔live boundary: the last pushed row
-		// may carry wrapped=true (a line continuing into the row that stays live),
-		// which would wrongly rejoin history with the live screen in selection/copy.
-		// scrollbackPhysicalRows cut the OLD seam; this cuts the one the push made.
-		sbW[len(sbW)-1] = false
 		live, liveW = live[push:], liveW[push:]
 		curRow -= push
 	}
@@ -108,7 +152,8 @@ func (t *Terminal) resizePrimary(cols, rows int) {
 	t.resizeTabStops(oldCols, cols)
 
 	if anchored {
-		t.displayOffset = min(anchoredOffsetSeparated(sb, sbW, live, liveW, topLine, topChar), t.ScrollbackLines())
+		newTop := physicalForAnchor(concatRows(sb, live), concatBools(sbW, liveW), topLine, topChar)
+		t.displayOffset = max(0, min(len(sb)-newTop, t.ScrollbackLines()))
 	} else {
 		t.displayOffset = 0
 	}

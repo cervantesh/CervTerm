@@ -78,23 +78,46 @@ func TestGrowDoesNotPullScrollbackIntoViewport(t *testing.T) {
 	}
 }
 
-// TestShrinkCutsSeamAtNewBoundary covers the pair-review finding: when a shrink
-// pushes live rows into scrollback, the last pushed row must have its wrapped
-// flag cleared (seam cut at the NEW boundary), or selection/copy would wrongly
-// join that history line with the first live line until the next resize.
-func TestShrinkCutsSeamAtNewBoundary(t *testing.T) {
-	term := NewTerminal(4, 4)
-	for _, r := range "abcdefghijkl" { // wraps to abcd|efgh|ijkl (rows 0,1 wrapped)
+// TestWrappedLineSurvivesShrinkWidenInOrder pins content integrity across a
+// shrink+widen. The combined reflow preserves wrap flags (no permanent seam cut),
+// so the line's characters stay in order with none lost or duplicated. A line
+// that lands exactly on the scrollback/live boundary may still render across two
+// rows (dual ownership under ConPTY — it fully heals once new output scrolls its
+// live part into history), but its content must remain contiguous and single.
+func TestWrappedLineSurvivesShrinkWidenInOrder(t *testing.T) {
+	term := NewTerminal(12, 4)
+	for _, r := range "abcdefghijkl" {
 		term.PutRune(r)
 	}
-	term.Resize(4, 1) // pushes abcd + efgh into scrollback; efgh becomes the seam
+	term.Resize(4, 1)  // narrow: wraps; top rows spill to scrollback
+	term.Resize(12, 4) // widen back
 
-	if term.ScrollbackLines() != 2 {
-		t.Fatalf("expected 2 scrollback rows after shrink, got %d", term.ScrollbackLines())
+	joined := strings.ReplaceAll(strings.TrimRight(fullText(term), "\n"), "\n", "")
+	if joined != "abcdefghijkl" {
+		t.Fatalf("content not preserved contiguously after shrink+widen: %q", joined)
 	}
-	last := (term.scrollbackStart + term.scrollbackRows - 1) % maxScrollbackRows
-	if term.scrollbackWrapped[last] {
-		t.Fatalf("seam not cut: last scrollback row still wrapped=true after shrink")
+}
+
+// TestNoAccumulationAcrossZoomCycles pins the core win over the old seam-cut:
+// repeated narrow/wide cycles must not shred a line into ever more fragments or
+// duplicate it. The old path committed a permanent cut per cycle; this one does
+// not, so the fragment/line count stays bounded.
+func TestNoAccumulationAcrossZoomCycles(t *testing.T) {
+	term := NewTerminal(30, 6)
+	for _, r := range "MARKER-0123456789-0123456789-END" {
+		term.PutRune(r)
+	}
+	for i := 0; i < 8; i++ {
+		term.Resize(6, 2)
+		term.Resize(30, 6)
+	}
+	full := fullText(term)
+	joined := strings.ReplaceAll(strings.TrimRight(full, "\n"), "\n", "")
+	if joined != "MARKER-0123456789-0123456789-END" {
+		t.Fatalf("line accumulated fragments / lost content over cycles: %q", joined)
+	}
+	if strings.Count(full, "MARKER") != 1 {
+		t.Fatalf("line duplicated over cycles: MARKER appears %d times\n%s", strings.Count(full, "MARKER"), full)
 	}
 }
 
@@ -115,6 +138,32 @@ func TestZoomRepaintColsAndRowsKeepsHistory(t *testing.T) {
 		if !strings.Contains(after, marker) {
 			t.Fatalf("history line %s lost across cols+rows zoom + repaint\n--- full ---\n%s", marker, after)
 		}
+	}
+}
+
+// TestStraddleLineNoLossNoDuplication is Fable's key correctness case: a long
+// line whose head lands in scrollback and tail in the live viewport must not be
+// duplicated when ConPTY repaints the viewport, and its head must survive in
+// history. The char-split at the boundary is what guarantees this.
+func TestStraddleLineNoLossNoDuplication(t *testing.T) {
+	term := NewTerminal(40, 6)
+	line := "HEADMARK-1234567890-1234567890-TAILMARK"
+	for _, r := range line {
+		term.PutRune(r)
+	}
+	term.Resize(12, 2)  // narrow AND short: the line wraps past the viewport, so its
+	term.Resize(40, 6)  // head spills to scrollback and its tail stays live (straddle)
+	simulateConPTYViewportRepaint(term) // shell repaints the viewport (clears the tail)
+
+	full := fullText(term)
+	if n := strings.Count(full, "HEADMARK"); n != 1 {
+		t.Fatalf("head duplicated or lost: HEADMARK appears %d times\n%s", n, full)
+	}
+	// The surviving head must have no fake spaces spliced after its content (the
+	// char-split head is zero-padded, so re-reads drop the ring padding).
+	joined := strings.ReplaceAll(strings.TrimRight(full, "\n"), "\n", "")
+	if strings.Contains(joined, "1234  ") || strings.Contains(joined, "HEADMARK ") {
+		t.Fatalf("space pollution near boundary:\n%q", joined)
 	}
 }
 
