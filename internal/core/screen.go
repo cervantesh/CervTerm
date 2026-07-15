@@ -105,45 +105,6 @@ func (t *Terminal) physicalRows() ([][]Cell, []bool) {
 	return rows, wrapped
 }
 
-func concatRows(a, b [][]Cell) [][]Cell {
-	out := make([][]Cell, 0, len(a)+len(b))
-	out = append(out, a...)
-	return append(out, b...)
-}
-
-func concatBools(a, b []bool) []bool {
-	out := make([]bool, 0, len(a)+len(b))
-	out = append(out, a...)
-	return append(out, b...)
-}
-
-// rebuildScreen rebuilds the scrollback ring and the live grid from the two
-// reflowed groups. Precondition: len(live) <= rows. The grid is TOP-anchored
-// (live[0] -> row 0; any extra rows stay blank) so ConPTY's post-resize viewport
-// repaint lands on the same rows we already show — no visual jump, no duplicated
-// lines. Unlike the old rebuildFromPhysicalRows it does not decide the cursor or
-// how much content spills to scrollback; resizePrimary owns that.
-func (t *Terminal) rebuildScreen(cols, rows int, sb [][]Cell, sbW []bool, live [][]Cell, liveW []bool) {
-	t.cols, t.rows = cols, rows
-	t.cells = make([]Cell, cols*rows)
-	t.rowWrapped = make([]bool, rows)
-	t.fillBlank(t.cells)
-	t.scrollback = nil
-	t.scrollbackWrapped = nil
-	t.scrollbackStart = 0
-	t.scrollbackRows = 0
-	t.displayOffset = 0
-
-	blank := t.blank()
-	for i := range sb {
-		t.appendScrollbackLine(paddedCellRow(sb[i], cols, blank), i < len(sbW) && sbW[i])
-	}
-	for i := 0; i < len(live) && i < rows; i++ {
-		copy(t.cells[i*cols:(i+1)*cols], paddedCellRow(live[i], cols, blank))
-		t.rowWrapped[i] = i < len(liveW) && liveW[i]
-	}
-}
-
 func (t *Terminal) snapshotScreen() *screenState {
 	return &screenState{
 		cols:              t.cols,
@@ -376,21 +337,6 @@ func (t *Terminal) ScrollViewport(lines int) bool {
 		t.displayOffset = maxOffset
 	}
 	return t.displayOffset != prev
-}
-
-// splitRowAt divides a physical row into head (row[:k]) and tail (row[k:]) as
-// independent copies. Used when a logical line straddles the scrollback/live
-// boundary: the straddling row is split at the exact char so history cells never
-// enter the viewport (which ConPTY would overwrite → loss) and live cells never
-// freeze into history (→ duplication).
-func splitRowAt(row []Cell, k int) (head, tail []Cell) {
-	if k < 0 {
-		k = 0
-	}
-	if k > len(row) {
-		k = len(row)
-	}
-	return append([]Cell(nil), row[:k]...), append([]Cell(nil), row[k:]...)
 }
 
 func paddedCellRow(row []Cell, cols int, blank Cell) []Cell {
