@@ -25,6 +25,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - SVG text/tspan layout handling with font-size, text-anchor, and dominant-baseline support.
 - Redistributable SVG text fixture table and vttest capture workflow notes/script.
 - Windows packaging metadata: manifest, version info, resource script, SVG icon source, and generated `.ico`.
+- Backend-neutral GPU renderer seam (`internal/frontend/gpu` `Renderer`) with an OpenGL adapter and Vulkan/Metal scaffolding stubs, so future GPU backends can plug in behind one interface. (#84, #85, #86)
 ### Security
 
 - OSC 52 clipboard write is now OFF by default (was "write"); set `clipboard.osc52 = "write"` to restore. Clipboard reads via OSC 52 remain denied. (#61)
@@ -47,6 +48,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Expanded README with build/run/configuration and limitation guidance.
 - CI artifacts now include generated default config and release documentation/metadata directories.
 - Emoji cluster grouping now includes emoji modifiers in addition to combining marks and ZWJ sequences.
+- The entire terminal render path (grid glyphs, cursor, overlays, chrome) now flows through the `gpu.Renderer` seam instead of direct OpenGL calls, with no change to on-screen output. (#85, #86)
 
 ### Known limitations
 
