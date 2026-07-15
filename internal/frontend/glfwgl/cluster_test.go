@@ -111,3 +111,20 @@ func TestCollectRenderClusterRejectsPlainASCII(t *testing.T) {
 		t.Fatalf("plain ASCII should not be pre-shaped, got %#v", cluster)
 	}
 }
+
+// TestCollectRenderClusterFastPathsBareASCII pins the render-path selection the
+// allocation fix depends on: bare digits/#/* (emoji candidates, but no combining
+// marks) take the fast per-rune path, while a keycap sequence — whose marks
+// attach as width-0 combining — must still cluster.
+func TestCollectRenderClusterFastPathsBareASCII(t *testing.T) {
+	for _, r := range []rune{'0', '5', '9', '#', '*'} {
+		cells := []core.Cell{{Rune: r}, {Rune: 'x'}}
+		if cluster, ok := collectRenderCluster(cells, 2, 0, 0); ok {
+			t.Fatalf("bare %q should use the fast per-rune path, got cluster %#v", r, cluster)
+		}
+	}
+	keycap := []core.Cell{core.NewCellWithCombining('1', core.Attr{}, '️', '⃣')}
+	if _, ok := collectRenderCluster(keycap, 1, 0, 0); !ok {
+		t.Fatalf("keycap sequence (digit + U+20E3) must still cluster")
+	}
+}

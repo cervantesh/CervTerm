@@ -33,6 +33,14 @@ func collectRenderCluster(cells []core.Cell, cols int, row int, col int) (render
 	if !shouldCluster {
 		return renderCluster{}, false
 	}
+	// A shapeable ASCII rune (digit, '#', '*') with no combining marks can't begin
+	// a keycap or ZWJ sequence — those attach as width-0 combining marks, caught
+	// by HasCombining above. So a bare ASCII digit is a lone glyph: render it via
+	// the fast per-rune path instead of allocating a cluster string every frame
+	// (this is the bulk of a number-heavy screen's per-frame churn).
+	if !cell.HasCombining() && cell.Rune < 0x80 {
+		return renderCluster{}, false
+	}
 
 	var b strings.Builder
 	writeCellText(&b, cell)
