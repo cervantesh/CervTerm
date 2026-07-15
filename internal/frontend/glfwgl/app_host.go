@@ -168,17 +168,14 @@ func (a *App) Search(query string) bool {
 	if query == "" {
 		return false
 	}
-	a.mu.Lock()
-	from := a.term.ScrollbackLines() + a.term.Rows()
-	row, col, ok := a.term.SearchBackward(query, from)
+	// Same atomic search-and-reveal as the interactive bar (from the live bottom,
+	// no prior match); the port handles the locking. Match state is main-thread
+	// only, so it is recorded outside the critical section.
+	row, col, ok := a.lterm.SearchUpward(query, false, 0)
 	if ok {
 		a.search.matchRow, a.search.matchCol = row, col
 		a.search.matchLen = len([]rune(query))
 		a.search.hasMatch = true
-		a.search.scrollGlobalRowIntoView(row)
-	}
-	a.mu.Unlock()
-	if ok {
 		a.requestRedraw()
 	}
 	return ok
