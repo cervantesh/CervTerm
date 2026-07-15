@@ -3,10 +3,6 @@
 package glfwgl
 
 import (
-	"sync"
-
-	"cervterm/internal/core"
-
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
@@ -15,11 +11,11 @@ import (
 // callbacks route here and the PTY sees nothing (trap 1); closing restores the
 // live input flow exactly by clearing search.active.
 
-// searchController owns the modal scrollback search: its state plus the three
-// App services it needs, injected as explicit dependencies (the terminal to
-// query, the shared mutex that guards it against the PTY reader, and a redraw
-// signal) rather than a back-pointer to the whole App. That keeps search logic
-// in one place and testable in isolation with a real core.Terminal.
+// searchController owns the modal scrollback search: its state plus the two App
+// services it needs as explicit, injected dependencies — a searchTerminal port
+// (the terminal operation, with locking handled by the adapter) and a redraw
+// signal — rather than a back-pointer to the whole App or a raw mutex. That keeps
+// search logic in one place and testable in isolation with a fake searchTerminal.
 //
 // All fields are main-thread only. While active is true, key and char callbacks
 // route to the search bar and nothing reaches the PTY. Match position is stored
@@ -33,16 +29,14 @@ type searchController struct {
 	matchLen int // match length in runes (highlight cell span, v1)
 	viewRow  int // frame-local: match's viewport row, or -1 when off-screen
 
-	term   *core.Terminal
-	mu     *sync.Mutex
+	term   searchTerminal
 	redraw func()
 }
 
 // init wires the App services the controller depends on. Called once after the
 // App is constructed, before the render loop starts.
-func (s *searchController) init(term *core.Terminal, mu *sync.Mutex, redraw func()) {
+func (s *searchController) init(term searchTerminal, redraw func()) {
 	s.term = term
-	s.mu = mu
 	s.redraw = redraw
 }
 
@@ -112,40 +106,15 @@ func (s *searchController) next() {
 		s.redraw()
 		return
 	}
-	s.mu.Lock()
-	from := s.term.ScrollbackLines() + s.term.Rows()
-	if s.hasMatch {
-		from = s.matchRow
-	}
-	row, col, ok := s.term.SearchBackward(string(s.query), from)
+	// The port searches and reveals atomically under the terminal lock; the
+	// controller only tracks the resulting match position.
+	row, col, ok := s.term.SearchUpward(string(s.query), s.hasMatch, s.matchRow)
 	if ok {
 		s.matchRow, s.matchCol = row, col
 		s.matchLen = len(s.query)
 		s.hasMatch = true
-		s.scrollGlobalRowIntoView(row)
 	} else {
 		s.hasMatch = false
 	}
-	s.mu.Unlock()
 	s.redraw()
-}
-
-// scrollGlobalRowIntoView adjusts the display offset so the given global
-// (physical-row) index is visible, centering it when a jump is needed. Must be
-// called with the terminal mutex held. Uses the same global-row/DisplayOffset
-// convention as core.Resize and CopyView (trap 2): the viewport shows global
-// rows [scrollbackRows-displayOffset, +rows-1].
-func (s *searchController) scrollGlobalRowIntoView(g int) {
-	if _, ok := s.term.GlobalRowToViewport(g); ok {
-		return // already visible
-	}
-	scrollbackRows := s.term.ScrollbackLines()
-	curOffset := s.term.DisplayOffset()
-	targetTop := g - s.term.Rows()/2
-	if targetTop < 0 {
-		targetTop = 0
-	}
-	// ScrollViewport moves relative to the current offset and clamps to
-	// [0, scrollbackRows]; a positive delta scrolls back into history.
-	s.term.ScrollViewport((scrollbackRows - targetTop) - curOffset)
 }
