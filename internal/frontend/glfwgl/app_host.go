@@ -175,7 +175,7 @@ func (a *App) Search(query string) bool {
 		a.search.matchRow, a.search.matchCol = row, col
 		a.search.matchLen = len([]rune(query))
 		a.search.hasMatch = true
-		a.scrollGlobalRowIntoView(row)
+		a.search.scrollGlobalRowIntoView(row)
 	}
 	a.mu.Unlock()
 	if ok {
