@@ -152,6 +152,6 @@ type Terminal struct {
 	tabStops          []bool
 	charsets          [2]Charset
 	activeCharset     int
-	cursorStyle       int
+	cursorStyle       CursorStyle
 	focusEvents       bool
 }

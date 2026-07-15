@@ -70,7 +70,7 @@ func TestParserSGRDimBlink(t *testing.T) {
 	term := core.NewTerminal(8, 1)
 	var p Parser
 	p.Advance(term, []byte("\x1b[1;2;5mX\x1b[22mY\x1b[25mZ"))
-	cells := term.Cells()
+	cells := copyCells(term)
 	if !cells[0].Attr.Bold || !cells[0].Attr.Dim || !cells[0].Attr.Blink {
 		t.Fatalf("first attr = %+v", cells[0].Attr)
 	}
