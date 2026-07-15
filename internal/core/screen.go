@@ -12,8 +12,7 @@ func (t *Terminal) CopyView(dst []Cell) {
 	}
 
 	scrollbackRows := t.ScrollbackLines()
-	totalRows := scrollbackRows + t.rows
-	startRow := totalRows - t.rows - t.displayOffset
+	startRow := t.ViewportTopGlobalRow()
 	for row := 0; row < t.rows; row++ {
 		globalRow := startRow + row
 		if globalRow < scrollbackRows {
@@ -26,6 +25,29 @@ func (t *Terminal) CopyView(dst []Cell) {
 	}
 }
 
+// ViewportTopGlobalRow is the global (physical-row) index of the first row
+// visible in the viewport — the same startRow CopyView copies from. The viewport
+// shows global rows [ViewportTopGlobalRow(), ViewportTopGlobalRow()+Rows()-1].
+// Global indices match physicalRows and Resize: index 0 is the oldest scrollback
+// row, scrollbackRows+rows-1 is the last live row. This is the one place the
+// "scrollback minus display offset" arithmetic lives; search scroll-to-match and
+// the draw highlight both derive their viewport rows from it instead of
+// re-computing it by hand.
+func (t *Terminal) ViewportTopGlobalRow() int {
+	return t.scrollbackRows - t.displayOffset
+}
+
+// GlobalRowToViewport translates a global (physical-row) index to a 0-based
+// viewport row, returning ok=false when the row falls outside the visible
+// window. It is the inverse of ViewportTopGlobalRow.
+func (t *Terminal) GlobalRowToViewport(g int) (row int, ok bool) {
+	row = g - t.ViewportTopGlobalRow()
+	if row < 0 || row >= t.rows {
+		return 0, false
+	}
+	return row, true
+}
+
 // LineWrapped reports whether a row in the current viewport wraps into the
 // next row. Row indices are 0-based.
 func (t *Terminal) LineWrapped(row int) (bool, bool) {
@@ -33,7 +55,7 @@ func (t *Terminal) LineWrapped(row int) (bool, bool) {
 		return false, false
 	}
 
-	globalRow := t.scrollbackRows - t.displayOffset + row
+	globalRow := t.ViewportTopGlobalRow() + row
 	if globalRow < t.scrollbackRows {
 		sourceRow := (t.scrollbackStart + globalRow) % maxScrollbackRows
 		if len(t.scrollbackWrapped) != maxScrollbackRows {
@@ -54,14 +76,7 @@ func (t *Terminal) PlainText() string {
 	b.Grow(t.rows * (t.cols + 1))
 	for r := 0; r < t.rows; r++ {
 		start := r * t.cols
-		end := start + t.cols
-		last := end - 1
-		for last >= start && isBlankCell(t.cells[last]) {
-			last--
-		}
-		for i := start; i <= last; i++ {
-			writeCellText(&b, t.cells[i])
-		}
+		b.WriteString(RowText(t.cells[start : start+t.cols]))
 		if r != t.rows-1 {
 			b.WriteByte('\n')
 		}

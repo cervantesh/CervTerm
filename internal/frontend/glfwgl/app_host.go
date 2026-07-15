@@ -3,7 +3,6 @@
 package glfwgl
 
 import (
-	"strings"
 	"time"
 
 	"cervterm/internal/core"
@@ -149,25 +148,10 @@ func (a *App) Line(row int) (string, bool) {
 	cells := make([]core.Cell, cols*rows)
 	a.term.CopyView(cells)
 	start := row * cols
-	last := start + cols - 1
-	for last >= start && (cells[last].Rune == ' ' || cells[last].Rune == 0) {
-		last--
-	}
-	var b strings.Builder
-	for i := start; i <= last; i++ {
-		if cells[i].WideContinuation {
-			continue
-		}
-		r := cells[i].Rune
-		if r == 0 {
-			r = ' '
-		}
-		b.WriteRune(r)
-		for _, c := range cells[i].Combining() {
-			b.WriteRune(c)
-		}
-	}
-	return b.String(), true
+	// core.RowText is the canonical row-text rule shared with selection/copy, so
+	// term:line() returns exactly what the clipboard would (skipping Rune==0 and
+	// WideContinuation padding, not turning them into spaces).
+	return core.RowText(cells[start : start+cols]), true
 }
 
 func (a *App) LineWrapped(row int) (bool, bool) {
