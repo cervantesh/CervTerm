@@ -3,10 +3,12 @@
 package pty
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/ActiveState/termtest/conpty"
@@ -56,6 +58,14 @@ func NewLocalWithOptions(rows, cols uint16, opts Options) (Session, error) {
 	// SYSTEMROOT survives), which leaves the shell without a PATH — every external
 	// program (git, node, python, npx...) then fails to launch.
 	env := append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	// Advertise ANSI/VT color support the way Windows console apps detect it. Many
+	// (Django, and CLIs using colorama/supports-color) gate coloring on ANSICON
+	// rather than the Unix TERM/COLORTERM, so without this they print monochrome
+	// even though CervTerm renders SGR fine. The value is the ansicon convention
+	// (COLUMNSxROWS). Don't override a real ansicon the user is already running under.
+	if !hasEnvKey(env, "ANSICON") {
+		env = append(env, fmt.Sprintf("ANSICON=%dx%d", cols, rows))
+	}
 	for key, value := range opts.Env {
 		env = append(env, key+"="+value)
 	}
@@ -66,6 +76,18 @@ func NewLocalWithOptions(rows, cols uint16, opts Options) (Session, error) {
 	}
 
 	return &localSession{pty: cp, handle: handle}, nil
+}
+
+// hasEnvKey reports whether env already contains a "KEY=..." entry for key,
+// matched case-insensitively like Windows environment variables.
+func hasEnvKey(env []string, key string) bool {
+	prefix := key + "="
+	for _, kv := range env {
+		if len(kv) >= len(prefix) && strings.EqualFold(kv[:len(prefix)], prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func resolveWindowsProgram(program string) (string, error) {
