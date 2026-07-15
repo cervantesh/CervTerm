@@ -251,24 +251,29 @@ func trimmedCellRow(row []Cell) []Cell {
 	return out
 }
 
+// wrappedContentLen is the number of chars a WRAPPED physical row contributes to
+// its logical line: its full width minus any trailing synthetic Rune==0 padding
+// that a char-split boundary head left when padded to the ring width. Real
+// alignment spaces (Rune==' ') are kept. logicalRowsFromPhysical, physicalAnchor
+// and physicalForAnchor all use this so they agree on where chars fall — a
+// mismatch shifts the history/live boundary by a row on a later resize.
+func wrappedContentLen(row []Cell) int {
+	n := len(row)
+	for n > 0 && row[n-1].Rune == 0 && !row[n-1].WideContinuation {
+		n--
+	}
+	return n
+}
+
 func logicalRowsFromPhysical(rows [][]Cell, wrappedRows []bool) [][]Cell {
 	logicalRows := make([][]Cell, 0, len(rows))
 	var current []Cell
 	for i, row := range rows {
 		wrapped := i < len(wrappedRows) && wrappedRows[i]
 		if wrapped {
-			// A wrapped row continues onto the next one, so its trailing SPACES are
-			// interior alignment of the logical line (e.g. columns in `dir`/`ls`
-			// output), not padding — keep them (trimming collapsed those runs when
-			// content was rewrapped narrow). But drop trailing UNWRITTEN cells
-			// (Rune==0): a genuine auto-wrapped row is full of written cells, so the
-			// only Rune==0 tail comes from a char-split boundary head being padded to
-			// the ring width; keeping it would splice fake spaces mid-word.
-			r := row
-			for len(r) > 0 && r[len(r)-1].Rune == 0 && !r[len(r)-1].WideContinuation {
-				r = r[:len(r)-1]
-			}
-			current = append(current, r...)
+			// A wrapped row continues onto the next: keep its interior alignment
+			// spaces but drop trailing char-split padding (see wrappedContentLen).
+			current = append(current, row[:wrappedContentLen(row)]...)
 			continue
 		}
 		// Last row of the logical line: its trailing blanks are display padding.
@@ -315,9 +320,9 @@ func physicalAnchor(physicalRows [][]Cell, wrappedRows []bool, target int) (line
 		// A wrapped row contributes its full width to the logical line (its trailing
 		// cells are interior alignment, kept by logicalRowsFromPhysical); a
 		// non-wrapped row ends the line, so its char count is irrelevant (accum
-		// resets). Counting the full width keeps this consistent with the reflow.
+		// resets). Counting the effective width keeps this consistent with the reflow.
 		if i < len(wrappedRows) && wrappedRows[i] {
-			accum += len(physicalRows[i])
+			accum += wrappedContentLen(physicalRows[i])
 		} else {
 			logicalLine++
 			accum = 0
@@ -336,7 +341,7 @@ func physicalForAnchor(physicalRows [][]Cell, wrappedRows []bool, line, char int
 		wrapped := i < len(wrappedRows) && wrappedRows[i]
 		segLen := len(trimmedCellRow(physicalRows[i]))
 		if wrapped {
-			segLen = len(physicalRows[i]) // full width; consistent with physicalAnchor
+			segLen = wrappedContentLen(physicalRows[i]) // consistent with physicalAnchor
 		}
 		if logicalLine == line && (char < accum+segLen || !wrapped) {
 			return i

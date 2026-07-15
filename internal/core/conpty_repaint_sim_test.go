@@ -167,6 +167,31 @@ func TestStraddleLineNoLossNoDuplication(t *testing.T) {
 	}
 }
 
+// TestStraddlePaddingNotCountedOnNextResize is the pair-review regression: the
+// Rune==0 padding a char-split head is stored with must not be counted as content
+// by physicalAnchor on a LATER resize, or the history/live boundary drifts by a
+// row (freezing live cells into history) even though the final text still heals.
+func TestStraddlePaddingNotCountedOnNextResize(t *testing.T) {
+	term := NewTerminal(30, 6)
+	line := "MARKER-0123456789-0123456789-END" // 32 chars -> ceil(32/6)=6 rows at width 6
+	for _, r := range line {
+		term.PutRune(r)
+	}
+	term.Resize(6, 2)  // straddle: 4 rows to history, 2 live
+	term.Resize(30, 6) // widen: head char-split into history (zero-padded)
+	term.Resize(6, 2)  // shrink again: the padded head must not shift the boundary
+
+	// 6 physical rows total, 2 live -> exactly 4 in scrollback. A miscount from the
+	// padding reports 5 and freezes a live row into history.
+	if got := term.ScrollbackLines(); got != 4 {
+		t.Fatalf("padding counted as content: ScrollbackLines()=%d, want 4", got)
+	}
+	joined := strings.ReplaceAll(strings.TrimRight(fullText(term), "\n"), "\n", "")
+	if joined != line {
+		t.Fatalf("content corrupted across repeated straddle resizes: %q", joined)
+	}
+}
+
 func twoDigit(i int) string {
 	if i < 10 {
 		return "0" + string(rune('0'+i))

@@ -173,14 +173,6 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 	if a.needsRedraw {
 		return minWake
 	}
-	// A debounced zoom must wake the loop when its deadline arrives so the coalesced
-	// rebuild fires even if no other event does.
-	if a.zoom.pendingSet {
-		if d := a.zoom.deadline.Sub(now); d > 0 {
-			return max(minWake, d)
-		}
-		return minWake
-	}
 	// A pending timer bounds the wait. Zero (no timers, or no runtime) leaves
 	// nextWake unchanged, so an idle terminal with no timers still costs nothing.
 	var timerDeadline time.Time
@@ -189,7 +181,17 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 			timerDeadline = deadline
 		}
 	}
-	return nextWake(now, a.blinkActive(), a.blinkStart, a.blinkPeriod(), a.noticeUntil, a.showStats, timerDeadline)
+	wake := nextWake(now, a.blinkActive(), a.blinkStart, a.blinkPeriod(), a.noticeUntil, a.showStats, timerDeadline)
+	// A debounced zoom must wake the loop when its deadline arrives so the coalesced
+	// rebuild fires even if no other event does — but never past an earlier deadline
+	// (blink, timers, notice), so those stay on time.
+	if a.zoom.pendingSet {
+		zoomWake := max(minWake, a.zoom.deadline.Sub(now))
+		if wake <= 0 || zoomWake < wake {
+			wake = zoomWake
+		}
+	}
+	return wake
 }
 
 // blinkPeriod is the full cursor blink period; the phase flips every half.
