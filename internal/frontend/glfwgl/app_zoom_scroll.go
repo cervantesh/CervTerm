@@ -3,6 +3,8 @@
 package glfwgl
 
 import (
+	"time"
+
 	"cervterm/internal/script"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -22,8 +24,9 @@ type zoomBindings struct {
 	in, out, reset       script.Spec
 	inOK, outOK, resetOK bool
 	base                 float64
-	pending              float64 // coalesced target size; applied once per loop
+	pending              float64   // coalesced target size; applied once the burst settles
 	pendingSet           bool
+	deadline             time.Time // apply the pending size once now passes this (debounce)
 }
 
 // initZoomHotkeys parses the configured zoom chords and records the base font
@@ -96,11 +99,16 @@ func (a *App) zoomTarget() float64 {
 	return a.cfg.Font.Size
 }
 
+// zoomDebounce is how long the coalesced zoom target must be stable before the
+// atlas/grid/PTY rebuild fires. A burst (wheel spin, Ctrl+= key-repeat) resizes
+// the PTY at every intermediate size otherwise, and ConPTY's async repaint of
+// each size interleaves over the next grid → duplicated/garbled scrollback. One
+// rebuild at the settled size means one PTY resize and one repaint.
+const zoomDebounce = 70 * time.Millisecond
+
 // applyFontSize clamps pts to the zoom bounds and records it as the pending
-// target instead of rebuilding immediately. A fast burst of wheel ticks fires
-// this many times per frame; applyPendingZoom then rebuilds the atlas once per
-// loop iteration, so rapid zooming can't thrash the (expensive) atlas rebuild.
-// Reads a.cfg.Font.Size for the current size so accumulated steps compound.
+// target, pushing the debounce deadline out so a continuing burst keeps
+// coalescing. applyPendingZoom fires the actual rebuild once the burst settles.
 func (a *App) applyFontSize(pts float64) {
 	if pts < zoomFontMin {
 		pts = zoomFontMin
@@ -109,14 +117,15 @@ func (a *App) applyFontSize(pts float64) {
 		pts = zoomFontMax
 	}
 	a.zoom.pending, a.zoom.pendingSet = pts, true
+	a.zoom.deadline = time.Now().Add(zoomDebounce)
 	a.requestRedraw()
 }
 
-// applyPendingZoom performs at most one atlas/grid rebuild per loop iteration
-// for the coalesced zoom target. Called from the loop on the main thread with
-// the GL context current. SetFontSize is a no-op when the size is unchanged.
+// applyPendingZoom fires the coalesced zoom rebuild once the target has been
+// stable for zoomDebounce (the burst settled). Called from the loop on the main
+// thread with the GL context current. SetFontSize is a no-op when unchanged.
 func (a *App) applyPendingZoom() {
-	if !a.zoom.pendingSet {
+	if !a.zoom.pendingSet || time.Now().Before(a.zoom.deadline) {
 		return
 	}
 	a.zoom.pendingSet = false
