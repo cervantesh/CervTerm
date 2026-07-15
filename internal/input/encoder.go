@@ -2,6 +2,7 @@ package input
 
 import (
 	"fmt"
+	"strings"
 	"unicode"
 )
 
@@ -197,6 +198,7 @@ func EncodePaste(text string, bracketed bool) []byte {
 	if !bracketed {
 		return []byte(text)
 	}
+	text = strings.ReplaceAll(text, "\x1b[201~", "")
 	out := make([]byte, 0, len(text)+12)
 	out = append(out, "\x1b[200~"...)
 	out = append(out, text...)
