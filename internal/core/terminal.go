@@ -40,46 +40,101 @@ func (t *Terminal) Resize(cols, rows int) {
 	if cols == t.cols && rows == t.rows {
 		return
 	}
-	oldCols := t.cols
-	oldCursorGlobal := t.scrollbackRows + t.cursorRow
-	oldDisplayOffset := t.displayOffset
-	physicalRows, wrappedRows := t.physicalRows()
+	if t.alternateScreen {
+		t.resizeAlt(cols, rows)
+		return
+	}
+	t.resizePrimary(cols, rows)
+}
 
-	// Width change while scrolled up: remember the logical anchor at the viewport
-	// top so reflow doesn't make the content jump. At the bottom (offset 0) the
-	// viewport keeps following the prompt, so it is not anchored.
-	anchor := cols != oldCols && oldDisplayOffset > 0
-	anchorLine, anchorChar := 0, 0
-	if anchor {
-		anchorLine, anchorChar = physicalAnchor(physicalRows, wrappedRows, t.scrollbackRows-oldDisplayOffset)
+// resizePrimary reflows the primary screen. History (scrollback) and the live
+// screen are reflowed as SEPARATE groups so a shrink can spill live content into
+// history, but a grow never pulls history back into the viewport. That asymmetry
+// is deliberate: under ConPTY the shell repaints the whole viewport on every
+// resize, so anything we pull up would be overwritten with blanks and lost. The
+// grown viewport stays top-anchored with blank rows below, which the shell fills.
+func (t *Terminal) resizePrimary(cols, rows int) {
+	oldCols, oldOffset := t.cols, t.displayOffset
+
+	sb, sbW := t.scrollbackPhysicalRows()
+	live, liveW := t.screenPhysicalRows()
+
+	// Cursor anchor, in logical coordinates of the live group.
+	curLine, curStart := physicalAnchor(live, liveW, t.cursorRow)
+	curChar := curStart + t.cursorCol
+
+	// Viewport-top anchor, in combined coordinates, only while scrolled up.
+	anchored := oldOffset > 0
+	var topLine, topChar int
+	if anchored {
+		topLine, topChar = physicalAnchor(concatRows(sb, live), concatBools(sbW, liveW), len(sb)-oldOffset)
 	}
 
 	if cols != oldCols {
-		logicalRows := logicalRowsFromPhysical(physicalRows, wrappedRows)
-		physicalRows, wrappedRows = reflowLogicalRows(logicalRows, cols)
+		sb, sbW = reflowGroup(sb, sbW, cols)
+		live, liveW = reflowGroup(live, liveW, cols)
 	}
-	if !t.alternateScreen {
-		// Trailing all-blank rows below the cursor are dropped rather than letting
-		// them force content into scrollback; only real content scrolls to history.
-		keep := min(oldCursorGlobal+1, len(physicalRows))
-		for len(physicalRows) > keep && !wrappedRows[len(wrappedRows)-1] && isBlankRow(physicalRows[len(physicalRows)-1]) {
-			physicalRows = physicalRows[:len(physicalRows)-1]
-			wrappedRows = wrappedRows[:len(wrappedRows)-1]
+
+	curRow, curCol := cursorForAnchor(live, liveW, curLine, curChar, cols)
+
+	// Drop trailing all-blank rows below the cursor (local to the live group) so
+	// they don't spill into history; only real content scrolls to scrollback.
+	keep := curRow + 1
+	for len(live) > keep && !liveW[len(liveW)-1] && isBlankRow(live[len(live)-1]) {
+		live = live[:len(live)-1]
+		liveW = liveW[:len(liveW)-1]
+	}
+
+	// Shrink: live content that no longer fits spills into history, top-first.
+	// Grow: push <= 0, so nothing moves and the live group stays top-anchored.
+	if push := len(live) - rows; push > 0 {
+		sb = append(sb, live[:push]...)
+		sbW = append(sbW, liveW[:push]...)
+		// Re-cut the seam at the NEW scrollback↔live boundary: the last pushed row
+		// may carry wrapped=true (a line continuing into the row that stays live),
+		// which would wrongly rejoin history with the live screen in selection/copy.
+		// scrollbackPhysicalRows cut the OLD seam; this cuts the one the push made.
+		sbW[len(sbW)-1] = false
+		live, liveW = live[push:], liveW[push:]
+		curRow -= push
+	}
+
+	t.rebuildScreen(cols, rows, sb, sbW, live, liveW)
+
+	t.cursorRow = max(0, min(rows-1, curRow))
+	t.cursorCol = max(0, min(cols-1, curCol))
+	t.wrapNext = false
+	t.resetScrollRegion()
+	t.resizeTabStops(oldCols, cols)
+
+	if anchored {
+		t.displayOffset = min(anchoredOffsetSeparated(sb, sbW, live, liveW, topLine, topChar), t.ScrollbackLines())
+	} else {
+		t.displayOffset = 0
+	}
+}
+
+// resizeAlt resizes the alternate screen: a top-anchored crop/extend with no
+// reflow and no scrollback (the alt screen has none). Full-screen apps (vim,
+// less) repaint after the resize, so preserving the exact old cells matters less
+// than never fabricating scrollback here — which the old shared path did.
+func (t *Terminal) resizeAlt(cols, rows int) {
+	oldCols, oldRows := t.cols, t.rows
+	oldCells, oldWrapped := t.cells, t.rowWrapped
+	t.cols, t.rows = cols, rows
+	t.cells = make([]Cell, cols*rows)
+	t.rowWrapped = make([]bool, rows)
+	t.fillBlank(t.cells)
+
+	copyRows, copyCols := min(rows, oldRows), min(cols, oldCols)
+	for r := 0; r < copyRows; r++ {
+		copy(t.cells[r*cols:r*cols+copyCols], oldCells[r*oldCols:r*oldCols+copyCols])
+		if copyCols == oldCols && r < len(oldWrapped) {
+			t.rowWrapped[r] = oldWrapped[r]
 		}
 	}
-	visibleStart := max(0, len(physicalRows)-rows)
-	newDisplayOffset := oldDisplayOffset
-	if anchor {
-		newDisplayOffset = anchoredDisplayOffset(physicalRows, wrappedRows, anchorLine, anchorChar, rows)
-	}
-	t.rebuildFromPhysicalRows(cols, rows, physicalRows, wrappedRows, newDisplayOffset)
-
-	if cols == oldCols {
-		t.cursorRow = max(0, min(rows-1, oldCursorGlobal-visibleStart))
-	}
-	if t.cursorCol >= cols {
-		t.cursorCol = cols - 1
-	}
+	t.cursorRow = min(t.cursorRow, rows-1)
+	t.cursorCol = min(t.cursorCol, cols-1)
 	t.wrapNext = false
 	t.resetScrollRegion()
 	t.resizeTabStops(oldCols, cols)

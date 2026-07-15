@@ -105,7 +105,70 @@ func (t *Terminal) physicalRows() ([][]Cell, []bool) {
 	return rows, wrapped
 }
 
-func (t *Terminal) rebuildFromPhysicalRows(cols, rows int, physicalRows [][]Cell, wrappedRows []bool, displayOffset int) {
+// scrollbackPhysicalRows returns only the frozen history rows. The wrapped flag
+// of the LAST row is forced false so the scrollback↔screen seam is cut: reflow
+// then treats history and live screen as independent groups and never moves a
+// wrapped logical line across the seam. Moving it either way is wrong under
+// ConPTY — pulling the prefix into the viewport reintroduces the loss bug, and
+// pushing the live tail into history duplicates it when ConPTY repaints the
+// viewport — so we cut instead. Cost: a line that happened to wrap across the
+// seam at resize time is split into two logical lines (not rejoined).
+func (t *Terminal) scrollbackPhysicalRows() ([][]Cell, []bool) {
+	rows := make([][]Cell, 0, t.scrollbackRows)
+	wrapped := make([]bool, 0, t.scrollbackRows)
+	for row := 0; row < t.scrollbackRows; row++ {
+		sourceRow := (t.scrollbackStart + row) % maxScrollbackRows
+		start := sourceRow * t.cols
+		rows = append(rows, cloneCellRow(t.scrollback[start:start+t.cols]))
+		if len(t.scrollbackWrapped) == maxScrollbackRows {
+			wrapped = append(wrapped, t.scrollbackWrapped[sourceRow])
+		} else {
+			wrapped = append(wrapped, false)
+		}
+	}
+	if n := len(wrapped); n > 0 {
+		wrapped[n-1] = false // cut the seam
+	}
+	return rows, wrapped
+}
+
+// screenPhysicalRows returns only the live screen rows (t.cells) with their wrap
+// flags — the shell-owned region that ConPTY repaints on resize.
+func (t *Terminal) screenPhysicalRows() ([][]Cell, []bool) {
+	rows := make([][]Cell, 0, t.rows)
+	wrapped := make([]bool, 0, t.rows)
+	for row := 0; row < t.rows; row++ {
+		start := row * t.cols
+		rows = append(rows, cloneCellRow(t.cells[start:start+t.cols]))
+		wrapped = append(wrapped, row < len(t.rowWrapped) && t.rowWrapped[row])
+	}
+	return rows, wrapped
+}
+
+// reflowGroup rewraps one group (history or live screen) to a new width.
+func reflowGroup(rows [][]Cell, wrapped []bool, cols int) ([][]Cell, []bool) {
+	return reflowLogicalRows(logicalRowsFromPhysical(rows, wrapped), cols)
+}
+
+func concatRows(a, b [][]Cell) [][]Cell {
+	out := make([][]Cell, 0, len(a)+len(b))
+	out = append(out, a...)
+	return append(out, b...)
+}
+
+func concatBools(a, b []bool) []bool {
+	out := make([]bool, 0, len(a)+len(b))
+	out = append(out, a...)
+	return append(out, b...)
+}
+
+// rebuildScreen rebuilds the scrollback ring and the live grid from the two
+// reflowed groups. Precondition: len(live) <= rows. The grid is TOP-anchored
+// (live[0] -> row 0; any extra rows stay blank) so ConPTY's post-resize viewport
+// repaint lands on the same rows we already show — no visual jump, no duplicated
+// lines. Unlike the old rebuildFromPhysicalRows it does not decide the cursor or
+// how much content spills to scrollback; resizePrimary owns that.
+func (t *Terminal) rebuildScreen(cols, rows int, sb [][]Cell, sbW []bool, live [][]Cell, liveW []bool) {
 	t.cols, t.rows = cols, rows
 	t.cells = make([]Cell, cols*rows)
 	t.rowWrapped = make([]bool, rows)
@@ -114,26 +177,15 @@ func (t *Terminal) rebuildFromPhysicalRows(cols, rows int, physicalRows [][]Cell
 	t.scrollbackWrapped = nil
 	t.scrollbackStart = 0
 	t.scrollbackRows = 0
+	t.displayOffset = 0
 
-	visibleRows := min(rows, len(physicalRows))
-	scrollbackRows := len(physicalRows) - visibleRows
 	blank := t.blank()
-	for row := 0; row < scrollbackRows; row++ {
-		t.appendScrollbackLine(paddedCellRow(physicalRows[row], cols, blank), row < len(wrappedRows) && wrappedRows[row])
+	for i := range sb {
+		t.appendScrollbackLine(paddedCellRow(sb[i], cols, blank), i < len(sbW) && sbW[i])
 	}
-
-	visibleStart := len(physicalRows) - visibleRows
-	for row := 0; row < visibleRows; row++ {
-		physicalIndex := visibleStart + row
-		copy(t.cells[row*cols:(row+1)*cols], paddedCellRow(physicalRows[physicalIndex], cols, blank))
-		t.rowWrapped[row] = physicalIndex < len(wrappedRows) && wrappedRows[physicalIndex]
-	}
-
-	t.displayOffset = min(displayOffset, t.ScrollbackLines())
-	if visibleRows > 0 {
-		t.cursorRow = visibleRows - 1
-	} else {
-		t.cursorRow = 0
+	for i := 0; i < len(live) && i < rows; i++ {
+		copy(t.cells[i*cols:(i+1)*cols], paddedCellRow(live[i], cols, blank))
+		t.rowWrapped[i] = i < len(liveW) && liveW[i]
 	}
 }
 
@@ -348,11 +400,35 @@ func (t *Terminal) ScrollViewport(lines int) bool {
 	return t.displayOffset != prev
 }
 
-// anchoredDisplayOffset returns the display offset that keeps the logical
-// (line, char) anchor at the viewport top after a reflow to rows visible rows.
-func anchoredDisplayOffset(physicalRows [][]Cell, wrappedRows []bool, line, char, rows int) int {
-	newScrollback := max(0, len(physicalRows)-rows)
-	newTop := physicalForAnchor(physicalRows, wrappedRows, line, char)
+// cursorForAnchor maps a logical (line, char) anchor to a physical row/column in
+// a (reflowed) layout — the inverse of physicalAnchor for the cursor. The column
+// is clamped to the row width; ConPTY repositions the cursor after a resize, but
+// core stays sensible standalone (Unix ptys, tests).
+func cursorForAnchor(rows [][]Cell, wrapped []bool, line, char, cols int) (row, col int) {
+	row = physicalForAnchor(rows, wrapped, line, char)
+	accum := 0
+	for i := 0; i < row && i < len(rows); i++ {
+		accum += len(trimmedCellRow(rows[i]))
+		if i >= len(wrapped) || !wrapped[i] {
+			accum = 0
+		}
+	}
+	col = char - accum
+	if col < 0 {
+		col = 0
+	} else if col > cols-1 {
+		col = cols - 1
+	}
+	return row, col
+}
+
+// anchoredOffsetSeparated returns the display offset that keeps the logical
+// (line, char) anchor at the viewport top after a separated reflow. The
+// scrollback count is the real len(sb): on a grow the live group can be shorter
+// than rows, which the old len(physical)-rows formula underestimated.
+func anchoredOffsetSeparated(sb [][]Cell, sbW []bool, live [][]Cell, liveW []bool, line, char int) int {
+	newTop := physicalForAnchor(concatRows(sb, live), concatBools(sbW, liveW), line, char)
+	newScrollback := len(sb)
 	return max(0, min(newScrollback-newTop, newScrollback))
 }
 
