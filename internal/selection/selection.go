@@ -87,36 +87,11 @@ func clampPoint(snap render.Snapshot, p Point) Point {
 	return p
 }
 
+// lineText returns the text of one selected span [startCol, endCol] of a row.
+// It defers to core.RowText — the single canonical row-text rule shared with the
+// term:line() accessor — applied to the span slice, so the trailing-blank trim
+// and cell-skipping policy match copy/paste and Lua exactly.
 func lineText(snap render.Snapshot, row, startCol, endCol int) string {
-	last := endCol
-	for last >= startCol {
-		cell := snap.Cells[row*snap.Cols+last]
-		if !isBlankCell(cell) {
-			break
-		}
-		last--
-	}
-	if last < startCol {
-		return ""
-	}
-
-	var b strings.Builder
-	for col := startCol; col <= last; col++ {
-		writeCellText(&b, snap.Cells[row*snap.Cols+col])
-	}
-	return b.String()
-}
-
-func isBlankCell(cell core.Cell) bool {
-	return cell.WideContinuation || cell.Rune == 0 || cell.Rune == ' '
-}
-
-func writeCellText(b *strings.Builder, cell core.Cell) {
-	if cell.WideContinuation || cell.Rune == 0 {
-		return
-	}
-	b.WriteRune(cell.Rune)
-	for _, r := range cell.Combining() {
-		b.WriteRune(r)
-	}
+	base := row * snap.Cols
+	return core.RowText(snap.Cells[base+startCol : base+endCol+1])
 }
