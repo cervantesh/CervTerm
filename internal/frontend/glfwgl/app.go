@@ -102,7 +102,7 @@ type App struct {
 	// loop's 500ms bounded wait.
 	wakeReady atomic.Bool
 
-	search      searchState
+	search      searchController
 	selection   selectionState
 	mouseReport mouseReportState
 }
@@ -152,6 +152,9 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 			_ = app.pty.Close()
 		}
 	}()
+	// Wire the search controller's explicit dependencies now that the App (and its
+	// terminal and mutex) exists.
+	app.search.init(app.term, &app.mu, app.requestRedraw)
 	return app.runWindow()
 }
 
@@ -264,7 +267,7 @@ func (a *App) installCallbacks() {
 		// reaches the PTY (trap 1). closeSearch restores this callback's normal
 		// flow exactly by clearing a.search.active.
 		if a.search.active {
-			a.searchAppendRune(char)
+			a.search.appendRune(char)
 			return
 		}
 		if encoded, ok := input.Encode(input.Event{Rune: char}); ok {
@@ -279,7 +282,7 @@ func (a *App) installCallbacks() {
 		// bar (fixed v1) and, while searching, every key routes to search handling
 		// and nothing reaches the PTY (trap 1) — checked before script keys and
 		// the stats toggle so those chords cannot leak through the bar.
-		if a.handleSearchKey(key, mods) {
+		if a.search.handleKey(key, mods) {
 			return
 		}
 		if a.dispatchScriptKey(key, mods, action == glfw.Press) {
