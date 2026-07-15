@@ -7,8 +7,6 @@ import (
 
 	"cervterm/internal/core"
 	"cervterm/internal/script"
-
-	"github.com/go-gl/gl/v2.1/gl"
 )
 
 // overlayRender mirrors the committed script overlay scenes into the frontend.
@@ -69,9 +67,6 @@ func (a *App) drawOverlays() {
 		return
 	}
 	cols, rows := a.snap.Cols, a.snap.Rows
-	gl.Disable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	for i := range a.overlays.scenes {
 		sc := &a.overlays.scenes[i]
 		if !sc.Visible {
@@ -90,19 +85,19 @@ func (a *App) drawOverlayPrim(p script.OverlayPrim, cols, rows int) {
 		if x0, y0, x1, y1, ok := script.ClipCellRect(p.Col, p.Row, p.W, p.H, cols, rows); ok {
 			x := a.paddingX + float32(x0)*a.cellW
 			y := a.paddingY + float32(y0)*a.cellH
-			fillRect(x, y, float32(x1-x0+1)*a.cellW, float32(y1-y0+1)*a.cellH, c)
+			a.fillRect(x, y, float32(x1-x0+1)*a.cellW, float32(y1-y0+1)*a.cellH, c)
 		}
 	case script.OverlayHLine:
 		if x0, y0, x1, _, ok := script.ClipCellRect(p.Col, p.Row, p.W, 1, cols, rows); ok {
 			x := a.paddingX + float32(x0)*a.cellW
 			y := a.paddingY + float32(y0)*a.cellH
-			fillRect(x, y, float32(x1-x0+1)*a.cellW, max(1, a.uiScale), c)
+			a.fillRect(x, y, float32(x1-x0+1)*a.cellW, max(1, a.uiScale), c)
 		}
 	case script.OverlayVLine:
 		if x0, y0, _, y1, ok := script.ClipCellRect(p.Col, p.Row, 1, p.H, cols, rows); ok {
 			x := a.paddingX + float32(x0)*a.cellW
 			y := a.paddingY + float32(y0)*a.cellH
-			fillRect(x, y, max(1, a.uiScale), float32(y1-y0+1)*a.cellH, c)
+			a.fillRect(x, y, max(1, a.uiScale), float32(y1-y0+1)*a.cellH, c)
 		}
 	case script.OverlayText:
 		a.drawOverlayText(p, cols, rows, c)

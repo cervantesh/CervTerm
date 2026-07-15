@@ -50,7 +50,7 @@ func (a *App) runContinuousLoop(w *glfw.Window) error {
 		a.syncStatusSegments()
 		a.syncOverlays()
 		a.draw()
-		w.SwapBuffers()
+		a.r.EndFrame()
 		a.meter.AddFrame()
 	}
 	return nil
@@ -72,7 +72,7 @@ func (a *App) runOnDemandLoop(w *glfw.Window) error {
 		a.syncOverlays()
 		if a.shouldRedraw(time.Now()) {
 			a.draw()
-			w.SwapBuffers()
+			a.r.EndFrame()
 			a.meter.AddFrame()
 			a.needsRedraw = false
 		}
