@@ -181,7 +181,17 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 			timerDeadline = deadline
 		}
 	}
-	return nextWake(now, a.blinkActive(), a.blinkStart, a.blinkPeriod(), a.noticeUntil, a.showStats, timerDeadline)
+	wake := nextWake(now, a.blinkActive(), a.blinkStart, a.blinkPeriod(), a.noticeUntil, a.showStats, timerDeadline)
+	// A debounced zoom must wake the loop when its deadline arrives so the coalesced
+	// rebuild fires even if no other event does — but never past an earlier deadline
+	// (blink, timers, notice), so those stay on time.
+	if a.zoom.pendingSet {
+		zoomWake := max(minWake, a.zoom.deadline.Sub(now))
+		if wake <= 0 || zoomWake < wake {
+			wake = zoomWake
+		}
+	}
+	return wake
 }
 
 // blinkPeriod is the full cursor blink period; the phase flips every half.

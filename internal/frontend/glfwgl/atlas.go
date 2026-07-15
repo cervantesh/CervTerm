@@ -88,6 +88,17 @@ func (a *glyphAtlas) prewarmASCII() {
 }
 
 func (a *glyphAtlas) Reset() {
+	// Reset can fire mid-frame: insertRaster calls it when a glyph won't fit, and
+	// glyphs are inserted lazily during drawRow. At that point this frame has
+	// already issued immediate-mode quads that sample these atlas textures. The
+	// texture reallocation/clear below (and the re-uploads that follow) would then
+	// race those still-pending draws — a well-behaved driver serializes the read
+	// before the write, but many do not, and the earlier-drawn glyphs (higher rows,
+	// i.e. the ones "further back") sample cleared/overwritten texels and vanish.
+	// gl.Finish drains the pipeline so every pending draw completes against the old
+	// atlas before we touch it. Reset is rare (zoom reconfigure or atlas overflow),
+	// so the full stall is not a hot-path cost.
+	gl.Finish()
 	for i := range a.pages {
 		a.pages[i].packer.Reset()
 		clearAtlasTexture(a.pages[i].tex)
