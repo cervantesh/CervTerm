@@ -642,6 +642,7 @@ func fallbackFontPaths() []string {
 	paths = append(paths,
 		filepath.Join(fontDir, "NotoColorEmoji.ttf"),
 		filepath.Join(fontDir, "seguiemj.ttf"),
+		filepath.Join(fontDir, "seguisym.ttf"),
 		filepath.Join(fontDir, "consola.ttf"),
 		filepath.Join(fontDir, "malgun.ttf"),
 		filepath.Join(fontDir, "simsunb.ttf"),
