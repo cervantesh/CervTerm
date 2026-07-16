@@ -3,8 +3,6 @@
 package glfwgl
 
 import (
-	"time"
-
 	"cervterm/internal/script"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -18,16 +16,12 @@ const (
 	zoomFontStep = 1.0
 )
 
-// zoomBindings holds the parsed zoom hotkeys and the configured font size the
-// reset chord restores. Each *OK flag is false when its chord is empty/invalid.
+// zoomBindings holds parsed zoom hotkeys and the configured base size restored
+// by the reset chord. Pending zoom state is pane-local in paneFontState.
 type zoomBindings struct {
 	in, out, reset       script.Spec
 	inOK, outOK, resetOK bool
 	base                 float64
-	pending              float64 // latest target size; the visual is rebuilt toward this every step
-	pendingSet           bool
-	ptyDirty             bool      // grid changed since ConPTY was last told; resize it at burst settle
-	deadline             time.Time // resize the PTY once now passes this (debounce)
 }
 
 // initZoomHotkeys parses the configured zoom chords and records the base font
@@ -45,10 +39,9 @@ func (a *App) initZoomHotkeys() {
 	}
 }
 
-// handleZoomKey applies the configured zoom-in/out/reset hotkeys, rebuilding the
-// atlas and grid at the new font size. Returns true when the key was a zoom
-// chord (so it is consumed and never reaches the PTY). Runs on the main loop
-// thread with the GL context current, like the other key handlers.
+// handleZoomKey applies zoom-in/out/reset to the focused pane. It selects a shared
+// atlas context and updates only that pane's grid; the chord is consumed and never
+// reaches the PTY. Runs on the main loop thread with the GL context current.
 func (a *App) handleZoomKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	spec, ok := specFromGLFW(key, mods)
 	if !ok {
@@ -87,69 +80,6 @@ func (a *App) handleZoomWheel(yoff float64) bool {
 		a.applyFontSize(a.zoomTarget() - zoomFontStep)
 	}
 	return true
-}
-
-// zoomTarget is the size the next relative zoom step builds on: the pending
-// (not-yet-applied) target when a burst is in flight, otherwise the live size.
-// This lets several wheel ticks in one frame compound instead of collapsing to
-// a single step.
-func (a *App) zoomTarget() float64 {
-	if a.zoom.pendingSet {
-		return a.zoom.pending
-	}
-	return a.cfg.Font.Size
-}
-
-// zoomDebounce is how long the zoom target must be stable before ConPTY is
-// resized to the settled grid. The atlas/grid VISUAL rebuild is not debounced —
-// it runs every step so the zoom animates frame by frame. Only the PTY resize is
-// coalesced: ConPTY repaints its viewport asynchronously on every resize, and
-// several in flight at once interleave over the next grid → duplicated/garbled
-// scrollback. Debouncing the PTY resize means one resize and one repaint per
-// burst while the on-screen font still tracks the wheel.
-const zoomDebounce = 70 * time.Millisecond
-
-// applyFontSize clamps pts to the zoom bounds and records it as the latest
-// target, pushing the PTY-resize deadline out so a continuing burst keeps
-// coalescing that one resize. applyPendingZoom does the per-step visual rebuild
-// and the settled PTY resize on the loop thread.
-func (a *App) applyFontSize(pts float64) {
-	if pts < zoomFontMin {
-		pts = zoomFontMin
-	}
-	if pts > zoomFontMax {
-		pts = zoomFontMax
-	}
-	a.zoom.pending, a.zoom.pendingSet = pts, true
-	a.zoom.deadline = time.Now().Add(zoomDebounce)
-	a.requestRedraw()
-}
-
-// applyPendingZoom drives zoom from the loop on the main thread with the GL
-// context current. Every pass it rebuilds the atlas + local grid toward the
-// latest target (no PTY resize), so a burst animates frame by frame instead of
-// freezing until the user stops. Once the target has been stable for
-// zoomDebounce it resizes ConPTY once to the settled grid — the async-repaint
-// interleaving that garbles scrollback needs several PTY resizes in flight at
-// once, which one settled resize never produces.
-func (a *App) applyPendingZoom() {
-	if !a.zoom.pendingSet {
-		return
-	}
-	if a.cfg.Font.Size != a.zoom.pending {
-		a.cfg.Font.Size = a.zoom.pending
-		if a.rebuildAtlasGridVisual(a.contentScaleX, a.contentScaleY) {
-			a.zoom.ptyDirty = true
-		}
-	}
-	if time.Now().Before(a.zoom.deadline) {
-		return
-	}
-	a.zoom.pendingSet = false
-	if a.zoom.ptyDirty {
-		a.zoom.ptyDirty = false
-		a.resizePTYToGrid()
-	}
 }
 
 // handleScrollKey scrolls the scrollback viewport for Shift+PageUp/PageDown and

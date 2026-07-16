@@ -1,8 +1,15 @@
 package mux
 
-// SetSplitRatio transactionally changes one active branch ratio. The candidate
-// is rejected when any descendant pane would fall below the established minimum.
+// SetSplitRatio transactionally changes one active branch ratio using uniform
+// metrics. The candidate is rejected when any descendant pane would fall below
+// the established minimum.
 func (m *Model) SetSplitRatio(split SplitID, ratio SplitRatio, bounds PixelRect, metrics CellMetrics) error {
+	return m.SetSplitRatioWithMetrics(split, ratio, bounds, UniformCellMetrics(metrics))
+}
+
+// SetSplitRatioWithMetrics transactionally changes one active branch ratio
+// using metrics resolved per pane.
+func (m *Model) SetSplitRatioWithMetrics(split SplitID, ratio SplitRatio, bounds PixelRect, resolve CellMetricsResolver) error {
 	if split == 0 {
 		return ErrSplitNotFound
 	}
@@ -18,7 +25,7 @@ func (m *Model) SetSplitRatio(split SplitID, ratio SplitRatio, bounds PixelRect,
 	}
 	previous := m.root
 	m.root = candidate
-	layout, err := m.Layout(bounds, metrics)
+	layout, err := m.LayoutWithMetrics(bounds, resolve)
 	if err != nil {
 		m.root = previous
 		return err

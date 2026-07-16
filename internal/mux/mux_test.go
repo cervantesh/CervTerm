@@ -388,3 +388,117 @@ func TestMuxCompressedGeometryMatchesSnapshotMinimum(t *testing.T) {
 		}
 	}
 }
+
+func TestMuxResizePaneGridIsTargetedAndResizeBoundsPreservesMetrics(t *testing.T) {
+	factory := &fakeFactory{}
+	m := New(factory, Options{})
+	t.Cleanup(func() { _ = m.Shutdown() })
+	bounds := PixelRect{Width: 401, Height: 200}
+	initial := CellMetrics{CellWidth: 8, CellHeight: 16}
+	if _, _, _, err := m.Bootstrap(SpawnSpec{}, bounds, initial); err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := m.Split(1, SplitColumns, SpawnSpec{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstBefore, _ := m.PaneView(1)
+	secondBefore, _ := m.PaneView(second)
+
+	zoomed := CellMetrics{CellWidth: 10, CellHeight: 20}
+	events, err := m.ResizePaneGrid(second, zoomed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstAfter, _ := m.PaneView(1)
+	secondAfter, _ := m.PaneView(second)
+	if firstAfter.Geometry != firstBefore.Geometry || firstAfter.DesiredSize != firstBefore.DesiredSize {
+		t.Fatalf("first pane changed during targeted resize: before=%#v/%#v after=%#v/%#v", firstBefore.Geometry, firstBefore.DesiredSize, firstAfter.Geometry, firstAfter.DesiredSize)
+	}
+	if secondAfter.Geometry.Pixels != secondBefore.Geometry.Pixels || secondAfter.Geometry.Cols != 20 || secondAfter.Geometry.Rows != 10 {
+		t.Fatalf("second pane geometry = %#v, want unchanged pixels and 20x10 grid", secondAfter.Geometry)
+	}
+	if secondAfter.DesiredSize != (pty.Size{Rows: 10, Cols: 20}) || secondAfter.DesiredSize == secondBefore.DesiredSize {
+		t.Fatalf("second desired size = %#v, before %#v", secondAfter.DesiredSize, secondBefore.DesiredSize)
+	}
+	for _, event := range events {
+		if event.Pane != second {
+			t.Fatalf("targeted resize emitted event for pane %d: %#v", event.Pane, events)
+		}
+	}
+	if len(events) != 2 || events[0].Kind != PaneGeometryChanged || events[1].Kind != PaneDirty {
+		t.Fatalf("targeted resize events = %#v", events)
+	}
+	if events, err := m.ResizePaneGrid(second, zoomed); err != nil || len(events) != 0 {
+		t.Fatalf("unchanged pane metrics events=%#v err=%v", events, err)
+	}
+
+	resizedBounds := PixelRect{Width: 501, Height: 240}
+	if _, err := m.ResizeBounds(resizedBounds); err != nil {
+		t.Fatal(err)
+	}
+	firstAfter, _ = m.PaneView(1)
+	secondAfter, _ = m.PaneView(second)
+	if firstAfter.Geometry.Cols != 31 || firstAfter.Geometry.Rows != 15 {
+		t.Fatalf("first grid after bounds resize = %dx%d, want 31x15", firstAfter.Geometry.Cols, firstAfter.Geometry.Rows)
+	}
+	if secondAfter.Geometry.Cols != 25 || secondAfter.Geometry.Rows != 12 {
+		t.Fatalf("zoomed grid after bounds resize = %dx%d, want 25x12", secondAfter.Geometry.Cols, secondAfter.Geometry.Rows)
+	}
+	if got := m.paneMetrics[second]; got != zoomed {
+		t.Fatalf("ResizeBounds reset pane metric to %#v, want %#v", got, zoomed)
+	}
+
+	uniform := CellMetrics{CellWidth: 5, CellHeight: 10}
+	if _, err := m.ResizeGrid(resizedBounds, uniform); err != nil {
+		t.Fatal(err)
+	}
+	firstAfter, _ = m.PaneView(1)
+	secondAfter, _ = m.PaneView(second)
+	if firstAfter.Geometry.Cols != secondAfter.Geometry.Cols || firstAfter.Geometry.Rows != secondAfter.Geometry.Rows {
+		t.Fatalf("uniform ResizeGrid produced different grids: first=%#v second=%#v", firstAfter.Geometry, secondAfter.Geometry)
+	}
+	if m.paneMetrics[1] != uniform || m.paneMetrics[second] != uniform {
+		t.Fatalf("uniform ResizeGrid metrics = %#v", m.paneMetrics)
+	}
+}
+
+func TestMuxSplitInheritsAndCloseRemovesPaneMetrics(t *testing.T) {
+	factory := &fakeFactory{}
+	m := New(factory, Options{})
+	t.Cleanup(func() { _ = m.Shutdown() })
+	initial := CellMetrics{CellWidth: 9, CellHeight: 18, PaddingX: 1, PaddingY: 2}
+	if _, _, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 501, Height: 240}, initial); err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := m.Split(1, SplitColumns, SpawnSpec{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.paneMetrics[second]; got != initial {
+		t.Fatalf("split metric = %#v, want inherited %#v", got, initial)
+	}
+	if _, err := m.ClosePane(second); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.paneMetrics[second]; ok {
+		t.Fatalf("closed pane %d retained metrics", second)
+	}
+}
+
+func TestMuxResizePaneGridValidationIsAtomic(t *testing.T) {
+	m, _, _ := newTestMux(t)
+	before, _ := m.PaneView(1)
+	beforeMetrics := m.paneMetrics[1]
+
+	if _, err := m.ResizePaneGrid(999, testMetrics); !errors.Is(err, ErrPaneNotFound) {
+		t.Fatalf("missing pane error = %v, want %v", err, ErrPaneNotFound)
+	}
+	if _, err := m.ResizePaneGrid(1, CellMetrics{}); !errors.Is(err, ErrInvalidGeometry) {
+		t.Fatalf("invalid metrics error = %v, want %v", err, ErrInvalidGeometry)
+	}
+	after, _ := m.PaneView(1)
+	if after.Geometry != before.Geometry || after.DesiredSize != before.DesiredSize || m.paneMetrics[1] != beforeMetrics {
+		t.Fatalf("rejected resize mutated pane: before=%#v after=%#v metrics=%#v", before, after, m.paneMetrics[1])
+	}
+}
