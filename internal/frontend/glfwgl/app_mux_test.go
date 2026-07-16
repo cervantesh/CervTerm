@@ -78,11 +78,13 @@ func TestMuxRowSplitCreatesIndependentGeometry(t *testing.T) {
 }
 
 type recordingPaneSession struct {
-	reader *io.PipeReader
-	writer *io.PipeWriter
-	mu     sync.Mutex
-	writes bytes.Buffer
-	once   sync.Once
+	reader      *io.PipeReader
+	writer      *io.PipeWriter
+	mu          sync.Mutex
+	writes      bytes.Buffer
+	once        sync.Once
+	resizeErr   error
+	resizeCalls int
 }
 
 func newRecordingPaneSession() *recordingPaneSession {
@@ -95,7 +97,12 @@ func (s *recordingPaneSession) Write(data []byte) (int, error) {
 	defer s.mu.Unlock()
 	return s.writes.Write(data)
 }
-func (s *recordingPaneSession) Resize(pty.Size) error { return nil }
+func (s *recordingPaneSession) Resize(pty.Size) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.resizeCalls++
+	return s.resizeErr
+}
 func (s *recordingPaneSession) Close() error {
 	s.once.Do(func() { _ = s.writer.Close(); _ = s.reader.Close() })
 	return nil
@@ -104,6 +111,11 @@ func (s *recordingPaneSession) text() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.writes.String()
+}
+func (s *recordingPaneSession) setResizeError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.resizeErr = err
 }
 
 type recordingPaneFactory struct{ sessions []*recordingPaneSession }

@@ -133,6 +133,60 @@ func TestFocusExplicitNextAndDirectional(t *testing.T) {
 	}
 }
 
+func TestSetSplitRatioIsTargetedAndAtomic(t *testing.T) {
+	model := NewModel()
+	bounds := PixelRect{Width: 801, Height: 481}
+	second, err := model.Split(1, SplitColumns, bounds, testMetrics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := model.Split(second, SplitRows, bounds, testMetrics); err != nil {
+		t.Fatal(err)
+	}
+	before, err := model.Layout(bounds, testMetrics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before.Dividers) != 2 || before.Dividers[0].Split == 0 || before.Dividers[1].Split == 0 || before.Dividers[0].Split == before.Dividers[1].Split {
+		t.Fatalf("split identities = %#v", before.Dividers)
+	}
+	nestedBefore := before.Dividers[1]
+	if err := model.SetSplitRatio(before.Dividers[0].Split, 6_000, bounds, testMetrics); err != nil {
+		t.Fatalf("resize root split: %v", err)
+	}
+	after, err := model.Layout(bounds, testMetrics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Dividers[0].Pixels.X <= before.Dividers[0].Pixels.X {
+		t.Fatalf("root divider did not move right: before=%#v after=%#v", before.Dividers[0], after.Dividers[0])
+	}
+	if after.Dividers[1].Split != nestedBefore.Split || after.Dividers[1].Axis != nestedBefore.Axis {
+		t.Fatalf("nested split identity changed: before=%#v after=%#v", nestedBefore, after.Dividers[1])
+	}
+	accepted := after
+	for _, test := range []struct {
+		name  string
+		split SplitID
+		ratio SplitRatio
+		err   error
+	}{
+		{name: "missing", split: 999, ratio: DefaultSplitRatio, err: ErrSplitNotFound},
+		{name: "invalid ratio", split: after.Dividers[0].Split, ratio: 0, err: ErrInvalidRatio},
+		{name: "below descendant minimum", split: after.Dividers[0].Split, ratio: 9_500, err: ErrSplitTooSmall},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := model.SetSplitRatio(test.split, test.ratio, bounds, testMetrics); !errors.Is(err, test.err) {
+				t.Fatalf("SetSplitRatio error = %v, want %v", err, test.err)
+			}
+			got, layoutErr := model.Layout(bounds, testMetrics)
+			if layoutErr != nil || !reflect.DeepEqual(got, accepted) {
+				t.Fatalf("rejected ratio mutated layout: got=%#v err=%v want=%#v", got, layoutErr, accepted)
+			}
+		})
+	}
+}
+
 func TestCloseCollapseFinalEmptyAndNeverReuseIDs(t *testing.T) {
 	model := NewModel()
 	bounds := PixelRect{Width: 641, Height: 385}
@@ -203,7 +257,8 @@ func TestModelInvariantCheckerRejectsMalformedTree(t *testing.T) {
 	}
 
 	model = NewModel()
-	model.root = branchNode(SplitColumns, DefaultSplitRatio, model.root, nil)
+	model.root = branchNode(1, SplitColumns, DefaultSplitRatio, model.root, nil)
+	model.nextSplitID = 2
 	if err := model.CheckInvariants(); !errors.Is(err, ErrInvariant) {
 		t.Fatalf("nil child error = %v, want invariant error", err)
 	}

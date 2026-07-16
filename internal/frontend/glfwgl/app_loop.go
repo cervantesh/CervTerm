@@ -44,6 +44,7 @@ func (a *App) runContinuousLoop(w *glfw.Window) error {
 		consumed := a.drainIncoming()
 		a.processTermEvents(consumed)
 		a.applyPendingZoom()
+		a.applyPendingDividerResize()
 		a.resizeToWindow()
 		a.fireDueTimers(time.Now())
 		a.fireLifecycleEvents()
@@ -65,6 +66,7 @@ func (a *App) runOnDemandLoop(w *glfw.Window) error {
 		consumed := a.drainIncoming()
 		a.processTermEvents(consumed)
 		a.applyPendingZoom()
+		a.applyPendingDividerResize()
 		a.resizeToWindow()
 		a.fireDueTimers(time.Now())
 		a.fireLifecycleEvents()
@@ -139,6 +141,12 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 		zoomWake := max(minWake, a.zoom.deadline.Sub(now))
 		if wake <= 0 || zoomWake < wake {
 			wake = zoomWake
+		}
+	}
+	if a.divider.settlePending {
+		dividerWake := max(minWake, a.divider.settleAt.Sub(now))
+		if wake <= 0 || dividerWake < wake {
+			wake = dividerWake
 		}
 	}
 	return wake
@@ -228,13 +236,17 @@ func (a *App) resizeGridToWindow() bool {
 	return changed
 }
 
-// resizePTYToGrid applies each pane's latest desired size once at zoom settle.
-func (a *App) resizePTYToGrid() {
+// resizePTYToGrid applies each pane's latest desired size at a settlement
+// boundary and reports whether every pane accepted it.
+func (a *App) resizePTYToGrid() bool {
+	succeeded := true
 	for _, id := range a.mux.PaneIDs() {
 		events, err := a.mux.ApplyResize(id)
 		a.handleMuxEvents(events)
 		if err != nil {
+			succeeded = false
 			a.Notify("resize: " + err.Error())
 		}
 	}
+	return succeeded
 }
