@@ -6,6 +6,7 @@
 - UI/toolkit: no Fyne, no Gio, no widget toolkit. The MVP uses a thin GLFW/OpenGL frontend.
 - Inspiration: Alacritty first (small, fast, layered), with boundaries that can grow toward WezTerm (mux, panes, domains).
 - Performance policy: correctness and boundaries first; measure GC/allocation impact from day one; optimize only with evidence.
+- Graphics backend: OpenGL through GLFW remains the only supported backend. Vulkan work is paused indefinitely; see [Rendering backend decision](rendering-backend-decision.md).
 
 ## Layering
 
