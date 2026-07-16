@@ -37,6 +37,14 @@ type CellMetrics struct {
 	PaddingY   int
 }
 
+// CellMetricsResolver returns the cell metrics for one active pane.
+type CellMetricsResolver func(PaneID) (CellMetrics, bool)
+
+// UniformCellMetrics adapts one metric value to the per-pane layout API.
+func UniformCellMetrics(metrics CellMetrics) CellMetricsResolver {
+	return func(PaneID) (CellMetrics, bool) { return metrics, true }
+}
+
 // PaneGeometry carries both framebuffer and terminal-grid geometry for a leaf.
 type PaneGeometry struct {
 	Pane   PaneID
@@ -60,24 +68,40 @@ type Layout struct {
 	Compressed bool
 }
 
-// Layout projects the current topology into bounds. A topology that no longer
-// fits the split minimum is retained and receives best-effort, possibly zero-
-// cell geometry; Compressed reports that condition.
+// Layout projects the current topology using one metric value for every pane.
+// It is retained as the compatibility wrapper for uniform callers.
 func (m *Model) Layout(bounds PixelRect, metrics CellMetrics) (Layout, error) {
 	if err := validateGeometry(bounds, metrics); err != nil {
 		return Layout{}, err
+	}
+	return m.LayoutWithMetrics(bounds, UniformCellMetrics(metrics))
+}
+
+// LayoutWithMetrics projects the current topology using metrics resolved per pane.
+func (m *Model) LayoutWithMetrics(bounds PixelRect, resolve CellMetricsResolver) (Layout, error) {
+	if err := validateBounds(bounds); err != nil || resolve == nil {
+		return Layout{}, ErrInvalidGeometry
 	}
 
 	result := Layout{}
 	if m.root == nil {
 		return result, nil
 	}
-	layoutNode(m.root, bounds, metrics, &result)
+	if err := layoutNode(m.root, bounds, resolve, &result); err != nil {
+		return Layout{}, err
+	}
 	return result, nil
 }
 
-func layoutNode(n *node, rect PixelRect, metrics CellMetrics, result *Layout) {
+func layoutNode(n *node, rect PixelRect, resolve CellMetricsResolver, result *Layout) error {
 	if n.isLeaf() {
+		metrics, ok := resolve(n.pane)
+		if !ok {
+			return ErrPaneNotFound
+		}
+		if err := validateCellMetrics(metrics); err != nil {
+			return err
+		}
 		cols, rows := cellGeometry(rect, metrics)
 		result.Panes = append(result.Panes, PaneGeometry{
 			Pane:   n.pane,
@@ -88,13 +112,15 @@ func layoutNode(n *node, rect PixelRect, metrics CellMetrics, result *Layout) {
 		if cols < MinPaneCols || rows < MinPaneRows {
 			result.Compressed = true
 		}
-		return
+		return nil
 	}
 
 	first, divider, second := splitPixelRect(rect, n.axis, n.ratio)
-	layoutNode(n.first, first, metrics, result)
+	if err := layoutNode(n.first, first, resolve, result); err != nil {
+		return err
+	}
 	result.Dividers = append(result.Dividers, Divider{Split: n.split, Axis: n.axis, Pixels: divider, Container: rect})
-	layoutNode(n.second, second, metrics, result)
+	return layoutNode(n.second, second, resolve, result)
 }
 
 func splitPixelRect(rect PixelRect, axis SplitAxis, ratio SplitRatio) (PixelRect, PixelRect, PixelRect) {
@@ -141,7 +167,21 @@ func cellGeometry(rect PixelRect, metrics CellMetrics) (cols, rows int) {
 }
 
 func validateGeometry(bounds PixelRect, metrics CellMetrics) error {
-	if bounds.Width < 0 || bounds.Height < 0 || metrics.CellWidth <= 0 || metrics.CellHeight <= 0 || metrics.PaddingX < 0 || metrics.PaddingY < 0 {
+	if err := validateBounds(bounds); err != nil {
+		return err
+	}
+	return validateCellMetrics(metrics)
+}
+
+func validateBounds(bounds PixelRect) error {
+	if bounds.Width < 0 || bounds.Height < 0 {
+		return ErrInvalidGeometry
+	}
+	return nil
+}
+
+func validateCellMetrics(metrics CellMetrics) error {
+	if metrics.CellWidth <= 0 || metrics.CellHeight <= 0 || metrics.PaddingX < 0 || metrics.PaddingY < 0 {
 		return ErrInvalidGeometry
 	}
 	return nil

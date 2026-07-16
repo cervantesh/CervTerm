@@ -17,6 +17,7 @@ type paneUIState struct {
 	search      searchController
 	link        linkState
 	mouseReport mouseReportState
+	font        paneFontState
 }
 
 type muxSearchTerminal struct {
@@ -58,7 +59,7 @@ func (a *App) saveActivePaneUI() {
 func (a *App) ensurePaneUI(id termmux.PaneID) *paneUIState {
 	state := a.paneUI[id]
 	if state == nil {
-		state = &paneUIState{}
+		state = &paneUIState{font: a.initialPaneFontState()}
 		state.search.viewRow = -1
 		a.paneUI[id] = state
 	}
@@ -71,6 +72,7 @@ func (a *App) loadPaneUI(id termmux.PaneID) {
 	a.search = state.search
 	a.link = state.link
 	a.mouseReport = state.mouseReport
+	a.activatePaneFont(id)
 	a.lterm = muxSearchTerminal{mux: a.mux, pane: id}
 	a.search.init(a.lterm, a.requestRedraw)
 }
@@ -233,11 +235,8 @@ func (a *App) paneAtWindowPosition(x, y float64) (termmux.PaneID, termsel.Point,
 		if fx < float32(r.X) || fx >= float32(r.Right()) || fy < float32(r.Y) || fy >= float32(r.Bottom()) {
 			continue
 		}
-		localX := fx - float32(r.X)
-		localY := fy - float32(r.Y)
-		metrics := gridMetrics{cellW: a.cellW, cellH: a.cellH, paddingX: a.paddingX, paddingY: a.paddingY, cols: pane.Cols, rows: pane.Rows}
-		row, col := metrics.cellAt(localX, localY)
-		return pane.Pane, termsel.Point{Row: row, Col: col}, true
+		point := a.pointForPaneFramebufferPosition(pane.Pane, pane, fx, fy)
+		return pane.Pane, point, true
 	}
 	return 0, termsel.Point{}, false
 }
@@ -250,13 +249,15 @@ func (a *App) handleMuxKey(key glfw.Key, mods glfw.ModifierKey) bool {
 		ShellProgram: a.cfg.Shell.Program, ShellArgs: a.cfg.Shell.Args,
 		WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env,
 	}}
+	source := a.focusedPane
+	var created termmux.PaneID
 	var events []termmux.Event
 	var err error
 	switch {
 	case mods&glfw.ModAlt != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyEqual:
-		_, events, err = a.mux.Split(a.focusedPane, termmux.SplitColumns, spawn)
+		created, events, err = a.mux.Split(source, termmux.SplitColumns, spawn)
 	case mods&glfw.ModAlt != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyMinus:
-		_, events, err = a.mux.Split(a.focusedPane, termmux.SplitRows, spawn)
+		created, events, err = a.mux.Split(source, termmux.SplitRows, spawn)
 	case mods&glfw.ModAlt != 0 && key == glfw.KeyLeft:
 		events, err = a.mux.FocusDirection(termmux.FocusLeft)
 	case mods&glfw.ModAlt != 0 && key == glfw.KeyRight:
@@ -269,6 +270,9 @@ func (a *App) handleMuxKey(key glfw.Key, mods glfw.ModifierKey) bool {
 		events, err = a.mux.ClosePane(a.focusedPane)
 	default:
 		return false
+	}
+	if created != 0 {
+		a.inheritPaneFontState(created, source)
 	}
 	if len(events) > 0 {
 		a.handleMuxEvents(events)
@@ -292,11 +296,24 @@ func (a *App) pointForPaneWindowPosition(id termmux.PaneID, x, y float64) (terms
 	if windowW <= 0 || windowH <= 0 {
 		return termsel.Point{}, false
 	}
-	fx := float32(x)*float32(fbW)/float32(windowW) - float32(view.Geometry.Pixels.X)
-	fy := float32(y)*float32(fbH)/float32(windowH) - float32(view.Geometry.Pixels.Y)
-	metrics := gridMetrics{cellW: a.cellW, cellH: a.cellH, paddingX: a.paddingX, paddingY: a.paddingY, cols: view.Geometry.Cols, rows: view.Geometry.Rows}
-	row, col := metrics.cellAt(fx, fy)
-	return termsel.Point{Row: row, Col: col}, true
+	fx := float32(x) * float32(fbW) / float32(windowW)
+	fy := float32(y) * float32(fbH) / float32(windowH)
+	return a.pointForPaneFramebufferPosition(id, view.Geometry, fx, fy), true
+}
+
+func (a *App) paneGridMetrics(id termmux.PaneID, cols, rows int) gridMetrics {
+	cellW, cellH := a.cellW, a.cellH
+	if state := a.paneUI[id]; state != nil {
+		cellW, cellH = state.font.cellW, state.font.cellH
+	}
+	return gridMetrics{cellW: cellW, cellH: cellH, paddingX: a.paddingX, paddingY: a.paddingY, cols: cols, rows: rows}
+}
+
+func (a *App) pointForPaneFramebufferPosition(id termmux.PaneID, geometry termmux.PaneGeometry, fx, fy float32) termsel.Point {
+	localX := fx - float32(geometry.Pixels.X)
+	localY := fy - float32(geometry.Pixels.Y)
+	row, col := a.paneGridMetrics(id, geometry.Cols, geometry.Rows).cellAt(localX, localY)
+	return termsel.Point{Row: row, Col: col}
 }
 
 func (a *App) updateHoverForPane(id termmux.PaneID, x, y float64) {

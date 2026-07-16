@@ -86,10 +86,23 @@ func (m *Model) Split(pane PaneID, axis SplitAxis, bounds PixelRect, metrics Cel
 	return m.SplitWithRatio(pane, axis, DefaultSplitRatio, bounds, metrics)
 }
 
-// SplitWithRatio adds a new second child if both resulting leaves meet the
-// minimum cell geometry. Every rejection leaves topology, focus, and ID
-// allocation unchanged.
+// SplitWithRatio adds a new second child using uniform metrics.
 func (m *Model) SplitWithRatio(pane PaneID, axis SplitAxis, ratio SplitRatio, bounds PixelRect, metrics CellMetrics) (PaneID, error) {
+	if err := validateGeometry(bounds, metrics); err != nil {
+		return 0, err
+	}
+	return m.SplitWithRatioAndMetrics(pane, axis, ratio, bounds, UniformCellMetrics(metrics))
+}
+
+// SplitWithMetrics adds a new second child using metrics resolved per pane.
+func (m *Model) SplitWithMetrics(pane PaneID, axis SplitAxis, bounds PixelRect, resolve CellMetricsResolver) (PaneID, error) {
+	return m.SplitWithRatioAndMetrics(pane, axis, DefaultSplitRatio, bounds, resolve)
+}
+
+// SplitWithRatioAndMetrics adds a new second child if both resulting leaves
+// meet the minimum cell geometry. The resolver must include the next pane ID.
+// Every rejection leaves topology, focus, and ID allocation unchanged.
+func (m *Model) SplitWithRatioAndMetrics(pane PaneID, axis SplitAxis, ratio SplitRatio, bounds PixelRect, resolve CellMetricsResolver) (PaneID, error) {
 	if !validAxis(axis) {
 		return 0, ErrInvalidAxis
 	}
@@ -109,7 +122,7 @@ func (m *Model) SplitWithRatio(pane PaneID, axis SplitAxis, ratio SplitRatio, bo
 		return 0, ErrIDExhausted
 	}
 
-	layout, err := m.Layout(bounds, metrics)
+	layout, err := m.LayoutWithMetrics(bounds, resolve)
 	if err != nil {
 		return 0, err
 	}
@@ -126,9 +139,23 @@ func (m *Model) SplitWithRatio(pane PaneID, axis SplitAxis, ratio SplitRatio, bo
 		return 0, ErrPaneNotFound
 	}
 
+	firstMetrics, ok := resolve(pane)
+	if !ok {
+		return 0, ErrPaneNotFound
+	}
+	if err := validateCellMetrics(firstMetrics); err != nil {
+		return 0, err
+	}
+	secondMetrics, ok := resolve(m.nextPaneID)
+	if !ok {
+		return 0, ErrPaneNotFound
+	}
+	if err := validateCellMetrics(secondMetrics); err != nil {
+		return 0, err
+	}
 	firstRect, _, secondRect := splitPixelRect(target.Pixels, axis, ratio)
-	firstCols, firstRows := cellGeometry(firstRect, metrics)
-	secondCols, secondRows := cellGeometry(secondRect, metrics)
+	firstCols, firstRows := cellGeometry(firstRect, firstMetrics)
+	secondCols, secondRows := cellGeometry(secondRect, secondMetrics)
 	if firstCols < MinPaneCols || firstRows < MinPaneRows || secondCols < MinPaneCols || secondRows < MinPaneRows {
 		return 0, ErrSplitTooSmall
 	}
@@ -180,16 +207,23 @@ type focusScore struct {
 }
 
 // FocusDirection moves to the nearest pane whose rectangle lies in the
-// requested direction. Perpendicular overlap wins before edge distance, then
-// center distance and PaneID provide deterministic tie-breaking.
+// requested direction using uniform metrics.
 func (m *Model) FocusDirection(direction Direction, bounds PixelRect, metrics CellMetrics) (PaneID, error) {
+	if err := validateGeometry(bounds, metrics); err != nil {
+		return 0, err
+	}
+	return m.FocusDirectionWithMetrics(direction, bounds, UniformCellMetrics(metrics))
+}
+
+// FocusDirectionWithMetrics moves focus using a per-pane metric projection.
+func (m *Model) FocusDirectionWithMetrics(direction Direction, bounds PixelRect, resolve CellMetricsResolver) (PaneID, error) {
 	if !validDirection(direction) {
 		return 0, ErrInvalidDirection
 	}
 	if m.root == nil {
 		return 0, ErrEmptyModel
 	}
-	layout, err := m.Layout(bounds, metrics)
+	layout, err := m.LayoutWithMetrics(bounds, resolve)
 	if err != nil {
 		return 0, err
 	}

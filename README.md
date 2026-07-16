@@ -65,8 +65,9 @@ Lua keybindings take precedence over these built-ins:
 - `Alt+Left/Right/Up/Down`: move focus geometrically.
 - `Ctrl+Shift+W`: close the focused pane (or the window when it is the final pane).
 - Drag a divider with the left mouse button to resize adjacent panes.
+- `Ctrl++`, `Ctrl+-`, `Ctrl+0`, and Ctrl+wheel zoom only the focused pane; sibling panes keep their font size and grid.
 
-The mux is local and in-process. Visible tabs, detachable/persistent sessions, pane zoom, remote domains and tmux integration are deferred.
+The mux is local and in-process. Pane zoom shares one fixed-size glyph atlas across all active font sizes, so focus changes do not rebuild GPU resources. Visible tabs, detachable/persistent sessions, remote domains and tmux integration are deferred.
 
 
 ## Build and test

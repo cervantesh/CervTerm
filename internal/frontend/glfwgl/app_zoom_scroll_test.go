@@ -9,55 +9,53 @@ import (
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
-func TestZoomCoalescesAndCompounds(t *testing.T) {
-	a := &App{}
+func TestZoomCoalescesAndCompoundsPerPane(t *testing.T) {
+	a := newMuxTestApp(t, 20, 10)
 	a.cfg.Font.Size = 14
+	a.zoom.base = 14
+	state := a.ensurePaneUI(a.focusedPane)
+	state.font.fontSize = 14
 
-	// A burst of wheel-up ticks before any rebuild must compound, not collapse
-	// into one step, and must not touch the live font size (rebuild is deferred).
 	for i := 0; i < 5; i++ {
 		a.applyFontSize(a.zoomTarget() + zoomFontStep)
 	}
-	if a.cfg.Font.Size != 14 {
-		t.Fatalf("live font size changed before applyPendingZoom: %v", a.cfg.Font.Size)
+	if state.font.fontSize != 14 {
+		t.Fatalf("live font size changed before applyPendingZoom: %v", state.font.fontSize)
 	}
-	if !a.zoom.pendingSet || a.zoom.pending != 14+5*zoomFontStep {
-		t.Fatalf("expected pending %v, got %v (set=%v)", 14+5*zoomFontStep, a.zoom.pending, a.zoom.pendingSet)
+	if !state.font.pending || state.font.pendingTarget != 14+5*zoomFontStep {
+		t.Fatalf("expected pending %v, got %v (set=%v)", 14+5*zoomFontStep, state.font.pendingTarget, state.font.pending)
 	}
 
-	// Zooming past the max clamps.
 	for i := 0; i < 200; i++ {
 		a.applyFontSize(a.zoomTarget() + zoomFontStep)
 	}
-	if a.zoom.pending != zoomFontMax {
-		t.Fatalf("expected clamp to %v, got %v", zoomFontMax, a.zoom.pending)
+	if state.font.pendingTarget != zoomFontMax {
+		t.Fatalf("expected clamp to %v, got %v", zoomFontMax, state.font.pendingTarget)
 	}
 
-	// zoomTarget falls back to the live size once nothing is pending.
-	a.zoom.pendingSet = false
-	if got := a.zoomTarget(); got != a.cfg.Font.Size {
-		t.Fatalf("zoomTarget should fall back to live size %v, got %v", a.cfg.Font.Size, got)
+	state.font.pending = false
+	if got := a.zoomTarget(); got != state.font.fontSize {
+		t.Fatalf("zoomTarget should fall back to live size %v, got %v", state.font.fontSize, got)
 	}
 }
 
-func TestZoomArmsDebounceWithoutApplyingLiveSize(t *testing.T) {
-	a := &App{}
+func TestZoomArmsPaneDebounceWithoutApplyingLiveSize(t *testing.T) {
+	a := newMuxTestApp(t, 20, 10)
 	a.cfg.Font.Size = 14
+	state := a.ensurePaneUI(a.focusedPane)
+	state.font.fontSize = 14
 
-	// applyFontSize only records the target + a future PTY-resize deadline and
-	// asks for a redraw; the visual rebuild happens on the loop thread (needs GL)
-	// so the live font size must not change here.
 	a.applyFontSize(15)
-	if a.cfg.Font.Size != 14 {
-		t.Fatalf("applyFontSize must not change the live size, got %v", a.cfg.Font.Size)
+	if state.font.fontSize != 14 {
+		t.Fatalf("applyFontSize must not change the live size, got %v", state.font.fontSize)
 	}
-	if !a.zoom.pendingSet || a.zoom.pending != 15 {
-		t.Fatalf("pending not recorded: set=%v pending=%v", a.zoom.pendingSet, a.zoom.pending)
+	if !state.font.pending || state.font.pendingTarget != 15 {
+		t.Fatalf("pending not recorded: set=%v pending=%v", state.font.pending, state.font.pendingTarget)
 	}
 	if !a.needsRedraw {
 		t.Fatalf("a zoom step should request a redraw")
 	}
-	if !a.zoom.deadline.After(time.Now()) {
+	if !state.font.deadline.After(time.Now()) {
 		t.Fatalf("a zoom step should push the PTY-resize deadline into the future")
 	}
 }

@@ -58,14 +58,27 @@ func (a *App) Clipboard() string {
 	return a.window.GetClipboardString()
 }
 
-func (a *App) FontSize() float64 { return a.cfg.Font.Size }
+func (a *App) FontSize() float64 {
+	if id, ok := a.focusedFontPane(); ok {
+		return a.paneFontSize(id)
+	}
+	return a.cfg.Font.Size
+}
 
 func (a *App) SetFontSize(pts float64) {
-	if pts == a.cfg.Font.Size {
+	pts = clampZoomFontSize(pts)
+	if id, ok := a.focusedFontPane(); ok {
+		state := a.ensurePaneUI(id)
+		if state.font.fontSize == pts && !state.font.pending {
+			return
+		}
+		a.setPaneFontSize(id, pts)
 		return
 	}
+	// Before mux bootstrap, scripting configures the base used by the initial
+	// pane and by reset; there is no pane-local state or PTY to update yet.
 	a.cfg.Font.Size = pts
-	a.rebuildAtlasAndGrid(a.contentScaleX, a.contentScaleY)
+	a.zoom.base = pts
 }
 
 func (h paneHost) WriteInput(s string) {
@@ -87,11 +100,23 @@ func (h paneHost) WriteInput(s string) {
 	}
 }
 
-func (h paneHost) Notify(message string)      { h.app.Notify(message) }
-func (h paneHost) SetClipboard(text string)   { h.app.SetClipboard(text) }
-func (h paneHost) Clipboard() string          { return h.app.Clipboard() }
-func (h paneHost) FontSize() float64          { return h.app.FontSize() }
-func (h paneHost) SetFontSize(points float64) { h.app.SetFontSize(points) }
+func (h paneHost) Notify(message string)    { h.app.Notify(message) }
+func (h paneHost) SetClipboard(text string) { h.app.SetClipboard(text) }
+func (h paneHost) Clipboard() string        { return h.app.Clipboard() }
+func (h paneHost) FontSize() float64 {
+	if h.pane != 0 {
+		return h.app.paneFontSize(h.pane)
+	}
+	return h.app.FontSize()
+}
+
+func (h paneHost) SetFontSize(points float64) {
+	if h.pane != 0 {
+		h.app.setPaneFontSize(h.pane, points)
+		return
+	}
+	h.app.SetFontSize(points)
+}
 
 func (h paneHost) Selection() string {
 	if h.pane == h.app.focusedPane {

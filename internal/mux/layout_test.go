@@ -269,3 +269,54 @@ func rectInside(rect, bounds PixelRect) bool {
 func positiveOverlap(a, b PixelRect) bool {
 	return a.X < b.Right() && b.X < a.Right() && a.Y < b.Bottom() && b.Y < a.Bottom()
 }
+
+func TestLayoutWithMetricsResolvesEqualPixelRectanglesPerPane(t *testing.T) {
+	model := NewModel()
+	bounds := PixelRect{Width: 401, Height: 200}
+	second, err := model.Split(1, SplitColumns, bounds, testMetrics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics := map[PaneID]CellMetrics{
+		1:      {CellWidth: 8, CellHeight: 16},
+		second: {CellWidth: 10, CellHeight: 20},
+	}
+	resolve := func(id PaneID) (CellMetrics, bool) {
+		value, ok := metrics[id]
+		return value, ok
+	}
+	layout, err := model.LayoutWithMetrics(bounds, resolve)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if layout.Panes[0].Pixels.Width != layout.Panes[1].Pixels.Width || layout.Panes[0].Pixels.Height != layout.Panes[1].Pixels.Height {
+		t.Fatalf("pane rectangles differ: %#v", layout.Panes)
+	}
+	if got, want := layout.Panes[0], (PaneGeometry{Pane: 1, Pixels: PixelRect{Width: 200, Height: 200}, Cols: 25, Rows: 12}); got != want {
+		t.Fatalf("first geometry = %#v, want %#v", got, want)
+	}
+	if got, want := layout.Panes[1], (PaneGeometry{Pane: second, Pixels: PixelRect{X: 201, Width: 200, Height: 200}, Cols: 20, Rows: 10}); got != want {
+		t.Fatalf("second geometry = %#v, want %#v", got, want)
+	}
+
+	uniform, err := model.Layout(bounds, testMetrics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolvedUniform, err := model.LayoutWithMetrics(bounds, UniformCellMetrics(testMetrics))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resolvedUniform, uniform) {
+		t.Fatalf("uniform wrapper changed behavior: resolved=%#v wrapper=%#v", resolvedUniform, uniform)
+	}
+
+	delete(metrics, second)
+	if _, err := model.LayoutWithMetrics(bounds, resolve); !errors.Is(err, ErrPaneNotFound) {
+		t.Fatalf("missing pane metrics error = %v, want %v", err, ErrPaneNotFound)
+	}
+	metrics[second] = CellMetrics{}
+	if _, err := model.LayoutWithMetrics(bounds, resolve); !errors.Is(err, ErrInvalidGeometry) {
+		t.Fatalf("invalid pane metrics error = %v, want %v", err, ErrInvalidGeometry)
+	}
+}
