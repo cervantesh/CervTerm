@@ -5,8 +5,8 @@ package glfwgl
 import (
 	"time"
 
+	termmux "cervterm/internal/mux"
 	ptyio "cervterm/internal/pty"
-	"cervterm/internal/render"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
@@ -80,71 +80,21 @@ func (a *App) runOnDemandLoop(w *glfw.Window) error {
 	return nil
 }
 
-// drainIncoming applies every queued PTY chunk. It returns whether it consumed
-// any data and requests a redraw in that case.
+// drainIncoming advances pane-addressed mux ingress on the main thread.
 func (a *App) drainIncoming() bool {
-	consumed := false
-	for {
-		select {
-		case data := <-a.incoming:
-			a.mu.Lock()
-			a.parser.Advance(a.term, data)
-			a.mu.Unlock()
-			a.flushReplies()
-			// Fire on_output outside the lock: a handler may call term:write,
-			// which re-enters writeInput and would deadlock on a.mu.
-			if a.scriptRT != nil && a.scriptRT.WantsOutput() {
-				if err := a.scriptRT.FireOutput(a, string(data)); err != nil {
-					a.Notify("script error: " + err.Error())
-				}
-			}
-			a.meter.AddBytes(len(data))
-			consumed = true
-		default:
-			if consumed {
-				a.requestRedraw()
-			}
-			return consumed
-		}
-	}
+	events := a.mux.Drain(256)
+	return a.handleMuxEvents(events)
 }
 
-// processTermEvents fires title/cwd/bell handlers on the main thread. It runs every
-// loop iteration but only captures a snapshot when the parser advanced — via
-// drainIncoming or via the no-PTY fallback (termEventsPending) — so
-// bells/titles/cwd changes fire promptly even when draw() is skipped by on-demand
-// rendering. draw() renders the already-captured snapshot. The pending flag is
-// cleared before handlers run: a handler's term:write re-arms it for the next
-// iteration instead of re-entering dispatch.
-func (a *App) processTermEvents(consumed bool) {
-	if a.termEventsPending {
-		consumed = true
-		a.termEventsPending = false
-	}
-	if !consumed {
+// processTermEvents drains synthetic events produced by main-thread Host calls.
+func (a *App) processTermEvents(_ bool) {
+	if len(a.pendingMuxEvents) == 0 {
+		a.syncFocusedProjection()
 		return
 	}
-	a.mu.Lock()
-	render.Capture(&a.snap, a.term)
-	a.mu.Unlock()
-	if a.snap.Title != a.lastTitle {
-		a.lastTitle = a.snap.Title
-		if a.cfg.Window.DynamicTitle && a.snap.Title != "" {
-			a.window.SetTitle("CervTerm · " + a.snap.Title)
-		} else {
-			a.window.SetTitle("CervTerm")
-		}
-		a.fireScriptEvent(func() error { return a.scriptRT.FireTitle(a, a.snap.Title) })
-	}
-	if a.snap.Cwd != a.lastCwd {
-		a.lastCwd = a.snap.Cwd
-		a.fireScriptEvent(func() error { return a.scriptRT.FireCwd(a, a.snap.Cwd) })
-	}
-	// BellCount is monotonic; fire once per bell so bursts are not collapsed.
-	for a.lastBellCount < a.snap.BellCount {
-		a.lastBellCount++
-		a.fireScriptEvent(func() error { return a.scriptRT.FireBell(a) })
-	}
+	events := a.pendingMuxEvents
+	a.pendingMuxEvents = nil
+	a.handleMuxEvents(events)
 }
 
 // shouldRedraw reports whether the frame must be repainted now: an explicit
@@ -224,26 +174,20 @@ func (a *App) blinkActive() bool {
 	return a.cfg.Cursor.Blink
 }
 
-// spawnInitialPTY sizes the terminal to the real initial grid and starts the
-// PTY, so terminal and ConPTY agree from byte zero and no startup resize
-// repaints the shell banner. Called from runWindow once cellW/cellH are final.
-// The terminal resize holds a.mu, but startPTY runs without it (its reader
-// goroutine and the failure-path parser feed both take a.mu). Seeding
-// a.cols/a.rows makes the loop's first resizeToWindow a no-op.
+// spawnInitialPTY bootstraps the implicit mux tab at the real initial grid.
 func (a *App) spawnInitialPTY(w *glfw.Window) {
 	fbW, fbH := w.GetFramebufferSize()
-	cols, rows := a.gridSize(fbW, fbH)
-	a.mu.Lock()
-	a.term.Resize(cols, rows)
-	a.mu.Unlock()
-	a.cols, a.rows = cols, rows
-	// Fire events.resize for the initial grid; the first loop iteration drains it.
-	a.markResizeEvent(cols, rows)
-	if err := a.startPTY(); err != nil {
-		a.parser.Advance(a.term, []byte("\x1b[96mCervTerm\x1b[0m\r\n\r\n"))
-		a.parser.Advance(a.term, []byte("Local PTY unavailable on this platform/build.\r\n"))
-		a.parser.Advance(a.term, []byte(err.Error()+"\r\n\r\n"))
-		a.parser.Advance(a.term, []byte("Type to test the renderer and parser.\r\n"))
+	eventsRect := termmux.PixelRect{Width: fbW, Height: fbH}
+	_, pane, events, err := a.mux.Bootstrap(termmux.SpawnSpec{Options: ptyio.Options{
+		ShellProgram: a.cfg.Shell.Program, ShellArgs: a.cfg.Shell.Args,
+		WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env,
+	}}, eventsRect, a.muxMetrics())
+	a.focusedPane = pane
+	a.handleMuxEvents(events)
+	a.syncFocusedProjection()
+	a.markResizeEvent(a.cols, a.rows)
+	if err != nil {
+		a.Notify("PTY unavailable: " + err.Error())
 	}
 }
 
@@ -272,25 +216,25 @@ func (a *App) resizeToWindow() {
 // Returns whether the grid dimensions changed.
 func (a *App) resizeGridToWindow() bool {
 	w, h := a.window.GetFramebufferSize()
-	cols, rows := a.gridSize(w, h)
-	if cols == a.cols && rows == a.rows {
+	events, err := a.mux.ResizeGrid(termmux.PixelRect{Width: w, Height: h}, a.muxMetrics())
+	if err != nil {
+		a.Notify("resize: " + err.Error())
 		return false
 	}
-	a.cols, a.rows = cols, rows
-	a.mu.Lock()
-	a.term.Resize(cols, rows)
-	a.mu.Unlock()
-	a.markResizeEvent(cols, rows)
-	a.requestRedraw()
-	return true
+	changed := a.handleMuxEvents(events)
+	if a.syncFocusedProjection() {
+		a.markResizeEvent(a.cols, a.rows)
+	}
+	return changed
 }
 
-// resizePTYToGrid notifies ConPTY of the current grid dimensions. Kept separate
-// from the local reflow so zoom can coalesce it to one call per burst: ConPTY
-// repaints its viewport asynchronously on every resize, and several in flight at
-// once interleave over the next grid → duplicated/garbled scrollback.
+// resizePTYToGrid applies each pane's latest desired size once at zoom settle.
 func (a *App) resizePTYToGrid() {
-	if a.pty != nil {
-		_ = a.pty.Resize(ptyio.Size{Rows: uint16(a.rows), Cols: uint16(a.cols)})
+	for _, id := range a.mux.PaneIDs() {
+		events, err := a.mux.ApplyResize(id)
+		a.handleMuxEvents(events)
+		if err != nil {
+			a.Notify("resize: " + err.Error())
+		}
 	}
 }

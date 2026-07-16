@@ -3,40 +3,38 @@
 package glfwgl
 
 import (
-	"io"
+	"errors"
 	"runtime"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"cervterm/internal/config"
-	"cervterm/internal/core"
 	"cervterm/internal/fontglyph"
 	"cervterm/internal/frontend/gpu"
 	"cervterm/internal/input"
 	"cervterm/internal/metrics"
-	ptyio "cervterm/internal/pty"
+	termmux "cervterm/internal/mux"
 	"cervterm/internal/render"
 	"cervterm/internal/script"
-	"cervterm/internal/vt"
 
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
 type App struct {
-	term   *core.Terminal
-	parser vt.Parser
-	meter  metrics.Meter
-	pty    ptyio.Session
-	snap   render.Snapshot
-	cfg    config.Config
+	meter             metrics.Meter
+	snap              render.Snapshot
+	cfg               config.Config
+	mux               *termmux.Mux
+	focusedPane       termmux.PaneID
+	paneUI            map[termmux.PaneID]*paneUIState
+	pendingMuxEvents  []termmux.Event
+	pendingPaneScroll map[termmux.PaneID]int
+	pendingPaneResize map[termmux.PaneID]termmux.PaneGeometry
 
-	mu       sync.Mutex
-	incoming chan []byte
-	window   *glfw.Window
-	r        gpu.Renderer
-	atlas    *glyphAtlas
+	window *glfw.Window
+	r      gpu.Renderer
+	atlas  *glyphAtlas
 
 	// Last framebuffer size handed to the renderer; draw() calls r.Resize only when
 	// it changes, so a backend recreates its swapchain/drawable on real size changes
@@ -59,11 +57,7 @@ type App struct {
 	noticeUntil      time.Time
 	suppressNextChar bool
 	lastStats        time.Time
-	lastTitle        string
-	lastCwd          string
-	lastBellCount    int
 	blinkStart       time.Time
-	pendingReplies   [][]byte
 	showStats        bool
 	statsSpec        script.Spec
 	statsSpecOK      bool
@@ -90,18 +84,6 @@ type App struct {
 	needsRedraw    bool
 	lastBlinkPhase bool
 	lastStatsDraw  time.Time
-	// termEventsPending marks that the parser advanced outside drainIncoming
-	// (no-PTY fallback), so the next loop iteration must still dispatch
-	// title/bell events. Deferring to the loop instead of dispatching inline
-	// keeps a handler's term:write from re-entering event dispatch.
-	termEventsPending bool
-	// Deferred resize/scroll event state, drained once per loop iteration by
-	// fireLifecycleEvents. Marked (not fired) at the mutation site because
-	// term:scroll / term:set_font_size run inside a handler; firing there would
-	// re-enter Lua dispatch (traps 3 & 5).
-	resizeEventPending, scrollEventPending bool
-	resizeEventCols, resizeEventRows       int
-	scrollEventOffset                      int
 
 	// wakeReady gates the reader's PostEmptyEvent to the window between
 	// glfw.Init succeeding and glfw.Terminate running: the reader starts before
@@ -110,10 +92,11 @@ type App struct {
 	// loop's 500ms bounded wait.
 	wakeReady atomic.Bool
 
-	lterm       *lockedTerminal
-	search      searchController
-	selection   selectionState
-	mouseReport mouseReportState
+	lterm            searchTerminal
+	search           searchController
+	selection        selectionState
+	mouseReport      mouseReportState
+	mouseCapturePane termmux.PaneID
 }
 
 func Run() error {
@@ -127,74 +110,29 @@ func RunWithConfig(cfg config.Config) error {
 func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 	runtime.LockOSThread()
 	app := &App{
-		term:       core.NewTerminal(100, 32),
-		cfg:        cfg,
-		scriptRT:   rt,
-		incoming:   make(chan []byte, 128),
-		cellW:      9,
-		cellH:      16,
-		uiScale:    1,
-		blinkStart: time.Now(),
+		cfg:               cfg,
+		scriptRT:          rt,
+		cellW:             9,
+		cellH:             16,
+		uiScale:           1,
+		blinkStart:        time.Now(),
+		paneUI:            make(map[termmux.PaneID]*paneUIState),
+		pendingPaneScroll: make(map[termmux.PaneID]int),
+		pendingPaneResize: make(map[termmux.PaneID]termmux.PaneGeometry),
 	}
+	app.mux = termmux.New(nil, termmux.Options{
+		Wake: app.wakeMainLoop,
+		SetClipboard: func(_ termmux.PaneID, text string) {
+			if app.window != nil && cfg.Clipboard.OSC52 == "write" {
+				app.window.SetClipboardString(text)
+			}
+		},
+	})
 	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {
 		app.statsSpec, app.statsSpecOK = spec, true
 	}
 	app.initZoomHotkeys()
-	// Replies queue up and flush after Advance returns so the PTY write never
-	// happens while a.mu is held (a blocked write must not stall the drain
-	// loop mid-parse). All access is main-thread only.
-	app.parser.Reply = func(b []byte) {
-		app.pendingReplies = append(app.pendingReplies, b)
-	}
-	if cfg.Clipboard.OSC52 == "write" {
-		app.parser.SetClipboard = func(s string) {
-			if app.window != nil {
-				app.window.SetClipboardString(s)
-			}
-		}
-	}
-	// The PTY spawns later, from runWindow, once the window + glyph atlas exist
-	// and the real initial grid is known — see runWindow. This defer still
-	// nil-checks because a.pty stays nil until then (and on spawn failure).
-	defer func() {
-		if app.pty != nil {
-			_ = app.pty.Close()
-		}
-	}()
-	// Wire the search controller's explicit dependencies now that the App (and its
-	// terminal and mutex) exists. The lockedTerminal adapter owns the locking; the
-	// controller only sees the searchTerminal port.
-	app.lterm = newLockedTerminal(app.term, &app.mu)
-	app.search.init(app.lterm, app.requestRedraw)
 	return app.runWindow()
-}
-
-func (a *App) startPTY() error {
-	s, err := ptyio.NewLocalWithOptions(uint16(a.term.Rows()), uint16(a.term.Cols()), ptyio.Options{ShellProgram: a.cfg.Shell.Program, ShellArgs: a.cfg.Shell.Args, WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env})
-	if err != nil {
-		return err
-	}
-	a.pty = s
-	go func() {
-		buf := make([]byte, 32*1024)
-		for {
-			n, err := s.Reader().Read(buf)
-			if n > 0 {
-				chunk := make([]byte, n)
-				copy(chunk, buf[:n])
-				a.incoming <- chunk
-				a.wakeMainLoop()
-			}
-			if err != nil {
-				if err != io.EOF {
-					a.incoming <- []byte("\r\n[pty read error: " + err.Error() + "]\r\n")
-					a.wakeMainLoop()
-				}
-				return
-			}
-		}
-	}()
-	return nil
 }
 
 func (a *App) runWindow() error {
@@ -202,6 +140,10 @@ func (a *App) runWindow() error {
 		return err
 	}
 	defer glfw.Terminate()
+	// Stop reader goroutines while GLFW is still initialized. Clearing wakeReady
+	// first prevents new wake attempts; Shutdown joins readers that may already
+	// have observed true before glfw.Terminate runs.
+	defer func() { _ = a.mux.Shutdown() }()
 	// Registered after the Terminate defer so it runs first (LIFO): the reader
 	// must stop posting wakes before GLFW tears down.
 	a.wakeReady.Store(true)
@@ -254,15 +196,13 @@ func (a *App) runWindow() error {
 	// Paint the first frame before any event arrives, and dispatch any term
 	// events produced by pre-loop parser feeds (the no-PTY startup banner).
 	a.needsRedraw = true
-	a.termEventsPending = true
 
 	return a.runLoop(w)
 }
 
 func (a *App) bracketedPasteMode() bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.BracketedPasteMode()
+	_, view, ok := a.focusedView()
+	return ok && view.BracketedPaste
 }
 
 func (a *App) installCallbacks() {
@@ -322,6 +262,9 @@ func (a *App) installCallbacks() {
 			return
 		}
 
+		if a.handleMuxKey(key, mods) {
+			return
+		}
 		if a.handleClipboardKey(key, mods) {
 			return
 		}
@@ -351,13 +294,18 @@ func (a *App) installCallbacks() {
 	})
 
 	a.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
+		x, y := a.window.GetCursorPos()
+		if action == glfw.Press {
+			if pane, _, ok := a.paneAtWindowPosition(x, y); ok {
+				a.focusPane(pane)
+			}
+		}
 		if a.sendMouseButton(button, action, mods) {
 			return
 		}
 		if button != glfw.MouseButtonLeft {
 			return
 		}
-		x, y := a.window.GetCursorPos()
 		point := a.pointFromPixels(float32(x), float32(y))
 		if action == glfw.Press {
 			a.selection.dragging = true
@@ -386,7 +334,11 @@ func (a *App) installCallbacks() {
 			return
 		}
 		if !a.selection.dragging {
-			a.updateHover(x, y)
+			if pane, _, ok := a.paneAtWindowPosition(x, y); ok {
+				a.updateHoverForPane(pane, x, y)
+			} else {
+				a.clearHover()
+			}
 			return
 		}
 		a.selection.end = a.pointFromPixels(float32(x), float32(y))
@@ -400,6 +352,10 @@ func (a *App) installCallbacks() {
 		if a.handleZoomWheel(yoff) {
 			return
 		}
+		x, y := a.window.GetCursorPos()
+		if pane, _, ok := a.paneAtWindowPosition(x, y); ok {
+			a.focusPane(pane)
+		}
 		if a.sendMouseWheel(yoff, glfw.ModifierKey(0)) {
 			return
 		}
@@ -407,9 +363,7 @@ func (a *App) installCallbacks() {
 		if rows == 0 {
 			return
 		}
-		a.mu.Lock()
-		moved := a.term.ScrollViewport(rows)
-		a.mu.Unlock()
+		moved, _ := a.mux.ScrollViewport(a.focusedPane, rows)
 		// A wheel tick at the clamp moves nothing: skip the redraw so no frame is
 		// drawn (the event still woke the loop; nothing damages).
 		if moved {
@@ -421,10 +375,9 @@ func (a *App) installCallbacks() {
 		// The script focus event is independent of the terminal's focus-report
 		// mode. The callback runs on the loop thread (not inside a handler), so
 		// firing inline cannot re-enter Lua dispatch.
-		a.fireScriptEvent(func() error { return a.scriptRT.FireFocus(a, focused) })
-		a.mu.Lock()
-		enabled := a.term.FocusEventsMode()
-		a.mu.Unlock()
+		a.fireScriptEvent(func() error { return a.scriptRT.FireFocus(a.hostForFocused(), focused) })
+		_, view, ok := a.focusedView()
+		enabled := ok && view.FocusEvents
 		if !enabled {
 			return
 		}
@@ -464,27 +417,24 @@ func (a *App) copySelectionToClipboard() bool {
 }
 
 func (a *App) writeInputBytes(data []byte) {
-	if a.pty != nil {
-		_, _ = a.pty.Write(data)
+	if a.focusedPane == 0 {
 		return
 	}
-	// No-PTY fallback: the parser is fed directly, so no PTY echo will come
-	// back to wake the loop — request the repaint and event dispatch here.
-	a.mu.Lock()
-	a.parser.Advance(a.term, data)
-	a.mu.Unlock()
-	a.requestRedraw()
-	a.termEventsPending = true
+	events, err := a.mux.Write(a.focusedPane, data)
+	if errors.Is(err, termmux.ErrPaneNotRunning) {
+		if view, ok := a.mux.PaneView(a.focusedPane); ok && view.State == termmux.PaneStateFailed {
+			events, err = a.mux.FeedFallback(a.focusedPane, data)
+		}
+	}
+	if len(events) > 0 {
+		a.pendingMuxEvents = append(a.pendingMuxEvents, events...)
+	}
+	if err != nil {
+		a.Notify("input: " + err.Error())
+	}
+	if len(events) > 0 {
+		a.requestRedraw()
+	}
 }
 
-func (a *App) writeInput(s string) {
-	if a.pty != nil {
-		_, _ = a.pty.Write([]byte(s))
-		return
-	}
-	a.mu.Lock()
-	a.parser.Advance(a.term, []byte(s))
-	a.mu.Unlock()
-	a.requestRedraw()
-	a.termEventsPending = true
-}
+func (a *App) writeInput(s string) { a.writeInputBytes([]byte(s)) }

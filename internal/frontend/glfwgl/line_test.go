@@ -18,14 +18,15 @@ import (
 // impossible for the call site to drift from the shared rule again, whatever the
 // row contains (gaps, wide glyphs, trailing blanks).
 func TestLineMatchesCanonicalRowText(t *testing.T) {
-	a := &App{term: core.NewTerminal(8, 3)}
-	// Row 0: normal text with a cursor-positioned gap and trailing blanks.
-	// Row 1: a wide (CJK) glyph, which lays down a base rune + WideContinuation.
-	a.parser.Advance(a.term, []byte("Hi\x1b[5GX\r\n世ok"))
+	a := newMuxTestApp(t, 8, 3)
+	feedTestPane(t, a, []byte("Hi\x1b[5GX\r\n世ok"))
 
 	cols, rows := 8, 3
-	cells := make([]core.Cell, cols*rows)
-	a.term.CopyView(cells)
+	_, view, ok := a.focusedView()
+	if !ok {
+		t.Fatal("missing focused pane")
+	}
+	cells := view.Snapshot.Cells
 
 	for row := 0; row < rows; row++ {
 		got, ok := a.Line(row)
@@ -42,8 +43,8 @@ func TestLineMatchesCanonicalRowText(t *testing.T) {
 // TestLineWideGlyph pins that a wide glyph's trailing WideContinuation cell is
 // emitted once (as the base rune), never doubled or turned into padding.
 func TestLineWideGlyph(t *testing.T) {
-	a := &App{term: core.NewTerminal(6, 2)}
-	a.parser.Advance(a.term, []byte("世X"))
+	a := newMuxTestApp(t, 6, 2)
+	feedTestPane(t, a, []byte("世X"))
 
 	got, ok := a.Line(0)
 	if !ok {

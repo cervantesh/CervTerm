@@ -77,6 +77,10 @@ return {
     working_directory = %q,
     env = {},
   },
+  -- Native pane defaults (Lua bindings below take precedence):
+  -- Alt+Shift+= split right; Alt+Shift+- split below; Alt+Arrow focus;
+  -- Ctrl+Shift+W close focused pane.
+
   -- keys = {
   --   {
   --     key = "p",

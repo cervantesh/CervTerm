@@ -3,38 +3,46 @@
 package glfwgl
 
 import (
+	"errors"
 	"time"
 
-	"cervterm/internal/core"
-	"cervterm/internal/render"
+	termmux "cervterm/internal/mux"
 	termsel "cervterm/internal/selection"
 )
 
-// App's script.Host implementation: the terminal surface Lua handlers see.
-
-func (a *App) WriteInput(s string) {
-	a.writeInput(s)
+// paneHost binds the existing script.Host surface to one immutable pane ID for
+// the duration of a callback. Background output can therefore never redirect
+// term:* operations to the currently focused sibling.
+type paneHost struct {
+	app  *App
+	pane termmux.PaneID
 }
 
-// Notify runs on the main thread only (script dispatch and drain paths), so it
-// may set the redraw flag directly to paint the notice promptly.
+func (a *App) hostForFocused() paneHost {
+	id, _ := a.mux.FocusedPane()
+	return paneHost{app: a, pane: id}
+}
+
+// App remains a script.Host compatibility adapter for call sites that are
+// inherently focused-pane/window-level (keys, timers, focus events).
+func (a *App) WriteInput(s string)              { a.hostForFocused().WriteInput(s) }
+func (a *App) Selection() string                { return a.hostForFocused().Selection() }
+func (a *App) Scroll(lines int) bool            { return a.hostForFocused().Scroll(lines) }
+func (a *App) ScrollToBottom()                  { a.hostForFocused().ScrollToBottom() }
+func (a *App) ScrollbackLen() int               { return a.hostForFocused().ScrollbackLen() }
+func (a *App) Size() (int, int)                 { return a.hostForFocused().Size() }
+func (a *App) Cursor() (int, int)               { return a.hostForFocused().Cursor() }
+func (a *App) Title() string                    { return a.hostForFocused().Title() }
+func (a *App) Cwd() string                      { return a.hostForFocused().Cwd() }
+func (a *App) SetTitle(title string)            { a.hostForFocused().SetTitle(title) }
+func (a *App) Line(row int) (string, bool)      { return a.hostForFocused().Line(row) }
+func (a *App) LineWrapped(row int) (bool, bool) { return a.hostForFocused().LineWrapped(row) }
+func (a *App) Search(query string) bool         { return a.hostForFocused().Search(query) }
+
 func (a *App) Notify(msg string) {
 	a.notice = msg
 	a.noticeUntil = time.Now().Add(4 * time.Second)
 	a.requestRedraw()
-}
-
-func (a *App) Selection() string {
-	if !a.selection.active {
-		return ""
-	}
-	// Script handlers run on the main thread between frames, never inside
-	// draw(), so reusing a.snap is safe while the terminal snapshot is captured
-	// under a.mu.
-	a.mu.Lock()
-	render.Capture(&a.snap, a.term)
-	a.mu.Unlock()
-	return termsel.Text(a.snap.Cells, a.snap.Cols, a.snap.Rows, termsel.Range{Start: a.selection.start, End: a.selection.end})
 }
 
 func (a *App) SetClipboard(text string) {
@@ -50,148 +58,144 @@ func (a *App) Clipboard() string {
 	return a.window.GetClipboardString()
 }
 
-func (a *App) Scroll(lines int) bool {
-	a.mu.Lock()
-	moved := a.term.ScrollViewport(lines)
-	a.mu.Unlock()
-	if moved {
-		a.requestRedraw()
-		// Defer events.scroll: this runs inside a handler, so it must not re-enter
-		// Lua dispatch. The loop drains the pending offset next iteration.
-		a.markScrollEvent()
-	}
-	return moved
-}
-
-func (a *App) ScrollToBottom() {
-	a.mu.Lock()
-	moved := a.term.ScrollViewport(-a.term.ScrollbackLines())
-	a.mu.Unlock()
-	if moved {
-		a.requestRedraw()
-		a.markScrollEvent()
-	}
-}
-
-func (a *App) ScrollbackLen() int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.ScrollbackLines()
-}
-
-// flushReplies sends queued parser replies to the PTY outside a.mu. Main
-// thread only.
-func (a *App) flushReplies() {
-	if len(a.pendingReplies) == 0 {
-		return
-	}
-	replies := a.pendingReplies
-	a.pendingReplies = nil
-	if a.pty == nil {
-		return
-	}
-	for _, b := range replies {
-		_, _ = a.pty.Write(b)
-	}
-}
-
-// Size, Cursor, Title, Cwd, and Line expose read-only terminal state to Lua handlers.
-// They are called on the main loop thread while the handler runs; the lock guards
-// against future concurrent access and matches the other term accessors.
-
-func (a *App) Size() (int, int) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.Cols(), a.term.Rows()
-}
-
-func (a *App) Cursor() (int, int) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.CursorRow(), a.term.CursorCol()
-}
-
-func (a *App) Title() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.Title()
-}
-
-func (a *App) Cwd() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.Cwd()
-}
-
-func (a *App) SetTitle(title string) {
-	a.mu.Lock()
-	changed := a.term.Title() != title
-	if changed {
-		a.term.SetTitle(title)
-	}
-	a.mu.Unlock()
-	if changed {
-		// Re-arm terminal event processing so this follows the same title update
-		// and script dispatch path as an OSC 0/2 title change.
-		a.termEventsPending = true
-		a.requestRedraw()
-	}
-}
-
-func (a *App) Line(row int) (string, bool) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	cols, rows := a.term.Cols(), a.term.Rows()
-	if row < 0 || row >= rows {
-		return "", false
-	}
-	cells := make([]core.Cell, cols*rows)
-	a.term.CopyView(cells)
-	start := row * cols
-	// core.RowText is the canonical row-text rule shared with selection/copy, so
-	// term:line() returns exactly what the clipboard would (skipping Rune==0 and
-	// WideContinuation padding, not turning them into spaces).
-	return core.RowText(cells[start : start+cols]), true
-}
-
-func (a *App) LineWrapped(row int) (bool, bool) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.LineWrapped(row)
-}
-
-// Search jumps to the first (bottom-most) match for query and scrolls it into
-// view, returning whether a match was found. It is the non-interactive,
-// scriptable counterpart to the ctrl+shift+f bar: it records the match cells so
-// draw highlights them, but does not open the modal UI. Main-thread only.
-func (a *App) Search(query string) bool {
-	if query == "" {
-		return false
-	}
-	// Same atomic search-and-reveal as the interactive bar (from the live bottom,
-	// no prior match); the port handles the locking. Match state is main-thread
-	// only, so it is recorded outside the critical section.
-	row, col, ok := a.lterm.SearchUpward(query, false, 0)
-	if ok {
-		a.search.matchRow, a.search.matchCol = row, col
-		a.search.matchLen = len([]rune(query))
-		a.search.hasMatch = true
-		a.requestRedraw()
-	}
-	return ok
-}
-
-// FontSize returns the active font size in points.
 func (a *App) FontSize() float64 { return a.cfg.Font.Size }
 
-// SetFontSize changes the font size and rebuilds the atlas + grid at the current
-// content scale. pts arrives already clamped to 6..72 by the Lua boundary. Runs
-// on the main thread with the GL context current (dispatched from a key/timer
-// handler); rebuildAtlasAndGrid documents that requirement.
 func (a *App) SetFontSize(pts float64) {
 	if pts == a.cfg.Font.Size {
 		return
 	}
 	a.cfg.Font.Size = pts
 	a.rebuildAtlasAndGrid(a.contentScaleX, a.contentScaleY)
+}
+
+func (h paneHost) WriteInput(s string) {
+	if h.pane == 0 {
+		return
+	}
+	events, err := h.app.mux.Write(h.pane, []byte(s))
+	if errors.Is(err, termmux.ErrPaneNotRunning) {
+		if view, ok := h.app.mux.PaneView(h.pane); ok && view.State == termmux.PaneStateFailed {
+			events, err = h.app.mux.FeedFallback(h.pane, []byte(s))
+		}
+	}
+	if err != nil {
+		h.app.Notify("input: " + err.Error())
+	}
+	h.app.pendingMuxEvents = append(h.app.pendingMuxEvents, events...)
+	if len(events) > 0 {
+		h.app.requestRedraw()
+	}
+}
+
+func (h paneHost) Notify(message string)      { h.app.Notify(message) }
+func (h paneHost) SetClipboard(text string)   { h.app.SetClipboard(text) }
+func (h paneHost) Clipboard() string          { return h.app.Clipboard() }
+func (h paneHost) FontSize() float64          { return h.app.FontSize() }
+func (h paneHost) SetFontSize(points float64) { h.app.SetFontSize(points) }
+
+func (h paneHost) Selection() string {
+	if h.pane == h.app.focusedPane {
+		h.app.saveActivePaneUI()
+	}
+	state := h.app.ensurePaneUI(h.pane)
+	if !state.selection.active {
+		return ""
+	}
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return ""
+	}
+	return termsel.Text(view.Snapshot.Cells, view.Snapshot.Cols, view.Snapshot.Rows, termsel.Range{Start: state.selection.start, End: state.selection.end})
+}
+
+func (h paneHost) Scroll(lines int) bool {
+	moved, _ := h.app.mux.ScrollViewport(h.pane, lines)
+	if moved {
+		h.app.recordPaneScroll(h.pane)
+		h.app.requestRedraw()
+	}
+	return moved
+}
+
+func (h paneHost) ScrollToBottom() {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return
+	}
+	if moved, _ := h.app.mux.ScrollViewport(h.pane, -view.ScrollbackLines); moved {
+		h.app.recordPaneScroll(h.pane)
+		h.app.requestRedraw()
+	}
+}
+
+func (h paneHost) ScrollbackLen() int {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return 0
+	}
+	return view.ScrollbackLines
+}
+
+func (h paneHost) Size() (int, int) {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return 0, 0
+	}
+	return view.Snapshot.Cols, view.Snapshot.Rows
+}
+
+func (h paneHost) Cursor() (int, int) {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return 0, 0
+	}
+	return view.Snapshot.CursorRow, view.Snapshot.CursorCol
+}
+
+func (h paneHost) Title() string {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return ""
+	}
+	return view.Snapshot.Title
+}
+
+func (h paneHost) Cwd() string {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return ""
+	}
+	return view.Snapshot.Cwd
+}
+
+func (h paneHost) SetTitle(title string) {
+	changed, _ := h.app.mux.SetTitle(h.pane, title)
+	if changed {
+		h.app.pendingMuxEvents = append(h.app.pendingMuxEvents, termmux.Event{Kind: termmux.PaneTitleChanged, Pane: h.pane, Text: title}, termmux.Event{Kind: termmux.PaneDirty, Pane: h.pane})
+		h.app.requestRedraw()
+	}
+}
+
+func (h paneHost) Line(row int) (string, bool) { return h.app.mux.Line(h.pane, row) }
+func (h paneHost) LineWrapped(row int) (bool, bool) {
+	return h.app.mux.LineWrapped(h.pane, row)
+}
+
+func (h paneHost) Search(query string) bool {
+	if query == "" {
+		return false
+	}
+	row, col, ok, _ := h.app.mux.SearchUpward(h.pane, query, false, 0)
+	if !ok {
+		return false
+	}
+	state := h.app.ensurePaneUI(h.pane)
+	state.search.matchRow, state.search.matchCol = row, col
+	state.search.matchLen = len([]rune(query))
+	state.search.hasMatch = true
+	if h.pane == h.app.focusedPane {
+		h.app.loadPaneUI(h.pane)
+	}
+	h.app.requestRedraw()
+	return true
 }

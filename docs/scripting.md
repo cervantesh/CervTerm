@@ -58,6 +58,8 @@ and receives the `term` handle first:
   the handler fires once per loop iteration with the final offset, not once per
   tick, and it never fires from inside a frame draw.
 
+With native panes, `output`, `title`, `cwd`, `bell`, `resize`, and `scroll` receive a `term` handle permanently bound to the pane that produced the event for that callback. Reads, writes, search, scrolling and title changes through that handle cannot jump to a focused sibling. Keybindings, timers, and window `focus` events use the pane focused when dispatch begins. Background pane title changes still fire `title`, but only the focused pane controls the OS window title.
+
 ```lua
 return {
   events = {
