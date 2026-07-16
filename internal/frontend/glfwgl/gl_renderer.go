@@ -4,6 +4,8 @@ package glfwgl
 
 import (
 	"image/color"
+	"log"
+	"strings"
 
 	"cervterm/internal/frontend/gpu"
 
@@ -19,12 +21,11 @@ import (
 //
 // This is the active OpenGL implementation used by App and the shared glyph atlas.
 //
-// Blend state: BLEND is kept permanently enabled with the resting blend func
-// SRC_ALPHA, ONE_MINUS_SRC_ALPHA (set once in the constructor; a GL context is
-// current by construction when the renderer is created after gl.Init()). This is
-// behavior-preserving — opaque fills use A=255 and render identically. The only
-// place that departs from the resting blend is the subpixel two-pass in
-// DrawGlyph, which restores it before returning.
+// Blend state: BLEND is kept permanently enabled with separate RGB and alpha
+// factors so drawing into the authoritative RGBA target preserves destination
+// alpha correctly. Opaque fills still render identically. The only place that
+// departs from the resting blend is the subpixel two-pass in DrawGlyph, which
+// restores it before returning.
 //
 // TEXTURE_2D state: tracked in texEnabled to avoid redundant Enable/Disable
 // toggles. BeginFrame and FillRect ensure it is OFF; DrawGlyph ensures it is ON.
@@ -41,6 +42,9 @@ type glRenderer struct {
 	widthPx      int
 	heightPx     int
 	clipStack    []gpu.ClipRect
+	framebuffer  uint32
+	frameTexture uint32
+	targetReady  bool
 }
 
 // newGLRenderer builds an OpenGL Renderer for win. A GL context must be current
@@ -49,7 +53,7 @@ func newGLRenderer(win *glfw.Window) *glRenderer {
 	r := &glRenderer{win: win}
 	// Resting blend state: always-on translucent blend (see type doc).
 	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	gl.BlendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 	return r
 }
 
@@ -67,11 +71,59 @@ func (r *glRenderer) setTexEnabled(on bool) {
 }
 
 func (r *glRenderer) Resize(widthPx, heightPx int) {
-	// No GL here; the GL viewport is established per-frame in BeginFrame.
+	if widthPx == r.widthPx && heightPx == r.heightPx && r.targetReady {
+		return
+	}
+	r.destroyFrameTarget()
 	r.widthPx, r.heightPx = widthPx, heightPx
+	if widthPx <= 0 || heightPx <= 0 {
+		return
+	}
+	if !supportsFramebufferObject() {
+		log.Printf("OpenGL framebuffer objects unavailable; using correctness-first full redraw fallback")
+		return
+	}
+	gl.GenTextures(1, &r.frameTexture)
+	gl.BindTexture(gl.TEXTURE_2D, r.frameTexture)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(widthPx), int32(heightPx), 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
+	gl.GenFramebuffers(1, &r.framebuffer)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, r.framebuffer)
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, r.frameTexture, 0)
+	r.targetReady = gl.CheckFramebufferStatus(gl.FRAMEBUFFER) == gl.FRAMEBUFFER_COMPLETE
+	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+	r.boundTexture = 0
+	if !r.targetReady {
+		log.Printf("OpenGL RGBA frame target is incomplete; falling back to the window framebuffer")
+		r.destroyFrameTarget()
+	}
+}
+
+func (r *glRenderer) destroyFrameTarget() {
+	if r.framebuffer != 0 {
+		gl.DeleteFramebuffers(1, &r.framebuffer)
+	}
+	if r.frameTexture != 0 {
+		gl.DeleteTextures(1, &r.frameTexture)
+	}
+	r.framebuffer, r.frameTexture = 0, 0
+	r.targetReady = false
+}
+
+func (r *glRenderer) PersistentTargetReady() bool { return r.targetReady }
+
+func supportsFramebufferObject() bool {
+	extensions := gl.GoStr(gl.GetString(gl.EXTENSIONS))
+	return strings.Contains(extensions, "GL_ARB_framebuffer_object")
 }
 
 func (r *glRenderer) BeginFrame(widthPx, heightPx int) {
+	if r.targetReady {
+		gl.BindFramebuffer(gl.FRAMEBUFFER, r.framebuffer)
+	}
 	// Matches app_draw.go: viewport + ortho projection (top-left origin) + identity
 	// modelview.
 	gl.Viewport(0, 0, int32(widthPx), int32(heightPx))
@@ -85,7 +137,7 @@ func (r *glRenderer) BeginFrame(widthPx, heightPx int) {
 	r.setTexEnabled(false)
 	// Ensure the resting blend state (kept enabled for the whole frame).
 	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	gl.BlendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 	r.clipStack = r.clipStack[:0]
 	gl.Disable(gl.SCISSOR_TEST)
 }
@@ -131,9 +183,20 @@ func (r *glRenderer) Clear(c color.RGBA) {
 	}
 }
 
+func (r *glRenderer) ReplaceRect(x, y, w, h float32, c color.RGBA) {
+	r.setTexEnabled(false)
+	gl.Disable(gl.BLEND)
+	r.solidQuad(x, y, w, h, c)
+	gl.Enable(gl.BLEND)
+	gl.BlendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+}
+
 func (r *glRenderer) FillRect(x, y, w, h float32, c color.RGBA) {
 	r.setTexEnabled(false)
-	// Body of app_draw.go fillRect: color (incl. alpha) then a QUAD.
+	r.solidQuad(x, y, w, h, c)
+}
+
+func (r *glRenderer) solidQuad(x, y, w, h float32, c color.RGBA) {
 	gl.Color4f(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, float32(c.A)/255)
 	gl.Begin(gl.QUADS)
 	gl.Vertex2f(x, y)
@@ -159,13 +222,13 @@ func (r *glRenderer) DrawGlyph(page int, mode gpu.GlyphMode, x, y, w, h, skew fl
 		// LCD subpixel two-pass (bit-identical to atlas.drawEntry): a coverage pass
 		// with ZERO, ONE_MINUS_SRC_COLOR, then a tinted additive pass, then restore
 		// the resting blend.
-		gl.BlendFunc(gl.ZERO, gl.ONE_MINUS_SRC_COLOR)
+		gl.BlendFuncSeparate(gl.ZERO, gl.ONE_MINUS_SRC_COLOR, gl.ZERO, gl.ONE)
 		gl.Color4ub(255, 255, 255, 255)
 		r.drawQuad(x, y, w, h, skew, u0, v0, u1, v1)
-		gl.BlendFunc(gl.ONE, gl.ONE)
+		gl.BlendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE)
 		gl.Color4f(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, float32(c.A)/255)
 		r.drawQuad(x, y, w, h, skew, u0, v0, u1, v1)
-		gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+		gl.BlendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 	default: // gpu.GlyphMask
 		// Alpha-coverage mask tinted by c (the common text path).
 		gl.Color4f(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, float32(c.A)/255)
@@ -239,10 +302,40 @@ func (r *glRenderer) EndFrame() {
 	if len(r.clipStack) != 0 {
 		panic("glfwgl: unbalanced renderer clip stack")
 	}
+	if r.targetReady {
+		// Present the authoritative RGBA target as one full-frame image.
+		gl.Disable(gl.SCISSOR_TEST)
+		gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+		gl.Viewport(0, 0, int32(r.widthPx), int32(r.heightPx))
+		gl.MatrixMode(gl.PROJECTION)
+		gl.LoadIdentity()
+		gl.Ortho(0, float64(r.widthPx), float64(r.heightPx), 0, -1, 1)
+		gl.MatrixMode(gl.MODELVIEW)
+		gl.LoadIdentity()
+		gl.Disable(gl.BLEND)
+		r.setTexEnabled(true)
+		gl.BindTexture(gl.TEXTURE_2D, r.frameTexture)
+		gl.Color4ub(255, 255, 255, 255)
+		gl.Begin(gl.QUADS)
+		gl.TexCoord2f(0, 1)
+		gl.Vertex2f(0, 0)
+		gl.TexCoord2f(1, 1)
+		gl.Vertex2f(float32(r.widthPx), 0)
+		gl.TexCoord2f(1, 0)
+		gl.Vertex2f(float32(r.widthPx), float32(r.heightPx))
+		gl.TexCoord2f(0, 0)
+		gl.Vertex2f(0, float32(r.heightPx))
+		gl.End()
+		r.boundTexture = 0
+		r.setTexEnabled(false)
+		gl.Enable(gl.BLEND)
+		gl.BlendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+	}
 	r.win.SwapBuffers()
 }
 
 func (r *glRenderer) Destroy() {
+	r.destroyFrameTarget()
 	if len(r.pages) > 0 {
 		gl.DeleteTextures(int32(len(r.pages)), &r.pages[0])
 	}

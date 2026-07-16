@@ -32,24 +32,55 @@ type mouseReportState struct {
 func (a *App) metrics() gridMetrics {
 	_, view, ok := a.focusedView()
 	if !ok {
-		return gridMetrics{cellW: a.cellW, cellH: a.cellH, paddingX: a.paddingX, paddingY: a.paddingY, cols: a.cols, rows: a.rows}
+		return gridMetrics{
+			cellW: a.cellW, cellH: a.cellH,
+			paddingX: a.paddingX, paddingY: a.paddingY,
+			contentRight: a.paddingX + float32(a.cols)*a.cellW,
+			cols:         a.cols, rows: a.rows,
+		}
 	}
-	return gridMetrics{cellW: a.cellW, cellH: a.cellH, paddingX: a.paddingX, paddingY: a.paddingY, cols: view.Geometry.Cols, rows: view.Geometry.Rows}
+	return gridMetrics{
+		cellW: a.cellW, cellH: a.cellH,
+		paddingX: a.paddingX, paddingY: a.paddingY,
+		contentRight: a.paddingX + float32(view.Geometry.Cols)*a.cellW,
+		cols:         view.Geometry.Cols, rows: view.Geometry.Rows,
+	}
 }
 
+// windowToFramebuffer is the single coordinate conversion used by terminal and
+// scrollbar hit testing. GLFW cursor callbacks are in window coordinates while
+// rendering and grid geometry use framebuffer pixels.
+func (a *App) windowToFramebuffer(x, y float64) (float32, float32) {
+	if a.window == nil {
+		return float32(x), float32(y)
+	}
+	windowW, windowH := a.window.GetSize()
+	fbW, fbH := a.window.GetFramebufferSize()
+	if windowW <= 0 || windowH <= 0 {
+		return float32(x), float32(y)
+	}
+	return float32(x) * float32(fbW) / float32(windowW), float32(y) * float32(fbH) / float32(windowH)
+}
+
+// pointFromPixels accepts GLFW window coordinates and maps them to the focused
+// pane's local grid, falling back to the focused geometry when no pane view exists.
 func (a *App) pointFromPixels(x, y float32) termsel.Point {
 	if point, ok := a.pointForPaneWindowPosition(a.focusedPane, float64(x), float64(y)); ok {
 		return point
 	}
-	row, col := a.metrics().cellAt(x, y)
+	fx, fy := a.windowToFramebuffer(float64(x), float64(y))
+	row, col := a.metrics().cellAt(fx, fy)
 	return termsel.Point{Row: row, Col: col}
 }
 
-func scrollRowsFromWheelDelta(yoff float64) int {
+func scrollRowsFromWheelDelta(yoff float64, multiplier int) int {
 	if yoff == 0 {
 		return 0
 	}
-	rows := int(math.Round(yoff * 3))
+	if multiplier <= 0 {
+		multiplier = 1
+	}
+	rows := int(math.Round(yoff * float64(multiplier)))
 	if rows == 0 {
 		if yoff > 0 {
 			return 1
@@ -206,6 +237,26 @@ func mouseButtonFromGLFW(button glfw.MouseButton) (input.MouseButton, bool) {
 	default:
 		return input.MouseLeft, false
 	}
+}
+
+func (a *App) currentModifiers() glfw.ModifierKey {
+	if a.window == nil {
+		return 0
+	}
+	var mods glfw.ModifierKey
+	if a.window.GetKey(glfw.KeyLeftControl) == glfw.Press || a.window.GetKey(glfw.KeyRightControl) == glfw.Press {
+		mods |= glfw.ModControl
+	}
+	if a.window.GetKey(glfw.KeyLeftAlt) == glfw.Press || a.window.GetKey(glfw.KeyRightAlt) == glfw.Press {
+		mods |= glfw.ModAlt
+	}
+	if a.window.GetKey(glfw.KeyLeftShift) == glfw.Press || a.window.GetKey(glfw.KeyRightShift) == glfw.Press {
+		mods |= glfw.ModShift
+	}
+	if a.window.GetKey(glfw.KeyLeftSuper) == glfw.Press || a.window.GetKey(glfw.KeyRightSuper) == glfw.Press {
+		mods |= glfw.ModSuper
+	}
+	return mods
 }
 
 func mouseModsFromGLFW(mods glfw.ModifierKey) input.Mod {

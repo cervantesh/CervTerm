@@ -79,6 +79,10 @@ func (r *metalRenderer) Clear(c color.RGBA) {
 	// TODO: clear the current drawable to c (clear load action / clear encoder).
 }
 
+func (r *metalRenderer) ReplaceRect(x, y, w, h float32, c color.RGBA) {
+	// TODO: append a quad using the unblended replacement pipeline.
+}
+
 func (r *metalRenderer) FillRect(x, y, w, h float32, c color.RGBA) {
 	// TODO: append a colored quad to the solid batch.
 }

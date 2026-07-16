@@ -78,6 +78,11 @@ type Renderer interface {
 	// doing a full-frame redraw; partial-damage frames never call it.
 	Clear(c color.RGBA)
 
+	// ReplaceRect overwrites destination RGBA without blending. It is used for
+	// damaged background pixels in an authoritative alpha-aware target, where
+	// blending the replacement over stale pixels would accumulate opacity.
+	ReplaceRect(x, y, w, h float32, c color.RGBA)
+
 	// FillRect draws a solid axis-aligned rectangle, alpha-blended (straight RGBA).
 	FillRect(x, y, w, h float32, c color.RGBA)
 

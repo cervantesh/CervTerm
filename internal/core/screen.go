@@ -16,7 +16,7 @@ func (t *Terminal) CopyView(dst []Cell) {
 	for row := 0; row < t.rows; row++ {
 		globalRow := startRow + row
 		if globalRow < scrollbackRows {
-			sourceRow := (t.scrollbackStart + globalRow) % maxScrollbackRows
+			sourceRow := (t.scrollbackStart + globalRow) % t.scrollbackCapacity
 			copy(dst[row*t.cols:(row+1)*t.cols], t.scrollback[sourceRow*t.cols:(sourceRow+1)*t.cols])
 			continue
 		}
@@ -57,8 +57,8 @@ func (t *Terminal) LineWrapped(row int) (bool, bool) {
 
 	globalRow := t.ViewportTopGlobalRow() + row
 	if globalRow < t.scrollbackRows {
-		sourceRow := (t.scrollbackStart + globalRow) % maxScrollbackRows
-		if len(t.scrollbackWrapped) != maxScrollbackRows {
+		sourceRow := (t.scrollbackStart + globalRow) % t.scrollbackCapacity
+		if len(t.scrollbackWrapped) != t.scrollbackCapacity {
 			return false, true
 		}
 		return t.scrollbackWrapped[sourceRow], true
@@ -102,10 +102,10 @@ func (t *Terminal) physicalRows() ([][]Cell, []bool) {
 	wrapped := make([]bool, 0, count)
 
 	for row := 0; row < t.scrollbackRows; row++ {
-		sourceRow := (t.scrollbackStart + row) % maxScrollbackRows
+		sourceRow := (t.scrollbackStart + row) % t.scrollbackCapacity
 		start := sourceRow * t.cols
 		rows = append(rows, cloneCellRow(t.scrollback[start:start+t.cols]))
-		if len(t.scrollbackWrapped) == maxScrollbackRows {
+		if len(t.scrollbackWrapped) == t.scrollbackCapacity {
 			wrapped = append(wrapped, t.scrollbackWrapped[sourceRow])
 		} else {
 			wrapped = append(wrapped, false)
@@ -122,26 +122,27 @@ func (t *Terminal) physicalRows() ([][]Cell, []bool) {
 
 func (t *Terminal) snapshotScreen() *screenState {
 	return &screenState{
-		cols:              t.cols,
-		rows:              t.rows,
-		cells:             cloneCellRow(t.cells),
-		rowWrapped:        cloneBoolRow(t.rowWrapped),
-		scrollback:        cloneCellRow(t.scrollback),
-		scrollbackWrapped: cloneBoolRow(t.scrollbackWrapped),
-		scrollbackStart:   t.scrollbackStart,
-		scrollbackRows:    t.scrollbackRows,
-		displayOffset:     t.displayOffset,
-		cursorRow:         t.cursorRow,
-		cursorCol:         t.cursorCol,
-		wrapNext:          t.wrapNext,
-		savedCursorRow:    t.savedCursorRow,
-		savedCursorCol:    t.savedCursorCol,
-		savedWrapNext:     t.savedWrapNext,
-		hasSavedCursor:    t.hasSavedCursor,
-		scrollTop:         t.scrollTop,
-		scrollBottom:      t.scrollBottom,
-		charsets:          t.charsets,
-		activeCharset:     t.activeCharset,
+		cols:               t.cols,
+		rows:               t.rows,
+		cells:              cloneCellRow(t.cells),
+		rowWrapped:         cloneBoolRow(t.rowWrapped),
+		scrollback:         cloneCellRow(t.scrollback),
+		scrollbackWrapped:  cloneBoolRow(t.scrollbackWrapped),
+		scrollbackStart:    t.scrollbackStart,
+		scrollbackRows:     t.scrollbackRows,
+		scrollbackCapacity: t.scrollbackCapacity,
+		displayOffset:      t.displayOffset,
+		cursorRow:          t.cursorRow,
+		cursorCol:          t.cursorCol,
+		wrapNext:           t.wrapNext,
+		savedCursorRow:     t.savedCursorRow,
+		savedCursorCol:     t.savedCursorCol,
+		savedWrapNext:      t.savedWrapNext,
+		hasSavedCursor:     t.hasSavedCursor,
+		scrollTop:          t.scrollTop,
+		scrollBottom:       t.scrollBottom,
+		charsets:           t.charsets,
+		activeCharset:      t.activeCharset,
 	}
 }
 
@@ -154,6 +155,7 @@ func (t *Terminal) restoreScreen(s *screenState) {
 	t.scrollbackWrapped = cloneBoolRow(s.scrollbackWrapped)
 	t.scrollbackStart = s.scrollbackStart
 	t.scrollbackRows = s.scrollbackRows
+	t.scrollbackCapacity = s.scrollbackCapacity
 	t.displayOffset = min(s.displayOffset, s.scrollbackRows)
 	t.cursorRow = min(s.cursorRow, max(0, s.rows-1))
 	t.cursorCol = min(s.cursorCol, max(0, s.cols-1))
@@ -443,17 +445,21 @@ func (t *Terminal) scrollDownRegion(top, bottom, lines int) {
 }
 
 func (t *Terminal) appendScrollbackLine(line []Cell, wrapped bool) {
-	if len(t.scrollback) != maxScrollbackRows*t.cols {
-		t.scrollback = make([]Cell, maxScrollbackRows*t.cols)
-		t.scrollbackWrapped = make([]bool, maxScrollbackRows)
+	if t.alternateScreen || t.scrollbackCapacity == 0 {
+		t.displayOffset = 0
+		return
+	}
+	if len(t.scrollback) != t.scrollbackCapacity*t.cols {
+		t.scrollback = make([]Cell, t.scrollbackCapacity*t.cols)
+		t.scrollbackWrapped = make([]bool, t.scrollbackCapacity)
 		t.scrollbackStart = 0
 		t.scrollbackRows = 0
 	}
 
-	writeRow := (t.scrollbackStart + t.scrollbackRows) % maxScrollbackRows
-	if t.scrollbackRows == maxScrollbackRows {
+	writeRow := (t.scrollbackStart + t.scrollbackRows) % t.scrollbackCapacity
+	if t.scrollbackRows == t.scrollbackCapacity {
 		writeRow = t.scrollbackStart
-		t.scrollbackStart = (t.scrollbackStart + 1) % maxScrollbackRows
+		t.scrollbackStart = (t.scrollbackStart + 1) % t.scrollbackCapacity
 	} else {
 		t.scrollbackRows++
 	}
