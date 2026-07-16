@@ -112,6 +112,10 @@ func (r *vulkanRenderer) Clear(c color.RGBA) {
 	// TODO: clear the current render target/attachment to c (e.g. vkCmdClearAttachments).
 }
 
+func (r *vulkanRenderer) ReplaceRect(x, y, w, h float32, c color.RGBA) {
+	// TODO: append a quad using the unblended replacement pipeline.
+}
+
 func (r *vulkanRenderer) FillRect(x, y, w, h float32, c color.RGBA) {
 	// TODO: append two triangles (a quad) with color c to the solid vertex batch.
 }

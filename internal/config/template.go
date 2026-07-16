@@ -13,6 +13,10 @@ return {
     padding_x = %d,
     padding_y = %d,
     dynamic_title = %t,
+    -- Whole-window opacity requires an opaque background (#RRGGBB or alpha FF).
+    -- Blur is best-effort; unsupported platforms keep transparency without blur.
+    opacity = %.2f,
+    blur = %t,
   },
   font = {
     family = %q,
@@ -25,14 +29,33 @@ return {
   },
   colors = {
     foreground = %q,
+    -- #RRGGBB or #RRGGBBAA; default E6 is about 90%% background opacity.
     background = %q,
     cursor = %q,
     selection_background = %q,
   },
   scrolling = {
+    -- Retained scrollback rows per pane; valid range 0..10000.
     history = %d,
     wheel_multiplier = %d,
     hide_cursor_when_scrolled = %t,
+  },
+  scrollbar = {
+    -- The slot stays reserved while the track/thumb auto-hide and fade.
+    enabled = %t,
+    reserved_width_px = %d,
+    width_px = %d,
+    margin_px = %d,
+    radius_px = %d,
+    min_thumb_px = %d,
+    track_color = %q,
+    thumb_color = %q,
+    thumb_hover_color = %q,
+    thumb_press_color = %q,
+    auto_hide_delay_ms = %d,
+    fade_ms = %d,
+    page_step = %.2f,
+    track_click = %q,
   },
   cursor = {
     shape = %q,
@@ -107,10 +130,13 @@ return {
   --   local cervterm = require("cervterm")
   --   cervterm.every(1000, function(term) term:set_title(os.date("%%H:%%M:%%S")) end)
 }
-`, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY, cfg.Window.DynamicTitle,
+`, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY, cfg.Window.DynamicTitle, cfg.Window.Opacity, cfg.Window.Blur,
 		cfg.Font.Family, cfg.Font.Size, cfg.Font.Ligatures,
 		cfg.Colors.Foreground, cfg.Colors.Background, cfg.Colors.Cursor, cfg.Colors.SelectionBackground,
 		cfg.Scrolling.History, cfg.Scrolling.WheelMultiplier, cfg.Scrolling.HideCursorWhenScrolled,
+		cfg.Scrollbar.Enabled, cfg.Scrollbar.ReservedWidthPX, cfg.Scrollbar.WidthPX, cfg.Scrollbar.MarginPX, cfg.Scrollbar.RadiusPX, cfg.Scrollbar.MinThumbPX,
+		cfg.Scrollbar.TrackColor, cfg.Scrollbar.ThumbColor, cfg.Scrollbar.ThumbHoverColor, cfg.Scrollbar.ThumbPressColor,
+		cfg.Scrollbar.AutoHideDelayMS, cfg.Scrollbar.FadeMS, cfg.Scrollbar.PageStep, cfg.Scrollbar.TrackClick,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
 		cfg.Clipboard.OSC52,
 		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.ZoomInHotkey, cfg.Render.ZoomOutHotkey, cfg.Render.ZoomResetHotkey, cfg.Render.VSync, cfg.Render.Redraw, cfg.Render.Damage, cfg.Render.Bidi,

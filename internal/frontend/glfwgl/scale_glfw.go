@@ -68,10 +68,7 @@ func (a *App) rebuildForContentScale(scaleX, scaleY float32) {
 			state.font.ptyDirty = false
 			continue
 		}
-		state.font.pending = true
-		state.font.pendingTarget = state.font.fontSize
-		state.font.resizeAttempt = 1
-		state.font.deadline = now.Add(paneZoomResizeRetryInitial)
+		a.schedulePanePTYResizeRetry(id, now)
 	}
 	a.restoreFocusedFontProjection()
 }

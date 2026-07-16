@@ -74,6 +74,36 @@ func TestDividerSettlementRetriesTransientPTYResizeFailure(t *testing.T) {
 	}
 }
 
+func TestWindowResizeFailureArmsBoundedPaneRetry(t *testing.T) {
+	factory := &recordingPaneFactory{}
+	m := termmux.New(factory, termmux.Options{})
+	defer m.Shutdown()
+	if _, pane, _, err := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}); err != nil {
+		t.Fatal(err)
+	} else if events, err := m.ResizeBounds(termmux.PixelRect{Width: 640, Height: 400}); err != nil {
+		t.Fatal(err)
+	} else {
+		a := &App{mux: m, paneUI: make(map[termmux.PaneID]*paneUIState), pendingPaneResize: make(map[termmux.PaneID]termmux.PaneGeometry), pendingPaneScroll: make(map[termmux.PaneID]int)}
+		a.handleMuxEvents(events)
+		factory.sessions[0].setResizeError(errors.New("transient window resize"))
+		if a.resizePTYToGrid() {
+			t.Fatal("failed window resize reported success")
+		}
+		state := a.ensurePaneUI(pane)
+		if !state.font.pending || !state.font.ptyDirty || state.font.resizeAttempt != 1 {
+			t.Fatalf("window resize did not arm bounded retry: %#v", state.font)
+		}
+
+		state.font = paneFontState{}
+		if a.resizePTYToGridReporting(true) {
+			t.Fatal("failed divider-owned resize reported success")
+		}
+		if state.font.pending || state.font.ptyDirty {
+			t.Fatalf("divider-owned retry also armed pane retry: %#v", state.font)
+		}
+	}
+}
+
 func TestDividerSettlementStopsAfterPersistentPTYResizeFailure(t *testing.T) {
 	factory := &recordingPaneFactory{}
 	m := termmux.New(factory, termmux.Options{})

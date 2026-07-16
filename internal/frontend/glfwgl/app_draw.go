@@ -136,6 +136,7 @@ func (a *App) draw() {
 	a.drawHUD(w, h, palette, frameNow)
 	a.drawStatusBand(w, palette)
 	a.drawSearchBar(w, h, palette)
+	a.drawScrollbar(frameNow, background, w, h)
 	a.lastBlinkPhase = frameBlink
 	if a.showStats {
 		a.lastStatsDraw = frameNow
@@ -184,7 +185,7 @@ func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
 	if a.showStats {
 		s := a.meter.Snapshot()
 		a.hud.lines = append(a.hud.lines,
-			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.FontSize()),
+			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.effectiveTextRaster(), a.cfg.Font.Family, a.FontSize()),
 			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
 		a.hud.colors = append(a.hud.colors, themeColor(palette.Muted), themeColor(palette.Muted))
 		a.hud.statsAt = now
@@ -314,7 +315,7 @@ func cursorThicknessPixels(configured float64, cellW, cellH float32) float32 {
 }
 
 func configColor(hex string, fallback color.RGBA) color.RGBA {
-	if len(hex) != 7 || hex[0] != '#' {
+	if (len(hex) != 7 && len(hex) != 9) || hex[0] != '#' {
 		return fallback
 	}
 	r, errR := strconv.ParseUint(hex[1:3], 16, 8)
@@ -323,7 +324,19 @@ func configColor(hex string, fallback color.RGBA) color.RGBA {
 	if errR != nil || errG != nil || errB != nil {
 		return fallback
 	}
-	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
+	a := uint64(255)
+	if len(hex) == 9 {
+		var err error
+		a, err = strconv.ParseUint(hex[7:9], 16, 8)
+		if err != nil {
+			return fallback
+		}
+	}
+	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: uint8(a)}
+}
+
+func (a *App) replaceRect(x, y, w, h float32, c color.RGBA) {
+	a.r.ReplaceRect(x, y, w, h, c)
 }
 
 func (a *App) fillRect(x, y, w, h float32, c color.RGBA) {

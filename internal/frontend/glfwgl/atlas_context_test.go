@@ -26,12 +26,13 @@ type atlasTestDraw struct {
 	height float32
 }
 
-func (*atlasTestRenderer) Resize(int, int)                                         {}
-func (*atlasTestRenderer) BeginFrame(int, int)                                     {}
-func (*atlasTestRenderer) PushClip(gpu.ClipRect)                                   {}
-func (*atlasTestRenderer) PopClip()                                                {}
-func (*atlasTestRenderer) Clear(color.RGBA)                                        {}
-func (*atlasTestRenderer) FillRect(float32, float32, float32, float32, color.RGBA) {}
+func (*atlasTestRenderer) Resize(int, int)                                            {}
+func (*atlasTestRenderer) BeginFrame(int, int)                                        {}
+func (*atlasTestRenderer) PushClip(gpu.ClipRect)                                      {}
+func (*atlasTestRenderer) PopClip()                                                   {}
+func (*atlasTestRenderer) Clear(color.RGBA)                                           {}
+func (*atlasTestRenderer) FillRect(float32, float32, float32, float32, color.RGBA)    {}
+func (*atlasTestRenderer) ReplaceRect(float32, float32, float32, float32, color.RGBA) {}
 func (r *atlasTestRenderer) DrawGlyph(_ int, _ gpu.GlyphMode, _, _, width, height, _ float32, _, _, _, _ float32, _ color.RGBA) {
 	r.draws = append(r.draws, atlasTestDraw{width: width, height: height})
 }

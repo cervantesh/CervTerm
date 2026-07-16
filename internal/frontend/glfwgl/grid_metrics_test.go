@@ -27,3 +27,13 @@ func TestGridMetricsCellAt(t *testing.T) {
 		})
 	}
 }
+
+func TestGridMetricsRejectsReservedGutter(t *testing.T) {
+	g := gridMetrics{cellW: 10, cellH: 20, paddingX: 5, paddingY: 5, contentRight: 85, cols: 8, rows: 4}
+	if !g.containsCell(84.9, 10) {
+		t.Fatal("last grid pixel should be inside content")
+	}
+	if g.containsCell(85, 10) || g.containsCell(100, 10) {
+		t.Fatal("reserved gutter must not be a terminal cell")
+	}
+}

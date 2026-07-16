@@ -1,13 +1,22 @@
 package core
 
 func NewTerminal(cols, rows int) *Terminal {
+	return NewTerminalWithHistory(cols, rows, defaultScrollbackRows)
+}
+
+func NewTerminalWithHistory(cols, rows, history int) *Terminal {
 	if cols < 2 {
 		cols = 2
 	}
 	if rows < 1 {
 		rows = 1
 	}
-	t := &Terminal{cols: cols, rows: rows, attr: Attr{FG: DefaultFG, BG: DefaultBG}, scrollBottom: rows - 1, cursorVisible: true, autoWrap: true}
+	if history < 0 {
+		history = 0
+	} else if history > maxScrollbackRows {
+		history = maxScrollbackRows
+	}
+	t := &Terminal{cols: cols, rows: rows, scrollbackCapacity: history, attr: Attr{FG: DefaultFG, BG: DefaultBG}, scrollBottom: rows - 1, cursorVisible: true, autoWrap: true}
 	t.cells = make([]Cell, cols*rows)
 	t.rowWrapped = make([]bool, rows)
 	t.resetTabStops()
@@ -429,6 +438,7 @@ func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearO
 		t.scrollbackWrapped = nil
 		t.scrollbackStart = 0
 		t.scrollbackRows = 0
+		t.scrollbackCapacity = 0
 		t.displayOffset = 0
 		if clearOnEnter {
 			t.Clear()
@@ -460,5 +470,6 @@ func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearO
 		t.RestoreCursor()
 	}
 }
-func (t *Terminal) ScrollbackLines() int { return t.scrollbackRows }
-func (t *Terminal) DisplayOffset() int   { return t.displayOffset }
+func (t *Terminal) ScrollbackLines() int    { return t.scrollbackRows }
+func (t *Terminal) ScrollbackCapacity() int { return t.scrollbackCapacity }
+func (t *Terminal) DisplayOffset() int      { return t.displayOffset }

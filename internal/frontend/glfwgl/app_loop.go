@@ -3,6 +3,7 @@
 package glfwgl
 
 import (
+	"math"
 	"time"
 
 	termmux "cervterm/internal/mux"
@@ -50,6 +51,9 @@ func (a *App) runContinuousLoop(w *glfw.Window) error {
 		a.fireLifecycleEvents()
 		a.syncStatusSegments()
 		a.syncOverlays()
+		now := time.Now()
+		a.pollConfigReload(now)
+		a.applyPendingConfigReload()
 		a.draw()
 		a.r.EndFrame()
 		a.meter.AddFrame()
@@ -72,7 +76,10 @@ func (a *App) runOnDemandLoop(w *glfw.Window) error {
 		a.fireLifecycleEvents()
 		a.syncStatusSegments()
 		a.syncOverlays()
-		if a.shouldRedraw(time.Now()) {
+		now := time.Now()
+		a.pollConfigReload(now)
+		a.applyPendingConfigReload()
+		if a.shouldRedraw(now) {
 			a.draw()
 			a.r.EndFrame()
 			a.meter.AddFrame()
@@ -115,6 +122,9 @@ func (a *App) shouldRedraw(now time.Time) bool {
 	if a.showStats && now.Sub(a.lastStatsDraw) >= 500*time.Millisecond {
 		return true
 	}
+	if a.scrollbarNeedsRedraw(now) {
+		return true
+	}
 	return false
 }
 
@@ -146,6 +156,12 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 		dividerWake := max(minWake, a.divider.settleAt.Sub(now))
 		if wake <= 0 || dividerWake < wake {
 			wake = dividerWake
+		}
+	}
+	if scrollbarWake, ok := a.scrollbarWake(now); ok {
+		scrollbarWake = max(minWake, scrollbarWake)
+		if wake <= 0 || scrollbarWake < wake {
+			wake = scrollbarWake
 		}
 	}
 	return wake
@@ -184,7 +200,7 @@ func (a *App) blinkActive() bool {
 // spawnInitialPTY bootstraps the implicit mux tab at the real initial grid.
 func (a *App) spawnInitialPTY(w *glfw.Window) {
 	fbW, fbH := w.GetFramebufferSize()
-	eventsRect := termmux.PixelRect{Width: fbW, Height: fbH}
+	eventsRect := a.muxContentBounds(fbW, fbH)
 	_, pane, events, err := a.mux.Bootstrap(termmux.SpawnSpec{Options: ptyio.Options{
 		ShellProgram: a.cfg.Shell.Program, ShellArgs: a.cfg.Shell.Args,
 		WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env,
@@ -198,11 +214,16 @@ func (a *App) spawnInitialPTY(w *glfw.Window) {
 	}
 }
 
+func (a *App) muxContentBounds(width, height int) termmux.PixelRect {
+	reserved := int(math.Ceil(float64(a.scrollbarReservedWidth())))
+	return termmux.PixelRect{Width: max(0, width-reserved), Height: max(0, height)}
+}
+
 // gridSize maps a framebuffer size (in pixels) to the terminal grid, applying
 // the padding and cell metrics. Shared by resizeToWindow and the initial PTY
 // spawn in runWindow so the two sites cannot drift.
 func (a *App) gridSize(w, h int) (cols, rows int) {
-	cols = max(2, int((float32(w)-2*a.paddingX)/a.cellW))
+	cols = max(2, int((float32(w)-2*a.paddingX-a.scrollbarReservedWidth())/a.cellW))
 	rows = max(1, int((float32(h)-2*a.paddingY)/a.cellH))
 	return cols, rows
 }
@@ -223,7 +244,7 @@ func (a *App) resizeToWindow() {
 // Returns whether the grid dimensions changed.
 func (a *App) resizeGridToWindow() bool {
 	w, h := a.window.GetFramebufferSize()
-	events, err := a.mux.ResizeBounds(termmux.PixelRect{Width: w, Height: h})
+	events, err := a.mux.ResizeBounds(a.muxContentBounds(w, h))
 	if err != nil {
 		a.Notify("resize: " + err.Error())
 		return false
@@ -236,11 +257,17 @@ func (a *App) resizeGridToWindow() bool {
 }
 
 // resizePTYToGrid applies each pane's latest desired size at a settlement
-// boundary and reports whether every pane accepted it.
-func (a *App) resizePTYToGrid() bool { return a.resizePTYToGridReporting(true) }
+// boundary and reports whether every pane accepted it. Window-driven failures
+// enter the bounded pane retry path; divider settlement owns its own retries.
+func (a *App) resizePTYToGrid() bool { return a.resizePTYToGridWithRetry(true, true) }
 
 func (a *App) resizePTYToGridReporting(reportFailure bool) bool {
+	return a.resizePTYToGridWithRetry(reportFailure, false)
+}
+
+func (a *App) resizePTYToGridWithRetry(reportFailure, scheduleRetry bool) bool {
 	succeeded := true
+	now := time.Now()
 	for _, id := range a.mux.PaneIDs() {
 		events, err := a.mux.ApplyResize(id)
 		if err == nil || reportFailure {
@@ -248,6 +275,9 @@ func (a *App) resizePTYToGridReporting(reportFailure bool) bool {
 		}
 		if err != nil {
 			succeeded = false
+			if scheduleRetry {
+				a.schedulePanePTYResizeRetry(id, now)
+			}
 		}
 	}
 	return succeeded

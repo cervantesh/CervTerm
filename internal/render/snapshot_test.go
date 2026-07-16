@@ -132,6 +132,26 @@ func TestCaptureRespectsTerminalCursorVisibilityMode(t *testing.T) {
 	}
 }
 
+func TestCaptureViewportMetadataAndCursorPolicy(t *testing.T) {
+	term := core.NewTerminalWithHistory(5, 2, 10)
+	for _, line := range []string{"one", "two", "tri"} {
+		for _, r := range line {
+			term.PutRune(r)
+		}
+		term.CarriageReturn()
+		term.NewLine()
+	}
+	term.ScrollViewport(1)
+	var snap Snapshot
+	CaptureWithOptions(&snap, term, CaptureOptions{HideCursorWhenScrolled: false})
+	if snap.HistoryRows == 0 || snap.DisplayOffset != 1 {
+		t.Fatalf("viewport metadata = history %d offset %d", snap.HistoryRows, snap.DisplayOffset)
+	}
+	if !snap.CursorVisible {
+		t.Fatal("cursor policy false should keep terminal cursor visible while scrolled")
+	}
+}
+
 func BenchmarkCaptureReuse(b *testing.B) {
 	term := core.NewTerminal(120, 40)
 	var snap Snapshot
