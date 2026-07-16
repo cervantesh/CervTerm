@@ -64,8 +64,9 @@ Lua keybindings take precedence over these built-ins:
 - `Alt+Shift+-`: split the focused pane into top/bottom rows.
 - `Alt+Left/Right/Up/Down`: move focus geometrically.
 - `Ctrl+Shift+W`: close the focused pane (or the window when it is the final pane).
+- Drag a divider with the left mouse button to resize adjacent panes.
 
-The initial mux is local and in-process. Visible tabs, detachable/persistent sessions, draggable dividers, pane zoom, remote domains and tmux integration are deferred.
+The mux is local and in-process. Visible tabs, detachable/persistent sessions, pane zoom, remote domains and tmux integration are deferred.
 
 
 ## Build and test

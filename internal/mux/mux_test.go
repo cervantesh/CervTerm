@@ -72,6 +72,11 @@ func (s *fakeSession) closes() int {
 	defer s.mu.Unlock()
 	return s.closeCount
 }
+func (s *fakeSession) resizeCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.resizes)
+}
 
 type fakeFactory struct {
 	mu             sync.Mutex
@@ -285,6 +290,48 @@ func TestMuxSplitRoutesIndependentSessionsAndCollapses(t *testing.T) {
 	firstView, ok := m.PaneView(1)
 	if !ok || firstView.Geometry.Cols != 100 || firstView.Geometry.Rows != 30 || firstView.Snapshot.Cols != 100 || firstView.Snapshot.Rows != 30 {
 		t.Fatalf("survivor was not resized after collapse: %#v", firstView)
+	}
+}
+
+func TestMuxSetSplitRatioReflowsBeforeSettledPTYResize(t *testing.T) {
+	factory := &fakeFactory{}
+	m := New(factory, Options{})
+	defer m.Shutdown()
+	bounds := PixelRect{Width: 801, Height: 480}
+	metrics := CellMetrics{CellWidth: 8, CellHeight: 16}
+	if _, _, _, err := m.Bootstrap(SpawnSpec{}, bounds, metrics); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := m.Split(1, SplitColumns, SpawnSpec{}); err != nil {
+		t.Fatal(err)
+	}
+	layout, err := m.Layout()
+	if err != nil || len(layout.Dividers) != 1 {
+		t.Fatalf("layout=%#v err=%v", layout, err)
+	}
+	beforeFirst, beforeSecond := factory.sessions[0].resizeCount(), factory.sessions[1].resizeCount()
+	events, err := m.SetSplitRatio(layout.Dividers[0].Split, 6_000)
+	if err != nil || len(events) == 0 {
+		t.Fatalf("SetSplitRatio events=%#v err=%v", events, err)
+	}
+	first, _ := m.PaneView(1)
+	second, _ := m.PaneView(2)
+	if first.Geometry.Pixels.Width <= second.Geometry.Pixels.Width || first.Snapshot.Cols != first.Geometry.Cols {
+		t.Fatalf("reflowed geometry first=%#v second=%#v", first.Geometry, second.Geometry)
+	}
+	if got := factory.sessions[0].resizeCount(); got != beforeFirst {
+		t.Fatalf("first PTY resized during live ratio update: before=%d after=%d", beforeFirst, got)
+	}
+	if got := factory.sessions[1].resizeCount(); got != beforeSecond {
+		t.Fatalf("second PTY resized during live ratio update: before=%d after=%d", beforeSecond, got)
+	}
+	for _, id := range m.PaneIDs() {
+		if _, err := m.ApplyResize(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if factory.sessions[0].resizeCount() != beforeFirst+1 || factory.sessions[1].resizeCount() != beforeSecond+1 {
+		t.Fatalf("settled resize counts=(%d,%d), want (%d,%d)", factory.sessions[0].resizeCount(), factory.sessions[1].resizeCount(), beforeFirst+1, beforeSecond+1)
 	}
 }
 

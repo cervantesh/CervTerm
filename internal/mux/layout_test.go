@@ -51,6 +51,9 @@ func TestLayoutAxesRemainderAndHalfOpenRectangles(t *testing.T) {
 			if layout.Panes[0].Pixels != test.wantFirst || layout.Dividers[0].Pixels != test.wantDivider || layout.Panes[1].Pixels != test.wantSecond {
 				t.Fatalf("rectangles = %#v, %#v, %#v; want %#v, %#v, %#v", layout.Panes[0].Pixels, layout.Dividers[0].Pixels, layout.Panes[1].Pixels, test.wantFirst, test.wantDivider, test.wantSecond)
 			}
+			if layout.Dividers[0].Split == 0 || layout.Dividers[0].Container != test.bounds {
+				t.Fatalf("divider identity/container = %#v, want nonzero split and %#v", layout.Dividers[0], test.bounds)
+			}
 			if layout.Panes[0].Pixels.Right() != layout.Dividers[0].Pixels.X && test.axis == SplitColumns {
 				t.Fatal("column rectangles are not half-open and adjacent")
 			}
@@ -83,8 +86,8 @@ func TestLayoutNestedVisualDFSAndCellGeometry(t *testing.T) {
 		{Pane: third, Pixels: PixelRect{X: 161, Y: 97, Width: 160, Height: 96}, Cols: 20, Rows: 6},
 	}
 	wantDividers := []Divider{
-		{Axis: SplitColumns, Pixels: PixelRect{X: 160, Width: 1, Height: 193}},
-		{Axis: SplitRows, Pixels: PixelRect{X: 161, Y: 96, Width: 160, Height: 1}},
+		{Split: 1, Axis: SplitColumns, Pixels: PixelRect{X: 160, Width: 1, Height: 193}, Container: bounds},
+		{Split: 2, Axis: SplitRows, Pixels: PixelRect{X: 161, Y: 96, Width: 160, Height: 1}, Container: PixelRect{X: 161, Width: 160, Height: 193}},
 	}
 	if !reflect.DeepEqual(layout.Panes, wantPanes) {
 		t.Fatalf("panes = %#v, want %#v", layout.Panes, wantPanes)

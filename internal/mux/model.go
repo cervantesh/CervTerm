@@ -3,6 +3,9 @@ package mux
 // PaneID is a stable, process-local pane identity. Zero is never valid.
 type PaneID uint64
 
+// SplitID is a stable, process-local identity for one branch divider.
+type SplitID uint64
+
 // TabID is a stable, process-local tab identity. Phase 1 creates one implicit
 // tab while keeping the identity explicit for later phases.
 type TabID uint64
@@ -27,6 +30,7 @@ const (
 
 type node struct {
 	pane   PaneID
+	split  SplitID
 	axis   SplitAxis
 	ratio  SplitRatio
 	first  *node
@@ -35,8 +39,8 @@ type node struct {
 
 func leafNode(pane PaneID) *node { return &node{pane: pane} }
 
-func branchNode(axis SplitAxis, ratio SplitRatio, first, second *node) *node {
-	return &node{axis: axis, ratio: ratio, first: first, second: second}
+func branchNode(split SplitID, axis SplitAxis, ratio SplitRatio, first, second *node) *node {
+	return &node{split: split, axis: axis, ratio: ratio, first: first, second: second}
 }
 
 func (n *node) isLeaf() bool { return n != nil && n.pane != 0 }
@@ -44,12 +48,13 @@ func (n *node) isLeaf() bool { return n != nil && n.pane != 0 }
 // Model owns the pure identity, topology, and focus state of the implicit tab.
 // It has no terminal, PTY, renderer, or frontend dependencies.
 type Model struct {
-	tabID      TabID
-	nextTabID  TabID
-	nextPaneID PaneID
-	root       *node
-	focused    PaneID
-	allocated  map[PaneID]struct{}
+	tabID       TabID
+	nextTabID   TabID
+	nextPaneID  PaneID
+	nextSplitID SplitID
+	root        *node
+	focused     PaneID
+	allocated   map[PaneID]struct{}
 }
 
 // NewModel creates one implicit tab containing one focused root leaf.
@@ -57,12 +62,13 @@ func NewModel() *Model {
 	const initialID = 1
 	pane := PaneID(initialID)
 	return &Model{
-		tabID:      TabID(initialID),
-		nextTabID:  TabID(initialID + 1),
-		nextPaneID: PaneID(initialID + 1),
-		root:       leafNode(pane),
-		focused:    pane,
-		allocated:  map[PaneID]struct{}{pane: {}},
+		tabID:       TabID(initialID),
+		nextTabID:   TabID(initialID + 1),
+		nextPaneID:  PaneID(initialID + 1),
+		nextSplitID: SplitID(initialID),
+		root:        leafNode(pane),
+		focused:     pane,
+		allocated:   map[PaneID]struct{}{pane: {}},
 	}
 }
 
@@ -99,6 +105,9 @@ func (m *Model) SplitWithRatio(pane PaneID, axis SplitAxis, ratio SplitRatio, bo
 	if m.nextPaneID == 0 {
 		return 0, ErrIDExhausted
 	}
+	if m.nextSplitID == 0 {
+		return 0, ErrIDExhausted
+	}
 
 	layout, err := m.Layout(bounds, metrics)
 	if err != nil {
@@ -125,7 +134,8 @@ func (m *Model) SplitWithRatio(pane PaneID, axis SplitAxis, ratio SplitRatio, bo
 	}
 
 	newPane := m.nextPaneID
-	replacement := branchNode(axis, ratio, leafNode(pane), leafNode(newPane))
+	newSplit := m.nextSplitID
+	replacement := branchNode(newSplit, axis, ratio, leafNode(pane), leafNode(newPane))
 	newRoot, replaced := replaceLeaf(m.root, pane, replacement)
 	if !replaced {
 		return 0, invariantError("split target %d disappeared", pane)
@@ -135,6 +145,7 @@ func (m *Model) SplitWithRatio(pane PaneID, axis SplitAxis, ratio SplitRatio, bo
 	m.focused = newPane
 	m.allocated[newPane] = struct{}{}
 	m.nextPaneID++
+	m.nextSplitID++
 	return newPane, nil
 }
 
@@ -343,6 +354,7 @@ func (m *Model) CheckInvariants() error {
 
 	seenNodes := make(map[*node]struct{})
 	seenPanes := make(map[PaneID]struct{})
+	seenSplits := make(map[SplitID]struct{})
 	focusedLeaves := 0
 	var visit func(*node) error
 	visit = func(n *node) error {
@@ -355,7 +367,7 @@ func (m *Model) CheckInvariants() error {
 		seenNodes[n] = struct{}{}
 
 		if n.isLeaf() {
-			if n.first != nil || n.second != nil || n.axis != 0 || n.ratio != 0 {
+			if n.first != nil || n.second != nil || n.split != 0 || n.axis != 0 || n.ratio != 0 {
 				return invariantError("pane %d leaf carries split state", n.pane)
 			}
 			if _, duplicate := seenPanes[n.pane]; duplicate {
@@ -377,6 +389,16 @@ func (m *Model) CheckInvariants() error {
 		if n.pane != 0 {
 			return invariantError("split carries pane ID %d", n.pane)
 		}
+		if n.split == 0 {
+			return invariantError("branch has zero split ID")
+		}
+		if _, duplicate := seenSplits[n.split]; duplicate {
+			return invariantError("split %d appears more than once", n.split)
+		}
+		if m.nextSplitID != 0 && n.split >= m.nextSplitID {
+			return invariantError("active split %d is not below next ID %d", n.split, m.nextSplitID)
+		}
+		seenSplits[n.split] = struct{}{}
 		if !validAxis(n.axis) {
 			return invariantError("split has invalid axis %d", n.axis)
 		}
@@ -439,48 +461,4 @@ func firstPane(n *node) PaneID {
 		return 0
 	}
 	return n.pane
-}
-
-func replaceLeaf(n *node, pane PaneID, replacement *node) (*node, bool) {
-	if n == nil {
-		return nil, false
-	}
-	if n.isLeaf() {
-		if n.pane == pane {
-			return replacement, true
-		}
-		return n, false
-	}
-	if first, replaced := replaceLeaf(n.first, pane, replacement); replaced {
-		return branchNode(n.axis, n.ratio, first, n.second), true
-	}
-	if second, replaced := replaceLeaf(n.second, pane, replacement); replaced {
-		return branchNode(n.axis, n.ratio, n.first, second), true
-	}
-	return n, false
-}
-
-func removeLeaf(n *node, pane PaneID) (*node, bool) {
-	if n == nil {
-		return nil, false
-	}
-	if n.isLeaf() {
-		if n.pane == pane {
-			return nil, true
-		}
-		return n, false
-	}
-	if first, removed := removeLeaf(n.first, pane); removed {
-		if first == nil {
-			return n.second, true
-		}
-		return branchNode(n.axis, n.ratio, first, n.second), true
-	}
-	if second, removed := removeLeaf(n.second, pane); removed {
-		if second == nil {
-			return n.first, true
-		}
-		return branchNode(n.axis, n.ratio, n.first, second), true
-	}
-	return n, false
 }

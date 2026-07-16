@@ -7,6 +7,7 @@ import (
 
 var (
 	ErrPaneNotFound        = errors.New("mux: pane not found")
+	ErrSplitNotFound       = errors.New("mux: split not found")
 	ErrPaneNotRunning      = errors.New("mux: pane is not running")
 	ErrAlreadyBootstrapped = errors.New("mux: already bootstrapped")
 	ErrEmptyModel          = errors.New("mux: model is empty")

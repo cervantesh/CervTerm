@@ -37,6 +37,9 @@ Inside CervTerm, verify:
 - `Alt+Shift+=` creates a right-hand pane; `Alt+Shift+-` creates a lower pane.
 - Nested row/column splits preserve non-overlapping one-pixel dividers and clip italic, wide, combining and color glyphs at pane edges.
 - `Alt+Arrow` moves focus geometrically and the accent border/window title follow the focused pane.
+- Hover each divider and verify the resize cursor matches its axis; left-drag both root and nested dividers in both directions.
+- Drag to each minimum-size boundary and verify it stops without collapsing, overlapping, selecting text, opening links or sending mouse reports to a TUI.
+- Release after a long drag and verify each shell/TUI receives its settled size once without duplicated banners or scrollback corruption.
 - Input, paste, scrollback, search, selection, links and mouse-aware TUIs operate only in the intended pane.
 - Run cmd.exe in one pane and PowerShell in another; verify output and parser replies never cross sessions.
 - Resize and font zoom update every pane without duplicated banners or scrollback corruption.

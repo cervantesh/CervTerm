@@ -7,6 +7,15 @@ import (
 	"cervterm/internal/pty"
 )
 
+// SetSplitRatio updates one branch and immediately reflows pane grids while
+// leaving PTY notification to the frontend's drag-settlement boundary.
+func (m *Mux) SetSplitRatio(split SplitID, ratio SplitRatio) ([]Event, error) {
+	if err := m.model.SetSplitRatio(split, ratio, m.bounds, m.metrics); err != nil {
+		return nil, err
+	}
+	return m.ResizeGrid(m.bounds, m.metrics)
+}
+
 // Resize updates each terminal before attempting its PTY resize.
 func (m *Mux) Resize(content PixelRect, metrics CellMetrics) ([]Event, error) {
 	events, err := m.ResizeGrid(content, metrics)

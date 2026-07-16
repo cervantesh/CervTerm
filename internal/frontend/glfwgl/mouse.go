@@ -59,6 +59,19 @@ func scrollRowsFromWheelDelta(yoff float64) int {
 	return rows
 }
 
+func (a *App) cancelMouseCapture() {
+	id := a.mouseCapturePane
+	if id == 0 {
+		return
+	}
+	state := a.ensurePaneUI(id)
+	state.mouseReport.down = false
+	if id == a.focusedPane {
+		a.mouseReport = state.mouseReport
+	}
+	a.mouseCapturePane = 0
+}
+
 func (a *App) mouseMode() core.MouseMode {
 	_, view, ok := a.focusedView()
 	if !ok {
@@ -79,7 +92,7 @@ func (a *App) sendMouseButton(button glfw.MouseButton, action glfw.Action, mods 
 		target = a.mouseCapturePane
 		view, exists := a.mux.PaneView(target)
 		if !exists {
-			a.mouseCapturePane = 0
+			a.cancelMouseCapture()
 			return false
 		}
 		mode = view.MouseMode
@@ -94,6 +107,9 @@ func (a *App) sendMouseButton(button glfw.MouseButton, action glfw.Action, mods 
 	x, y := a.window.GetCursorPos()
 	point, ok := a.pointForPaneWindowPosition(target, x, y)
 	if !ok {
+		if action == glfw.Release {
+			a.cancelMouseCapture()
+		}
 		return false
 	}
 	mouseAction := input.MousePress
