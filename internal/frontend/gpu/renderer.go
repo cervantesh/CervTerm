@@ -5,8 +5,8 @@ import (
 	"image/color"
 )
 
-// errNotImplemented is returned by the stub backends (Vulkan, Metal) until they
-// are built out. Shared here so the tagged files reuse one value.
+// errNotImplemented is returned by the stub backends (Vulkan, Metal, WebGPU)
+// until they are built out. Shared here so tagged files reuse one value.
 var errNotImplemented = errors.New("gpu: backend not implemented yet")
 
 // GlyphMode selects how DrawGlyph blends/tints an atlas quad.
@@ -23,8 +23,8 @@ const (
 
 // Renderer is the backend-neutral GPU contract for one terminal frame. The
 // frontend translates its draw-list (solid rects + textured glyph quads) into
-// these calls; each backend implements them for its API (OpenGL today,
-// Vulkan/Metal as stubs). Coordinates are framebuffer pixels with a top-left
+// these calls; each backend implements them for its API (OpenGL today, with
+// Vulkan, Metal, and WebGPU as stubs). Coordinates are framebuffer pixels with
 // origin — the backend sets up that space in BeginFrame. Colors are straight
 // (non-premultiplied) RGBA; glyph draws tint an alpha-mask atlas quad by c
 // (per GlyphMode).
