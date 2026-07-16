@@ -1,29 +1,20 @@
 // Package gpu defines a backend-neutral rendering seam for CervTerm's terminal
-// surface, so the OpenGL path (today), a Vulkan path, and a Metal path can be
-// swapped behind one interface (Renderer) without the frontend knowing which GPU
-// API is in use.
+// surface, so OpenGL (today), Vulkan, Metal, and WebGPU can be swapped behind
+// one Renderer interface without changing the frontend draw path.
 //
-// STATUS: scaffolding. Renderer is defined; the Vulkan and Metal implementations
-// here are STUBS (every method returns/records nothing or errNotImplemented).
-// They are gated behind build tags so the default and -tags glfw builds are
-// unaffected:
+// STATUS: Renderer and the OpenGL adapter are live. Vulkan, Metal, and WebGPU
+// are build-tagged STUBS: their methods return errNotImplemented or record
+// nothing, so default and -tags glfw builds remain unaffected:
 //
-//	go build -tags vulkan ./internal/frontend/gpu/   # compiles the Vulkan stub
-//	GOOS=darwin go build -tags metal ./...           # compiles the Metal stub
+//	go build -tags vulkan ./internal/frontend/gpu/   # Vulkan stub
+//	go build -tags webgpu ./internal/frontend/gpu/   # WebGPU stub
+//	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -tags metal ./internal/frontend/gpu/
 //
-// PREREQUISITE (Phase 0, backend-agnostic, do this first): the glfwgl frontend
-// currently calls gl.* directly in the hot grid path (drawRow, atlas glyph
-// quads, drawCursor) and only routes the chrome through a draw-list. To make ANY
-// alternate backend real, the WHOLE render must go through gpu.Renderer:
+// Phase 0 is complete: terminal rows, cursor, overlays, chrome, glyphs, atlas
+// uploads/resets, and presentation all route through Renderer. A real alternate
+// backend still needs startup selection plus its API-specific implementation.
 //
-//  1. Implement Renderer with the existing OpenGL calls (an "glRenderer" that
-//     wraps fillRect / the atlas quad emit / viewport+ortho+clear+swap).
-//  2. Convert drawRow and the glyph emit to produce Renderer calls (or vertex
-//     data) instead of gl.Begin/Vertex/End. The draw-list work already done for
-//     the chrome is the template — the grid needs the same immediate→retained
-//     shift, because Vulkan/Metal have no glBegin/End; you build vertex buffers.
-//  3. Pick the backend at startup (config or build tag) via a factory.
-//
-// Only after Phase 0 do the Vulkan/Metal implementations below plug in and
-// render the actual terminal. Until then they render nothing.
+// Alternate backends must preserve partial redraws with a persistent offscreen
+// target because swapchain/drawable/surface images rotate. BeginFrame never
+// clears; Clear affects that persistent target only on a frontend full redraw.
 package gpu
