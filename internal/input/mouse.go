@@ -43,7 +43,7 @@ func EncodeMouse(event MouseEvent) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	if event.Action == MouseRelease {
+	if event.Action == MouseRelease && !event.SGR {
 		code = 3
 	} else if event.Action == MouseMove {
 		code += 32
