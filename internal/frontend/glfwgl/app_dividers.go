@@ -12,20 +12,22 @@ import (
 )
 
 const (
-	dividerHitSlop     = 4
-	dividerResizeRetry = 100 * time.Millisecond
+	dividerHitSlop           = 4
+	dividerResizeRetry       = 100 * time.Millisecond
+	dividerResizeMaxAttempts = 5
 )
 
 type dividerInteraction struct {
-	active        bool
-	split         termmux.SplitID
-	axis          termmux.SplitAxis
-	dirty         bool
-	settlePending bool
-	settleAt      time.Time
-	cursorSet     bool
-	h             *glfw.Cursor
-	v             *glfw.Cursor
+	active         bool
+	split          termmux.SplitID
+	axis           termmux.SplitAxis
+	dirty          bool
+	settlePending  bool
+	settleAt       time.Time
+	settleAttempts int
+	cursorSet      bool
+	h              *glfw.Cursor
+	v              *glfw.Cursor
 }
 
 func hitDivider(layout termmux.Layout, x, y, slop int) (termmux.Divider, bool) {
@@ -183,6 +185,7 @@ func (a *App) finishDividerDrag() bool {
 	if a.divider.dirty {
 		a.divider.settlePending = true
 		a.divider.settleAt = time.Now()
+		a.divider.settleAttempts = 0
 	}
 	a.divider.active = false
 	a.divider.split = 0
@@ -196,11 +199,21 @@ func (a *App) applyPendingDividerResize() {
 	if !a.divider.settlePending || a.divider.active || time.Now().Before(a.divider.settleAt) {
 		return
 	}
-	if a.resizePTYToGrid() {
+	reportFailure := a.divider.settleAttempts == 0
+	if a.resizePTYToGridReporting(reportFailure) {
 		a.divider.settlePending = false
+		a.divider.settleAttempts = 0
 		return
 	}
-	a.divider.settleAt = time.Now().Add(dividerResizeRetry)
+	a.divider.settleAttempts++
+	if a.divider.settleAttempts >= dividerResizeMaxAttempts {
+		a.divider.settlePending = false
+		a.divider.settleAttempts = 0
+		a.Notify("resize: pane size could not be applied after repeated attempts")
+		return
+	}
+	delay := dividerResizeRetry * time.Duration(1<<(a.divider.settleAttempts-1))
+	a.divider.settleAt = time.Now().Add(delay)
 }
 
 func (a *App) updateDividerCursor(x, y float64) bool {
