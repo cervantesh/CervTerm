@@ -228,6 +228,23 @@ func TestParserEraseModes(t *testing.T) {
 	}
 }
 
+func TestParserEraseCharactersForCMDCompletion(t *testing.T) {
+	term := core.NewTerminal(40, 1)
+	var p Parser
+
+	p.Advance(term, []byte(">type a-very-long-completion-name.txt"))
+	// ConPTY rewrites a shorter cmd.exe completion at column 2, then emits ECH
+	// for the cells that belonged to the previous, longer candidate.
+	p.Advance(term, []byte("\x1b[1;2Htype b.txt\x1b[27X"))
+
+	if got := term.PlainText(); got != ">type b.txt" {
+		t.Fatalf("CSI X left stale completion text: %q", got)
+	}
+	if row, col := term.CursorRow(), term.CursorCol(); row != 0 || col != 11 {
+		t.Fatalf("CSI X moved cursor to (%d,%d)", row, col)
+	}
+}
+
 func TestParserSaveRestoreCursor(t *testing.T) {
 	term := core.NewTerminal(6, 2)
 	var p Parser

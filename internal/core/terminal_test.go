@@ -289,6 +289,27 @@ func TestTerminalEraseLineModes(t *testing.T) {
 	}
 }
 
+func TestTerminalEraseChars(t *testing.T) {
+	term := NewTerminal(6, 1)
+	for _, r := range "abcdef" {
+		term.PutRune(r)
+	}
+	term.SetCursor(0, 2)
+
+	term.EraseChars(2)
+	if got := term.PlainText(); got != "ab  ef" {
+		t.Fatalf("erase characters should blank without shifting: %q", got)
+	}
+	if row, col := term.CursorRow(), term.CursorCol(); row != 0 || col != 2 {
+		t.Fatalf("erase characters moved cursor to (%d,%d)", row, col)
+	}
+
+	term.EraseChars(99)
+	if got := term.PlainText(); got != "ab" {
+		t.Fatalf("erase characters should clamp at the line edge: %q", got)
+	}
+}
+
 func TestTerminalEraseDisplayModes(t *testing.T) {
 	term := NewTerminal(4, 3)
 	for _, r := range "abcd" {

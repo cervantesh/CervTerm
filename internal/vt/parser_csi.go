@@ -45,6 +45,8 @@ func (p *Parser) dispatchCSI(t *core.Terminal, action byte) {
 		t.ScrollUp(p.param(0, 1))
 	case 'T':
 		t.ScrollDown(p.param(0, 1))
+	case 'X':
+		t.EraseChars(p.param(0, 1))
 	case 'I':
 		t.CursorForwardTabs(p.param(0, 1))
 	case 'Z':

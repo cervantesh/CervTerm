@@ -101,6 +101,31 @@ func (t *Terminal) ClearToBeginningOfLine() {
 	}
 }
 
+// EraseChars replaces n character positions at and after the cursor with blanks
+// without shifting the remaining cells or moving the cursor (ECMA-48 ECH).
+func (t *Terminal) EraseChars(n int) {
+	if n <= 0 {
+		n = 1
+	}
+	remaining := t.cols - t.cursorCol
+	if n > remaining {
+		n = remaining
+	}
+	if n <= 0 {
+		return
+	}
+
+	blank := t.blank()
+	start := t.cursorRow*t.cols + t.cursorCol
+	for i := start; i < start+n; i++ {
+		t.cells[i] = blank
+	}
+	if n == remaining {
+		t.rowWrapped[t.cursorRow] = false
+	}
+	t.wrapNext = false
+}
+
 func (t *Terminal) ClearToEndOfScreen() {
 	t.ClearToEndOfLine()
 	for row := t.cursorRow + 1; row < t.rows; row++ {
