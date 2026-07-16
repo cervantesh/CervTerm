@@ -5,7 +5,7 @@ This document is the executable contract for the MVP. Implementation must follow
 ## Non-goals for MVP
 
 - No Fyne, no Gio, no Rust.
-- No visible tab bar, SSH/serial domains, daemon, detach/reattach, pane persistence, or pane zoom in the initial mux.
+- No SSH/serial/WSL/local-domain abstraction, daemon, detach/reattach, or persistence of live pane processes. Visible tabs, local windows, and layout-only workspaces are post-MVP roadmap work.
 - No premature dirty-region optimizer, arena allocator, or custom memory pool until measurements justify it.
 
 ## Architecture constraints
@@ -13,7 +13,7 @@ This document is the executable contract for the MVP. Implementation must follow
 1. `internal/core` is renderer-neutral and PTY-neutral.
 2. `internal/vt` parses terminal bytes into `internal/core` operations.
 3. `internal/render` exposes renderer-neutral frame snapshots.
-4. `internal/pty` exposes a session interface; local PTY is only one domain.
+4. `internal/pty` exposes a local session transport interface; no domain abstraction is planned.
 5. `internal/frontend/glfwgl` is disposable and built only with `-tags glfw`.
 6. Headless tests must pass with `go test ./...` without compiling GLFW/OpenGL.
 7. The native in-process mux owns pane identity, split topology, focus, geometry, lifecycle and one independent session aggregate per leaf; the frontend only projects and routes.
@@ -85,6 +85,8 @@ This document is the executable contract for the MVP. Implementation must follow
 - Keyboard/paste targets the focused pane; pointer operations first hit-test a pane and translate to pane-local cells.
 - PTY-origin Lua output/title/CWD/bell callbacks remain bound to the originating pane for the callback duration.
 - Multi-pane frames repaint fully for correctness; incremental pane damage is deferred.
+- Font zoom is pane-local: keyboard/wheel/reset target the focused pane, sibling panes retain their size/grid, and new splits inherit the source pane's zoom.
+- All active font sizes share one fixed two-page atlas; pane focus never clears atlas pages.
 
 
 ### Visual theme
@@ -110,6 +112,7 @@ go test ./internal/vt -bench=. -benchmem
 go test ./internal/render -bench=. -benchmem
 go test ./internal/theme -bench=. -benchmem
 GODEBUG=gctrace=1 go test ./internal/vt -bench=BenchmarkParserThroughput -benchmem
+go run ./scripts/capture-parity-baseline.go -count 3
 ```
 
 Optional GUI build/run:
@@ -123,3 +126,5 @@ go run -tags glfw ./cmd/cervterm
 - A failing spec test blocks further feature work.
 - GUI is allowed to be minimal, but the default visual style must be refined: dark surface, soft foreground, tuned ANSI palette, subtle accent/status line.
 - Measurements are not marketing claims; they must be reproducible with commands in this file.
+- `docs/parity-support-matrix.json` is the machine-readable feature-status contract; update it with every support-state change.
+- The phased post-MVP contract is `docs/wezterm-parity-roadmap.md`.

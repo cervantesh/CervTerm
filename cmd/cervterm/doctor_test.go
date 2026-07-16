@@ -9,8 +9,12 @@ import (
 )
 
 func TestRunDoctorPrintsActionableSections(t *testing.T) {
+	path := t.TempDir() + "/cervterm.lua"
+	if err := os.WriteFile(path, []byte("return {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	output := captureStdout(t, func() {
-		if code := runDoctor(doctorOptions{LogPath: "-"}); code != 0 {
+		if code := runDoctor(doctorOptions{ConfigPath: path, LogPath: "-"}); code != 0 {
 			t.Fatalf("runDoctor exit code = %d, want 0", code)
 		}
 	})

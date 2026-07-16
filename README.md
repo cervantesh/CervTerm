@@ -11,12 +11,13 @@ CervTerm is not a finished daily-driver terminal yet, but it already includes:
 - Windows ConPTY backend and Unix PTY backend behind build tags.
 - GLFW/OpenGL frontend.
 - Scrollback, alternate screen, resize reflow, selection/copy/paste, and bracketed paste.
-- Native in-process pane mux with independent PTY/parser/core state per pane, clipped binary row/column splits, focused input, and deterministic close/collapse.
+- Native in-process pane mux with independent PTY/parser/core state per pane, clipped binary row/column splits, draggable dividers, focused input, deterministic close/collapse, and independent per-pane zoom.
 - Scrollback search: `ctrl+shift+f` opens a search bar (Enter jumps to the next match upward, Esc closes); also scriptable via `term:search`.
 - VT parsing for common cursor, erase, color, scroll-region, insert/delete, input-mode, mouse-mode, and title sequences.
 - Keyboard encoding for navigation keys, F1-F12, and Ctrl/Alt/Shift modifiers.
 - SGR mouse press/release/wheel/drag encoding, including modifiers.
-- Lua config loading, Teal check/gen support, and `--print-default-config`.
+- Lua config loading, Teal check/gen support, atomic runtime reload, and `--print-default-config`.
+- Configurable opacity, platform-capability-aware native blur, and an interactive scrollbar.
 - Renderer-neutral OpenType glyph backend with bitmap color fonts, broad COLRv1 paint/composite/variation support, SVG glyph extraction/rasterization, DirectWrite shaping smoke coverage, and shaped color cluster handling.
 - Diagnostics logging via `--log-file` / `CERVTERM_LOG_FILE`, including panic stack capture.
 - Parser fuzz smoke coverage, replay-style VT golden fixtures, and a Windows daily-driver smoke matrix for cmd.exe, git, pager, alternate-screen, resize/reflow, and longer-session paths.
@@ -24,8 +25,12 @@ CervTerm is not a finished daily-driver terminal yet, but it already includes:
 - `--doctor` support diagnostics for config/log/environment reporting.
 See:
 
+- [`docs/wezterm-parity-roadmap.md`](docs/wezterm-parity-roadmap.md)
+- [`docs/parity-baseline.md`](docs/parity-baseline.md)
+- [`docs/parity-support-matrix.json`](docs/parity-support-matrix.json)
 - [`docs/product-roadmap.md`](docs/product-roadmap.md)
 - [`docs/config-roadmap.md`](docs/config-roadmap.md)
+- [`docs/config-compatibility-policy.md`](docs/config-compatibility-policy.md)
 - [`docs/vttest-checklist.md`](docs/vttest-checklist.md)
 - [`docs/vttest-captures.md`](docs/vttest-captures.md)
 - [`docs/emoji-rendering-research.md`](docs/emoji-rendering-research.md)
@@ -75,6 +80,7 @@ The mux is local and in-process. Pane zoom shares one fixed-size glyph atlas acr
 ```sh
 go test ./...
 go test -tags glfw ./internal/fontglyph ./internal/frontend/glfwgl ./cmd/cervterm -count=1
+go run ./scripts/capture-parity-baseline.go -count 3
 go build -tags glfw -o cervterm.exe ./cmd/cervterm
 ```
 
