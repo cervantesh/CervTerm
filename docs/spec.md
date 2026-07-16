@@ -5,7 +5,7 @@ This document is the executable contract for the MVP. Implementation must follow
 ## Non-goals for MVP
 
 - No Fyne, no Gio, no Rust.
-- No visible tab bar, SSH/serial domains, daemon, detach/reattach, pane persistence, pane zoom, or draggable dividers in the initial mux.
+- No visible tab bar, SSH/serial domains, daemon, detach/reattach, pane persistence, or pane zoom in the initial mux.
 - No premature dirty-region optimizer, arena allocator, or custom memory pool until measurements justify it.
 
 ## Architecture constraints
@@ -76,9 +76,10 @@ This document is the executable contract for the MVP. Implementation must follow
 
 ### Native panes
 
-- One implicit tab contains a binary split tree with one-pixel fixed dividers.
+- One implicit tab contains a binary split tree with one-pixel draggable dividers and process-local ratios.
 - `Alt+Shift+=` splits the focused pane left/right; `Alt+Shift+-` splits top/bottom.
 - `Alt+Arrow` changes focused pane; `Ctrl+Shift+W` closes the focused pane and collapses its parent split.
+- Left-dragging a divider resizes its adjacent subtrees live, preserves every descendant's 10x3 minimum, and settles ConPTY sizes once on release.
 - Lua bindings take precedence over built-in pane bindings.
 - Each pane has independent PTY/parser/core/snapshot, scrollback, selection, search, links and mouse-report state.
 - Keyboard/paste targets the focused pane; pointer operations first hit-test a pane and translate to pane-local cells.

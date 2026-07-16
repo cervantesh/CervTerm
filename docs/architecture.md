@@ -29,7 +29,7 @@ The core never imports the mux, renderer, PTY, GLFW, or OpenGL. Each mux pane ow
 Frontend -> Mux Window -> implicit Tab -> SplitTree -> Pane -> local Session -> Terminal Core
 ```
 
-The initial mux is process-local and supports native column/row splits, focused-pane input, independent scrollback/selection/search/mouse state, deterministic close/collapse and clipped rendering. Persistence, detach/reattach, visible tabs, remote domains and tmux integration remain deferred. IDs and pane-addressed commands/events avoid GLFW pointers so a future daemon can preserve the model without moving topology into the frontend.
+The mux is process-local and supports native column/row splits, stable split identities and ratios, draggable dividers, focused-pane input, independent scrollback/selection/search/mouse state, deterministic close/collapse and clipped rendering. GLFW projects pointer drag intent, while `internal/mux` validates ratios and owns geometry; terminal grids update live and PTY resize settles once at drag completion. Persistence, detach/reattach, visible tabs, remote domains and tmux integration remain deferred. IDs and pane-addressed commands/events avoid GLFW pointers so a future daemon can preserve the model without moving topology into the frontend.
 
 ## Verifiable measurements
 

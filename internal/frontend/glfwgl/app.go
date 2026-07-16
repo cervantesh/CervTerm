@@ -97,6 +97,7 @@ type App struct {
 	selection        selectionState
 	mouseReport      mouseReportState
 	mouseCapturePane termmux.PaneID
+	divider          dividerInteraction
 }
 
 func Run() error {
@@ -157,6 +158,7 @@ func (a *App) runWindow() error {
 		return err
 	}
 	a.window = w
+	defer a.closeDividerCursors()
 	if icons := windowIcons(); len(icons) > 0 {
 		w.SetIcon(icons)
 	}
@@ -295,6 +297,16 @@ func (a *App) installCallbacks() {
 
 	a.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 		x, y := a.window.GetCursorPos()
+		if a.divider.active {
+			if button == glfw.MouseButtonLeft && action == glfw.Release {
+				a.finishDividerDrag()
+				a.updateDividerCursor(x, y)
+			}
+			return
+		}
+		if button == glfw.MouseButtonLeft && action == glfw.Press && a.mouseCapturePane == 0 && a.beginDividerDrag(x, y) {
+			return
+		}
 		if action == glfw.Press {
 			if pane, _, ok := a.paneAtWindowPosition(x, y); ok {
 				a.focusPane(pane)
@@ -330,7 +342,19 @@ func (a *App) installCallbacks() {
 		}
 	})
 	a.window.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
-		if a.sendMouseMove(x, y) {
+		if a.dragDivider(x, y) {
+			return
+		}
+		if a.mouseCapturePane != 0 {
+			a.clearDividerCursor()
+			a.sendMouseMove(x, y)
+			return
+		}
+		reported := a.sendMouseMove(x, y)
+		if a.updateDividerCursor(x, y) {
+			return
+		}
+		if reported {
 			return
 		}
 		if !a.selection.dragging {
@@ -372,6 +396,11 @@ func (a *App) installCallbacks() {
 		}
 	})
 	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
+		if !focused {
+			a.finishDividerDrag()
+			a.clearDividerCursor()
+			a.cancelMouseCapture()
+		}
 		// The script focus event is independent of the terminal's focus-report
 		// mode. The callback runs on the loop thread (not inside a handler), so
 		// firing inline cannot re-enter Lua dispatch.

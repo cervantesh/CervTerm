@@ -47,8 +47,10 @@ type PaneGeometry struct {
 
 // Divider is the one-pixel framebuffer region between a split's children.
 type Divider struct {
-	Axis   SplitAxis
-	Pixels PixelRect
+	Split     SplitID
+	Axis      SplitAxis
+	Pixels    PixelRect
+	Container PixelRect
 }
 
 // Layout is a deterministic value projection of the current split tree.
@@ -91,7 +93,7 @@ func layoutNode(n *node, rect PixelRect, metrics CellMetrics, result *Layout) {
 
 	first, divider, second := splitPixelRect(rect, n.axis, n.ratio)
 	layoutNode(n.first, first, metrics, result)
-	result.Dividers = append(result.Dividers, Divider{Axis: n.axis, Pixels: divider})
+	result.Dividers = append(result.Dividers, Divider{Split: n.split, Axis: n.axis, Pixels: divider, Container: rect})
 	layoutNode(n.second, second, metrics, result)
 }
 
