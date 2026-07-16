@@ -74,6 +74,45 @@ func TestDividerSettlementRetriesTransientPTYResizeFailure(t *testing.T) {
 	}
 }
 
+func TestDividerSettlementStopsAfterPersistentPTYResizeFailure(t *testing.T) {
+	factory := &recordingPaneFactory{}
+	m := termmux.New(factory, termmux.Options{})
+	defer m.Shutdown()
+	bounds := termmux.PixelRect{Width: 800, Height: 480}
+	metrics := termmux.CellMetrics{CellWidth: 8, CellHeight: 16}
+	if _, first, _, err := m.Bootstrap(termmux.SpawnSpec{}, bounds, metrics); err != nil {
+		t.Fatal(err)
+	} else if _, _, err := m.Split(first, termmux.SplitColumns, termmux.SpawnSpec{}); err != nil {
+		t.Fatal(err)
+	}
+	layout, err := m.Layout()
+	if err != nil || len(layout.Dividers) != 1 {
+		t.Fatalf("layout=%#v err=%v", layout, err)
+	}
+	if _, err := m.SetSplitRatio(layout.Dividers[0].Split, 6_000); err != nil {
+		t.Fatal(err)
+	}
+	factory.sessions[0].setResizeError(errors.New("persistent resize"))
+	a := &App{mux: m, paneUI: make(map[termmux.PaneID]*paneUIState), pendingPaneResize: make(map[termmux.PaneID]termmux.PaneGeometry), pendingPaneScroll: make(map[termmux.PaneID]int)}
+	a.divider.settlePending = true
+	for attempt := 0; attempt < dividerResizeMaxAttempts; attempt++ {
+		a.divider.settleAt = time.Time{}
+		a.applyPendingDividerResize()
+		if attempt == 0 {
+			firstNoticeUntil := a.noticeUntil
+			a.divider.settleAt = time.Time{}
+			a.applyPendingDividerResize()
+			attempt++
+			if a.noticeUntil != firstNoticeUntil {
+				t.Fatal("silent retry refreshed the resize notice")
+			}
+		}
+	}
+	if a.divider.settlePending || a.divider.settleAttempts != 0 {
+		t.Fatalf("persistent failure kept retry loop armed: %#v", a.divider)
+	}
+}
+
 func TestClearDividerCursorResetsStateWithoutWindow(t *testing.T) {
 	a := &App{}
 	a.divider.cursorSet = true
