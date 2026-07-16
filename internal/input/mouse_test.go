@@ -9,7 +9,8 @@ func TestEncodeSGRMouse(t *testing.T) {
 		want  string
 	}{
 		{name: "left press", event: MouseEvent{Button: MouseLeft, Action: MousePress, Row: 2, Col: 4, SGR: true}, want: "\x1b[<0;5;3M"},
-		{name: "left release", event: MouseEvent{Button: MouseLeft, Action: MouseRelease, Row: 2, Col: 4, SGR: true}, want: "\x1b[<3;5;3m"},
+		{name: "left release", event: MouseEvent{Button: MouseLeft, Action: MouseRelease, Row: 2, Col: 4, SGR: true}, want: "\x1b[<0;5;3m"},
+		{name: "middle release with alt", event: MouseEvent{Button: MouseMiddle, Action: MouseRelease, Row: 2, Col: 4, Mods: ModAlt, SGR: true}, want: "\x1b[<9;5;3m"},
 		{name: "drag with ctrl shift", event: MouseEvent{Button: MouseLeft, Action: MouseMove, Row: 1, Col: 1, Mods: ModCtrl | ModShift, SGR: true}, want: "\x1b[<52;2;2M"},
 		{name: "wheel up", event: MouseEvent{Button: MouseWheelUp, Action: MousePress, Row: 0, Col: 0, SGR: true}, want: "\x1b[<64;1;1M"},
 		{name: "wheel down alt", event: MouseEvent{Button: MouseWheelDown, Action: MousePress, Row: 0, Col: 0, Mods: ModAlt, SGR: true}, want: "\x1b[<73;1;1M"},
