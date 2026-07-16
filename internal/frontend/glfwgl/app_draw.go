@@ -63,6 +63,7 @@ func (a *App) draw() {
 			continue
 		}
 		state := a.ensurePaneUI(geometry.Pane)
+		a.activatePaneFont(geometry.Pane)
 		a.snap = view.Snapshot
 		a.selection, a.search, a.link, a.mouseReport = state.selection, state.search, state.link, state.mouseReport
 		a.search.init(muxSearchTerminal{mux: a.mux, pane: geometry.Pane}, a.requestRedraw)
@@ -129,6 +130,7 @@ func (a *App) draw() {
 			a.cols, a.rows = view.Snapshot.Cols, view.Snapshot.Rows
 		}
 	}
+	a.retainVisibleFontContexts(layout)
 	a.damage.rowsDrawn = rowsDrawn
 	a.prepareStatusBand(w)
 	a.drawHUD(w, h, palette, frameNow)
@@ -182,7 +184,7 @@ func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
 	if a.showStats {
 		s := a.meter.Snapshot()
 		a.hud.lines = append(a.hud.lines,
-			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.cfg.Font.Size),
+			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.FontSize()),
 			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
 		a.hud.colors = append(a.hud.colors, themeColor(palette.Muted), themeColor(palette.Muted))
 		a.hud.statsAt = now

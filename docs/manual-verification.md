@@ -42,7 +42,7 @@ Inside CervTerm, verify:
 - Release after a long drag and verify each shell/TUI receives its settled size once without duplicated banners or scrollback corruption.
 - Input, paste, scrollback, search, selection, links and mouse-aware TUIs operate only in the intended pane.
 - Run cmd.exe in one pane and PowerShell in another; verify output and parser replies never cross sessions.
-- Resize and font zoom update every pane without duplicated banners or scrollback corruption.
+- Give two panes visibly different zoom levels with `Ctrl++`/`Ctrl+-` or Ctrl+wheel; verify only the focused pane changes, `Ctrl+0` resets only that pane, mouse hit-testing remains aligned, and switching focus does not flash or rebuild text.
 - Closing one pane with `Ctrl+Shift+W` leaves siblings running and collapses the tree; closing the final pane closes the window.
 - Exit a shell without closing its pane; its final screen remains visible until explicit close.
 - Trigger title, OSC 7 CWD and bell changes in a background pane; Lua callbacks target that pane while the window title remains focused-pane-derived.

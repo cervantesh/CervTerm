@@ -134,11 +134,10 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 		}
 	}
 	wake := nextWake(now, a.blinkActive(), a.blinkStart, a.blinkPeriod(), a.noticeUntil, a.showStats, timerDeadline)
-	// A debounced zoom must wake the loop when its deadline arrives so the coalesced
-	// rebuild fires even if no other event does — but never past an earlier deadline
-	// (blink, timers, notice), so those stay on time.
-	if a.zoom.pendingSet {
-		zoomWake := max(minWake, a.zoom.deadline.Sub(now))
+	// A debounced zoom must wake for the earliest pane-local settlement without
+	// delaying an earlier blink, timer, notice, or sibling zoom deadline.
+	if deadline, ok := a.earliestPendingZoomDeadline(); ok {
+		zoomWake := max(minWake, deadline.Sub(now))
 		if wake <= 0 || zoomWake < wake {
 			wake = zoomWake
 		}
@@ -224,7 +223,7 @@ func (a *App) resizeToWindow() {
 // Returns whether the grid dimensions changed.
 func (a *App) resizeGridToWindow() bool {
 	w, h := a.window.GetFramebufferSize()
-	events, err := a.mux.ResizeGrid(termmux.PixelRect{Width: w, Height: h}, a.muxMetrics())
+	events, err := a.mux.ResizeBounds(termmux.PixelRect{Width: w, Height: h})
 	if err != nil {
 		a.Notify("resize: " + err.Error())
 		return false

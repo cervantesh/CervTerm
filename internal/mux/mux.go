@@ -52,7 +52,7 @@ type Mux struct {
 	readers      sync.WaitGroup
 	bootstrapped bool
 	bounds       PixelRect
-	metrics      CellMetrics
+	paneMetrics  map[PaneID]CellMetrics
 }
 
 func New(factory SessionFactory, options Options) *Mux {
@@ -64,14 +64,15 @@ func New(factory SessionFactory, options Options) *Mux {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Mux{
-		factory:  factory,
-		options:  options,
-		model:    NewModel(),
-		panes:    make(map[PaneID]*pane),
-		closed:   make(map[PaneID]struct{}),
-		incoming: make(chan ingressRecord, options.IngressCapacity),
-		ctx:      ctx,
-		cancel:   cancel,
+		factory:     factory,
+		options:     options,
+		model:       NewModel(),
+		panes:       make(map[PaneID]*pane),
+		closed:      make(map[PaneID]struct{}),
+		paneMetrics: make(map[PaneID]CellMetrics),
+		incoming:    make(chan ingressRecord, options.IngressCapacity),
+		ctx:         ctx,
+		cancel:      cancel,
 	}
 }
 
@@ -95,7 +96,8 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 		p.parser.SetClipboard = func(text string) { m.options.SetClipboard(p.id, text) }
 	}
 	m.panes[p.id] = p
-	m.bounds, m.metrics = content, metrics
+	m.bounds = content
+	m.paneMetrics[p.id] = metrics
 	m.bootstrapped = true
 
 	rows, cols := terminalSize(geometry)
@@ -134,7 +136,9 @@ func (m *Mux) FocusedPane() (PaneID, bool) {
 
 func (m *Mux) PaneIDs() []PaneID { return m.model.PaneIDs() }
 
-func (m *Mux) Layout() (Layout, error) { return m.model.Layout(m.bounds, m.metrics) }
+func (m *Mux) Layout() (Layout, error) {
+	return m.model.LayoutWithMetrics(m.bounds, m.resolveMetrics)
+}
 
 func (m *Mux) PaneView(id PaneID) (PaneView, bool) {
 	p, ok := m.panes[id]
@@ -163,7 +167,7 @@ func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Ev
 	if !validAxis(axis) {
 		return 0, nil, ErrInvalidAxis
 	}
-	layout, err := m.model.Layout(m.bounds, m.metrics)
+	layout, err := m.model.LayoutWithMetrics(m.bounds, m.resolveMetrics)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -178,8 +182,12 @@ func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Ev
 	if !found {
 		return 0, nil, ErrPaneNotFound
 	}
+	targetMetrics, ok := m.resolveMetrics(target)
+	if !ok {
+		return 0, nil, ErrPaneNotFound
+	}
 	_, _, newRect := splitPixelRect(targetGeometry.Pixels, axis, DefaultSplitRatio)
-	cols, rows := cellGeometry(newRect, m.metrics)
+	cols, rows := cellGeometry(newRect, targetMetrics)
 	if cols < MinPaneCols || rows < MinPaneRows {
 		return 0, nil, ErrSplitTooSmall
 	}
@@ -202,7 +210,13 @@ func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Ev
 	newPane.desiredSize = pty.Size{Rows: ptyRows, Cols: ptyCols}
 	newPane.appliedSize = newPane.desiredSize
 
-	createdID, err := m.model.Split(target, axis, m.bounds, m.metrics)
+	resolveSplitMetrics := func(id PaneID) (CellMetrics, bool) {
+		if id == predictedID {
+			return targetMetrics, true
+		}
+		return m.resolveMetrics(id)
+	}
+	createdID, err := m.model.SplitWithMetrics(target, axis, m.bounds, resolveSplitMetrics)
 	if err != nil {
 		_ = newPane.close()
 		return 0, nil, err
@@ -212,7 +226,8 @@ func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Ev
 		return 0, nil, invariantError("model allocated pane %d after predicting %d", createdID, predictedID)
 	}
 	m.panes[createdID] = newPane
-	resizeEvents, resizeErr := m.Resize(m.bounds, m.metrics)
+	m.paneMetrics[createdID] = targetMetrics
+	resizeEvents, resizeErr := m.resizeBoundsAndApply(m.bounds)
 	newPane.capture()
 	newPane.startReader(m.ctx, m.incoming, m.options.Wake, &m.readers)
 	events := []Event{{Kind: PaneStarted, Pane: createdID}, {Kind: PaneFocused, Pane: createdID}}
@@ -228,7 +243,7 @@ func (m *Mux) FocusPane(id PaneID) ([]Event, error) {
 }
 
 func (m *Mux) FocusDirection(direction Direction) ([]Event, error) {
-	id, err := m.model.FocusDirection(direction, m.bounds, m.metrics)
+	id, err := m.model.FocusDirectionWithMetrics(direction, m.bounds, m.resolveMetrics)
 	if err != nil {
 		return nil, err
 	}
@@ -432,6 +447,7 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 	closeErr := p.close()
 	result, modelErr := m.model.Close(id)
 	delete(m.panes, id)
+	delete(m.paneMetrics, id)
 	m.closed[id] = struct{}{}
 	var events []Event
 	if closeErr != nil {
@@ -447,7 +463,7 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 			events = append(events, Event{Kind: TabEmpty})
 		} else {
 			var resizeEvents []Event
-			resizeEvents, resizeErr = m.Resize(m.bounds, m.metrics)
+			resizeEvents, resizeErr = m.resizeBoundsAndApply(m.bounds)
 			events = append(events, resizeEvents...)
 		}
 	}
