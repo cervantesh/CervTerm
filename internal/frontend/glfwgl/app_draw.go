@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"cervterm/internal/core"
+	"cervterm/internal/frontend/gpu"
+	termmux "cervterm/internal/mux"
 	"cervterm/internal/render"
 	cervtermtheme "cervterm/internal/theme"
 )
@@ -26,20 +28,12 @@ type hudCache struct {
 }
 
 func (a *App) draw() {
-	// One timestamp and blink phase for the whole frame: sampling time.Now more
-	// than once lets a blink boundary or notice expiry land between samples,
-	// painting one state while recording another and losing the corrective
-	// repaint.
 	frameNow := time.Now()
 	frameBlink := a.blinkPhaseAt(frameNow)
 	if a.notice != "" && frameNow.After(a.noticeUntil) {
-		a.notice = "" // expired: this frame paints without it and stops re-triggering
+		a.notice = ""
 	}
-
 	w, h := a.window.GetFramebufferSize()
-	// Drive the renderer's Resize hook on a real size change (and on the first frame,
-	// since lastFB* are seeded to -1) so a swapchain/drawable backend recreates before
-	// the frame; BeginFrame then just re-establishes the coordinate space.
 	if w != a.lastFBW || h != a.lastFBH {
 		a.r.Resize(w, h)
 		a.lastFBW, a.lastFBH = w, h
@@ -52,70 +46,94 @@ func (a *App) draw() {
 	selectionColor := configColor(a.cfg.Colors.SelectionBackground, color.RGBA{0x2A, 0x63, 0x77, 0xFF})
 	defaultFG := configColor(a.cfg.Colors.Foreground, rgb(core.DefaultFG))
 	a.updateFPS()
+	a.r.Clear(background)
 
-	// Title/cwd/bell events are fired in processTermEvents (once per data batch),
-	// not here, so on-demand rendering does not delay them to the next repaint.
-	a.mu.Lock()
-	render.Capture(&a.snap, a.term)
-	displayOffset := a.term.DisplayOffset()
-	alternateScreen := a.term.AlternateScreenMode()
-	// Convert the match's global (physical-row) index to a viewport row via the
-	// canonical GlobalRowToViewport (same convention as CopyView, trap 2).
-	// Off-screen matches yield -1. Done under the lock since it reads term state.
-	a.search.viewRow = -1
-	if a.search.hasMatch {
-		if vr, ok := a.term.GlobalRowToViewport(a.search.matchRow); ok {
-			a.search.viewRow = vr
-		}
+	layout, err := a.mux.Layout()
+	if err != nil {
+		a.Notify("layout: " + err.Error())
+		return
 	}
-	a.mu.Unlock()
-	a.refreshLinks()
-	a.prepareStatusBand(w)
-	noticeVisible := a.notice != "" && frameNow.Before(a.noticeUntil)
-	fullRedraw, damagedRows := a.prepareDamage(w, h, displayOffset, alternateScreen, noticeVisible, background)
-	if fullRedraw {
-		a.r.Clear(background)
-	}
-
-	var cursorRowOrder []int
+	focused, _ := a.mux.FocusedPane()
+	basePaddingX, basePaddingY := a.paddingX, a.paddingY
+	a.saveActivePaneUI()
 	rowsDrawn := 0
-	for r, damaged := range damagedRows {
-		if !damaged {
+	for _, geometry := range layout.Panes {
+		view, ok := a.mux.PaneView(geometry.Pane)
+		if !ok {
 			continue
 		}
-		rowsDrawn++
-		if !fullRedraw {
-			a.fillRect(0, a.paddingY+float32(r)*a.cellH, float32(w), a.cellH, background)
-		}
-		order := a.drawRow(r, background, selectionColor, defaultFG)
-		if r == a.snap.CursorRow {
-			cursorRowOrder = order
-		}
-	}
-
-	if a.snap.CursorVisible {
-		cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
-		if cursorRowOrder != nil {
-			inverse := render.InversePermutation(cursorRowOrder)
-			if cursorCol >= 0 && cursorCol < len(inverse) {
-				cursorCol = inverse[cursorCol]
+		state := a.ensurePaneUI(geometry.Pane)
+		a.snap = view.Snapshot
+		a.selection, a.search, a.link, a.mouseReport = state.selection, state.search, state.link, state.mouseReport
+		a.search.init(muxSearchTerminal{mux: a.mux, pane: geometry.Pane}, a.requestRedraw)
+		a.search.viewRow = -1
+		if a.search.hasMatch {
+			if row, ok := a.mux.GlobalRowToViewport(geometry.Pane, a.search.matchRow); ok {
+				a.search.viewRow = row
 			}
 		}
-		x := a.paddingX + float32(cursorCol)*a.cellW
-		y := a.paddingY + float32(cursorRow)*a.cellH
-		a.drawCursor(x, y, cursorColor, frameBlink)
+		a.paddingX = float32(geometry.Pixels.X) + basePaddingX
+		a.paddingY = float32(geometry.Pixels.Y) + basePaddingY
+		a.refreshLinks()
+		a.r.PushClip(gpu.ClipRect{X: geometry.Pixels.X, Y: geometry.Pixels.Y, Width: geometry.Pixels.Width, Height: geometry.Pixels.Height})
+		var cursorRowOrder []int
+		for row := 0; row < a.snap.Rows; row++ {
+			rowsDrawn++
+			order := a.drawRow(row, background, selectionColor, defaultFG)
+			if row == a.snap.CursorRow {
+				cursorRowOrder = order
+			}
+		}
+		if geometry.Pane == focused && a.snap.CursorVisible {
+			cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
+			if cursorRowOrder != nil {
+				inverse := render.InversePermutation(cursorRowOrder)
+				if cursorCol >= 0 && cursorCol < len(inverse) {
+					cursorCol = inverse[cursorCol]
+				}
+			}
+			x := a.paddingX + float32(cursorCol)*a.cellW
+			y := a.paddingY + float32(cursorRow)*a.cellH
+			a.drawCursor(x, y, cursorColor, frameBlink)
+		}
+		a.drawLinkUnderline(cursorColor)
+		if geometry.Pane == focused {
+			a.drawOverlays()
+		}
+		a.r.PopClip()
+		state.selection, state.search, state.link, state.mouseReport = a.selection, a.search, a.link, a.mouseReport
 	}
-
+	a.paddingX, a.paddingY = basePaddingX, basePaddingY
+	for _, divider := range layout.Dividers {
+		r := divider.Pixels
+		a.fillRect(float32(r.X), float32(r.Y), float32(r.Width), float32(r.Height), color.RGBA{0x4A, 0x52, 0x63, 0xFF})
+	}
+	if view, ok := a.mux.PaneView(focused); ok {
+		r := view.Geometry.Pixels
+		if r.Width > 0 && r.Height > 0 {
+			accent := cursorColor
+			if view.State == termmux.PaneStateExited || view.State == termmux.PaneStateFailed {
+				accent = color.RGBA{0xD8, 0x72, 0x72, 0xFF}
+			}
+			a.fillRect(float32(r.X), float32(r.Y), float32(r.Width), 1, accent)
+			a.fillRect(float32(r.X), float32(r.Bottom()-1), float32(r.Width), 1, accent)
+			a.fillRect(float32(r.X), float32(r.Y), 1, float32(r.Height), accent)
+			a.fillRect(float32(r.Right()-1), float32(r.Y), 1, float32(r.Height), accent)
+		}
+	}
+	if focused != 0 {
+		a.focusedPane = focused
+		a.loadPaneUI(focused)
+		if view, ok := a.mux.PaneView(focused); ok {
+			a.snap = view.Snapshot
+			a.cols, a.rows = view.Snapshot.Cols, view.Snapshot.Rows
+		}
+	}
 	a.damage.rowsDrawn = rowsDrawn
-	a.drawLinkUnderline(cursorColor)
-	a.drawOverlays()
+	a.prepareStatusBand(w)
 	a.drawHUD(w, h, palette, frameNow)
 	a.drawStatusBand(w, palette)
 	a.drawSearchBar(w, h, palette)
-	a.recordDamageFrame(w, h, displayOffset, alternateScreen, noticeVisible, background, rowsDrawn)
-
-	// Record exactly what this frame rendered so shouldRedraw detects the next
-	// blink flip / stats-window elapse against the painted state.
 	a.lastBlinkPhase = frameBlink
 	if a.showStats {
 		a.lastStatsDraw = frameNow

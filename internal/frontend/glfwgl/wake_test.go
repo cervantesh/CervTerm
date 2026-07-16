@@ -117,7 +117,7 @@ func TestNextWake(t *testing.T) {
 			now:         base.Add(300 * time.Millisecond),
 			blinkActive: true,
 			blinkStart:  base,
-			blinkPeriod: blinkPeriod,                    // 200ms to next blink boundary
+			blinkPeriod: blinkPeriod,                      // 200ms to next blink boundary
 			timer:       base.Add(350 * time.Millisecond), // 50ms out
 			want:        50 * time.Millisecond,
 		},
@@ -143,7 +143,7 @@ func TestNextWake(t *testing.T) {
 			now:         base.Add(300 * time.Millisecond),
 			blinkActive: true,
 			blinkStart:  base,
-			blinkPeriod: blinkPeriod,                    // 200ms to next blink boundary
+			blinkPeriod: blinkPeriod,                      // 200ms to next blink boundary
 			timer:       base.Add(900 * time.Millisecond), // 600ms out, ignored
 			want:        200 * time.Millisecond,
 		},

@@ -37,6 +37,8 @@ type metalRenderer struct {
 	//   sampler       mtl.SamplerState
 }
 
+var _ Renderer = (*metalRenderer)(nil)
+
 // NewMetalRenderer will create the device, CAMetalLayer, queue, and pipelines.
 // It errors until built out.
 func NewMetalRenderer(widthPx, heightPx int) (Renderer, error) {
@@ -46,10 +48,10 @@ func NewMetalRenderer(widthPx, heightPx int) (Renderer, error) {
 // --- Init phases (fill these in) ----------------------------------------------
 
 func (r *metalRenderer) createDevice() error    { return errNotImplemented } // MTLCreateSystemDefaultDevice
-func (r *metalRenderer) createLayer() error      { return errNotImplemented } // CAMetalLayer on the GLFW NSView
-func (r *metalRenderer) createQueue() error      { return errNotImplemented }
-func (r *metalRenderer) createPipelines() error  { return errNotImplemented } // compile MSL, solid + glyph pipelines
-func (r *metalRenderer) createBuffers() error    { return errNotImplemented } // dynamic vertex buffers
+func (r *metalRenderer) createLayer() error     { return errNotImplemented } // CAMetalLayer on the GLFW NSView
+func (r *metalRenderer) createQueue() error     { return errNotImplemented }
+func (r *metalRenderer) createPipelines() error { return errNotImplemented } // compile MSL, solid + glyph pipelines
+func (r *metalRenderer) createBuffers() error   { return errNotImplemented } // dynamic vertex buffers
 
 // --- Renderer interface (stubbed) ---------------------------------------------
 
@@ -69,6 +71,9 @@ func (r *metalRenderer) BeginFrame(widthPx, heightPx int) {
 	// clear) load action; set viewport to (widthPx, heightPx); reset the per-frame
 	// vertex writer.
 }
+
+func (r *metalRenderer) PushClip(rect ClipRect) {}
+func (r *metalRenderer) PopClip()               {}
 
 func (r *metalRenderer) Clear(c color.RGBA) {
 	// TODO: clear the current drawable to c (clear load action / clear encoder).
