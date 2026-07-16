@@ -17,9 +17,7 @@ import (
 // (atlas texture create/clear/upload, drawEntry/drawQuad glyph emit) behind the
 // backend-neutral interface.
 //
-// DEAD CODE: nothing constructs or calls glRenderer yet — the frontend still
-// calls gl.* directly. It is added here so PR-B can wire the whole render path
-// through gpu.Renderer without also moving the GL logic in the same change.
+// This is the active OpenGL implementation used by App and the shared glyph atlas.
 //
 // Blend state: BLEND is kept permanently enabled with the resting blend func
 // SRC_ALPHA, ONE_MINUS_SRC_ALPHA (set once in the constructor; a GL context is
@@ -32,6 +30,8 @@ import (
 // toggles. BeginFrame and FillRect ensure it is OFF; DrawGlyph ensures it is ON.
 // The GL call is only emitted on a transition, which matches the original
 // enable/disable pattern's net effect.
+var _ gpu.Renderer = (*glRenderer)(nil)
+
 type glRenderer struct {
 	win          *glfw.Window
 	pages        []uint32 // atlas page textures
@@ -40,6 +40,7 @@ type glRenderer struct {
 	texEnabled   bool     // tracks gl.Enable/Disable(TEXTURE_2D) to skip redundant toggles
 	widthPx      int
 	heightPx     int
+	clipStack    []gpu.ClipRect
 }
 
 // newGLRenderer builds an OpenGL Renderer for win. A GL context must be current
@@ -85,12 +86,49 @@ func (r *glRenderer) BeginFrame(widthPx, heightPx int) {
 	// Ensure the resting blend state (kept enabled for the whole frame).
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	r.clipStack = r.clipStack[:0]
+	gl.Disable(gl.SCISSOR_TEST)
+}
+
+func (r *glRenderer) PushClip(rect gpu.ClipRect) {
+	rect = rect.Clamp(r.widthPx, r.heightPx)
+	if n := len(r.clipStack); n > 0 {
+		rect = r.clipStack[n-1].Intersect(rect)
+	}
+	r.clipStack = append(r.clipStack, rect)
+	r.applyCurrentClip()
+}
+
+func (r *glRenderer) applyCurrentClip() {
+	if len(r.clipStack) == 0 {
+		gl.Disable(gl.SCISSOR_TEST)
+		return
+	}
+	rect := r.clipStack[len(r.clipStack)-1]
+	x, y, width, height := rect.Scissor(r.heightPx)
+	gl.Enable(gl.SCISSOR_TEST)
+	gl.Scissor(x, y, width, height)
+}
+
+func (r *glRenderer) PopClip() {
+	if len(r.clipStack) == 0 {
+		panic("glfwgl: PopClip without matching PushClip")
+	}
+	r.clipStack = r.clipStack[:len(r.clipStack)-1]
+	r.applyCurrentClip()
 }
 
 func (r *glRenderer) Clear(c color.RGBA) {
-	// Matches glClearColor + app_draw.go clear: alpha forced to 1.
-	gl.ClearColor(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, 1)
+	// Clear always targets the complete drawable, independent of the clip stack.
+	hadClip := len(r.clipStack) > 0
+	if hadClip {
+		gl.Disable(gl.SCISSOR_TEST)
+	}
+	gl.ClearColor(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, float32(c.A)/255)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
+	if hadClip {
+		r.applyCurrentClip()
+	}
 }
 
 func (r *glRenderer) FillRect(x, y, w, h float32, c color.RGBA) {
@@ -198,6 +236,9 @@ func (r *glRenderer) ClearAtlasPage(page int) {
 }
 
 func (r *glRenderer) EndFrame() {
+	if len(r.clipStack) != 0 {
+		panic("glfwgl: unbalanced renderer clip stack")
+	}
 	r.win.SwapBuffers()
 }
 

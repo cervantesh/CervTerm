@@ -21,6 +21,31 @@ const (
 	GlyphSubpixel
 )
 
+// ClipRect is a half-open top-left-origin framebuffer rectangle.
+type ClipRect struct {
+	X, Y, Width, Height int
+}
+
+// Intersect returns the overlap of two clip rectangles.
+func (r ClipRect) Intersect(other ClipRect) ClipRect {
+	x1, y1 := max(r.X, other.X), max(r.Y, other.Y)
+	x2, y2 := min(r.X+r.Width, other.X+other.Width), min(r.Y+r.Height, other.Y+other.Height)
+	if x2 <= x1 || y2 <= y1 {
+		return ClipRect{X: x1, Y: y1}
+	}
+	return ClipRect{X: x1, Y: y1, Width: x2 - x1, Height: y2 - y1}
+}
+
+// Clamp confines a clip rectangle to the framebuffer.
+func (r ClipRect) Clamp(width, height int) ClipRect {
+	return r.Intersect(ClipRect{Width: max(0, width), Height: max(0, height)})
+}
+
+// Scissor converts a top-left clip to OpenGL's bottom-left scissor coordinates.
+func (r ClipRect) Scissor(framebufferHeight int) (x, y, width, height int32) {
+	return int32(r.X), int32(framebufferHeight - (r.Y + r.Height)), int32(r.Width), int32(r.Height)
+}
+
 // Renderer is the backend-neutral GPU contract for one terminal frame. The
 // frontend translates its draw-list (solid rects + textured glyph quads) into
 // these calls; each backend implements them for its API (OpenGL today, with
@@ -43,6 +68,11 @@ type Renderer interface {
 	// partial-redraw damage model and clears explicitly via Clear only on a full
 	// redraw. (GL: glViewport + glOrtho + identity modelview.)
 	BeginFrame(widthPx, heightPx int)
+
+	// PushClip intersects rect with the current top-left-origin framebuffer clip.
+	// PopClip restores the previous clip. BeginFrame resets the stack.
+	PushClip(rect ClipRect)
+	PopClip()
 
 	// Clear clears the whole drawable to c. The frontend calls this only when it is
 	// doing a full-frame redraw; partial-damage frames never call it.

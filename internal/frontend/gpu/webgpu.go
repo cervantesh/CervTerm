@@ -81,6 +81,9 @@ func (r *webgpuRenderer) BeginFrame(widthPx, heightPx int) {
 	// render pass that loads the persistent target, and reset ordered frame geometry.
 }
 
+func (r *webgpuRenderer) PushClip(rect ClipRect) {}
+func (r *webgpuRenderer) PopClip()               {}
+
 func (r *webgpuRenderer) Clear(c color.RGBA) {
 	// TODO: clear the complete persistent target to c only when explicitly called.
 }

@@ -1,3 +1,5 @@
+//go:build glfw
+
 package glfwgl
 
 import (
@@ -6,21 +8,8 @@ import (
 	"cervterm/internal/core"
 )
 
-// searchTerminal is the narrow port the search controller needs from the
-// terminal: one atomic "find the next match and reveal it" operation. The
-// locking is the adapter's concern, so the controller never handles a mutex.
-type searchTerminal interface {
-	// SearchUpward finds the next match for query at or above the current match
-	// (prevRow when hasPrev is true) or from the live bottom otherwise, scrolls it
-	// into view on a hit, and returns the match — all under the terminal lock.
-	SearchUpward(query string, hasPrev bool, prevRow int) (row, col int, ok bool)
-}
-
-// lockedTerminal adapts a *core.Terminal plus the mutex guarding it against the
-// PTY reader goroutine into serialized, coarse-grained operations. It is the one
-// place that knows the terminal must be locked; callers depend on the port, not
-// on the mutex. The mutex is shared with App (it is &App.mu), so operations here
-// are mutually exclusive with the parser advance and every other App term access.
+// lockedTerminal is retained only as a test adapter for searchController's
+// legacy core.Terminal fixtures; production search uses muxSearchTerminal.
 type lockedTerminal struct {
 	term *core.Terminal
 	mu   *sync.Mutex

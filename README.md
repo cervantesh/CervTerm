@@ -11,6 +11,7 @@ CervTerm is not a finished daily-driver terminal yet, but it already includes:
 - Windows ConPTY backend and Unix PTY backend behind build tags.
 - GLFW/OpenGL frontend.
 - Scrollback, alternate screen, resize reflow, selection/copy/paste, and bracketed paste.
+- Native in-process pane mux with independent PTY/parser/core state per pane, clipped binary row/column splits, focused input, and deterministic close/collapse.
 - Scrollback search: `ctrl+shift+f` opens a search bar (Enter jumps to the next match upward, Esc closes); also scriptable via `term:search`.
 - VT parsing for common cursor, erase, color, scroll-region, insert/delete, input-mode, mouse-mode, and title sequences.
 - Keyboard encoding for navigation keys, F1-F12, and Ctrl/Alt/Shift modifiers.
@@ -54,6 +55,18 @@ For a Windows zip install:
 Portable winget manifest templates live under `packaging/winget/`. Authenticode signing and MSI/WiX publishing are intentionally deferred for now; beta distribution uses unsigned portable zips with SHA256 checksums and GitHub provenance attestations.
 
 For release authenticity and unsigned beta expectations, see [`docs/release-trust.md`](docs/release-trust.md). For diagnostics, see [`docs/troubleshooting.md`](docs/troubleshooting.md).
+
+## Pane shortcuts
+
+Lua keybindings take precedence over these built-ins:
+
+- `Alt+Shift+=`: split the focused pane into left/right columns.
+- `Alt+Shift+-`: split the focused pane into top/bottom rows.
+- `Alt+Left/Right/Up/Down`: move focus geometrically.
+- `Ctrl+Shift+W`: close the focused pane (or the window when it is the final pane).
+
+The initial mux is local and in-process. Visible tabs, detachable/persistent sessions, draggable dividers, pane zoom, remote domains and tmux integration are deferred.
+
 
 ## Build and test
 

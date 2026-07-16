@@ -11,25 +11,24 @@
 
 ```text
 cmd/cervterm
-  -> internal/frontend/glfwgl  window, input, OpenGL drawing (optional tag)
-  -> internal/render           renderer-neutral frame snapshots
-  -> internal/pty              local PTY now, ConPTY/SSH/serial later
-  -> internal/vt               escape parser, toolkit-neutral
-  -> internal/core             grid, cells, cursor, attributes
-  -> internal/metrics          GC/allocation/frame counters
+  -> internal/frontend/glfwgl  window, input, OpenGL projection (optional tag)
+  -> internal/mux             pane IDs, split tree, focus, layout, lifecycle and session aggregates
+  -> internal/render          renderer-neutral per-pane frame snapshots
+  -> internal/pty             local PTY/ConPTY byte transports
+  -> internal/vt              escape parser, toolkit-neutral
+  -> internal/core            per-pane grid, cells, cursor, attributes and scrollback
+  -> internal/metrics         GC/allocation/frame counters
 ```
 
-The core never imports the renderer, PTY, GLFW, or OpenGL. The render snapshot copies core cells into a stable frame. Frontends consume snapshots; they do not parse ANSI. The PTY only moves bytes.
+The core never imports the mux, renderer, PTY, GLFW, or OpenGL. Each mux pane owns one PTY, VT parser, terminal core and render snapshot. PTY readers enqueue pane-addressed bytes; the GLFW main thread serializes parsing, topology, focus, lifecycle and rendering. The frontend projects positioned panes and routes input; it does not own the split tree or sessions.
 
-## Future WezTerm-like growth
-
-Add `internal/mux` later:
+## Native in-process mux
 
 ```text
-Frontend -> Mux Window -> Tab -> Pane -> Domain(local/ssh/serial) -> Terminal Core
+Frontend -> Mux Window -> implicit Tab -> SplitTree -> Pane -> local Session -> Terminal Core
 ```
 
-This allows tabs, splits, SSH domains, and remote multiplexing without rewriting the core terminal state.
+The initial mux is process-local and supports native column/row splits, focused-pane input, independent scrollback/selection/search/mouse state, deterministic close/collapse and clipped rendering. Persistence, detach/reattach, visible tabs, remote domains and tmux integration remain deferred. IDs and pane-addressed commands/events avoid GLFW pointers so a future daemon can preserve the model without moving topology into the frontend.
 
 ## Verifiable measurements
 

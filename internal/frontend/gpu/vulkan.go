@@ -58,6 +58,8 @@ type vulkanRenderer struct {
 	//   descriptorSets []vk.DescriptorSet          // per atlas page
 }
 
+var _ Renderer = (*vulkanRenderer)(nil)
+
 // NewVulkanRenderer will run the full init chain (createInstance → …
 // → createSyncObjects) and return a ready Renderer. It errors until built out.
 func NewVulkanRenderer(widthPx, heightPx int) (Renderer, error) {
@@ -102,6 +104,9 @@ func (r *vulkanRenderer) BeginFrame(widthPx, heightPx int) {
 	// render pass (no clear), set viewport/scissor to (widthPx, heightPx), reset
 	// the per-frame vertex writer.
 }
+
+func (r *vulkanRenderer) PushClip(rect ClipRect) {}
+func (r *vulkanRenderer) PopClip()               {}
 
 func (r *vulkanRenderer) Clear(c color.RGBA) {
 	// TODO: clear the current render target/attachment to c (e.g. vkCmdClearAttachments).
