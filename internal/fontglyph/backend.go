@@ -67,7 +67,7 @@ type Backend interface {
 }
 
 type glyphRasterizer interface {
-	RasterizeGlyph(glyphID uint16, cellW, cellH, baseline, cellSpan int) (*image.RGBA, bool)
+	RasterizeGlyph(glyphID uint16, cellW, cellH, baseline, cellSpan int, advancePx float32) (*image.RGBA, bool)
 	Close()
 }
 
@@ -216,7 +216,7 @@ func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool
 	}
 	if b.dwRaster != nil && lf.sfnt == b.faces[0].sfnt {
 		if glyphIndexErr == nil && glyphID != 0 {
-			if img, ok := b.dwRaster.RasterizeGlyph(uint16(glyphID), b.cellW, b.cellH, b.baseline, cellSpan); ok {
+			if img, ok := b.dwRaster.RasterizeGlyph(uint16(glyphID), b.cellW, b.cellH, b.baseline, cellSpan, float32(advance)/64); ok {
 				return RasterizedGlyph{
 					Image: img, Width: (bounds.Max.X - bounds.Min.X).Ceil(), Height: (bounds.Max.Y - bounds.Min.Y).Ceil(),
 					BearingX: bounds.Min.X.Ceil(), BearingY: -bounds.Min.Y.Ceil(), AdvanceX: float64(advance) / 64.0,

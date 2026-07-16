@@ -39,7 +39,11 @@ func TestDWriteRasterizer(t *testing.T) {
 			if idErr != nil {
 				t.Fatalf("GlyphIndex(%q): %v", tt.r, idErr)
 			}
-			img, ok := raster.RasterizeGlyph(uint16(id), backend.cellW, backend.cellH, backend.baseline, 1)
+			advance, advanceOK := backend.faces[0].face.GlyphAdvance(tt.r)
+			if !advanceOK {
+				t.Fatalf("GlyphAdvance(%q) unavailable", tt.r)
+			}
+			img, ok := raster.RasterizeGlyph(uint16(id), backend.cellW, backend.cellH, backend.baseline, 1, float32(advance)/64)
 			if !ok || img.Bounds() != image.Rect(0, 0, backend.cellW, backend.cellH) {
 				t.Fatalf("RasterizeGlyph(%q) ok=%t bounds=%v", tt.r, ok, img.Bounds())
 			}
@@ -62,6 +66,31 @@ func TestDWriteRasterizer(t *testing.T) {
 	goGlyph, ok := backend.Rasterize('x', 1)
 	if !ok || directWriteLetter == nil || bytes.Equal(directWriteLetter.Pix, goGlyph.Image.Pix) {
 		t.Fatal("DirectWrite 'd' coverage unexpectedly matches Go-path 'x' coverage")
+	}
+}
+
+func TestDWriteNarrowGlyphUsesNaturalAdvancePosition(t *testing.T) {
+	t.Setenv("LocalAppData", t.TempDir())
+	backend, err := NewOpenTypeBackend(Spec{Family: "Go Mono", Size: 14, DPI: 96, TextRaster: "auto"})
+	if err != nil {
+		t.Fatalf("NewOpenTypeBackend: %v", err)
+	}
+	defer backend.Close()
+	if backend.dwRaster == nil {
+		t.Fatal("DirectWrite rasterizer is unavailable")
+	}
+
+	glyph, ok := backend.Rasterize('.', 1)
+	if !ok || glyph.Image == nil {
+		t.Fatal("DirectWrite period did not rasterize")
+	}
+	cx, n := inkHorizontalCentroid(glyph.Image)
+	if n == 0 {
+		t.Fatal("DirectWrite period has no visible ink")
+	}
+	lo, hi := float64(backend.cellW)*0.2, float64(backend.cellW)*0.8
+	if cx < lo || cx > hi {
+		t.Fatalf("DirectWrite period centroid x=%.1f outside centered band [%.1f, %.1f] of cell width %d", cx, lo, hi, backend.cellW)
 	}
 }
 
