@@ -107,20 +107,20 @@ func (t *Terminal) EraseChars(n int) {
 	if n <= 0 {
 		n = 1
 	}
-	remaining := t.cols - t.cursorCol
-	if n > remaining {
-		n = remaining
-	}
-	if n <= 0 {
+	startCol := t.cursorCol
+	endCol := min(t.cols, startCol+n)
+	if startCol >= endCol {
 		return
 	}
+	startCol, endCol = t.expandWideCellRange(t.cursorRow, startCol, endCol)
 
-	blank := t.blank()
-	start := t.cursorRow*t.cols + t.cursorCol
-	for i := start; i < start+n; i++ {
-		t.cells[i] = blank
+	blank := Cell{Rune: ' ', Attr: t.attr}
+	rowStart := t.cursorRow * t.cols
+	for col := startCol; col < endCol; col++ {
+		t.cells[rowStart+col] = blank
 	}
-	if n == remaining {
+	t.repairWideCells(t.cursorRow, blank)
+	if endCol == t.cols {
 		t.rowWrapped[t.cursorRow] = false
 	}
 	t.wrapNext = false
@@ -174,11 +174,17 @@ func (t *Terminal) PutRune(r rune) {
 	if t.insertMode {
 		t.InsertChars(width)
 	}
+	eraseStart, eraseEnd := t.expandWideCellRange(t.cursorRow, t.cursorCol, min(t.cols, t.cursorCol+width))
+	eraseBlank := Cell{Rune: ' ', Attr: t.attr}
+	for col := eraseStart; col < eraseEnd; col++ {
+		t.cells[t.cursorRow*t.cols+col] = eraseBlank
+	}
 	t.cells[idx] = Cell{Rune: r, Attr: t.attr}
 	if width == 2 && t.cursorCol+1 < t.cols {
 		t.cells[idx+1] = Cell{Attr: t.attr, WideContinuation: true}
 	}
 
+	t.repairWideCells(t.cursorRow, eraseBlank)
 	if t.cursorCol+width >= t.cols {
 		t.wrapNext = t.autoWrap
 		t.cursorCol = t.cols - 1
@@ -315,6 +321,7 @@ func (t *Terminal) InsertChars(n int) {
 	for i := start; i < start+n; i++ {
 		t.cells[i] = blank
 	}
+	t.repairWideCells(t.cursorRow, blank)
 	t.rowWrapped[t.cursorRow] = false
 	t.wrapNext = false
 }
@@ -337,6 +344,7 @@ func (t *Terminal) DeleteChars(n int) {
 	for i := end - n; i < end; i++ {
 		t.cells[i] = blank
 	}
+	t.repairWideCells(t.cursorRow, blank)
 	t.rowWrapped[t.cursorRow] = false
 	t.wrapNext = false
 }

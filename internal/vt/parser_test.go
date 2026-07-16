@@ -245,6 +245,24 @@ func TestParserEraseCharactersForCMDCompletion(t *testing.T) {
 	}
 }
 
+func TestParserEraseCharactersClearsWidePair(t *testing.T) {
+	term := core.NewTerminal(5, 1)
+	var p Parser
+	p.Advance(term, []byte("好x\x1b[1;2H\x1b[X"))
+
+	cells := make([]core.Cell, 5)
+	term.CopyView(cells)
+	if cells[0].Rune != ' ' || cells[0].WideContinuation || cells[1].Rune != ' ' || cells[1].WideContinuation {
+		t.Fatalf("CSI X left an orphaned wide pair: %#v", cells[:2])
+	}
+	if cells[2].Rune != 'x' {
+		t.Fatalf("CSI X erased the following cell: %#v", cells[2])
+	}
+	if term.CursorCol() != 1 {
+		t.Fatalf("CSI X moved cursor to column %d", term.CursorCol())
+	}
+}
+
 func TestParserSaveRestoreCursor(t *testing.T) {
 	term := core.NewTerminal(6, 2)
 	var p Parser
