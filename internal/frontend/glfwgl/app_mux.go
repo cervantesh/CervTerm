@@ -1,0 +1,349 @@
+//go:build glfw
+
+package glfwgl
+
+import (
+	"fmt"
+
+	termmux "cervterm/internal/mux"
+	"cervterm/internal/pty"
+	termsel "cervterm/internal/selection"
+
+	"github.com/go-gl/glfw/v3.3/glfw"
+)
+
+type paneUIState struct {
+	selection   selectionState
+	search      searchController
+	link        linkState
+	mouseReport mouseReportState
+}
+
+type muxSearchTerminal struct {
+	mux  *termmux.Mux
+	pane termmux.PaneID
+}
+
+func (t muxSearchTerminal) SearchUpward(query string, hasPrev bool, prevRow int) (row, col int, ok bool) {
+	row, col, ok, err := t.mux.SearchUpward(t.pane, query, hasPrev, prevRow)
+	return row, col, ok && err == nil
+}
+
+func (a *App) muxMetrics() termmux.CellMetrics {
+	return termmux.CellMetrics{
+		CellWidth:  max(1, int(a.cellW)),
+		CellHeight: max(1, int(a.cellH)),
+		PaddingX:   max(0, int(a.paddingX)),
+		PaddingY:   max(0, int(a.paddingY)),
+	}
+}
+
+func (a *App) saveActivePaneUI() {
+	if a.focusedPane == 0 {
+		return
+	}
+	state := a.paneUI[a.focusedPane]
+	if state == nil {
+		if _, ok := a.mux.PaneView(a.focusedPane); !ok {
+			return
+		}
+		state = a.ensurePaneUI(a.focusedPane)
+	}
+	state.selection = a.selection
+	state.search = a.search
+	state.link = a.link
+	state.mouseReport = a.mouseReport
+}
+
+func (a *App) ensurePaneUI(id termmux.PaneID) *paneUIState {
+	state := a.paneUI[id]
+	if state == nil {
+		state = &paneUIState{}
+		state.search.viewRow = -1
+		a.paneUI[id] = state
+	}
+	return state
+}
+
+func (a *App) loadPaneUI(id termmux.PaneID) {
+	state := a.ensurePaneUI(id)
+	a.selection = state.selection
+	a.search = state.search
+	a.link = state.link
+	a.mouseReport = state.mouseReport
+	a.lterm = muxSearchTerminal{mux: a.mux, pane: id}
+	a.search.init(a.lterm, a.requestRedraw)
+}
+
+func (a *App) syncFocusedProjection() bool {
+	id, ok := a.mux.FocusedPane()
+	if !ok {
+		return false
+	}
+	if a.focusedPane != id {
+		a.saveActivePaneUI()
+		a.focusedPane = id
+		a.loadPaneUI(id)
+	}
+	view, ok := a.mux.PaneView(id)
+	if !ok {
+		return false
+	}
+	a.snap = view.Snapshot
+	a.cols, a.rows = view.Snapshot.Cols, view.Snapshot.Rows
+	return true
+}
+
+func (a *App) focusedView() (termmux.PaneID, termmux.PaneView, bool) {
+	if !a.syncFocusedProjection() {
+		return 0, termmux.PaneView{}, false
+	}
+	view, ok := a.mux.PaneView(a.focusedPane)
+	return a.focusedPane, view, ok
+}
+
+func (a *App) focusPane(id termmux.PaneID) bool {
+	if id == 0 || id == a.focusedPane {
+		return id != 0
+	}
+	a.saveActivePaneUI()
+	events, err := a.mux.FocusPane(id)
+	if err != nil {
+		return false
+	}
+	a.handleMuxEvents(events)
+	return true
+}
+
+func (a *App) handleMuxEvents(events []termmux.Event) bool {
+	consumed := false
+	for _, event := range events {
+		host := paneHost{app: a, pane: event.Pane}
+		switch event.Kind {
+		case termmux.PaneStarted:
+			a.ensurePaneUI(event.Pane)
+		case termmux.PaneOutput:
+			a.meter.AddBytes(len(event.Data))
+			if a.scriptRT != nil && a.scriptRT.WantsOutput() {
+				if err := a.scriptRT.FireOutput(host, string(event.Data)); err != nil {
+					a.Notify("script error: " + err.Error())
+				}
+			}
+			consumed = true
+		case termmux.PaneDirty:
+			consumed = true
+		case termmux.PaneTitleChanged:
+			if event.Pane == a.focusedPane {
+				a.updateWindowTitle(event.Text)
+			}
+			a.fireScriptEvent(func() error { return a.scriptRT.FireTitle(host, event.Text) })
+		case termmux.PaneCWDChanged:
+			a.fireScriptEvent(func() error { return a.scriptRT.FireCwd(host, event.Text) })
+		case termmux.PaneBell:
+			a.fireScriptEvent(func() error { return a.scriptRT.FireBell(host) })
+		case termmux.PaneFocused:
+			oldPane := a.focusedPane
+			if oldPane != 0 && oldPane != event.Pane {
+				a.sendPaneFocus(oldPane, false)
+			}
+			a.saveActivePaneUI()
+			a.focusedPane = event.Pane
+			a.loadPaneUI(event.Pane)
+			if oldPane != event.Pane {
+				a.sendPaneFocus(event.Pane, true)
+			}
+			if view, ok := a.mux.PaneView(event.Pane); ok {
+				a.snap = view.Snapshot
+				a.cols, a.rows = view.Snapshot.Cols, view.Snapshot.Rows
+				a.updateWindowTitle(view.Snapshot.Title)
+			}
+			consumed = true
+		case termmux.PaneGeometryChanged:
+			if event.Pane == a.focusedPane {
+				a.cols, a.rows = event.Geometry.Cols, event.Geometry.Rows
+			}
+			if a.pendingPaneResize == nil {
+				a.pendingPaneResize = make(map[termmux.PaneID]termmux.PaneGeometry)
+			}
+			a.pendingPaneResize[event.Pane] = event.Geometry
+			consumed = true
+		case termmux.PaneWriteFailed, termmux.PaneResizeFailed, termmux.PaneCloseFailed:
+			if event.Err != nil {
+				a.Notify(fmt.Sprintf("pane %d: %v", event.Pane, event.Err))
+			}
+		case termmux.PaneExited:
+			if event.Err != nil {
+				a.Notify(fmt.Sprintf("pane %d exited: %v", event.Pane, event.Err))
+			} else if event.Pane == a.focusedPane {
+				a.Notify(fmt.Sprintf("pane %d exited; close it to collapse the split", event.Pane))
+			}
+			consumed = true
+		case termmux.PaneClosed:
+			if state := a.paneUI[event.Pane]; state != nil && state.link.handCursor != nil {
+				state.link.handCursor.Destroy()
+			}
+			delete(a.paneUI, event.Pane)
+			delete(a.pendingPaneScroll, event.Pane)
+			delete(a.pendingPaneResize, event.Pane)
+			if a.mouseCapturePane == event.Pane {
+				a.mouseCapturePane = 0
+			}
+			consumed = true
+		case termmux.TabEmpty:
+			if a.window != nil {
+				a.window.SetShouldClose(true)
+			}
+		}
+	}
+	if consumed {
+		a.syncFocusedProjection()
+		a.requestRedraw()
+	}
+	return consumed
+}
+
+func (a *App) updateWindowTitle(title string) {
+	if a.window == nil {
+		return
+	}
+	if a.cfg.Window.DynamicTitle && title != "" {
+		a.window.SetTitle("CervTerm · " + title)
+		return
+	}
+	a.window.SetTitle("CervTerm")
+}
+
+func (a *App) paneAtWindowPosition(x, y float64) (termmux.PaneID, termsel.Point, bool) {
+	if a.window == nil {
+		return 0, termsel.Point{}, false
+	}
+	windowW, windowH := a.window.GetSize()
+	fbW, fbH := a.window.GetFramebufferSize()
+	if windowW <= 0 || windowH <= 0 {
+		return 0, termsel.Point{}, false
+	}
+	fx := float32(x) * float32(fbW) / float32(windowW)
+	fy := float32(y) * float32(fbH) / float32(windowH)
+	layout, err := a.mux.Layout()
+	if err != nil {
+		return 0, termsel.Point{}, false
+	}
+	for _, pane := range layout.Panes {
+		r := pane.Pixels
+		if fx < float32(r.X) || fx >= float32(r.Right()) || fy < float32(r.Y) || fy >= float32(r.Bottom()) {
+			continue
+		}
+		localX := fx - float32(r.X)
+		localY := fy - float32(r.Y)
+		metrics := gridMetrics{cellW: a.cellW, cellH: a.cellH, paddingX: a.paddingX, paddingY: a.paddingY, cols: pane.Cols, rows: pane.Rows}
+		row, col := metrics.cellAt(localX, localY)
+		return pane.Pane, termsel.Point{Row: row, Col: col}, true
+	}
+	return 0, termsel.Point{}, false
+}
+
+func (a *App) handleMuxKey(key glfw.Key, mods glfw.ModifierKey) bool {
+	if a.focusedPane == 0 {
+		return false
+	}
+	spawn := termmux.SpawnSpec{Options: pty.Options{
+		ShellProgram: a.cfg.Shell.Program, ShellArgs: a.cfg.Shell.Args,
+		WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env,
+	}}
+	var events []termmux.Event
+	var err error
+	switch {
+	case mods&glfw.ModAlt != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyEqual:
+		_, events, err = a.mux.Split(a.focusedPane, termmux.SplitColumns, spawn)
+	case mods&glfw.ModAlt != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyMinus:
+		_, events, err = a.mux.Split(a.focusedPane, termmux.SplitRows, spawn)
+	case mods&glfw.ModAlt != 0 && key == glfw.KeyLeft:
+		events, err = a.mux.FocusDirection(termmux.FocusLeft)
+	case mods&glfw.ModAlt != 0 && key == glfw.KeyRight:
+		events, err = a.mux.FocusDirection(termmux.FocusRight)
+	case mods&glfw.ModAlt != 0 && key == glfw.KeyUp:
+		events, err = a.mux.FocusDirection(termmux.FocusUp)
+	case mods&glfw.ModAlt != 0 && key == glfw.KeyDown:
+		events, err = a.mux.FocusDirection(termmux.FocusDown)
+	case mods&glfw.ModControl != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyW:
+		events, err = a.mux.ClosePane(a.focusedPane)
+	default:
+		return false
+	}
+	if len(events) > 0 {
+		a.handleMuxEvents(events)
+	}
+	if err != nil {
+		a.Notify("mux: " + err.Error())
+	}
+	return true
+}
+
+func (a *App) pointForPaneWindowPosition(id termmux.PaneID, x, y float64) (termsel.Point, bool) {
+	if a.window == nil {
+		return termsel.Point{}, false
+	}
+	view, ok := a.mux.PaneView(id)
+	if !ok {
+		return termsel.Point{}, false
+	}
+	windowW, windowH := a.window.GetSize()
+	fbW, fbH := a.window.GetFramebufferSize()
+	if windowW <= 0 || windowH <= 0 {
+		return termsel.Point{}, false
+	}
+	fx := float32(x)*float32(fbW)/float32(windowW) - float32(view.Geometry.Pixels.X)
+	fy := float32(y)*float32(fbH)/float32(windowH) - float32(view.Geometry.Pixels.Y)
+	metrics := gridMetrics{cellW: a.cellW, cellH: a.cellH, paddingX: a.paddingX, paddingY: a.paddingY, cols: view.Geometry.Cols, rows: view.Geometry.Rows}
+	row, col := metrics.cellAt(fx, fy)
+	return termsel.Point{Row: row, Col: col}, true
+}
+
+func (a *App) updateHoverForPane(id termmux.PaneID, x, y float64) {
+	for pane, state := range a.paneUI {
+		if pane != id {
+			state.link.hoverActive = false
+		}
+	}
+	state := a.ensurePaneUI(id)
+	point, pointOK := a.pointForPaneWindowPosition(id, x, y)
+	link, linkOK := linkRegion{}, false
+	if pointOK {
+		link, linkOK = linkAt(state.link.links, point)
+	}
+	changed := linkOK != state.link.hoverActive || link != state.link.hover
+	state.link.hover, state.link.hoverActive = link, linkOK
+	if id == a.focusedPane {
+		a.link = state.link
+	}
+	if a.window != nil {
+		if linkOK {
+			if state.link.handCursor == nil {
+				state.link.handCursor = glfw.CreateStandardCursor(glfw.HandCursor)
+			}
+			a.window.SetCursor(state.link.handCursor)
+		} else {
+			a.window.SetCursor(nil)
+		}
+	}
+	if changed {
+		a.requestRedraw()
+	}
+}
+
+func (a *App) sendPaneFocus(id termmux.PaneID, focused bool) {
+	view, ok := a.mux.PaneView(id)
+	if !ok || !view.FocusEvents || view.State != termmux.PaneStateRunning {
+		return
+	}
+	sequence := []byte("\x1b[O")
+	if focused {
+		sequence = []byte("\x1b[I")
+	}
+	_, _ = a.mux.Write(id, sequence)
+}
+
+func (a *App) writePaneInput(id termmux.PaneID, data []byte) error {
+	_, err := a.mux.Write(id, data)
+	return err
+}

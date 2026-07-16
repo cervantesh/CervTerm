@@ -24,7 +24,7 @@ type zoomBindings struct {
 	in, out, reset       script.Spec
 	inOK, outOK, resetOK bool
 	base                 float64
-	pending              float64   // latest target size; the visual is rebuilt toward this every step
+	pending              float64 // latest target size; the visual is rebuilt toward this every step
 	pendingSet           bool
 	ptyDirty             bool      // grid changed since ConPTY was last told; resize it at burst settle
 	deadline             time.Time // resize the PTY once now passes this (debounce)
@@ -160,12 +160,15 @@ func (a *App) handleScrollKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	if mods&glfw.ModShift == 0 || mods&(glfw.ModControl|glfw.ModAlt|glfw.ModSuper) != 0 {
 		return false
 	}
-	a.mu.Lock()
-	page := a.term.Rows() - 1
+	_, view, ok := a.focusedView()
+	if !ok {
+		return true
+	}
+	page := view.Snapshot.Rows - 1
 	if page < 1 {
 		page = 1
 	}
-	history := a.term.ScrollbackLines()
+	history := view.ScrollbackLines
 	var lines int
 	switch key {
 	case glfw.KeyPageUp:
@@ -173,15 +176,13 @@ func (a *App) handleScrollKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	case glfw.KeyPageDown:
 		lines = -page
 	case glfw.KeyHome:
-		lines = history // clamps to the oldest row
+		lines = history
 	case glfw.KeyEnd:
-		lines = -history // back to the live prompt
+		lines = -history
 	default:
-		a.mu.Unlock()
 		return false
 	}
-	moved := a.term.ScrollViewport(lines)
-	a.mu.Unlock()
+	moved, _ := a.mux.ScrollViewport(a.focusedPane, lines)
 	if moved {
 		a.requestRedraw()
 		a.markScrollEvent()

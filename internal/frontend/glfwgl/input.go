@@ -9,9 +9,11 @@ import (
 )
 
 func (a *App) inputMode() input.Mode {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return input.Mode{ApplicationCursor: a.term.ApplicationCursorMode()}
+	_, view, ok := a.focusedView()
+	if !ok {
+		return input.Mode{}
+	}
+	return input.Mode{ApplicationCursor: view.ApplicationCursor}
 }
 
 func inputEventFromGLFW(key glfw.Key, mods glfw.ModifierKey) (input.Event, bool) {

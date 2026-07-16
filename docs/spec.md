@@ -5,7 +5,7 @@ This document is the executable contract for the MVP. Implementation must follow
 ## Non-goals for MVP
 
 - No Fyne, no Gio, no Rust.
-- No tabs, panes, SSH, serial, GPU glyph atlas optimization beyond a simple MVP frontend.
+- No visible tab bar, SSH/serial domains, daemon, detach/reattach, pane persistence, pane zoom, or draggable dividers in the initial mux.
 - No premature dirty-region optimizer, arena allocator, or custom memory pool until measurements justify it.
 
 ## Architecture constraints
@@ -16,7 +16,9 @@ This document is the executable contract for the MVP. Implementation must follow
 4. `internal/pty` exposes a session interface; local PTY is only one domain.
 5. `internal/frontend/glfwgl` is disposable and built only with `-tags glfw`.
 6. Headless tests must pass with `go test ./...` without compiling GLFW/OpenGL.
-7. Any future mux must route through pane/domain abstractions, not frontend state.
+7. The native in-process mux owns pane identity, split topology, focus, geometry, lifecycle and one independent session aggregate per leaf; the frontend only projects and routes.
+8. PTY readers only enqueue pane-addressed records; terminal/parser/mux mutation remains serialized on the GLFW main thread.
+9. Every pane render is confined by the backend-neutral renderer clip stack.
 
 ## MVP behavior
 
@@ -71,6 +73,18 @@ This document is the executable contract for the MVP. Implementation must follow
 - Mouse wheel in the GLFW frontend scrolls the viewport.
 - Mouse drag selects terminal cells in the current viewport.
 - Ctrl+C copies selected text to the clipboard; when no selection exists it remains available for terminal interrupt input.
+
+### Native panes
+
+- One implicit tab contains a binary split tree with one-pixel fixed dividers.
+- `Alt+Shift+=` splits the focused pane left/right; `Alt+Shift+-` splits top/bottom.
+- `Alt+Arrow` changes focused pane; `Ctrl+Shift+W` closes the focused pane and collapses its parent split.
+- Lua bindings take precedence over built-in pane bindings.
+- Each pane has independent PTY/parser/core/snapshot, scrollback, selection, search, links and mouse-report state.
+- Keyboard/paste targets the focused pane; pointer operations first hit-test a pane and translate to pane-local cells.
+- PTY-origin Lua output/title/CWD/bell callbacks remain bound to the originating pane for the callback duration.
+- Multi-pane frames repaint fully for correctness; incremental pane damage is deferred.
+
 
 ### Visual theme
 

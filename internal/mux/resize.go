@@ -1,0 +1,76 @@
+package mux
+
+import (
+	"errors"
+	"fmt"
+
+	"cervterm/internal/pty"
+)
+
+// Resize updates each terminal before attempting its PTY resize.
+func (m *Mux) Resize(content PixelRect, metrics CellMetrics) ([]Event, error) {
+	events, err := m.ResizeGrid(content, metrics)
+	if err != nil {
+		return events, err
+	}
+	var resizeErrors []error
+	for _, id := range m.model.PaneIDs() {
+		paneEvents, paneErr := m.ApplyResize(id)
+		events = append(events, paneEvents...)
+		if paneErr != nil {
+			resizeErrors = append(resizeErrors, paneErr)
+		}
+	}
+	return events, errors.Join(resizeErrors...)
+}
+
+// ResizeGrid updates pane geometry, terminal grids, snapshots, and desired PTY
+// sizes without notifying sessions. Frontends use this to preserve debounced PTY
+// resize behavior while keeping the mux authoritative for terminal state.
+func (m *Mux) ResizeGrid(content PixelRect, metrics CellMetrics) ([]Event, error) {
+	layout, err := m.model.Layout(content, metrics)
+	if err != nil {
+		return nil, err
+	}
+	m.bounds, m.metrics = content, metrics
+	events := make([]Event, 0, len(layout.Panes)*2)
+	for _, geometry := range layout.Panes {
+		geometry = effectiveGeometry(geometry)
+		p := m.panes[geometry.Pane]
+		if p == nil {
+			return events, invariantError("layout references unattached pane %d", geometry.Pane)
+		}
+		if p.geometry == geometry {
+			continue
+		}
+		p.geometry = geometry
+		p.terminal.Resize(geometry.Cols, geometry.Rows)
+		p.capture()
+		rows, cols := terminalSize(geometry)
+		p.desiredSize = pty.Size{Rows: rows, Cols: cols}
+		events = append(events, Event{Kind: PaneGeometryChanged, Pane: p.id, Geometry: geometry}, Event{Kind: PaneDirty, Pane: p.id})
+	}
+	return events, nil
+}
+
+// ApplyResize notifies one pane session of the latest desired grid size.
+func (m *Mux) ApplyResize(id PaneID) ([]Event, error) {
+	p, ok := m.panes[id]
+	if !ok || !m.model.paneExists(id) {
+		return nil, ErrPaneNotFound
+	}
+	if p.session == nil || (p.state != PaneStateRunning && p.state != PaneStateExited) {
+		return nil, nil
+	}
+	if p.resizeErr == nil && p.appliedSize == p.desiredSize {
+		return nil, nil
+	}
+	if err := p.session.Resize(p.desiredSize); err != nil {
+		p.resizeErr = err
+		wrapped := fmt.Errorf("pane %d resize: %w", p.id, err)
+		return []Event{{Kind: PaneResizeFailed, Pane: p.id, Err: err}}, wrapped
+	}
+	p.appliedSize = p.desiredSize
+	p.resizeErr = nil
+	return nil, nil
+}
