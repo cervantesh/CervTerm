@@ -113,19 +113,22 @@ GOOS=linux GOARCH=amd64 go build -o dist/cervterm-linux-amd64 ./cmd/cervterm
 
 ## Lua config example
 
-Generate a complete editable template with `--print-default-config`. A minimal example:
+Generate a complete editable template with `--print-default-config`. The default enables the new appearance schema (`#080B12E6` background, optional blur request, and compact reserved scrollbar) while keeping whole-window opacity at `1.0`. A minimal override:
 
 ```lua
 return {
-  window = { width = 1100, height = 720, padding_x = 6, padding_y = 6 },
-  font = { family = "Go Mono", size = 14 },
+  window = { width = 1100, height = 720, opacity = 1.0, blur = true },
+  colors = { background = "#080B12E6" },
+  scrolling = { history = 2000, wheel_multiplier = 3, hide_cursor_when_scrolled = true },
   shell = { program = "cmd.exe", args = {} },
 }
 ```
 
+The selected source is watched with debounce. `ctrl+shift+r` and `term:reload_config()` request a manual atomic reload; invalid edits preserve the last valid runtime. Shell and other startup-only changes are reported as requiring restart.
+
 ## Teal config
 
-`cervterm.tl` is checked and generated through the external `tl` command before CervTerm loads the generated Lua file. Lua remains the runtime target, so Teal is optional for users who prefer direct Lua config.
+`cervterm.tl` is checked and generated through the external `tl` command before CervTerm loads the generated Lua file. Copy `docs/examples/cervterm.d.tl` beside it for the complete root `cervterm.Config` type, or start from `docs/examples/cervterm.tl`. Lua remains the runtime target, so Teal is optional for users who prefer direct Lua config.
 
 ## Diagnostics logging
 
@@ -133,11 +136,13 @@ Runtime diagnostics are written to stderr and to a local log file by default. Ov
 
 ## Display scaling
 
-The terminal draws no permanent chrome: text fills the window to the configured padding, the OS title bar is themed dark, and a two-row stats overlay is toggled by `render.stats_hotkey` (default `ctrl+shift+i`; empty to disable).
+The terminal reserves the configured scrollbar slot outside the cell grid (12 logical px by default), so auto-hide/fade never covers text or resizes the PTY. The OS title bar is themed dark, and a two-row stats overlay is toggled by `render.stats_hotkey` (default `ctrl+shift+i`; empty to disable). The default background uses alpha `E6`; `window.opacity` is a separate whole-window mode and validation prevents activating both non-neutral opacity modes together.
 
 Rendering is damage-driven by default (`render.redraw = "on_demand"`): the main loop blocks in the OS event wait and repaints only when something visible changed, so an idle terminal draws about the cursor blink rate and near zero with blink and the stats overlay off. Set `render.redraw = "continuous"` to restore the old always-draw loop for benchmarking or as an escape hatch. `render.vsync` still caps the swap rate to the monitor refresh.
 
 Drawn frames repaint changed rows by default (`render.damage = "rows"`); set `render.damage = "frame"` as an escape hatch if partial-redraw artifacts appear.
+
+The OpenGL backend keeps an authoritative RGBA offscreen frame image: damaged background pixels replace prior RGBA, while glyphs and overlays blend normally, and the complete image is presented each frame. Blur is routed through a capability-aware `BlurProvider`; providers report `active`, `disabled`, `unsupported`, `incompatible`, or `failed` and degrade without terminating. **The macOS AppKit, KDE/X11, and KDE/Wayland providers are experimental and compile-validated but have not yet completed real-compositor smoke testing.** KDE/X11 uses `_KDE_NET_WM_BLUR_BEHIND_REGION`; KDE/Wayland uses `org_kde_kwin_blur` in builds compiled with `-tags "glfw wayland"`. GNOME and compositors without a supported protocol retain plain transparency. The Windows provider still disables its native material when background alpha is active because that material makes the GLFW client opaque. Please report native-platform results in [community testing issue #104](https://github.com/cervantesh/CervTerm/issues/104) before treating any experimental provider as supported.
 
 The GLFW frontend uses the current monitor content scale to rasterize text and scale window padding and chrome in framebuffer pixels. Moving the window between monitors rebuilds the glyph atlas at the new effective DPI. A GLFW-enabled `--doctor` reports the primary monitor scale and effective DPI; headless builds report that scale detection is unavailable.
 

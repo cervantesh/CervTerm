@@ -88,6 +88,10 @@ func (r *webgpuRenderer) Clear(c color.RGBA) {
 	// TODO: clear the complete persistent target to c only when explicitly called.
 }
 
+func (r *webgpuRenderer) ReplaceRect(x, y, w, h float32, c color.RGBA) {
+	// TODO: append a quad using the unblended replacement pipeline.
+}
+
 func (r *webgpuRenderer) FillRect(x, y, w, h float32, c color.RGBA) {
 	// TODO: append a colored quad while preserving Renderer call order.
 }

@@ -27,6 +27,8 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Window.PaddingX = intField(tbl, "padding_x", cfg.Window.PaddingX)
 		cfg.Window.PaddingY = intField(tbl, "padding_y", cfg.Window.PaddingY)
 		cfg.Window.DynamicTitle = boolField(tbl, "dynamic_title", cfg.Window.DynamicTitle)
+		cfg.Window.Opacity = numberField(tbl, "opacity", cfg.Window.Opacity)
+		cfg.Window.Blur = boolField(tbl, "blur", cfg.Window.Blur)
 	}
 	if tbl := tableField(root, "font"); tbl != nil {
 		cfg.Font.Family = stringField(tbl, "family", cfg.Font.Family)
@@ -43,6 +45,22 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Scrolling.History = intField(tbl, "history", cfg.Scrolling.History)
 		cfg.Scrolling.WheelMultiplier = intField(tbl, "wheel_multiplier", cfg.Scrolling.WheelMultiplier)
 		cfg.Scrolling.HideCursorWhenScrolled = boolField(tbl, "hide_cursor_when_scrolled", cfg.Scrolling.HideCursorWhenScrolled)
+	}
+	if tbl := tableField(root, "scrollbar"); tbl != nil {
+		cfg.Scrollbar.Enabled = boolField(tbl, "enabled", cfg.Scrollbar.Enabled)
+		cfg.Scrollbar.ReservedWidthPX = intField(tbl, "reserved_width_px", cfg.Scrollbar.ReservedWidthPX)
+		cfg.Scrollbar.WidthPX = intField(tbl, "width_px", cfg.Scrollbar.WidthPX)
+		cfg.Scrollbar.MarginPX = intField(tbl, "margin_px", cfg.Scrollbar.MarginPX)
+		cfg.Scrollbar.RadiusPX = intField(tbl, "radius_px", cfg.Scrollbar.RadiusPX)
+		cfg.Scrollbar.MinThumbPX = intField(tbl, "min_thumb_px", cfg.Scrollbar.MinThumbPX)
+		cfg.Scrollbar.TrackColor = stringField(tbl, "track_color", cfg.Scrollbar.TrackColor)
+		cfg.Scrollbar.ThumbColor = stringField(tbl, "thumb_color", cfg.Scrollbar.ThumbColor)
+		cfg.Scrollbar.ThumbHoverColor = stringField(tbl, "thumb_hover_color", cfg.Scrollbar.ThumbHoverColor)
+		cfg.Scrollbar.ThumbPressColor = stringField(tbl, "thumb_press_color", cfg.Scrollbar.ThumbPressColor)
+		cfg.Scrollbar.AutoHideDelayMS = intField(tbl, "auto_hide_delay_ms", cfg.Scrollbar.AutoHideDelayMS)
+		cfg.Scrollbar.FadeMS = intField(tbl, "fade_ms", cfg.Scrollbar.FadeMS)
+		cfg.Scrollbar.PageStep = numberField(tbl, "page_step", cfg.Scrollbar.PageStep)
+		cfg.Scrollbar.TrackClick = stringField(tbl, "track_click", cfg.Scrollbar.TrackClick)
 	}
 	if tbl := tableField(root, "cursor"); tbl != nil {
 		cfg.Cursor.Shape = stringField(tbl, "shape", cfg.Cursor.Shape)

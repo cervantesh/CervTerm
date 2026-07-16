@@ -11,6 +11,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Native in-process panes with horizontal and vertical splits, focused input, directional navigation, independent terminal sessions, and deterministic close/collapse behavior.
 - Resize adjacent panes live by dragging their divider with the mouse while preserving minimum terminal dimensions.
 - Zoom the focused pane independently while sharing one bounded multi-size glyph atlas across all panes.
+- Configurable RGBA backgrounds, live appearance reload, a reserved scrollbar, and experimental native blur providers for macOS AppKit and KDE X11/Wayland with transparent fallback.
 
 ### Fixed
 

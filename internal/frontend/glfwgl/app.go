@@ -3,7 +3,7 @@
 package glfwgl
 
 import (
-	"errors"
+	"log"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -25,12 +25,23 @@ type App struct {
 	meter             metrics.Meter
 	snap              render.Snapshot
 	cfg               config.Config
+	configPath        string
+	configWatch       configWatchState
+	reloadPending     bool
 	mux               *termmux.Mux
 	focusedPane       termmux.PaneID
 	paneUI            map[termmux.PaneID]*paneUIState
 	pendingMuxEvents  []termmux.Event
 	pendingPaneScroll map[termmux.PaneID]int
 	pendingPaneResize map[termmux.PaneID]termmux.PaneGeometry
+
+	transparentFramebuffer bool
+	transparencyWarned     bool
+	blurProvider           BlurProvider
+	blurProviderName       string
+	blurStatus             BlurStatus
+	blurWarned             bool
+	blurWarnedStatus       BlurStatus
 
 	window *glfw.Window
 	r      gpu.Renderer
@@ -98,6 +109,7 @@ type App struct {
 	mouseReport      mouseReportState
 	mouseCapturePane termmux.PaneID
 	divider          dividerInteraction
+	scrollbar        scrollbarState
 }
 
 func Run() error {
@@ -109,9 +121,14 @@ func RunWithConfig(cfg config.Config) error {
 }
 
 func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
+	return RunWithSource(cfg, rt, "")
+}
+
+func RunWithSource(cfg config.Config, rt *script.Runtime, sourcePath string) error {
 	runtime.LockOSThread()
 	app := &App{
 		cfg:               cfg,
+		configPath:        sourcePath,
 		scriptRT:          rt,
 		cellW:             9,
 		cellH:             16,
@@ -121,8 +138,13 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 		pendingPaneScroll: make(map[termmux.PaneID]int),
 		pendingPaneResize: make(map[termmux.PaneID]termmux.PaneGeometry),
 	}
+	app.configWatch = newConfigWatchState(sourcePath)
+	historyCapacity := cfg.Scrolling.History
+	hideCursorWhenScrolled := cfg.Scrolling.HideCursorWhenScrolled
 	app.mux = termmux.New(nil, termmux.Options{
-		Wake: app.wakeMainLoop,
+		ScrollbackCapacity:     &historyCapacity,
+		HideCursorWhenScrolled: &hideCursorWhenScrolled,
+		Wake:                   app.wakeMainLoop,
 		SetClipboard: func(_ termmux.PaneID, text string) {
 			if app.window != nil && cfg.Clipboard.OSC52 == "write" {
 				app.window.SetClipboardString(text)
@@ -133,6 +155,12 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 		app.statsSpec, app.statsSpecOK = spec, true
 	}
 	app.initZoomHotkeys()
+	defer func() {
+		if app.scriptRT != nil {
+			app.scriptRT.Close()
+			app.scriptRT = nil
+		}
+	}()
 	return app.runWindow()
 }
 
@@ -153,16 +181,28 @@ func (a *App) runWindow() error {
 	glfw.WindowHint(glfw.ContextVersionMajor, 2)
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	glfw.WindowHint(glfw.Resizable, glfw.True)
+	// The capability is a creation-time hint. Request it unconditionally so an
+	// opaque startup config can later switch to background alpha without recreating
+	// the terminal window.
+	glfw.WindowHint(glfw.TransparentFramebuffer, glfw.True)
 	w, err := glfw.CreateWindow(a.cfg.Window.Width, a.cfg.Window.Height, "CervTerm", nil, nil)
 	if err != nil {
 		return err
 	}
 	a.window = w
 	defer a.closeDividerCursors()
+	a.transparentFramebuffer = w.GetAttrib(glfw.TransparentFramebuffer) == glfw.True
+	a.blurProvider = newBlurProvider(w)
+	defer func() {
+		if err := a.blurProvider.Close(); err != nil {
+			log.Printf("close blur provider %q: %v", a.blurProvider.Name(), err)
+		}
+	}()
 	if icons := windowIcons(); len(icons) > 0 {
 		w.SetIcon(icons)
 	}
 	applyDarkTitleBar(w)
+	a.applyWindowAppearance()
 	w.MakeContextCurrent()
 	swapInterval := 1
 	if !a.cfg.Render.VSync {
@@ -180,7 +220,7 @@ func (a *App) runWindow() error {
 	a.lastFBW, a.lastFBH = -1, -1
 	sx, sy := w.GetContentScale()
 	a.applyScale(sx, sy)
-	atlas, err := newGlyphAtlasWithSpec(a.r, fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(sx, sy), TextRaster: a.cfg.Render.TextRaster}, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+	atlas, err := newGlyphAtlasWithSpec(a.r, fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(sx, sy), TextRaster: a.effectiveTextRaster()}, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
 	if err != nil {
 		return err
 	}
@@ -242,6 +282,12 @@ func (a *App) installCallbacks() {
 		// and nothing reaches the PTY (trap 1) — checked before script keys and
 		// the stats toggle so those chords cannot leak through the bar.
 		if a.search.handleKey(key, mods) {
+			return
+		}
+		if action == glfw.Press && key == glfw.KeyR && mods&glfw.ModControl != 0 && mods&glfw.ModShift != 0 && mods&(glfw.ModAlt|glfw.ModSuper) == 0 {
+			if !a.requestConfigReload() {
+				a.Notify("no config source to reload")
+			}
 			return
 		}
 		if a.dispatchScriptKey(key, mods, action == glfw.Press) {
@@ -307,6 +353,11 @@ func (a *App) installCallbacks() {
 		if button == glfw.MouseButtonLeft && action == glfw.Press && a.mouseCapturePane == 0 && a.beginDividerDrag(x, y) {
 			return
 		}
+		fx, fy := a.windowToFramebuffer(x, y)
+		if a.handleScrollbarButton(button, action, fx, fy) {
+			a.clearDividerCursor()
+			return
+		}
 		if action == glfw.Press {
 			if pane, _, ok := a.paneAtWindowPosition(x, y); ok {
 				a.focusPane(pane)
@@ -350,6 +401,11 @@ func (a *App) installCallbacks() {
 			a.sendMouseMove(x, y)
 			return
 		}
+		fx, fy := a.windowToFramebuffer(x, y)
+		if a.handleScrollbarMove(fx, fy) {
+			a.clearDividerCursor()
+			return
+		}
 		reported := a.sendMouseMove(x, y)
 		if a.updateDividerCursor(x, y) {
 			return
@@ -377,13 +433,17 @@ func (a *App) installCallbacks() {
 			return
 		}
 		x, y := a.window.GetCursorPos()
+		fx, fy := a.windowToFramebuffer(x, y)
+		if a.handleScrollbarWheel(yoff, fx, fy) {
+			return
+		}
 		if pane, _, ok := a.paneAtWindowPosition(x, y); ok {
 			a.focusPane(pane)
 		}
-		if a.sendMouseWheel(yoff, glfw.ModifierKey(0)) {
+		if a.sendMouseWheel(yoff, a.currentModifiers()) {
 			return
 		}
-		rows := scrollRowsFromWheelDelta(yoff)
+		rows := scrollRowsFromWheelDelta(yoff, a.cfg.Scrolling.WheelMultiplier)
 		if rows == 0 {
 			return
 		}
@@ -391,6 +451,7 @@ func (a *App) installCallbacks() {
 		// A wheel tick at the clamp moves nothing: skip the redraw so no frame is
 		// drawn (the event still woke the loop; nothing damages).
 		if moved {
+			a.scrollbar.lastActivity = time.Now()
 			a.requestRedraw()
 			a.markScrollEvent()
 		}
@@ -417,53 +478,3 @@ func (a *App) installCallbacks() {
 		}
 	})
 }
-
-func (a *App) handleClipboardKey(key glfw.Key, mods glfw.ModifierKey) bool {
-	if mods&glfw.ModControl != 0 && key == glfw.KeyV {
-		text := a.window.GetClipboardString()
-		a.writeInputBytes(input.EncodePaste(text, a.bracketedPasteMode()))
-		return true
-	}
-	if mods&glfw.ModShift != 0 && key == glfw.KeyInsert {
-		text := a.window.GetClipboardString()
-		a.writeInputBytes(input.EncodePaste(text, a.bracketedPasteMode()))
-		return true
-	}
-	if mods&glfw.ModControl != 0 && key == glfw.KeyInsert {
-		_ = a.copySelectionToClipboard()
-		return true
-	}
-	return false
-}
-
-func (a *App) copySelectionToClipboard() bool {
-	text := a.Selection()
-	if text == "" {
-		return false
-	}
-	a.SetClipboard(text)
-	return true
-}
-
-func (a *App) writeInputBytes(data []byte) {
-	if a.focusedPane == 0 {
-		return
-	}
-	events, err := a.mux.Write(a.focusedPane, data)
-	if errors.Is(err, termmux.ErrPaneNotRunning) {
-		if view, ok := a.mux.PaneView(a.focusedPane); ok && view.State == termmux.PaneStateFailed {
-			events, err = a.mux.FeedFallback(a.focusedPane, data)
-		}
-	}
-	if len(events) > 0 {
-		a.pendingMuxEvents = append(a.pendingMuxEvents, events...)
-	}
-	if err != nil {
-		a.Notify("input: " + err.Error())
-	}
-	if len(events) > 0 {
-		a.requestRedraw()
-	}
-}
-
-func (a *App) writeInput(s string) { a.writeInputBytes([]byte(s)) }

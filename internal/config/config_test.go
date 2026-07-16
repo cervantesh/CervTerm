@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestDefaultsValidate(t *testing.T) {
 	cfg := Defaults()
@@ -85,6 +88,14 @@ func TestValidateRejectsInvalidConfig(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsExcessiveScrollbackHistory(t *testing.T) {
+	cfg := Defaults()
+	cfg.Scrolling.History = MaxScrollbackHistory + 1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected excessive scrollback history to fail validation")
+	}
+}
+
 func TestValidateAcceptsBidiFlag(t *testing.T) {
 	cfg := Defaults()
 	cfg.Render.Bidi = true
@@ -116,5 +127,58 @@ func TestValidateTextCoverage(t *testing.T) {
 				t.Fatalf("Validate() error = %v, wantErr %t", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestAppearanceDefaults(t *testing.T) {
+	cfg := Defaults()
+	if cfg.Colors.Background != "#080B12E6" || cfg.Window.Opacity != 1 || !cfg.Window.Blur {
+		t.Fatalf("unexpected appearance defaults: window=%#v colors=%#v", cfg.Window, cfg.Colors)
+	}
+	if !cfg.Scrollbar.Enabled || cfg.Scrollbar.ReservedWidthPX != 12 || cfg.Scrollbar.WidthPX != 8 || cfg.Scrollbar.MarginPX != 2 || cfg.Scrollbar.RadiusPX != 4 || cfg.Scrollbar.MinThumbPX != 24 {
+		t.Fatalf("unexpected scrollbar geometry defaults: %#v", cfg.Scrollbar)
+	}
+	if cfg.Scrollbar.AutoHideDelayMS != 1000 || cfg.Scrollbar.FadeMS != 150 || cfg.Scrollbar.TrackClick != "page" {
+		t.Fatalf("unexpected scrollbar behavior defaults: %#v", cfg.Scrollbar)
+	}
+}
+
+func TestValidateAppearance(t *testing.T) {
+	tests := []struct {
+		name    string
+		edit    func(*Config)
+		wantErr bool
+	}{
+		{"rgb background", func(c *Config) { c.Colors.Background = "#010203" }, false},
+		{"rgba background", func(c *Config) { c.Colors.Background = "#01020380" }, false},
+		{"opacity zero opaque background", func(c *Config) { c.Colors.Background = "#010203"; c.Window.Opacity = 0 }, false},
+		{"exclusive opacity modes", func(c *Config) { c.Window.Opacity = .8 }, true},
+		{"opacity nan", func(c *Config) { c.Window.Opacity = math.NaN() }, true},
+		{"opacity high", func(c *Config) { c.Window.Opacity = 1.01 }, true},
+		{"bad rgba", func(c *Config) { c.Colors.Background = "#0102030" }, true},
+		{"slot too narrow", func(c *Config) { c.Scrollbar.ReservedWidthPX = 11 }, true},
+		{"radius too large", func(c *Config) { c.Scrollbar.RadiusPX = 5 }, true},
+		{"bad track mode", func(c *Config) { c.Scrollbar.TrackClick = "center" }, true},
+		{"bad thumb color", func(c *Config) { c.Scrollbar.ThumbColor = "cyan" }, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Defaults()
+			tt.edit(&cfg)
+			if err := cfg.Validate(); (err != nil) != tt.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %t", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBackgroundAlpha(t *testing.T) {
+	cfg := Defaults()
+	if got := cfg.BackgroundAlpha(); got != 0xe6 {
+		t.Fatalf("BackgroundAlpha() = %#x, want 0xe6", got)
+	}
+	cfg.Colors.Background = "#010203"
+	if got := cfg.BackgroundAlpha(); got != 0xff {
+		t.Fatalf("RGB BackgroundAlpha() = %#x, want 0xff", got)
 	}
 }

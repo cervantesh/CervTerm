@@ -24,3 +24,12 @@ func TestDefaultLuaLoadsAndValidates(t *testing.T) {
 		t.Fatalf("DefaultLua config should validate: %v", err)
 	}
 }
+
+func TestDefaultLuaContainsAppearanceSchema(t *testing.T) {
+	template := DefaultLua()
+	for _, field := range []string{"opacity =", "blur =", "scrollbar =", "reserved_width_px =", "thumb_hover_color =", "track_click ="} {
+		if !strings.Contains(template, field) {
+			t.Fatalf("default Lua template missing %q", field)
+		}
+	}
+}

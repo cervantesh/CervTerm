@@ -82,14 +82,14 @@ func (a *App) syncFocusedProjection() bool {
 	if !ok {
 		return false
 	}
+	view, ok := a.mux.PaneView(id)
+	if !ok {
+		return false
+	}
 	if a.focusedPane != id {
 		a.saveActivePaneUI()
 		a.focusedPane = id
 		a.loadPaneUI(id)
-	}
-	view, ok := a.mux.PaneView(id)
-	if !ok {
-		return false
 	}
 	a.snap = view.Snapshot
 	a.cols, a.rows = view.Snapshot.Cols, view.Snapshot.Rows
