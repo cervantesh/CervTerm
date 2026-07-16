@@ -3,14 +3,19 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
+	"strconv"
 )
+
+const MaxScrollbackHistory = 10_000
 
 type Config struct {
 	Window    WindowConfig
 	Font      FontConfig
 	Colors    ColorsConfig
 	Scrolling ScrollingConfig
+	Scrollbar ScrollbarConfig
 	Cursor    CursorConfig
 	Clipboard ClipboardConfig
 	Render    RenderConfig
@@ -23,6 +28,8 @@ type WindowConfig struct {
 	PaddingX     int
 	PaddingY     int
 	DynamicTitle bool
+	Opacity      float64
+	Blur         bool
 }
 
 type FontConfig struct {
@@ -42,6 +49,23 @@ type ScrollingConfig struct {
 	History                int
 	WheelMultiplier        int
 	HideCursorWhenScrolled bool
+}
+
+type ScrollbarConfig struct {
+	Enabled         bool
+	ReservedWidthPX int
+	WidthPX         int
+	MarginPX        int
+	RadiusPX        int
+	MinThumbPX      int
+	TrackColor      string
+	ThumbColor      string
+	ThumbHoverColor string
+	ThumbPressColor string
+	AutoHideDelayMS int
+	FadeMS          int
+	PageStep        float64
+	TrackClick      string
 }
 
 type CursorConfig struct {
@@ -78,10 +102,18 @@ type ShellConfig struct {
 
 func Defaults() Config {
 	return Config{
-		Window:    WindowConfig{Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6, DynamicTitle: true},
+		Window: WindowConfig{
+			Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6, DynamicTitle: true,
+			Opacity: 1.0, Blur: true,
+		},
 		Font:      FontConfig{Family: "Go Mono", Size: 14, Ligatures: false},
-		Colors:    ColorsConfig{Foreground: "#E6E1D8", Background: "#080B12", Cursor: "#60E8F0", SelectionBackground: "#2A6377"},
+		Colors:    ColorsConfig{Foreground: "#E6E1D8", Background: "#080B12E6", Cursor: "#60E8F0", SelectionBackground: "#2A6377"},
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
+		Scrollbar: ScrollbarConfig{
+			Enabled: true, ReservedWidthPX: 12, WidthPX: 8, MarginPX: 2, RadiusPX: 4, MinThumbPX: 24,
+			TrackColor: "#10172266", ThumbColor: "#60E8F0CC", ThumbHoverColor: "#7CF4F9E6", ThumbPressColor: "#B6FAFFFF",
+			AutoHideDelayMS: 1000, FadeMS: 150, PageStep: 0.9, TrackClick: "page",
+		},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
 		Clipboard: ClipboardConfig{OSC52: "off"},
 		Render:    RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", ZoomInHotkey: "ctrl+equal", ZoomOutHotkey: "ctrl+minus", ZoomResetHotkey: "ctrl+0", VSync: true, Redraw: "on_demand", Damage: "rows"},
@@ -97,11 +129,35 @@ func (c Config) Validate() error {
 	if c.Window.PaddingX < 0 || c.Window.PaddingY < 0 {
 		errs = append(errs, errors.New("window padding must be >= 0"))
 	}
+	if math.IsNaN(c.Window.Opacity) || math.IsInf(c.Window.Opacity, 0) || c.Window.Opacity < 0 || c.Window.Opacity > 1 {
+		errs = append(errs, errors.New("window.opacity must be a finite number between 0.0 and 1.0"))
+	}
 	if c.Font.Size <= 0 {
 		errs = append(errs, errors.New("font size must be > 0"))
 	}
-	if c.Scrolling.History < 0 || c.Scrolling.WheelMultiplier <= 0 {
-		errs = append(errs, errors.New("scrolling history must be >= 0 and wheel_multiplier > 0"))
+	if c.Scrolling.History < 0 || c.Scrolling.History > MaxScrollbackHistory || c.Scrolling.WheelMultiplier <= 0 {
+		errs = append(errs, fmt.Errorf("scrolling history must be between 0 and %d and wheel_multiplier > 0", MaxScrollbackHistory))
+	}
+	if c.Scrollbar.ReservedWidthPX < 0 || c.Scrollbar.WidthPX < 0 || c.Scrollbar.MarginPX < 0 || c.Scrollbar.RadiusPX < 0 {
+		errs = append(errs, errors.New("scrollbar dimensions must be >= 0"))
+	}
+	if c.Scrollbar.Enabled && (c.Scrollbar.WidthPX <= 0 || c.Scrollbar.ReservedWidthPX <= 0) {
+		errs = append(errs, errors.New("enabled scrollbar width_px and reserved_width_px must be > 0"))
+	}
+	if c.Scrollbar.WidthPX+2*c.Scrollbar.MarginPX > c.Scrollbar.ReservedWidthPX {
+		errs = append(errs, errors.New("scrollbar width_px plus margins must fit reserved_width_px"))
+	}
+	if c.Scrollbar.RadiusPX*2 > c.Scrollbar.WidthPX {
+		errs = append(errs, errors.New("scrollbar radius_px must not exceed half width_px"))
+	}
+	if c.Scrollbar.MinThumbPX <= 0 || math.IsNaN(c.Scrollbar.PageStep) || math.IsInf(c.Scrollbar.PageStep, 0) || c.Scrollbar.PageStep <= 0 {
+		errs = append(errs, errors.New("scrollbar min_thumb_px and page_step must be > 0"))
+	}
+	if c.Scrollbar.AutoHideDelayMS < 0 || c.Scrollbar.FadeMS < 0 {
+		errs = append(errs, errors.New("scrollbar auto_hide_delay_ms and fade_ms must be >= 0"))
+	}
+	if c.Scrollbar.TrackClick != "page" && c.Scrollbar.TrackClick != "jump" {
+		errs = append(errs, fmt.Errorf("scrollbar.track_click %q must be page or jump", c.Scrollbar.TrackClick))
 	}
 	if c.Cursor.Shape != "block" && c.Cursor.Shape != "underline" && c.Cursor.Shape != "beam" {
 		errs = append(errs, fmt.Errorf("cursor shape %q must be block, underline, or beam", c.Cursor.Shape))
@@ -127,16 +183,43 @@ func (c Config) Validate() error {
 	if c.Render.Damage != "rows" && c.Render.Damage != "frame" {
 		errs = append(errs, fmt.Errorf("render.damage %q must be rows or frame", c.Render.Damage))
 	}
-	for name, value := range map[string]string{"foreground": c.Colors.Foreground, "background": c.Colors.Background, "cursor": c.Colors.Cursor, "selection_background": c.Colors.SelectionBackground} {
+	for name, value := range map[string]string{
+		"foreground": c.Colors.Foreground, "background": c.Colors.Background, "cursor": c.Colors.Cursor,
+		"selection_background": c.Colors.SelectionBackground,
+	} {
 		if !isHexColor(value) {
-			errs = append(errs, fmt.Errorf("colors.%s must be #RRGGBB", name))
+			errs = append(errs, fmt.Errorf("colors.%s must be #RRGGBB or #RRGGBBAA", name))
 		}
+	}
+	for name, value := range map[string]string{
+		"track_color": c.Scrollbar.TrackColor, "thumb_color": c.Scrollbar.ThumbColor,
+		"thumb_hover_color": c.Scrollbar.ThumbHoverColor, "thumb_press_color": c.Scrollbar.ThumbPressColor,
+	} {
+		if !isHexColor(value) {
+			errs = append(errs, fmt.Errorf("scrollbar.%s must be #RRGGBB or #RRGGBBAA", name))
+		}
+	}
+	if c.BackgroundAlpha() < 0xff && c.Window.Opacity < 1 {
+		errs = append(errs, errors.New("transparent colors.background and window.opacity < 1 cannot be enabled together"))
 	}
 	return errors.Join(errs...)
 }
 
-var hexColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+var hexColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$`)
 
 func isHexColor(value string) bool {
 	return hexColorPattern.MatchString(value)
+}
+
+// BackgroundAlpha returns the configured background alpha. Invalid colors are
+// treated as opaque; Validate reports their syntax separately.
+func (c Config) BackgroundAlpha() uint8 {
+	if len(c.Colors.Background) != 9 {
+		return 0xff
+	}
+	n, err := strconv.ParseUint(c.Colors.Background[7:9], 16, 8)
+	if err != nil {
+		return 0xff
+	}
+	return uint8(n)
 }

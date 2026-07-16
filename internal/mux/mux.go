@@ -15,9 +15,11 @@ import (
 
 // Options configures process-local mux orchestration.
 type Options struct {
-	IngressCapacity int
-	Wake            func()
-	SetClipboard    func(PaneID, string)
+	IngressCapacity        int
+	Wake                   func()
+	SetClipboard           func(PaneID, string)
+	ScrollbackCapacity     *int
+	HideCursorWhenScrolled *bool
 }
 
 // PaneView is an immutable copy of the pane state exposed to frontends.
@@ -90,7 +92,7 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 		return 0, 0, nil, invariantError("bootstrap layout has %d panes", len(layout.Panes))
 	}
 	geometry := effectiveGeometry(layout.Panes[0])
-	p := newPane(geometry.Pane, geometry.Cols, geometry.Rows)
+	p := newPane(geometry.Pane, geometry.Cols, geometry.Rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
 	p.geometry = geometry
 	if m.options.SetClipboard != nil {
 		p.parser.SetClipboard = func(text string) { m.options.SetClipboard(p.id, text) }
@@ -193,7 +195,7 @@ func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Ev
 	}
 
 	predictedID := m.model.nextPaneID
-	newPane := newPane(predictedID, cols, rows)
+	newPane := newPane(predictedID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
 	if m.options.SetClipboard != nil {
 		newPane.parser.SetClipboard = func(text string) { m.options.SetClipboard(newPane.id, text) }
 	}
@@ -354,19 +356,6 @@ func (m *Mux) advancePane(p *pane, data []byte) []Event {
 		events = append(events, Event{Kind: PaneBell, Pane: p.id})
 	}
 	return events
-}
-
-// ScrollViewport moves one pane's viewport and refreshes its immutable snapshot.
-func (m *Mux) ScrollViewport(id PaneID, lines int) (bool, error) {
-	p, ok := m.panes[id]
-	if !ok || !m.model.paneExists(id) {
-		return false, ErrPaneNotFound
-	}
-	moved := p.terminal.ScrollViewport(lines)
-	if moved {
-		p.capture()
-	}
-	return moved, nil
 }
 
 // SearchUpward atomically finds and reveals the next match in one pane.

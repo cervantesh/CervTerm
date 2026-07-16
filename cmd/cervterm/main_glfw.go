@@ -100,13 +100,12 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer rt.Close()
 		log.Printf("loaded config: %s", path)
 	}
 	if err := cfg.Validate(); err != nil {
 		log.Fatal(err)
 	}
-	if err := glfwgl.RunWithOptions(cfg, rt); err != nil {
+	if err := glfwgl.RunWithSource(cfg, rt, path); err != nil {
 		log.Fatal(err)
 	}
 }

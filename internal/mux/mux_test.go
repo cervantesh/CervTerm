@@ -187,6 +187,49 @@ func TestMuxWriteResizeOrderingAndRetryState(t *testing.T) {
 	}
 }
 
+func TestMuxSetScrollbackCapacityAppliesToAllPanes(t *testing.T) {
+	factory := &fakeFactory{}
+	m := New(factory, Options{})
+	defer m.Shutdown()
+	if _, _, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := m.Split(1, SplitColumns, SpawnSpec{}); err != nil {
+		t.Fatal(err)
+	}
+
+	m.SetScrollbackCapacity(7)
+	if _, _, err := m.Split(1, SplitRows, SpawnSpec{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range m.PaneIDs() {
+		if got := m.panes[id].terminal.ScrollbackCapacity(); got != 7 {
+			t.Fatalf("pane %d scrollback capacity = %d, want 7", id, got)
+		}
+	}
+}
+
+func TestMuxSetHideCursorWhenScrolledAppliesToActiveAndFuturePanes(t *testing.T) {
+	factory := &fakeFactory{}
+	m := New(factory, Options{})
+	defer m.Shutdown()
+	if _, _, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16}); err != nil {
+		t.Fatal(err)
+	}
+
+	m.SetHideCursorWhenScrolled(false)
+	if m.panes[1].captureOptions.HideCursorWhenScrolled {
+		t.Fatal("active pane retained hidden-cursor policy")
+	}
+	newID, _, err := m.Split(1, SplitColumns, SpawnSpec{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.panes[newID].captureOptions.HideCursorWhenScrolled {
+		t.Fatal("future pane did not inherit live cursor policy")
+	}
+}
+
 func TestMuxEOFRetainsPaneAndCloseIsIdempotent(t *testing.T) {
 	m, session, wakes := newTestMux(t)
 	if err := session.eof(); err != nil {

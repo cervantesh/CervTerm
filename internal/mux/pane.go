@@ -24,13 +24,14 @@ const (
 )
 
 type pane struct {
-	id       PaneID
-	state    PaneState
-	terminal *core.Terminal
-	parser   vt.Parser
-	session  pty.Session
-	snapshot render.Snapshot
-	geometry PaneGeometry
+	id             PaneID
+	state          PaneState
+	terminal       *core.Terminal
+	parser         vt.Parser
+	session        pty.Session
+	snapshot       render.Snapshot
+	captureOptions render.CaptureOptions
+	geometry       PaneGeometry
 
 	pendingReplies [][]byte
 	desiredSize    pty.Size
@@ -46,12 +47,21 @@ type pane struct {
 	closeErr  error
 }
 
-func newPane(id PaneID, cols, rows int) *pane {
+func newPane(id PaneID, cols, rows int, scrollbackCapacity *int, hideCursorWhenScrolled *bool) *pane {
+	terminal := core.NewTerminal(cols, rows)
+	if scrollbackCapacity != nil {
+		terminal = core.NewTerminalWithHistory(cols, rows, *scrollbackCapacity)
+	}
+	hideCursor := true
+	if hideCursorWhenScrolled != nil {
+		hideCursor = *hideCursorWhenScrolled
+	}
 	p := &pane{
-		id:       id,
-		state:    PaneStateStarting,
-		terminal: core.NewTerminal(cols, rows),
-		done:     make(chan struct{}),
+		id:             id,
+		state:          PaneStateStarting,
+		terminal:       terminal,
+		captureOptions: render.CaptureOptions{HideCursorWhenScrolled: hideCursor},
+		done:           make(chan struct{}),
 	}
 	p.parser.Reply = func(data []byte) {
 		p.pendingReplies = append(p.pendingReplies, append([]byte(nil), data...))
@@ -61,7 +71,7 @@ func newPane(id PaneID, cols, rows int) *pane {
 }
 
 func (p *pane) capture() {
-	render.Capture(&p.snapshot, p.terminal)
+	render.CaptureWithOptions(&p.snapshot, p.terminal, p.captureOptions)
 	p.title = p.snapshot.Title
 	p.cwd = p.snapshot.Cwd
 	p.bellCount = p.snapshot.BellCount

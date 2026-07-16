@@ -130,7 +130,7 @@ func (a *App) fontSpec(size float64, scaleX, scaleY float32) fontglyph.Spec {
 		Family:     a.cfg.Font.Family,
 		Size:       size,
 		DPI:        effectiveDPI(scaleX, scaleY),
-		TextRaster: a.cfg.Render.TextRaster,
+		TextRaster: a.effectiveTextRaster(),
 	}
 }
 
@@ -183,6 +183,18 @@ func (a *App) applyPanePTYResize(id termmux.PaneID) bool {
 	return err == nil
 }
 
+func (a *App) schedulePanePTYResizeRetry(id termmux.PaneID, now time.Time) {
+	state := a.ensurePaneUI(id)
+	state.font.ptyDirty = true
+	if state.font.pending {
+		return
+	}
+	state.font.pending = true
+	state.font.pendingTarget = state.font.fontSize
+	state.font.resizeAttempt = 1
+	state.font.deadline = now.Add(paneZoomResizeRetryInitial)
+}
+
 func (a *App) setPaneFontSize(id termmux.PaneID, pts float64) {
 	state := a.ensurePaneUI(id)
 	state.font.pending = false
@@ -191,10 +203,7 @@ func (a *App) setPaneFontSize(id termmux.PaneID, pts float64) {
 	if applied && gridChanged {
 		state.font.ptyDirty = !a.applyPanePTYResize(id)
 		if state.font.ptyDirty {
-			state.font.pending = true
-			state.font.pendingTarget = state.font.fontSize
-			state.font.resizeAttempt = 1
-			state.font.deadline = time.Now().Add(paneZoomResizeRetryInitial)
+			a.schedulePanePTYResizeRetry(id, time.Now())
 		}
 	}
 	a.restoreFocusedFontProjection()

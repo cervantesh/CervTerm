@@ -8,6 +8,7 @@ package glfwgl
 type gridMetrics struct {
 	cellW, cellH       float32
 	paddingX, paddingY float32
+	contentRight       float32
 	cols, rows         int
 }
 
@@ -30,4 +31,12 @@ func (g gridMetrics) cellAt(x, y float32) (row, col int) {
 		col = g.cols - 1
 	}
 	return row, col
+}
+
+func (g gridMetrics) containsCell(x, y float32) bool {
+	right := g.contentRight
+	if right <= g.paddingX {
+		right = g.paddingX + float32(g.cols)*g.cellW
+	}
+	return x >= g.paddingX && x < right && y >= g.paddingY && y < g.paddingY+float32(g.rows)*g.cellH
 }

@@ -32,6 +32,23 @@ func TestLoadTealExample(t *testing.T) {
 	}
 }
 
+func TestTypedDefaultTealExample(t *testing.T) {
+	if _, err := exec.LookPath("tl"); err != nil {
+		t.Skip("tl not installed")
+	}
+	dir := t.TempDir()
+	copyFile(t, filepath.Join("..", "..", "docs", "examples", "cervterm.d.tl"), filepath.Join(dir, "cervterm.d.tl"))
+	copyFile(t, filepath.Join("..", "..", "docs", "examples", "cervterm.tl"), filepath.Join(dir, "cervterm.tl"))
+	cfg, rt, err := Load(filepath.Join(dir, "cervterm.tl"), config.Defaults())
+	if err != nil {
+		t.Fatalf("typed default Load failed: %v", err)
+	}
+	defer rt.Close()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("typed default should validate: %v", err)
+	}
+}
+
 func copyFile(t *testing.T, src, dst string) {
 	t.Helper()
 	data, err := os.ReadFile(src)

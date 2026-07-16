@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 // TestViewportTopGlobalRow pins the canonical scrollback->viewport arithmetic:
 // the top visible global row is scrollbackRows - displayOffset. app_search and
@@ -94,5 +97,69 @@ func TestGlobalRowToViewport(t *testing.T) {
 	}
 	if _, ok := term.GlobalRowToViewport(4); ok {
 		t.Fatal("global row 4 should be off-screen at offset 0")
+	}
+}
+
+func TestScrollbackCapacityRetainsNewestRows(t *testing.T) {
+	term := NewTerminalWithHistory(2, 2, 3)
+	for i := 1; i <= 5; i++ {
+		term.appendScrollbackLine([]Cell{{Rune: rune('0' + i)}, {Rune: ' '}}, i%2 == 0)
+	}
+	if got := term.ScrollbackLines(); got != 3 {
+		t.Fatalf("ScrollbackLines() = %d, want 3", got)
+	}
+	rows, wraps := term.physicalRows()
+	if got := []rune{rows[0][0].Rune, rows[1][0].Rune, rows[2][0].Rune}; !slices.Equal(got, []rune{'3', '4', '5'}) {
+		t.Fatalf("ring rows = %q, want 345", string(got))
+	}
+	if wraps[0] || !wraps[1] || wraps[2] {
+		t.Fatalf("wrap flags = %v, want false,true,false", wraps[:3])
+	}
+	term.ScrollViewport(3)
+	term.SetScrollbackCapacity(2)
+	if term.ScrollbackCapacity() != 2 || term.ScrollbackLines() != 2 || term.DisplayOffset() != 2 {
+		t.Fatalf("after shrink: capacity=%d rows=%d offset=%d", term.ScrollbackCapacity(), term.ScrollbackLines(), term.DisplayOffset())
+	}
+	rows, _ = term.physicalRows()
+	if rows[0][0].Rune != '4' || rows[1][0].Rune != '5' {
+		t.Fatalf("shrink retained %q%q, want 45", rows[0][0].Rune, rows[1][0].Rune)
+	}
+	term.SetScrollbackCapacity(5)
+	if term.ScrollbackLines() != 2 || term.ScrollbackCapacity() != 5 {
+		t.Fatalf("grow changed rows: capacity=%d rows=%d", term.ScrollbackCapacity(), term.ScrollbackLines())
+	}
+}
+
+func TestZeroScrollbackCapacity(t *testing.T) {
+	term := NewTerminalWithHistory(2, 2, 0)
+	term.appendScrollbackLine(make([]Cell, 2), false)
+	if term.ScrollbackLines() != 0 || term.ScrollViewport(1) {
+		t.Fatalf("zero-capacity terminal retained history: rows=%d offset=%d", term.ScrollbackLines(), term.DisplayOffset())
+	}
+}
+
+func TestScrollbackCapacityClampsExcessiveValues(t *testing.T) {
+	term := NewTerminalWithHistory(2, 2, maxScrollbackRows+1)
+	if got := term.ScrollbackCapacity(); got != maxScrollbackRows {
+		t.Fatalf("constructor capacity = %d, want %d", got, maxScrollbackRows)
+	}
+	term.SetScrollbackCapacity(maxScrollbackRows + 1)
+	if got := term.ScrollbackCapacity(); got != maxScrollbackRows {
+		t.Fatalf("live capacity = %d, want %d", got, maxScrollbackRows)
+	}
+}
+
+func TestScrollbackCapacityChangeWhileAlternateScreen(t *testing.T) {
+	term := NewTerminalWithHistory(2, 2, 3)
+	term.appendScrollbackLine([]Cell{{Rune: 'a'}, {}}, false)
+	term.SetAlternateScreenMode(true)
+	term.SetScrollbackCapacity(5)
+	term.appendScrollbackLine([]Cell{{Rune: 'x'}, {}}, false)
+	if term.ScrollbackCapacity() != 0 || term.ScrollbackLines() != 0 {
+		t.Fatalf("alternate screen gained history: capacity=%d rows=%d", term.ScrollbackCapacity(), term.ScrollbackLines())
+	}
+	term.SetAlternateScreenMode(false)
+	if term.ScrollbackCapacity() != 5 || term.ScrollbackLines() != 1 {
+		t.Fatalf("primary history not preserved/resized: capacity=%d rows=%d", term.ScrollbackCapacity(), term.ScrollbackLines())
 	}
 }

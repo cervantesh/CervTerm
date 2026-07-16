@@ -17,9 +17,7 @@ Add a `keys` array to the returned config table. Each entry has:
   `shift`, and `super`. `cmd` and `win` are aliases for `super`.
 - `action`: required function. CervTerm calls it with one `term` handle.
 
-User keybindings run before built-in shortcuts. If a user binding matches, the
-key is consumed. If the action fails, CervTerm shows a transient `script error:`
-notice in the status area and still consumes the key.
+User keybindings run before most built-in shortcuts. The fixed `ctrl+shift+r` config-reload chord and active search UI take priority so recovery remains available; otherwise a matching user binding is consumed. If an action fails, CervTerm shows a transient `script error:` notice in the status area.
 
 ```lua
 return {
@@ -103,6 +101,12 @@ All row and column numbers at the Lua boundary are 1-based.
 | `term:font_size()` | Returns the active font size in points. |
 | `term:set_font_size(pts)` | Sets the font size (clamped to 6..72), rebuilding the glyph atlas and reflowing the grid. |
 | `term:search(query)` | Jumps to the first (bottom-most) case-insensitive match for `query` across scrollback and the live screen, scrolls it into view and highlights it; returns whether a match was found. Non-interactive counterpart to the search bar. An empty query is a no-op and returns `false`. |
+| `term:window_opacity()` / `term:set_window_opacity(n)` | Gets or sets compositor opacity in `[0,1]`; a translucent background and opacity below 1 are mutually exclusive. |
+| `term:background()` / `term:set_background(color)` | Gets or sets `#RRGGBB`/`#RRGGBBAA` terminal background. |
+| `term:blur()` / `term:set_blur(enabled)` | Gets or requests optional platform blur. Windows preserves transparency when its native material is incompatible. The macOS AppKit, KDE X11, and KDE Wayland providers are experimental and compile-validated but await real-compositor community smoke testing; unsupported platforms preserve transparency without terminating. |
+| `term:scrolling()` / `term:set_scrolling(table)` | Gets or atomically updates history capacity (0..10000 rows per pane), wheel multiplier, and scrolled-cursor policy. |
+| `term:scrollbar()` / `term:set_scrollbar(table)` | Gets or atomically updates the complete scrollbar configuration table. |
+| `term:reload_config()` | Queues a safe reload of the selected source and returns whether a source is active. |
 
 ### Interactive search
 
@@ -334,6 +338,10 @@ If `PROMPT_COMMAND` already contains hooks, compose `__cervterm_osc7` with them
 instead of replacing them. The byte-oriented encoder percent-escapes spaces,
 reserved characters, and UTF-8 path bytes before emitting the OSC sequence.
 
+## Hot reload
+
+CervTerm polls only the selected `.lua` or `.tl` source and debounces saves. A selected Teal file remains the watch identity, so `tl gen` updating its `.lua` sibling cannot recurse. Press `ctrl+shift+r` or call `term:reload_config()` for a manual reload. Reload builds and validates a new config/runtime before changing active state; an error leaves the previous settings and bindings alive and shows a notice. Colors, opacity/blur, scrollbar, and scrolling are live. Shell and other startup-only changes are reported as requiring restart.
+
 ## Teal
 
 Teal configs are checked and generated before CervTerm loads them. Copy
@@ -374,5 +382,5 @@ User config is the user's own file and is not sandboxed. Filesystem and network
 permission controls are future work for third-party plugin support.
 
 Event handlers observe only: an `output` handler cannot rewrite or suppress the
-bytes shown. This slice does not add hot reload, command palettes, key repeat
-dispatch, multiple handlers per event, or multi-chord sequences.
+bytes shown. This runtime does not add command palettes, multiple handlers per
+event, or multi-chord sequences.

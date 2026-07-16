@@ -23,4 +23,8 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 	return errors.New("glfw frontend requires building with -tags glfw")
 }
 
+func RunWithSource(cfg config.Config, rt *script.Runtime, sourcePath string) error {
+	return errors.New("glfw frontend requires building with -tags glfw")
+}
+
 type glyphAtlas struct{}

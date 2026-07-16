@@ -3,6 +3,8 @@
 package glfwgl
 
 import (
+	"time"
+
 	"cervterm/internal/script"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -90,7 +92,7 @@ func (a *App) handleScrollKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	if mods&glfw.ModShift == 0 || mods&(glfw.ModControl|glfw.ModAlt|glfw.ModSuper) != 0 {
 		return false
 	}
-	_, view, ok := a.focusedView()
+	pane, view, ok := a.focusedView()
 	if !ok {
 		return true
 	}
@@ -112,10 +114,13 @@ func (a *App) handleScrollKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	default:
 		return false
 	}
-	moved, _ := a.mux.ScrollViewport(a.focusedPane, lines)
+	moved, _ := a.mux.ScrollViewport(pane, lines)
 	if moved {
+		a.recordPaneScroll(pane)
+		if pane == a.focusedPane && a.window != nil && a.cfg.Scrollbar.Enabled {
+			a.scrollbar.lastActivity = time.Now()
+		}
 		a.requestRedraw()
-		a.markScrollEvent()
 	}
 	return true
 }
