@@ -29,7 +29,7 @@ jobs:
       - name: Generate Windows resources
         run: |
           go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
-          go run ./scripts/generate-windows-resource.go -arch amd64
+          go run ./scripts/generate-windows-resource.go -arch amd64 -version "%RELEASE_VERSION%"
       - name: Build Windows package
         run: |
           go run ./scripts/package-beta.go -version "%RELEASE_VERSION%" -outdir dist
