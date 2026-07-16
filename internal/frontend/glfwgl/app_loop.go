@@ -238,14 +238,17 @@ func (a *App) resizeGridToWindow() bool {
 
 // resizePTYToGrid applies each pane's latest desired size at a settlement
 // boundary and reports whether every pane accepted it.
-func (a *App) resizePTYToGrid() bool {
+func (a *App) resizePTYToGrid() bool { return a.resizePTYToGridReporting(true) }
+
+func (a *App) resizePTYToGridReporting(reportFailure bool) bool {
 	succeeded := true
 	for _, id := range a.mux.PaneIDs() {
 		events, err := a.mux.ApplyResize(id)
-		a.handleMuxEvents(events)
+		if err == nil || reportFailure {
+			a.handleMuxEvents(events)
+		}
 		if err != nil {
 			succeeded = false
-			a.Notify("resize: " + err.Error())
 		}
 	}
 	return succeeded
