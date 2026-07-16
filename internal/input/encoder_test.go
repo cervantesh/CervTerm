@@ -62,6 +62,7 @@ func TestEncodeModifiedKeys(t *testing.T) {
 		{name: "ctrl left", event: Event{Key: KeyLeft, Mods: ModCtrl}, want: "\x1b[1;5D"},
 		{name: "ctrl shift page up", event: Event{Key: KeyPageUp, Mods: ModCtrl | ModShift}, want: "\x1b[5;6~"},
 		{name: "alt f4", event: Event{Key: KeyF4, Mods: ModAlt}, want: "\x1b[1;3S"},
+		{name: "shift tab", event: Event{Key: KeyTab, Mods: ModShift}, want: "\x1b[Z"},
 	}
 
 	for _, tt := range tests {

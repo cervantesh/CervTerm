@@ -80,6 +80,11 @@ func EncodeWithMode(event Event, mode Mode) ([]byte, bool) {
 	case KeyBackspace:
 		return []byte("\x7f"), true
 	case KeyTab:
+		if event.Mods == ModShift {
+			// Xterm/VT back-tab (CBT). Interactive TUIs such as Pi distinguish
+			// this from the plain HT byte used by Tab.
+			return []byte("\x1b[Z"), true
+		}
 		return []byte("\t"), true
 	case KeyEscape:
 		return []byte("\x1b"), true
