@@ -26,6 +26,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Redistributable SVG text fixture table and vttest capture workflow notes/script.
 - Windows packaging metadata: manifest, version info, resource script, SVG icon source, and generated `.ico`.
 - Backend-neutral GPU renderer seam (`internal/frontend/gpu` `Renderer`) with an OpenGL adapter and Vulkan/Metal scaffolding stubs, so future GPU backends can plug in behind one interface. (#84, #85, #86)
+- Build-tagged WebGPU backend scaffold, parallel to the Vulkan and Metal stubs, without changing current OpenGL builds.
 ### Security
 
 - OSC 52 clipboard write is now OFF by default (was "write"); set `clipboard.osc52 = "write"` to restore. Clipboard reads via OSC 52 remain denied. (#61)
@@ -39,6 +40,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Windows: CervTerm now advertises ANSI color support (`ANSICON`) so console apps that gate coloring on it (Django, colorama/supports-color CLIs) emit color instead of monochrome. CervTerm already rendered ANSI; the apps just weren't emitting it.
 - Zoom animates frame by frame while only the ConPTY resize is debounced, so rapid zoom no longer garbles or duplicates scrollback. (#59)
 - Scrollback view stays pinned to content while output streams in. (#57)
+- Shift+Tab now emits the standard back-tab sequence, restoring reverse-tab shortcuts in interactive TUIs such as Pi.
 
 ### Changed
 
