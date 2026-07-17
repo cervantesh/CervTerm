@@ -16,13 +16,11 @@ import (
 )
 
 func TestMuxBindingsSplitFocusCloseAndPaneUIIsolation(t *testing.T) {
-	a := newRunningMuxTestApp(t)
+	a, factory := newRecordingActionApp(t)
 	first := a.focusedPane
 	a.selection = selectionState{active: true, start: termsel.Point{Row: 1, Col: 2}, end: termsel.Point{Row: 1, Col: 4}}
 
-	if !a.handleMuxKey(glfw.KeyEqual, glfw.ModAlt|glfw.ModShift) {
-		t.Fatal("column split chord was not consumed")
-	}
+	a.handleKeyEvent(glfw.KeyEqual, glfw.Press, glfw.ModAlt|glfw.ModShift)
 	ids := a.mux.PaneIDs()
 	if len(ids) != 2 || a.focusedPane == first {
 		t.Fatalf("split panes=%v focus=%d first=%d", ids, a.focusedPane, first)
@@ -33,22 +31,22 @@ func TestMuxBindingsSplitFocusCloseAndPaneUIIsolation(t *testing.T) {
 	}
 	a.selection = selectionState{active: true, start: termsel.Point{Row: 2, Col: 3}, end: termsel.Point{Row: 2, Col: 5}}
 
-	if !a.handleMuxKey(glfw.KeyLeft, glfw.ModAlt) || a.focusedPane != first {
+	a.handleKeyEvent(glfw.KeyLeft, glfw.Press, glfw.ModAlt)
+	if a.focusedPane != first {
 		t.Fatalf("left focus = %d, want %d", a.focusedPane, first)
 	}
 	if !a.selection.active || a.selection.start != (termsel.Point{Row: 1, Col: 2}) {
 		t.Fatalf("first pane selection was not restored: %#v", a.selection)
 	}
-	if !a.handleMuxKey(glfw.KeyRight, glfw.ModAlt) || a.focusedPane != second {
+	a.handleKeyEvent(glfw.KeyRight, glfw.Press, glfw.ModAlt)
+	if a.focusedPane != second {
 		t.Fatalf("right focus = %d, want %d", a.focusedPane, second)
 	}
 	if !a.selection.active || a.selection.start != (termsel.Point{Row: 2, Col: 3}) {
 		t.Fatalf("second pane selection was not restored: %#v", a.selection)
 	}
 
-	if !a.handleMuxKey(glfw.KeyW, glfw.ModControl|glfw.ModShift) {
-		t.Fatal("close chord was not consumed")
-	}
+	a.handleKeyEvent(glfw.KeyW, glfw.Press, glfw.ModControl|glfw.ModShift)
 	if got := a.mux.PaneIDs(); len(got) != 1 || got[0] != first || a.focusedPane != first {
 		t.Fatalf("close/collapse panes=%v focus=%d", got, a.focusedPane)
 	}
@@ -58,13 +56,12 @@ func TestMuxBindingsSplitFocusCloseAndPaneUIIsolation(t *testing.T) {
 	if _, exists := a.pendingPaneResize[second]; exists {
 		t.Fatalf("closed pane %d retained a pending resize", second)
 	}
+	assertNoRecordedPaneInput(t, factory)
 }
 
 func TestMuxRowSplitCreatesIndependentGeometry(t *testing.T) {
-	a := newRunningMuxTestApp(t)
-	if !a.handleMuxKey(glfw.KeyMinus, glfw.ModAlt|glfw.ModShift) {
-		t.Fatal("row split chord was not consumed")
-	}
+	a, factory := newRecordingActionApp(t)
+	a.handleKeyEvent(glfw.KeyMinus, glfw.Press, glfw.ModAlt|glfw.ModShift)
 	layout, err := a.mux.Layout()
 	if err != nil {
 		t.Fatal(err)
@@ -74,6 +71,16 @@ func TestMuxRowSplitCreatesIndependentGeometry(t *testing.T) {
 	}
 	if layout.Panes[0].Pixels.Bottom() > layout.Dividers[0].Pixels.Y || layout.Panes[1].Pixels.Y < layout.Dividers[0].Pixels.Bottom() {
 		t.Fatalf("row split overlaps divider: %#v", layout)
+	}
+	assertNoRecordedPaneInput(t, factory)
+}
+
+func assertNoRecordedPaneInput(t *testing.T, factory *recordingPaneFactory) {
+	t.Helper()
+	for i, session := range factory.sessions {
+		if got := session.text(); got != "" {
+			t.Fatalf("pane session %d received binding bytes %q", i, got)
+		}
 	}
 }
 
