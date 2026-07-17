@@ -27,13 +27,14 @@ type Composition struct {
 }
 
 type compositionBuilder struct {
-	state      *lua.LState
-	root       *lua.LTable
-	provenance Provenance
-	maxNodes   int
-	nodes      int
-	document   Document
-	origin     ProvenanceOrigin
+	state       *lua.LState
+	root        *lua.LTable
+	provenance  Provenance
+	maxNodes    int
+	nodes       int
+	document    Document
+	origin      ProvenanceOrigin
+	deferColors bool
 }
 
 // ComposeSourceGraph applies schema-driven low-to-high merge semantics to a
@@ -55,12 +56,16 @@ func ComposeSourceGraph(state *lua.LState, graph *SourceGraph, options Compositi
 	if err != nil {
 		return Composition{}, err
 	}
-	builder := &compositionBuilder{state: state, root: state.NewTable(), provenance: newProvenance(), maxNodes: maxNodes}
+	builder := &compositionBuilder{state: state, root: state.NewTable(), provenance: newProvenance(), maxNodes: maxNodes, deferColors: true}
 	builder.root.RawSetString("config_version", lua.LNumber(CurrentSchemaVersion))
 	builder.seedDefaults(rootSchema, "")
+	colorSchemes := make(namedColorSchemeCatalog)
 	for _, source := range graph.Sources {
 		builder.document = source.Document
 		builder.origin = sourceLayerOrigin(graph, source, LayerInclude, source.RequestedPath)
+		if err := builder.mergeColorSchemeDeclarations(graph, source, colorSchemes); err != nil {
+			return Composition{}, err
+		}
 		if err := builder.mergeRecord(builder.root, source.Document.Root, rootSchema, ""); err != nil {
 			return Composition{}, err
 		}
@@ -75,7 +80,31 @@ func ComposeSourceGraph(state *lua.LState, graph *SourceGraph, options Compositi
 			return Composition{}, err
 		}
 	}
-	if err := builder.applyCLIOverrides(options.CLIOverrides); err != nil {
+	if err := builder.applyCLIOverrides(colorOverrides(options.CLIOverrides, false)); err != nil {
+		return Composition{}, err
+	}
+	if err := builder.applySelectedColorScheme(colorSchemes); err != nil {
+		return Composition{}, err
+	}
+	for _, source := range graph.Sources {
+		builder.document = source.Document
+		builder.origin = sourceLayerOrigin(graph, source, LayerInclude, source.RequestedPath)
+		if err := builder.mergeExplicitColors(source.Document.Root); err != nil {
+			return Composition{}, err
+		}
+	}
+	if selection.Environment != nil {
+		if err := builder.applyNamedColors(graph, "environments", selection.Environment.Name, LayerEnvironment); err != nil {
+			return Composition{}, err
+		}
+	}
+	if selection.Profile != nil {
+		if err := builder.applyNamedColors(graph, "profiles", selection.Profile.Name, LayerProfile); err != nil {
+			return Composition{}, err
+		}
+	}
+	builder.deferColors = false
+	if err := builder.applyCLIOverrides(colorOverrides(options.CLIOverrides, true)); err != nil {
 		return Composition{}, err
 	}
 	present := make(map[string]struct{})
@@ -107,6 +136,25 @@ func (b *compositionBuilder) applyNamedLayer(graph *SourceGraph, field, name str
 	return nil
 }
 
+func (b *compositionBuilder) applyNamedColors(graph *SourceGraph, field, name string, layer ProvenanceLayer) error {
+	for _, source := range graph.Sources {
+		declarations, ok := source.Document.Root.RawGetString(field).(*lua.LTable)
+		if !ok {
+			continue
+		}
+		partial, ok := declarations.RawGetString(name).(*lua.LTable)
+		if !ok {
+			continue
+		}
+		b.document = source.Document
+		b.origin = sourceLayerOrigin(graph, source, layer, name)
+		if err := b.mergeExplicitColors(partial); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchema, prefix string) error {
 	for _, child := range schema.children {
 		value := src.RawGetString(child.name)
@@ -114,6 +162,12 @@ func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchem
 			continue
 		}
 		path := joinPath(prefix, child.name)
+		if b.document.AuthoredVersion == 1 && path == "color_scheme" {
+			continue
+		}
+		if b.deferColors && path == "colors" {
+			continue
+		}
 		if isUnsetValue(value) {
 			if b.document.AuthoredVersion != 2 {
 				continue
@@ -381,7 +435,7 @@ func fixedLeafPaths(schema fieldSchema, path string) []schemaLeaf {
 
 func legacyValueCompatible(value lua.LValue, kind ValueKind) bool {
 	switch kind {
-	case KindTable, KindStringList, KindStringMap, KindIndexedColorMap, KindKeyList, KindEvents:
+	case KindTable, KindStringList, KindStringMap, KindIndexedColorMap, KindKeyList, KindEvents, KindColorSchemeMap:
 		_, ok := value.(*lua.LTable)
 		return ok
 	case KindString:

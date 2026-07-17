@@ -13,6 +13,7 @@ const (
 	LayerPrimary     ProvenanceLayer = "primary"
 	LayerEnvironment ProvenanceLayer = "environment"
 	LayerProfile     ProvenanceLayer = "profile"
+	LayerColorScheme ProvenanceLayer = "color_scheme"
 	LayerCLI         ProvenanceLayer = "cli"
 	LayerRuntime     ProvenanceLayer = "runtime"
 )

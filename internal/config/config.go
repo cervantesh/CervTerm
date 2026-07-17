@@ -11,15 +11,16 @@ import (
 const MaxScrollbackHistory = 10_000
 
 type Config struct {
-	Window    WindowConfig
-	Font      FontConfig
-	Colors    ColorsConfig
-	Scrolling ScrollingConfig
-	Scrollbar ScrollbarConfig
-	Cursor    CursorConfig
-	Clipboard ClipboardConfig
-	Render    RenderConfig
-	Shell     ShellConfig
+	Window      WindowConfig
+	Font        FontConfig
+	ColorScheme string `json:",omitempty"`
+	Colors      ColorsConfig
+	Scrolling   ScrollingConfig
+	Scrollbar   ScrollbarConfig
+	Cursor      CursorConfig
+	Clipboard   ClipboardConfig
+	Render      RenderConfig
+	Shell       ShellConfig
 }
 
 type WindowConfig struct {

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 
 	lua "github.com/yuin/gopher-lua"
 )
@@ -21,9 +22,38 @@ func loadLua(evalPath, sourcePath string, base Config) (Config, error) {
 	if !ok {
 		return base, fmt.Errorf("config must return a table, got %s", value.Type().String())
 	}
-	document, err := DecodeDocument(sourcePath, table)
+	var document Document
+	var err error
+	version, versionErr := documentVersion(sourcePath, table)
+	if versionErr != nil {
+		return base, versionErr
+	}
+	hasNamedScheme := version >= 2 && (table.RawGetString("color_scheme") != lua.LNil || table.RawGetString("color_schemes") != lua.LNil)
+	if hasNamedScheme {
+		document, err = decodeCompositionDocument(sourcePath, table, map[string]fieldSchema{
+			"color_schemes": {name: "color_schemes", kind: KindColorSchemeMap},
+		})
+	} else {
+		document, err = DecodeDocument(sourcePath, table)
+	}
 	if err != nil {
 		return base, err
+	}
+	if hasNamedScheme {
+		canonical, canonicalErr := filepath.Abs(sourcePath)
+		if canonicalErr != nil {
+			return base, canonicalErr
+		}
+		graph := &SourceGraph{
+			Primary: canonical,
+			Sources: []SourceNode{{RequestedPath: sourcePath, CanonicalPath: canonical, SelectedPath: evalPath, Document: document}},
+			state:   state,
+		}
+		composition, composeErr := ComposeSourceGraph(state, graph, CompositionOptions{})
+		if composeErr != nil {
+			return base, composeErr
+		}
+		return FromDocument(base, composition.Document), nil
 	}
 	return FromDocument(base, document), nil
 }

@@ -10,3 +10,4 @@
 | [0006-bound-terminal-image-lifetime-and-resources.md](./0006-bound-terminal-image-lifetime-and-resources.md) | Proposed | Bound terminal image lifetime and resources | 2026-07-16 | Before Phase 13 |
 | [0007-persist-workspace-layouts-not-live-processes.md](./0007-persist-workspace-layouts-not-live-processes.md) | Proposed | Persist workspace layouts, not live processes | 2026-07-16 | Before Phase 9 |
 | [0008-gate-terminal-originated-external-side-effects.md](./0008-gate-terminal-originated-external-side-effects.md) | Proposed | Gate terminal-originated external side effects | 2026-07-16 | Before Phase 10 |
+| [0009-compose-local-named-color-schemes-before-inline-colors.md](./0009-compose-local-named-color-schemes-before-inline-colors.md) | Accepted | Compose local named color schemes before inline colors | 2026-07-17 | Phase 3 |
