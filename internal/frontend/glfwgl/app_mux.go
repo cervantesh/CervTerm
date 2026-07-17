@@ -5,7 +5,6 @@ package glfwgl
 import (
 	"fmt"
 
-	termaction "cervterm/internal/action"
 	termmux "cervterm/internal/mux"
 	termsel "cervterm/internal/selection"
 
@@ -239,32 +238,6 @@ func (a *App) paneAtWindowPosition(x, y float64) (termmux.PaneID, termsel.Point,
 		return pane.Pane, point, true
 	}
 	return 0, termsel.Point{}, false
-}
-
-func (a *App) handleMuxKey(key glfw.Key, mods glfw.ModifierKey) bool {
-	if a.focusedPane == 0 {
-		return false
-	}
-	var command termaction.Action
-	switch {
-	case mods&glfw.ModAlt != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyEqual:
-		command = termaction.SplitPane{Axis: termaction.SplitColumns}
-	case mods&glfw.ModAlt != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyMinus:
-		command = termaction.SplitPane{Axis: termaction.SplitRows}
-	case mods&glfw.ModAlt != 0 && key == glfw.KeyLeft:
-		command = termaction.FocusPane{Direction: termaction.FocusLeft}
-	case mods&glfw.ModAlt != 0 && key == glfw.KeyRight:
-		command = termaction.FocusPane{Direction: termaction.FocusRight}
-	case mods&glfw.ModAlt != 0 && key == glfw.KeyUp:
-		command = termaction.FocusPane{Direction: termaction.FocusUp}
-	case mods&glfw.ModAlt != 0 && key == glfw.KeyDown:
-		command = termaction.FocusPane{Direction: termaction.FocusDown}
-	case mods&glfw.ModControl != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyW:
-		command = termaction.ClosePane{}
-	default:
-		return false
-	}
-	return a.dispatchReservedAction(command, key, mods, false)
 }
 
 func (a *App) pointForPaneWindowPosition(id termmux.PaneID, x, y float64) (termsel.Point, bool) {

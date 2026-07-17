@@ -16,9 +16,7 @@ import (
 func splitZoomTestPane(t *testing.T, a *App) (termmux.PaneID, termmux.PaneID) {
 	t.Helper()
 	first := a.focusedPane
-	if !a.handleMuxKey(glfw.KeyEqual, glfw.ModAlt|glfw.ModShift) {
-		t.Fatal("column split chord was not consumed")
-	}
+	a.handleKeyEvent(glfw.KeyEqual, glfw.Press, glfw.ModAlt|glfw.ModShift)
 	second := a.focusedPane
 	if first == 0 || second == 0 || first == second {
 		t.Fatalf("split focus first=%d second=%d", first, second)
@@ -51,10 +49,11 @@ func TestPerPaneZoomStateIsIndependent(t *testing.T) {
 }
 
 func TestZoomResetTargetsConfiguredBaseForFocusedPane(t *testing.T) {
-	a := newRunningMuxTestApp(t)
+	a, factory := newRecordingActionApp(t)
 	a.cfg.Font.Size = 13.5
 	a.cfg.Render.ZoomResetHotkey = "ctrl+0"
 	a.initZoomHotkeys()
+	a.initActionBindings()
 	if !a.zoom.resetOK || a.zoom.base != 13.5 {
 		t.Fatalf("reset binding/base = ok:%v base:%v", a.zoom.resetOK, a.zoom.base)
 	}
@@ -63,15 +62,14 @@ func TestZoomResetTargetsConfiguredBaseForFocusedPane(t *testing.T) {
 	secondState := a.ensurePaneUI(second)
 	secondState.font.fontSize = 21
 
-	if !a.handleZoomKey(glfw.Key0, glfw.ModControl) {
-		t.Fatal("configured reset chord was not consumed")
-	}
+	a.handleKeyEvent(glfw.Key0, glfw.Press, glfw.ModControl)
 	if !secondState.font.pending || secondState.font.pendingTarget != 13.5 {
 		t.Fatalf("focused reset state = %#v, want pending configured base 13.5", secondState.font)
 	}
 	if got := a.ensurePaneUI(first).font; got != firstBefore {
 		t.Fatalf("reset changed sibling state: got %#v, want %#v", got, firstBefore)
 	}
+	assertNoRecordedPaneInput(t, factory)
 }
 
 func TestPendingZoomRemainsAttachedAfterFocusChange(t *testing.T) {
@@ -256,9 +254,7 @@ func TestSplitInheritsFontAfterCommittedResizeError(t *testing.T) {
 	a.handleMuxEvents(events)
 	a.ensurePaneUI(first).font = paneFontState{fontSize: 19, cellW: 12, cellH: 24, baseline: 18}
 	factory.sessions[0].setResizeError(errors.New("persistent resize failure"))
-	if !a.handleMuxKey(glfw.KeyEqual, glfw.ModAlt|glfw.ModShift) {
-		t.Fatal("split chord was not consumed")
-	}
+	a.handleKeyEvent(glfw.KeyEqual, glfw.Press, glfw.ModAlt|glfw.ModShift)
 	second := a.focusedPane
 	if second == first || second == 0 {
 		t.Fatalf("split did not commit a new pane: %d", second)

@@ -284,3 +284,10 @@ func TestLegacyCallbackRepeatAndCharacterSuppressionRemainExact(t *testing.T) {
 		t.Fatalf("callback press: notice=%q suppress=%v", a.notice, a.suppressNextChar)
 	}
 }
+
+func TestKeyPipelineClipboardRepeatsDoNotLeakToPTY(t *testing.T) {
+	a, factory := newRecordingActionApp(t)
+	a.handleKeyEvent(glfw.KeyV, glfw.Repeat, glfw.ModControl)
+	a.handleKeyEvent(glfw.KeyC, glfw.Repeat, glfw.ModControl|glfw.ModShift)
+	assertNoRecordedPaneInput(t, factory)
+}

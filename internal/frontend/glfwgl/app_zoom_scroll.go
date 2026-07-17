@@ -41,28 +41,6 @@ func (a *App) initZoomHotkeys() {
 	}
 }
 
-// handleZoomKey applies zoom-in/out/reset to the focused pane. It selects a shared
-// atlas context and updates only that pane's grid; the chord is consumed and never
-// reaches the PTY. Runs on the main loop thread with the GL context current.
-func (a *App) handleZoomKey(key glfw.Key, mods glfw.ModifierKey) bool {
-	spec, ok := specFromGLFW(key, mods)
-	if !ok {
-		return false
-	}
-	var command termaction.Action
-	switch {
-	case a.zoom.resetOK && spec == a.zoom.reset:
-		command = termaction.Zoom{Mode: termaction.ZoomReset}
-	case a.zoom.inOK && spec == a.zoom.in:
-		command = termaction.Zoom{Mode: termaction.ZoomDelta, Amount: zoomFontStep}
-	case a.zoom.outOK && spec == a.zoom.out:
-		command = termaction.Zoom{Mode: termaction.ZoomDelta, Amount: -zoomFontStep}
-	default:
-		return false
-	}
-	return a.dispatchReservedAction(command, key, mods, false)
-}
-
 // handleZoomWheel zooms on Ctrl+wheel (up = in, down = out), the standard
 // terminal gesture. Returns true when Ctrl was held so the caller skips the
 // normal scroll/mouse-report path. GLFW omits modifiers from the scroll
@@ -83,28 +61,4 @@ func (a *App) handleZoomWheel(yoff float64) bool {
 		a.notifyActionError(err)
 	}
 	return true
-}
-
-// handleScrollKey scrolls the scrollback viewport for Shift+PageUp/PageDown and
-// Shift+Home/End. Plain (unshifted) PageUp/Home/etc. fall through to the normal
-// encode path so full-screen apps still receive them. Returns true when the
-// chord was a scroll chord (consumed, never sent to the PTY).
-func (a *App) handleScrollKey(key glfw.Key, mods glfw.ModifierKey) bool {
-	if mods&glfw.ModShift == 0 || mods&(glfw.ModControl|glfw.ModAlt|glfw.ModSuper) != 0 {
-		return false
-	}
-	var command termaction.Scroll
-	switch key {
-	case glfw.KeyPageUp:
-		command = termaction.Scroll{Unit: termaction.ScrollPage, Amount: 1}
-	case glfw.KeyPageDown:
-		command = termaction.Scroll{Unit: termaction.ScrollPage, Amount: -1}
-	case glfw.KeyHome:
-		command = termaction.Scroll{Unit: termaction.ScrollBuffer, Amount: 1}
-	case glfw.KeyEnd:
-		command = termaction.Scroll{Unit: termaction.ScrollBuffer, Amount: -1}
-	default:
-		return false
-	}
-	return a.dispatchReservedAction(command, key, mods, false)
 }
