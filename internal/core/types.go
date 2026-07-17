@@ -133,6 +133,8 @@ type Terminal struct {
 	savedWrapNext      bool
 	hasSavedCursor     bool
 	attr               Attr
+	paletteBase        PaletteBase
+	paletteOverrides   PaletteOverrides
 	title              string
 	cwd                string
 	cwdSeq             int

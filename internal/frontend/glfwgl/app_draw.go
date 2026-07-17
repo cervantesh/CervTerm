@@ -44,8 +44,7 @@ func (a *App) draw() {
 	background := configColor(a.cfg.Colors.Background, color.RGBA{0x08, 0x0B, 0x12, 0xFF})
 	cursorColor := configColor(a.cfg.Colors.Cursor, a.chrome.accent)
 	selectionColor := configColor(a.cfg.Colors.SelectionBackground, color.RGBA{0x2A, 0x63, 0x77, 0xFF})
-	defaultFG := configColor(a.cfg.Colors.Foreground, rgb(core.DefaultFG))
-	colorResolver := configuredColorResolver(a.cfg.Colors)
+	paletteBase := configuredPaletteBase(a.cfg.Colors)
 	a.updateFPS()
 	a.r.Clear(background)
 
@@ -66,6 +65,10 @@ func (a *App) draw() {
 		state := a.ensurePaneUI(geometry.Pane)
 		a.activatePaneFont(geometry.Pane)
 		a.snap = view.Snapshot
+		panePalette := a.snap.PaletteOverrides.Apply(paletteBase)
+		colorResolver := panePalette.ColorResolver()
+		defaultFG := rgb(panePalette.FG)
+		paneBackground := panePaletteBackground(background, panePalette, a.snap.PaletteOverrides)
 		a.selection, a.search, a.link, a.mouseReport = state.selection, state.search, state.link, state.mouseReport
 		a.search.init(muxSearchTerminal{mux: a.mux, pane: geometry.Pane}, a.requestRedraw)
 		a.search.viewRow = -1
@@ -78,10 +81,11 @@ func (a *App) draw() {
 		a.paddingY = float32(geometry.Pixels.Y) + basePaddingY
 		a.refreshLinks()
 		a.r.PushClip(gpu.ClipRect{X: geometry.Pixels.X, Y: geometry.Pixels.Y, Width: geometry.Pixels.Width, Height: geometry.Pixels.Height})
+		a.fillRect(float32(geometry.Pixels.X), float32(geometry.Pixels.Y), float32(geometry.Pixels.Width), float32(geometry.Pixels.Height), paneBackground)
 		var cursorRowOrder []int
 		for row := 0; row < a.snap.Rows; row++ {
 			rowsDrawn++
-			order := a.drawRow(row, background, selectionColor, defaultFG, &colorResolver)
+			order := a.drawRow(row, paneBackground, selectionColor, defaultFG, &colorResolver)
 			if row == a.snap.CursorRow {
 				cursorRowOrder = order
 			}
