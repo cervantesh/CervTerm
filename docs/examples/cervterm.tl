@@ -5,6 +5,8 @@ local _shades_of_purple: cervterm.ColorScheme = {
   background = "#2D2B55",
   cursor = "#FAD000",
   selection_background = "#B362FF",
+  accent = "#FAD000FF",
+  search_match = "#6943FFCC",
   ansi = {
     "#000000", "#D90429", "#3AD900", "#FFE700",
     "#6943FF", "#FF2C70", "#80FCFF", "#C7C7C7",

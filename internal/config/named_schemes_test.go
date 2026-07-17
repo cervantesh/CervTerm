@@ -220,23 +220,32 @@ func TestNamedColorSchemeUnknownSelectionAndAbsentSelectorCompatibility(t *testi
 	}
 }
 
-func TestNamedColorSchemeProvenanceDefaultsSchemeExplicit(t *testing.T) {
+func TestNamedColorSchemeSemanticChromeAndProvenance(t *testing.T) {
 	dir := t.TempDir()
-	primary := writeGraphLua(t, dir, "primary.lua", `return {config_version=2,color_scheme="selected",color_schemes={selected={background="#111111",indexed_colors={[16]="#161616"}}},colors={background="#222222",indexed_colors={[16]="#262626"}}}`)
+	primary := writeGraphLua(t, dir, "primary.lua", `return {
+		config_version=2,
+		color_scheme="selected",
+		color_schemes={selected={
+			chrome_background="#111111", chrome_muted="#222222", accent="#333333",
+			split="#444444", search_match="#555555", error="#666666",
+		}},
+		colors={accent="#ABCDEF"},
+	}`)
 	state, graph, composition := buildComposition(t, primary, CompositionOptions{})
 	defer state.Close()
 	defer graph.Close()
 
-	assertProvenanceLayers(t, composition.Provenance, "colors.background", []ProvenanceLayer{LayerDefaults, LayerColorScheme, LayerPrimary})
-	background, ok := composition.Provenance.Lookup("colors.background")
-	if !ok || background.Overwritten[len(background.Overwritten)-1].Name != "selected" || background.Overwritten[len(background.Overwritten)-1].Layer != LayerColorScheme {
-		t.Fatalf("background scheme provenance = %#v, ok=%v", background, ok)
+	cfg := FromDocument(Defaults(), composition.Document)
+	if cfg.Colors.ChromeBackground != "#111111" || cfg.Colors.ChromeMuted != "#222222" || cfg.Colors.Accent != "#ABCDEF" || cfg.Colors.Split != "#444444" || cfg.Colors.SearchMatch != "#555555" || cfg.Colors.Error != "#666666" {
+		t.Fatalf("semantic chrome colors = %#v", cfg.Colors)
 	}
-	indexedPath := indexedColorEntryPath("colors.indexed_colors", 16)
-	assertProvenanceLayers(t, composition.Provenance, indexedPath, []ProvenanceLayer{LayerColorScheme, LayerPrimary})
-	indexed, ok := composition.Provenance.Lookup(indexedPath)
-	if !ok || indexed.Overwritten[0].Name != "selected" || indexed.Overwritten[0].CanonicalSource != canonicalTestSource(t, filepath.Join(dir, "primary.lua")) {
-		t.Fatalf("indexed scheme provenance = %#v, ok=%v", indexed, ok)
+	for _, path := range []string{"colors.chrome_background", "colors.chrome_muted", "colors.split", "colors.search_match", "colors.error"} {
+		assertProvenanceLayers(t, composition.Provenance, path, []ProvenanceLayer{LayerDefaults, LayerColorScheme})
+	}
+	assertProvenanceLayers(t, composition.Provenance, "colors.accent", []ProvenanceLayer{LayerDefaults, LayerColorScheme, LayerPrimary})
+	accent, ok := composition.Provenance.Lookup("colors.accent")
+	if !ok || accent.Winner.Layer != LayerPrimary || accent.Overwritten[len(accent.Overwritten)-1].Name != "selected" || accent.Overwritten[len(accent.Overwritten)-1].Layer != LayerColorScheme {
+		t.Fatalf("accent provenance = %#v, ok=%v", accent, ok)
 	}
 }
 
@@ -336,13 +345,13 @@ func TestLoadLuaNamedSchemesAndV1Compatibility(t *testing.T) {
 
 func TestNamedColorSchemeV1IncludeIgnoresSelectorAndMalformedColors(t *testing.T) {
 	dir := t.TempDir()
-	writeGraphLua(t, dir, "legacy.lua", `return {color_scheme="legacy-ignored",colors={foreground=true,ansi="bad",indexed_colors="bad"}}`)
-	primary := writeGraphLua(t, dir, "primary.lua", `return {config_version=2,includes={"legacy.lua"},color_scheme="selected",color_schemes={selected={foreground="#ABCDEF",background="#123456",indexed_colors={[16]="#161616"}}}}`)
+	writeGraphLua(t, dir, "legacy.lua", `return {color_scheme="legacy-ignored",colors={foreground=true,chrome_background=true,ansi="bad",indexed_colors="bad"}}`)
+	primary := writeGraphLua(t, dir, "primary.lua", `return {config_version=2,includes={"legacy.lua"},color_scheme="selected",color_schemes={selected={foreground="#ABCDEF",background="#123456",chrome_background="#334455",indexed_colors={[16]="#161616"}}}}`)
 	state, graph, composition := buildComposition(t, primary, CompositionOptions{})
 	defer state.Close()
 	defer graph.Close()
 	cfg := FromDocument(Defaults(), composition.Document)
-	if cfg.ColorScheme != "selected" || cfg.Colors.Foreground != "#ABCDEF" || cfg.Colors.Background != "#123456" || cfg.Colors.IndexedColors.Lookup(16) != "#161616" {
+	if cfg.ColorScheme != "selected" || cfg.Colors.Foreground != "#ABCDEF" || cfg.Colors.Background != "#123456" || cfg.Colors.ChromeBackground != "#334455" || cfg.Colors.IndexedColors.Lookup(16) != "#161616" {
 		t.Fatalf("v1 include affected named scheme: %#v", cfg)
 	}
 }

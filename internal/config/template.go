@@ -18,6 +18,8 @@ return {
   --     background = "#080B12",
   --     cursor = "#60E8F0",
   --     selection_background = "#2A6377",
+  --     accent = "#60E8F0FF",
+  --     search_match = "#7A5C12FF",
   --   },
   -- },
   window = {
@@ -46,6 +48,13 @@ return {
     background = %q,
     cursor = %q,
     selection_background = %q,
+    -- Semantic application chrome; #RRGGBB or #RRGGBBAA.
+    chrome_background = %q,
+    chrome_muted = %q,
+    accent = %q,
+    split = %q,
+    search_match = %q,
+    error = %q,
     -- black/red/green/yellow/blue/purple/cyan/white, then bright variants.
     -- ANSI entries require exactly #RRGGBB (alpha is not accepted).
     ansi = {
@@ -163,6 +172,7 @@ return {
 `, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY, cfg.Window.DynamicTitle, cfg.Window.Opacity, cfg.Window.Blur,
 		cfg.Font.Family, cfg.Font.Size, cfg.Font.Ligatures,
 		cfg.Colors.Foreground, cfg.Colors.Background, cfg.Colors.Cursor, cfg.Colors.SelectionBackground,
+		cfg.Colors.ChromeBackground, cfg.Colors.ChromeMuted, cfg.Colors.Accent, cfg.Colors.Split, cfg.Colors.SearchMatch, cfg.Colors.Error,
 		cfg.Colors.ANSI[0], cfg.Colors.ANSI[1], cfg.Colors.ANSI[2], cfg.Colors.ANSI[3],
 		cfg.Colors.ANSI[4], cfg.Colors.ANSI[5], cfg.Colors.ANSI[6], cfg.Colors.ANSI[7],
 		cfg.Colors.ANSI[8], cfg.Colors.ANSI[9], cfg.Colors.ANSI[10], cfg.Colors.ANSI[11],

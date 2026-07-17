@@ -46,7 +46,7 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 		}
 		if a.search.hasMatch && r == a.search.viewRow &&
 			logicalCol >= a.search.matchCol && logicalCol < a.search.matchCol+a.search.matchLen {
-			a.fillRect(x, y, a.cellW, a.cellH, searchHighlightColor)
+			a.fillRect(x, y, a.cellW, a.cellH, a.chrome.searchMatch)
 		}
 		fg := defaultFG
 		if cell.Attr.HasExplicitFG() {
