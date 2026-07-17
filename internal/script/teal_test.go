@@ -39,13 +39,17 @@ func TestTypedDefaultTealExample(t *testing.T) {
 	dir := t.TempDir()
 	copyFile(t, filepath.Join("..", "..", "docs", "examples", "cervterm.d.tl"), filepath.Join(dir, "cervterm.d.tl"))
 	copyFile(t, filepath.Join("..", "..", "docs", "examples", "cervterm.tl"), filepath.Join(dir, "cervterm.tl"))
-	cfg, rt, err := Load(filepath.Join(dir, "cervterm.tl"), config.Defaults())
+	bundle, err := BuildCandidateBundle(filepath.Join(dir, "cervterm.tl"), config.Defaults(), CandidateOptions{})
 	if err != nil {
-		t.Fatalf("typed default Load failed: %v", err)
+		t.Fatalf("typed default candidate load failed: %v", err)
 	}
-	defer rt.Close()
+	defer bundle.Close()
+	cfg := bundle.Config()
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("typed default should validate: %v", err)
+	}
+	if cfg.ColorScheme != "Shades of Purple" || cfg.Colors.Background != "#2D2B55" {
+		t.Fatalf("typed named scheme not selected: scheme=%q background=%q", cfg.ColorScheme, cfg.Colors.Background)
 	}
 }
 

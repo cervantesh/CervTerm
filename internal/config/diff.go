@@ -34,6 +34,8 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Font.Size != effective.Font.Size, "font.size", ApplyRestart)
 	changes = appendChange(changes, desired.Font.Ligatures != effective.Font.Ligatures, "font.ligatures", ApplyRestart)
 
+	changes = appendChange(changes, desired.ColorScheme != effective.ColorScheme, "color_scheme", ApplyLive)
+
 	changes = appendChange(changes, desired.Colors.Foreground != effective.Colors.Foreground, "colors.foreground", ApplyLive)
 	changes = appendChange(changes, desired.Colors.Background != effective.Colors.Background, "colors.background", ApplyLive)
 	changes = appendChange(changes, desired.Colors.Cursor != effective.Colors.Cursor, "colors.cursor", ApplyLive)
@@ -103,6 +105,7 @@ func MergeLiveConfig(base, source Config) Config {
 	base = base.Clone()
 	base.Window.Opacity = source.Window.Opacity
 	base.Window.Blur = source.Window.Blur
+	base.ColorScheme = source.ColorScheme
 	base.Colors = source.Colors
 	base.Scrolling = source.Scrolling
 	base.Scrollbar = source.Scrollbar

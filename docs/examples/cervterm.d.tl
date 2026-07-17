@@ -163,6 +163,15 @@ local record cervterm
     indexed_colors: {integer: (string | Unset)} | Unset
   end
 
+  record ColorScheme
+    foreground: string | Unset
+    background: string | Unset
+    cursor: string | Unset
+    selection_background: string | Unset
+    ansi: {string} | Unset
+    indexed_colors: {integer: (string | Unset)} | Unset
+  end
+
   record ScrollingDocument
     history: integer | Unset
     wheel_multiplier: integer | Unset
@@ -236,6 +245,7 @@ local record cervterm
   end
 
   record PartialConfig
+    color_scheme: string | Unset
     window: WindowDocument | Unset
     font: FontDocument | Unset
     colors: ColorsDocument | Unset
@@ -256,6 +266,8 @@ local record cervterm
     default_profile: string | nil
     environments: {string:PartialConfig} | nil
     profiles: {string:PartialConfig} | nil
+    color_scheme: string | Unset
+    color_schemes: {string:ColorScheme} | nil
     window: WindowDocument | Unset
     font: FontDocument | Unset
     colors: ColorsDocument | Unset

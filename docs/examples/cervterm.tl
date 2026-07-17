@@ -1,5 +1,18 @@
 local cervterm = require("cervterm")
 
+local _shades_of_purple: cervterm.ColorScheme = {
+  foreground = "#FFFFFF",
+  background = "#2D2B55",
+  cursor = "#FAD000",
+  selection_background = "#B362FF",
+  ansi = {
+    "#000000", "#D90429", "#3AD900", "#FFE700",
+    "#6943FF", "#FF2C70", "#80FCFF", "#C7C7C7",
+    "#686868", "#F9555F", "#5CFF45", "#FFFF85",
+    "#6871FF", "#FF77FF", "#79E8FB", "#FFFFFF",
+  },
+}
+
 local config: cervterm.Config = {
   config_version = 2,
   window = {
@@ -16,20 +29,8 @@ local config: cervterm.Config = {
     size = 14.0,
     ligatures = false,
   },
-  colors = {
-    foreground = "#E6E1D8",
-    background = "#080B12E6",
-    cursor = "#60E8F0",
-    selection_background = "#2A6377",
-    -- black/red/green/yellow/blue/purple/cyan/white, then bright variants
-    ansi = {
-      "#1B2232", "#FF5C8A", "#8BF59A", "#F8D866",
-      "#7AA2FF", "#D88CFF", "#60E8F0", "#D8DEEA",
-      "#57627A", "#FF7AA8", "#A6FFB5", "#FFE68A",
-      "#9BB8FF", "#E5A7FF", "#90F4FF", "#FFFFFF",
-    },
-    -- Optional: indexed_colors = { [16] = "#102030", [196] = "#FF1010" },
-  },
+  color_scheme = "Shades of Purple",
+  color_schemes = { ["Shades of Purple"] = _shades_of_purple },
   scrolling = {
     history = 2000,
     wheel_multiplier = 3,

@@ -100,7 +100,7 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 			return err
 		}
 	case KindStringList:
-		if path == "colors.ansi" {
+		if schema.name == "ansi" {
 			return validateANSIList(source, path, value)
 		}
 		return validateStringList(source, path, value)
@@ -114,6 +114,8 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		return validateEvents(source, path, value, allowUnset)
 	case KindDocumentMap:
 		return validateDocumentMap(source, path, value)
+	case KindColorSchemeMap:
+		return validateColorSchemeMap(source, path, value, allowUnset)
 	default:
 		return documentError(source, path, "has unsupported schema kind %q", schema.kind)
 	}
@@ -252,6 +254,40 @@ func validateDocumentMap(source, path string, value lua.LValue) error {
 		}
 		if err := validateStrictTable(source, joinPath(path, name), partial, rootSchema, false, nil, true); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validateColorSchemeMap(source, path string, value lua.LValue, _ bool) error {
+	table, ok := value.(*lua.LTable)
+	if !ok {
+		return typeError(source, path, KindColorSchemeMap, value)
+	}
+	names, err := strictStringKeys(source, path, table)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if name == "" {
+			return documentError(source, path, "name must not be empty")
+		}
+		palette, ok := table.RawGetString(name).(*lua.LTable)
+		if !ok {
+			return typeError(source, mapEntryPath(path, name), KindTable, table.RawGetString(name))
+		}
+		palettePath := mapEntryPath(path, name)
+		if err := validateStrictTable(source, palettePath, palette, colorSchemeSchema, false, nil, true); err != nil {
+			return err
+		}
+		for _, field := range []string{"foreground", "background", "cursor", "selection_background"} {
+			entry := palette.RawGetString(field)
+			if entry == lua.LNil || isUnsetValue(entry) {
+				continue
+			}
+			if !isHexColor(string(entry.(lua.LString))) {
+				return documentError(source, joinPath(palettePath, field), "must be #RRGGBB or #RRGGBBAA")
+			}
 		}
 	}
 	return nil
