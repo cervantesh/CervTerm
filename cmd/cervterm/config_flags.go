@@ -43,6 +43,22 @@ func registerCompositionFlags(flags *flag.FlagSet) *compositionFlags {
 	return values
 }
 
+type explainConfigFlags struct {
+	all    bool
+	fields repeatedFlagValues
+}
+
+func registerExplainConfigFlags(flags *flag.FlagSet) *explainConfigFlags {
+	values := &explainConfigFlags{}
+	flags.BoolVar(&values.all, "explain-config", false, "print resolved v2 configuration with provenance and exit")
+	flags.Var(&values.fields, "explain-config-field", "resolved v2 field path to explain; repeat to filter")
+	return values
+}
+
+func (f *explainConfigFlags) requested() bool {
+	return f != nil && (f.all || len(f.fields) != 0)
+}
+
 type environmentLookup func(string) (string, bool)
 
 func (f *compositionFlags) candidateOptions(args []string, lookup environmentLookup) (script.CandidateOptions, error) {

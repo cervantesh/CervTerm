@@ -16,6 +16,7 @@ import (
 func main() {
 	configPath := flag.String("config", "", "path to cervterm.lua or cervterm.tl")
 	compositionFlags := registerCompositionFlags(flag.CommandLine)
+	explainFlags := registerExplainConfigFlags(flag.CommandLine)
 	showVersion := flag.Bool("version", false, "print CervTerm version")
 	showBuildInfo := flag.Bool("build-info", false, "print CervTerm build information")
 	printDefaultConfig := flag.Bool("print-default-config", false, "print default Lua configuration")
@@ -41,16 +42,20 @@ func main() {
 		fmt.Print(config.DefaultLua())
 		return
 	}
-	if compositionFlags.explicitlyRequested() {
-		if _, err := compositionFlags.candidateOptions(os.Args[1:], os.LookupEnv); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-		} else {
-			fmt.Fprintln(os.Stderr, "--environment, --profile, and --config-override require the GLFW frontend build")
-		}
+	candidateOptions, err := compositionFlags.candidateOptions(os.Args[1:], os.LookupEnv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
+	if explainFlags.requested() {
+		os.Exit(runExplainConfig(configDiagnosticOptions{ConfigPath: *configPath, Candidate: candidateOptions, Fields: append([]string(nil), explainFlags.fields...)}))
+	}
 	if *doctor {
-		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath}))
+		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath, CandidateOptions: candidateOptions}))
+	}
+	if compositionFlags.explicitlyRequested() {
+		fmt.Fprintln(os.Stderr, "--environment, --profile, and --config-override require the GLFW frontend build")
+		os.Exit(2)
 	}
 	logFile, err := applog.Setup(applog.ResolvePath(*logPath))
 	if err != nil {

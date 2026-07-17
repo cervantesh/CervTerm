@@ -9,8 +9,9 @@ import (
 
 // CandidateOptions supplies pure composition and graph-building inputs.
 type CandidateOptions struct {
-	Composition config.CompositionOptions
-	SourceGraph config.SourceGraphOptions
+	Composition    config.CompositionOptions
+	SourceGraph    config.SourceGraphOptions
+	DiagnosticOnly bool
 }
 
 // Clone detaches pointer and slice inputs so startup selection is stable across reload.
@@ -48,14 +49,15 @@ func (o CandidateOptions) RequiresVersion2() bool {
 // candidate until a future atomic frontend transfer or Close. Like Runtime, its
 // lifecycle methods are main-thread-only and must not be called concurrently.
 type CandidateBundle struct {
-	config      config.Config
-	runtime     *Runtime
-	graph       *config.SourceGraph
-	composition config.Composition
-	options     CandidateOptions
-	publication config.TealPublicationResult
-	published   bool
-	closed      bool
+	config          config.Config
+	runtime         *Runtime
+	graph           *config.SourceGraph
+	graphDiagnostic config.SourceGraphDiagnostic
+	composition     config.Composition
+	options         CandidateOptions
+	publication     config.TealPublicationResult
+	published       bool
+	closed          bool
 }
 
 // BuildCandidateBundle builds and validates a composed v2 candidate without
@@ -117,6 +119,14 @@ func (b *CandidateBundle) Provenance() []config.ProvenanceRecord {
 	return b.composition.Provenance.Records()
 }
 
+// ConfigDiagnostic returns deterministic resolved values with detached provenance.
+func (b *CandidateBundle) ConfigDiagnostic(filters []string) (config.ConfigDiagnostic, error) {
+	if b == nil {
+		return config.ConfigDiagnostic{}, fmt.Errorf("candidate bundle is required")
+	}
+	return config.DiagnoseConfig(b.config, b.composition.Provenance, filters)
+}
+
 // Options returns the detached startup selection and override snapshot.
 func (b *CandidateBundle) Options() CandidateOptions {
 	if b == nil {
@@ -139,6 +149,19 @@ func (b *CandidateBundle) Dependencies() []config.SourceDependency {
 		return nil
 	}
 	return append([]config.SourceDependency(nil), b.graph.Dependencies...)
+}
+
+// SourceGraphDiagnostic returns a detached, non-executable source graph snapshot.
+func (b *CandidateBundle) SourceGraphDiagnostic() config.SourceGraphDiagnostic {
+	if b == nil {
+		return config.SourceGraphDiagnostic{}
+	}
+	return b.graphDiagnostic.Clone()
+}
+
+// GraphDiagnostic is a concise alias for SourceGraphDiagnostic.
+func (b *CandidateBundle) GraphDiagnostic() config.SourceGraphDiagnostic {
+	return b.SourceGraphDiagnostic()
 }
 
 // WatchPaths returns every declarative source and captured local module owned by

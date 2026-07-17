@@ -6,6 +6,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"cervterm/internal/config"
+	"cervterm/internal/script"
 )
 
 func TestRunDoctorPrintsActionableSections(t *testing.T) {
@@ -51,6 +54,25 @@ func TestRunDoctorReportsSubpixelEngine(t *testing.T) {
 	}
 }
 
+func TestRunDoctorReportsComposedV2AndRedactsSensitiveValues(t *testing.T) {
+	path := writeDiagnosticConfig(t, `return {config_version=2,colors={background="#080B12"},shell={env={API_TOKEN="doctor-secret"}},profiles={work={window={opacity=0.8}}},default_profile="work"}`)
+	profile := "work"
+	options := script.CandidateOptions{Composition: config.CompositionOptions{Selection: config.SelectionOptions{ProfileOverride: &profile}}}
+	output := captureStdout(t, func() {
+		if code := runDoctor(doctorOptions{ConfigPath: path, LogPath: "-", CandidateOptions: options, ContentScale: "not probed in diagnostic mode"}); code != 0 {
+			t.Fatalf("runDoctor exit code = %d, want 0", code)
+		}
+	})
+	for _, want := range []string{"schema: authored=2 effective=2", "composed configuration:", `profile: "work" [explicit]`, "shell.env = <redacted>", "pending: unavailable", "last-reload-failure: unavailable", "content-scale: not probed in diagnostic mode"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("doctor output missing %q\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "doctor-secret") {
+		t.Fatalf("doctor leaked sensitive value\n%s", output)
+	}
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
@@ -76,4 +98,16 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 	_ = reader.Close()
 	return buf.String()
+}
+
+func TestRunDoctorReturnsFailureForInvalidComposedConfig(t *testing.T) {
+	path := writeDiagnosticConfig(t, `return {config_version=2,unknown_field=true}`)
+	output := captureStdout(t, func() {
+		if code := runDoctor(doctorOptions{ConfigPath: path, LogPath: "-"}); code != 1 {
+			t.Fatalf("runDoctor exit code = %d, want 1", code)
+		}
+	})
+	if !strings.Contains(output, "load: error:") {
+		t.Fatalf("doctor failure output missing load error\n%s", output)
+	}
 }
