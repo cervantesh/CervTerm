@@ -926,3 +926,132 @@ func TestReloadV1ToV2RetainsAmbientSelectionSnapshot(t *testing.T) {
 		t.Fatalf("v1-to-v2 selected profile opacity = %v", app.cfg.Window.Opacity)
 	}
 }
+
+func TestConfigWatchFailurePathsReplaceAndSuccessClears(t *testing.T) {
+	dir := t.TempDir()
+	active := filepath.Join(dir, "active.lua")
+	failedA := filepath.Join(dir, "missing-a.lua")
+	failedB := filepath.Join(dir, "missing-b.lua")
+	watch := newConfigWatchState(active)
+	if !watch.acknowledgeFailure([]config.SourceWatchExpectation{{Path: failedA}}) {
+		t.Fatal("first failure set was not reported as changed")
+	}
+	if got, want := watch.paths, normalizeWatchPaths([]string{active, failedA}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("active plus failed paths = %v, want %v", got, want)
+	}
+	watch.acknowledgeFailure([]config.SourceWatchExpectation{{Path: failedB}})
+	if got, want := watch.paths, normalizeWatchPaths([]string{active, failedB}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("latest failure did not replace prior set: %v, want %v", got, want)
+	}
+	watch.acknowledgeSuccess([]string{active})
+	if len(watch.failedPaths) != 0 || !reflect.DeepEqual(watch.paths, []string{active}) {
+		t.Fatalf("success did not clear failure-only paths: paths=%v failed=%v", watch.paths, watch.failedPaths)
+	}
+}
+
+func TestReloadFailureNoticeRateLimitDoesNotOwnRetryState(t *testing.T) {
+	app := &App{reloadPending: true}
+	base := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
+	first := errors.New("same failure")
+	if !app.reportConfigReloadFailure(first, base) {
+		t.Fatal("first failure was suppressed")
+	}
+	app.reloadPending = true
+	if app.reportConfigReloadFailure(first, base.Add(time.Second)) {
+		t.Fatal("identical failure inside interval was reported")
+	}
+	if !app.reloadPending {
+		t.Fatal("notice suppression changed retry state")
+	}
+	if !app.reportConfigReloadFailure(first, base.Add(configReloadFailureNoticeInterval)) {
+		t.Fatal("identical failure reminder was suppressed past interval")
+	}
+	if !app.reportConfigReloadFailure(errors.New("different failure"), base.Add(configReloadFailureNoticeInterval+time.Second)) {
+		t.Fatal("different failure was not reported immediately")
+	}
+	app.clearConfigReloadFailureNotice()
+	if !app.reportConfigReloadFailure(first, base.Add(configReloadFailureNoticeInterval+2*time.Second)) {
+		t.Fatal("success reset did not allow later failure")
+	}
+}
+
+func TestMissingIncludeCreationRecoversWithoutPrimaryEdit(t *testing.T) {
+	dir := t.TempDir()
+	primary := filepath.Join(dir, "config.lua")
+	missing := filepath.Join(dir, "missing.lua")
+	writeReloadConfig(t, primary, `return {config_version=2,colors={background="#080B12"}}`)
+	loaded, err := script.LoadVersioned(primary, config.Defaults(), script.CandidateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activation, err := loaded.Candidate.PrepareActivation()
+	if err != nil {
+		loaded.Candidate.Close()
+		t.Fatal(err)
+	}
+	app := &App{cfg: loaded.Config, scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, configPath: primary, candidateOptions: loaded.Options, configWatch: newConfigWatchState(loaded.WatchPaths...), mux: termmux.New(nil, termmux.Options{}), paneUI: make(map[termmux.PaneID]*paneUIState)}
+	defer func() {
+		if app.scriptBundle != nil {
+			app.scriptBundle.Close()
+		}
+	}()
+	oldBundle, oldConfig := app.scriptBundle, app.cfg
+	writeReloadConfig(t, primary, `return {config_version=2,includes={"missing.lua"},colors={background="#080B12"}}`)
+	if err := app.reloadConfig(); err == nil || !strings.Contains(err.Error(), "missing.lua") {
+		t.Fatalf("missing include reload error = %v", err)
+	}
+	if app.scriptBundle != oldBundle || !reflect.DeepEqual(app.cfg, oldConfig) {
+		t.Fatal("failed candidate changed active bundle/config")
+	}
+	if !containsString(app.configWatch.paths, missing) || !containsString(app.configWatch.paths, primary) {
+		t.Fatalf("failed watcher union = %v", app.configWatch.paths)
+	}
+	app.reloadPending = false
+	writeReloadConfig(t, missing, `return {config_version=2,colors={foreground="#ddeeff"}}`)
+	base := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
+	if app.configWatch.poll(base) {
+		t.Fatal("creation fired before debounce")
+	}
+	if !app.configWatch.poll(base.Add(300 * time.Millisecond)) {
+		t.Fatal("missing include creation did not trigger recovery")
+	}
+	if err := app.reloadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if len(app.configWatch.failedPaths) != 0 || !containsString(app.configWatch.activePaths, missing) {
+		t.Fatalf("recovered watcher state active=%v failed=%v", app.configWatch.activePaths, app.configWatch.failedPaths)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestSameFailureSetChangeDuringAttemptRequeuesOnce(t *testing.T) {
+	dir := t.TempDir()
+	active := filepath.Join(dir, "active.lua")
+	failed := filepath.Join(dir, "failed.lua")
+	writeReloadConfig(t, active, "return {}")
+	writeReloadConfig(t, failed, "return {value=1}")
+	expectations := []config.SourceWatchExpectation{{Path: failed}}
+	app := &App{configWatch: newConfigWatchState(active)}
+	app.configWatch.acknowledgeFailure(expectations)
+	before := app.configWatch.snapshot()
+	writeReloadConfig(t, failed, "return {value=2}")
+	app.reloadPending = false
+	app.acknowledgeConfigReloadFailure(before, expectations)
+	if !app.reloadPending {
+		t.Fatal("same failure set changed during attempt was acknowledged away")
+	}
+	app.reloadPending = false
+	stable := app.configWatch.snapshot()
+	app.acknowledgeConfigReloadFailure(stable, expectations)
+	if app.reloadPending {
+		t.Fatal("stable identical failure set caused an immediate retry loop")
+	}
+}

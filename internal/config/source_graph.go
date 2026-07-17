@@ -104,6 +104,7 @@ type sourceGraphBuilder struct {
 	allowLegacyPrimary bool
 	explicit           map[string]string
 	reservedLua        map[string]string
+	expectations       map[string]SourceWatchExpectation
 }
 
 var sourceGraphConsumedKey = &lua.LUserData{Value: "cervterm.config.source_graph_consumed"}
@@ -132,27 +133,29 @@ func BuildVersionedSourceGraph(state *lua.LState, primary string, options Source
 }
 
 func buildSourceGraph(state *lua.LState, primary string, options SourceGraphOptions, allowLegacyPrimary bool) (*SourceGraph, error) {
+	initialExpectations := sourcePathExpectations(primary)
 	if state == nil {
-		return nil, fmt.Errorf("build config source graph: nil Lua state")
+		return nil, wrapSourceGraphFailure(fmt.Errorf("build config source graph: nil Lua state"), initialExpectations)
 	}
 	if state.G.Registry.RawGet(sourceGraphConsumedKey) != lua.LNil {
-		return nil, fmt.Errorf("build config source graph: Lua candidate state was already consumed")
+		return nil, wrapSourceGraphFailure(fmt.Errorf("build config source graph: Lua candidate state was already consumed"), initialExpectations)
 	}
 	state.G.Registry.RawSet(sourceGraphConsumedKey, lua.LTrue)
 	options = normalizeSourceGraphOptions(options)
 	stageRoot, ownsStage, err := sourceGraphStageRoot(options.StageDirectory)
 	if err != nil {
-		return nil, err
+		return nil, wrapSourceGraphFailure(err, initialExpectations)
 	}
 	graph := &SourceGraph{stageRoot: stageRoot, ownsStage: ownsStage, state: state}
 	capture, err := installDependencyCapture(state)
 	if err != nil {
 		_ = graph.Close()
-		return nil, err
+		return nil, wrapSourceGraphFailure(err, initialExpectations)
 	}
 	builder := &sourceGraphBuilder{
 		state: state, options: options, graph: graph, capture: capture, allowLegacyPrimary: allowLegacyPrimary,
 		records: make(map[string]*sourceRecord), explicit: make(map[string]string), reservedLua: make(map[string]string),
+		expectations: make(map[string]SourceWatchExpectation),
 	}
 	legacyCapture := false
 	defer func() {
@@ -165,7 +168,7 @@ func buildSourceGraph(state *lua.LState, primary string, options SourceGraphOpti
 	canonical, err := builder.build(primary, "", 0, true)
 	if err != nil {
 		_ = graph.Close()
-		return nil, err
+		return nil, wrapSourceGraphFailure(err, initialExpectations, builder.failureExpectations(), capture.failureExpectations())
 	}
 	graph.Primary = canonical
 	if primaryNode, ok := graph.PrimaryNode(); ok {
@@ -195,6 +198,12 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 	if parent != "" && !filepath.IsAbs(resolved) {
 		resolved = filepath.Join(filepath.Dir(parent), resolved)
 	}
+	selectedPath, err := filepath.Abs(resolved)
+	if err != nil {
+		return "", fmt.Errorf("resolve config source %q: %w", resolved, err)
+	}
+	selectedPath = filepath.Clean(selectedPath)
+	b.addExpectation(selectedPath)
 	canonical, info, err := canonicalLocalFile(resolved)
 	if err != nil {
 		if parent != "" {
@@ -202,11 +211,7 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 		}
 		return "", err
 	}
-	selectedPath, err := filepath.Abs(resolved)
-	if err != nil {
-		return "", fmt.Errorf("resolve config source %q: %w", resolved, err)
-	}
-	selectedPath = filepath.Clean(selectedPath)
+	b.addExpectation(canonical)
 	loadSourcePath := canonical
 	if primary && b.allowLegacyPrimary {
 		loadSourcePath = selectedPath
@@ -455,4 +460,32 @@ func appendUniquePath(paths []string, path string) []string {
 		}
 	}
 	return append(paths, path)
+}
+
+func sourcePathExpectations(path string) []SourceWatchExpectation {
+	if path == "" || looksRemotePath(path) {
+		return nil
+	}
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil
+	}
+	return []SourceWatchExpectation{{Path: filepath.Clean(absolute)}}
+}
+
+func (b *sourceGraphBuilder) addExpectation(path string) {
+	if path == "" {
+		return
+	}
+	cleaned := filepath.Clean(path)
+	b.expectations[canonicalIdentity(cleaned)] = SourceWatchExpectation{Path: cleaned}
+}
+
+func (b *sourceGraphBuilder) failureExpectations() []SourceWatchExpectation {
+	out := make([]SourceWatchExpectation, 0, len(b.expectations))
+	for _, expectation := range b.expectations {
+		out = append(out, expectation)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out
 }
