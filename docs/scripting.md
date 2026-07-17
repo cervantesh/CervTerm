@@ -15,9 +15,15 @@ Add a `keys` array to the returned config table. Each entry has:
   `apostrophe`, and `grave`.
 - `mods`: optional `+`-separated string. Supported modifiers are `ctrl`, `alt`,
   `shift`, and `super`. `cmd` and `win` are aliases for `super`.
-- `action`: required function. CervTerm calls it with one `term` handle.
+- `label`: optional string used to make callback actions discoverable in future
+  command UIs.
+- `action`: required Lua function or typed value from `cervterm.action`. Functions
+  receive one `term` handle and retain the existing watchdog behavior.
 
-User keybindings run before most built-in shortcuts. The fixed `ctrl+shift+r` config-reload chord and active search UI take priority so recovery remains available; otherwise a matching user binding is consumed. If an action fails, CervTerm shows a transient `script error:` notice in the status area.
+User keybindings run before most built-in shortcuts. The fixed `ctrl+shift+r`
+config-reload chord and active search UI take priority so recovery remains
+available; otherwise a matching user binding follows its action trigger policy. If
+an action fails, CervTerm shows a transient action error notice in the status area.
 
 ```lua
 return {
@@ -34,6 +40,27 @@ return {
   },
 }
 ```
+
+### Typed actions
+
+Typed actions and legacy callbacks can coexist in `keys`:
+
+```lua
+local cervterm = require("cervterm")
+return { keys = {
+  { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
+  { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
+  { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
+  { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },
+  { key = "m", mods = "ctrl+shift", action = cervterm.action.Multiple({
+    cervterm.action.FocusPane("left"), cervterm.action.ClosePane,
+  }) },
+} }
+```
+
+Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ReloadConfig`, `ClosePane`, and `ResetFontSize`. Constructors: `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, `SplitPane("columns"|"rows")`, `FocusPane("left"|"right"|"up"|"down")`, and `Multiple({...})`. `WithTarget(action, "origin")` is also available.
+
+Arguments are validated during config loading. Typed actions use registry press/repeat policy. Function callbacks preserve legacy behavior: they execute on press, consume repeat without executing, and run through the existing watchdog.
 
 ## Events
 

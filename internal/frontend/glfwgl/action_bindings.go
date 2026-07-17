@@ -181,7 +181,7 @@ func (a *App) handleKeyEvent(key glfw.Key, eventAction glfw.Action, mods glfw.Mo
 			return
 		}
 	}
-	if a.dispatchScriptKey(key, mods, eventAction == glfw.Press) {
+	if a.dispatchScriptKey(key, mods, repeat) {
 		return
 	}
 	if a.dispatchBuiltinAction(key, mods, repeat) {

@@ -20,7 +20,7 @@ func (a *App) fireScriptEvent(fire func() error) {
 	}
 }
 
-func (a *App) dispatchScriptKey(key glfw.Key, mods glfw.ModifierKey, dispatch bool) bool {
+func (a *App) dispatchScriptKey(key glfw.Key, mods glfw.ModifierKey, repeat bool) bool {
 	if a.scriptRT == nil {
 		return false
 	}
@@ -28,15 +28,9 @@ func (a *App) dispatchScriptKey(key glfw.Key, mods glfw.ModifierKey, dispatch bo
 	if !ok {
 		return false
 	}
-	for i, binding := range a.scriptRT.Bindings() {
-		if binding == spec {
-			if dispatch {
-				if err := a.scriptRT.Dispatch(i, a.hostForFocused()); err != nil {
-					a.Notify("script error: " + err.Error())
-				}
-			}
-			a.suppressNextChar = scriptKeyProducesChar(key, mods)
-			return true
+	for _, binding := range a.scriptRT.Bindings() {
+		if binding.Spec == spec {
+			return a.dispatchKeyAction(binding.Action, key, mods, repeat)
 		}
 	}
 	return false

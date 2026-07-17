@@ -6,14 +6,17 @@ import (
 	"strings"
 	"time"
 
+	termaction "cervterm/internal/action"
 	"cervterm/internal/config"
 
 	lua "github.com/yuin/gopher-lua"
 )
 
 type Binding struct {
-	Spec Spec
-	fn   *lua.LFunction
+	Spec   Spec
+	Action termaction.Envelope
+	Label  string
+	fn     *lua.LFunction
 }
 
 // eventHandlers holds the optional Lua callbacks fired by terminal events.
@@ -84,11 +87,9 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 	return cfg, &Runtime{state: state, bindings: bindings, events: events, timers: tmrs, statuses: statuses, overlays: overlays, dispatchTimeout: time.Second}, nil
 }
 
-func (r *Runtime) Bindings() []Spec {
-	out := make([]Spec, len(r.bindings))
-	for i, binding := range r.bindings {
-		out[i] = binding.Spec
-	}
+func (r *Runtime) Bindings() []Binding {
+	out := make([]Binding, len(r.bindings))
+	copy(out, r.bindings)
 	return out
 }
 
@@ -97,6 +98,13 @@ func (r *Runtime) Dispatch(index int, host Host) error {
 		return fmt.Errorf("binding index %d out of range", index)
 	}
 	binding := r.bindings[index]
+	callback, ok := binding.Action.Action.(termaction.Callback)
+	if !ok || binding.fn == nil {
+		return fmt.Errorf("binding %d action %q is not a Lua callback", index, binding.Action.Action.ID())
+	}
+	if callback.BindingIndex != index {
+		return fmt.Errorf("binding %d callback index mismatch: %d", index, callback.BindingIndex)
+	}
 	return r.callProtected("keys "+binding.Spec.String(), binding.fn, host)
 }
 
@@ -213,15 +221,40 @@ func loadBindings(root *lua.LTable) ([]Binding, error) {
 			}
 			modsValue = string(mods)
 		}
-		action, ok := entry.RawGetString("action").(*lua.LFunction)
-		if !ok {
-			return nil, fmt.Errorf("keys[%d]: action must be a function", i)
+		label := ""
+		if value := entry.RawGetString("label"); value != lua.LNil {
+			parsed, ok := value.(lua.LString)
+			if !ok {
+				return nil, fmt.Errorf("keys[%d]: label must be a string", i)
+			}
+			label = string(parsed)
 		}
 		spec, err := ParseSpec(string(keyValue), modsValue)
 		if err != nil {
 			return nil, fmt.Errorf("keys[%d]: %w", i, err)
 		}
-		bindings = append(bindings, Binding{Spec: spec, fn: action})
+		actionValue := entry.RawGetString("action")
+		binding := Binding{Spec: spec, Label: label}
+		switch value := actionValue.(type) {
+		case *lua.LFunction:
+			binding.fn = value
+			binding.Action, err = termaction.New(termaction.Callback{BindingIndex: len(bindings), Label: label}, termaction.TargetFocused)
+		case *lua.LUserData:
+			var ok bool
+			binding.Action, ok = luaAction(value)
+			if !ok {
+				return nil, fmt.Errorf("keys[%d]: action userdata is not a cervterm action", i)
+			}
+		default:
+			return nil, fmt.Errorf("keys[%d]: action must be a function or cervterm action", i)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("keys[%d]: %w", i, err)
+		}
+		if err := binding.Action.Validate(); err != nil {
+			return nil, fmt.Errorf("keys[%d]: invalid action: %w", i, err)
+		}
+		bindings = append(bindings, binding)
 	}
 	return bindings, nil
 }
