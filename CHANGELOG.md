@@ -23,6 +23,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Candidate-only transactional Teal output publication with ownership markers, byte-identical legacy adoption, commit-time identity checks, durable atomic replacement, and reverse rollback.
 - A candidate-only ownership bundle for validated composed configuration, Lua runtime surfaces, provenance/selection, dependency graph/staging, and deferred Teal publication.
 - Exact-once version-aware config loading and atomic explicit-v2 startup/reload activation with prepared frontend resources, bundle ownership transfer, and v2-to-v1 Teal artifact rollback.
+- Dependency-aware hot reload for the complete evaluated config graph, including include/module aliases, deletion and symlink retarget detection, coalesced debounce, and generation-safe acknowledgement.
 
 ### Fixed
 
