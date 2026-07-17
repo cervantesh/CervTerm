@@ -27,6 +27,17 @@ type ConfigFieldDiagnostic struct {
 	Metadata   FieldMetadata      `json:"metadata"`
 	Value      string             `json:"value"`
 	Provenance []ProvenanceRecord `json:"provenance,omitempty"`
+	ShadowedBy string             `json:"shadowed_by,omitempty"`
+}
+
+type diagnosticDescriptor struct {
+	Family          string  `json:"family"`
+	CollectionFace  string  `json:"collection_face,omitempty"`
+	CollectionIndex *uint32 `json:"collection_index,omitempty"`
+	Weight          int     `json:"weight"`
+	Style           string  `json:"style"`
+	Stretch         int     `json:"stretch"`
+	AttributeMode   string  `json:"attribute_mode"`
 }
 
 // ConfigDiagnosticPathError reports an invalid exact field filter. Its text is
@@ -76,11 +87,13 @@ func DiagnoseConfig(cfg Config, provenance Provenance, filters []string) (Config
 		if err != nil {
 			return ConfigDiagnostic{}, fmt.Errorf("diagnose config field %q: %w", field.Path, err)
 		}
-		result.Fields = append(result.Fields, ConfigFieldDiagnostic{
-			Metadata:   field,
-			Value:      value,
-			Provenance: diagnosticProvenance(provenance, field.Path),
-		})
+		diagnostic := ConfigFieldDiagnostic{
+			Metadata: field, Value: value, Provenance: diagnosticProvenance(provenance, field.Path),
+		}
+		if field.Path == "font.family" && len(cfg.Font.Descriptors) != 0 {
+			diagnostic.ShadowedBy = "font.descriptors"
+		}
+		result.Fields = append(result.Fields, diagnostic)
 	}
 	return result, nil
 }
@@ -102,6 +115,31 @@ func diagnosticFieldValue(cfg Config, metadata FieldMetadata, provenance Provena
 			return DiagnosticConfigured, nil
 		}
 		return DiagnosticUnset, nil
+	}
+
+	if metadata.Path == "font.descriptors" {
+		values := make([]diagnosticDescriptor, len(cfg.Font.Descriptors))
+		for index, descriptor := range cfg.Font.Descriptors {
+			normalized, err := descriptor.Normalize()
+			if err != nil {
+				return "", fmt.Errorf("font.descriptors[%d]: %w", index+1, err)
+			}
+			descriptor = normalized
+			values[index] = diagnosticDescriptor{
+				Family: descriptor.Family, CollectionFace: descriptor.CollectionFace,
+				Weight: descriptor.Weight, Style: string(descriptor.Style), Stretch: descriptor.Stretch,
+				AttributeMode: string(descriptor.AttributeMode),
+			}
+			if descriptor.CollectionIndex.Present {
+				collectionIndex := descriptor.CollectionIndex.Value
+				values[index].CollectionIndex = &collectionIndex
+			}
+		}
+		encoded, err := json.Marshal(values)
+		if err != nil {
+			return "", err
+		}
+		return string(encoded), nil
 	}
 
 	value, ok := configFieldBySchemaPath(reflect.ValueOf(cfg), strings.Split(metadata.Path, "."))

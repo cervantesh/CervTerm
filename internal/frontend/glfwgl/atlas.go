@@ -98,10 +98,21 @@ func (a *glyphAtlas) Reset() {
 	log.Printf("glyph atlas generation reset: generation=%d", a.generation)
 }
 
+func (a *glyphAtlas) resolveStyle(request fontdesc.RequestedFaceStyle) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode) {
+	if a == nil {
+		return fontdesc.ResolvedFaceKey{}, fontdesc.SyntheticNone
+	}
+	return a.activeContext.resolveStyle(request)
+}
+
 func (a *glyphAtlas) drawRune(r rune, x, y float32, fg color.RGBA, scale, skew float32) {
-	entry, ok := a.cachedRune(r)
+	a.drawRuneStyle(fontdesc.RequestedFaceStyleNormal, r, x, y, fg, scale, skew)
+}
+
+func (a *glyphAtlas) drawRuneStyle(request fontdesc.RequestedFaceStyle, r rune, x, y float32, fg color.RGBA, scale, skew float32) {
+	entry, ok := a.cachedRuneStyle(request, r)
 	if !ok && r != '?' {
-		entry, ok = a.cachedRune('?')
+		entry, ok = a.cachedRuneStyle(request, '?')
 	}
 	if ok {
 		a.drawEntry(entry, x, y, fg, scale, skew)
@@ -109,7 +120,11 @@ func (a *glyphAtlas) drawRune(r rune, x, y float32, fg color.RGBA, scale, skew f
 }
 
 func (a *glyphAtlas) drawCluster(cluster string, cellSpan int, x, y float32, fg color.RGBA, scale, skew float32) bool {
-	entry, ok := a.cachedCluster(cluster, cellSpan)
+	return a.drawClusterStyle(fontdesc.RequestedFaceStyleNormal, cluster, cellSpan, x, y, fg, scale, skew)
+}
+
+func (a *glyphAtlas) drawClusterStyle(request fontdesc.RequestedFaceStyle, cluster string, cellSpan int, x, y float32, fg color.RGBA, scale, skew float32) bool {
+	entry, ok := a.cachedClusterStyle(request, cluster, cellSpan)
 	if ok {
 		a.drawEntry(entry, x, y, fg, scale, skew)
 	}
@@ -129,7 +144,11 @@ func (a *glyphAtlas) supportsLigatures() bool {
 // cached (positive as an atlas entry, negative in runNegative) so a run is
 // shaped at most once per atlas generation.
 func (a *glyphAtlas) drawRun(run string, cellSpan int, x, y float32, fg color.RGBA, scale, skew float32) bool {
-	entry, ok := a.cachedRun(run, cellSpan)
+	return a.drawRunStyle(fontdesc.RequestedFaceStyleNormal, run, cellSpan, x, y, fg, scale, skew)
+}
+
+func (a *glyphAtlas) drawRunStyle(request fontdesc.RequestedFaceStyle, run string, cellSpan int, x, y float32, fg color.RGBA, scale, skew float32) bool {
+	entry, ok := a.cachedRunStyle(request, run, cellSpan)
 	if ok {
 		a.drawEntry(entry, x, y, fg, scale, skew)
 	}
@@ -137,23 +156,32 @@ func (a *glyphAtlas) drawRun(run string, cellSpan int, x, y float32, fg color.RG
 }
 
 func (a *glyphAtlas) cachedRun(run string, cellSpan int) (atlasEntry, bool) {
+	return a.cachedRunStyle(fontdesc.RequestedFaceStyleNormal, run, cellSpan)
+}
+
+func (a *glyphAtlas) cachedRunStyle(request fontdesc.RequestedFaceStyle, run string, cellSpan int) (atlasEntry, bool) {
 	ctx := a.activeContext
 	if run == "" || ctx == nil {
 		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	key := atlasKey{spec: ctx.key, face: ctx.resolvedFace, kind: 'l', text: run, span: int32(cellSpan)}
+	face, _ := ctx.resolveStyle(request)
+	key := atlasKey{spec: ctx.key, face: face, kind: 'l', text: run, span: int32(cellSpan)}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
 	if gen, ok := a.runNegative[key]; ok && entryGenerationValid(gen, a.generation) {
 		return atlasEntry{}, false
 	}
-	backend, ok := activeLigatureBackend(ctx)
-	if !ok {
+	var rasterized fontglyph.RasterizedGlyph
+	var ligated bool
+	if backend, ok := activeStyledBackend(ctx); ok {
+		rasterized, ligated = backend.RasterizeRunStyle(request, run, cellSpan)
+	} else if backend, ok := activeLigatureBackend(ctx); ok {
+		rasterized, ligated = backend.RasterizeRun(run, cellSpan)
+	} else {
 		return atlasEntry{}, false
 	}
-	rasterized, ligated := backend.RasterizeRun(run, cellSpan)
 	if !ligated {
 		if a.runNegative == nil {
 			a.runNegative = make(map[atlasKey]uint64)
@@ -165,18 +193,29 @@ func (a *glyphAtlas) cachedRun(run string, cellSpan int) (atlasEntry, bool) {
 }
 
 func (a *glyphAtlas) cachedRune(r rune) (atlasEntry, bool) {
+	return a.cachedRuneStyle(fontdesc.RequestedFaceStyleNormal, r)
+}
+
+func (a *glyphAtlas) cachedRuneStyle(request fontdesc.RequestedFaceStyle, r rune) (atlasEntry, bool) {
 	ctx := a.activeContext
 	if ctx == nil {
 		return atlasEntry{}, false
 	}
+	face, _ := ctx.resolveStyle(request)
 	// Key on the rune directly; the old atlasKey{text: string(r)} allocated a
 	// string on every glyph lookup — i.e. per visible cell per frame.
-	key := atlasKey{spec: ctx.key, face: ctx.resolvedFace, kind: 'r', r: r}
+	key := atlasKey{spec: ctx.key, face: face, kind: 'r', r: r}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
 	span := max(1, core.RuneWidth(r))
-	rasterized, ok := ctx.backend.Rasterize(r, span)
+	var rasterized fontglyph.RasterizedGlyph
+	var ok bool
+	if backend, styled := activeStyledBackend(ctx); styled {
+		rasterized, ok = backend.RasterizeStyle(request, r, span)
+	} else {
+		rasterized, ok = ctx.backend.Rasterize(r, span)
+	}
 	if !ok {
 		return atlasEntry{}, false
 	}
@@ -184,16 +223,27 @@ func (a *glyphAtlas) cachedRune(r rune) (atlasEntry, bool) {
 }
 
 func (a *glyphAtlas) cachedCluster(cluster string, cellSpan int) (atlasEntry, bool) {
+	return a.cachedClusterStyle(fontdesc.RequestedFaceStyleNormal, cluster, cellSpan)
+}
+
+func (a *glyphAtlas) cachedClusterStyle(request fontdesc.RequestedFaceStyle, cluster string, cellSpan int) (atlasEntry, bool) {
 	ctx := a.activeContext
 	if cluster == "" || ctx == nil {
 		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	key := atlasKey{spec: ctx.key, face: ctx.resolvedFace, kind: 'c', text: cluster, span: int32(cellSpan)}
+	face, _ := ctx.resolveStyle(request)
+	key := atlasKey{spec: ctx.key, face: face, kind: 'c', text: cluster, span: int32(cellSpan)}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
-	rasterized, ok := ctx.backend.RasterizeCluster(cluster, cellSpan)
+	var rasterized fontglyph.RasterizedGlyph
+	var ok bool
+	if backend, styled := activeStyledBackend(ctx); styled {
+		rasterized, ok = backend.RasterizeClusterStyle(request, cluster, cellSpan)
+	} else {
+		rasterized, ok = ctx.backend.RasterizeCluster(cluster, cellSpan)
+	}
 	if !ok {
 		return atlasEntry{}, false
 	}

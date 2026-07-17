@@ -35,6 +35,15 @@ return {
   },
   font = {
     family = %q,
+    -- Optional ordered primary face descriptors replace family selection as a
+    -- whole list. Omitted attributes default to weight=400, style="normal",
+    -- stretch=100, and attribute_mode="augment". collection_face and
+    -- collection_index are mutually exclusive; index 0 is an explicit value.
+    -- descriptors = {
+    --   { family = "Example Mono", weight = 400, style = "normal",
+    --     stretch = 100, attribute_mode = "augment" },
+    --   { family = "Example Collection", collection_index = 0 },
+    -- },
     size = %.1f,
     -- Render programming ligatures (-> => != === etc.) when the font provides
     -- them (Fira Code, Cascadia Code, JetBrains Mono). No effect with fonts

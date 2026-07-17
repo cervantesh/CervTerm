@@ -27,6 +27,7 @@ const (
 	KindKeyList         ValueKind = "key_list"
 	KindEvents          ValueKind = "events"
 	KindDocumentMap     ValueKind = "document_map"
+	KindDescriptorList  ValueKind = "descriptor_list"
 	KindColorSchemeMap  ValueKind = "color_scheme_map"
 )
 
@@ -73,6 +74,9 @@ func FromDocument(base Config, document Document) Config {
 	cfg := FromTable(base, document.Root)
 	if document.AuthoredVersion >= 2 {
 		cfg.ColorScheme = stringField(document.Root, "color_scheme", cfg.ColorScheme)
+		if font := tableField(document.Root, "font"); font != nil {
+			cfg.Font.Descriptors = descriptorListField(font, "descriptors", cfg.Font.Descriptors)
+		}
 	}
 	return cfg
 }
@@ -96,7 +100,8 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "blur", kind: KindBoolean, apply: ApplyLive, runtimeOverride: true},
 	}},
 	{name: "font", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
-		{name: "family", kind: KindString}, {name: "size", kind: KindNumber}, {name: "ligatures", kind: KindBoolean},
+		{name: "family", kind: KindString}, {name: "descriptors", kind: KindDescriptorList},
+		{name: "size", kind: KindNumber}, {name: "ligatures", kind: KindBoolean},
 	}},
 	{name: "color_scheme", kind: KindString, apply: ApplyLive},
 	{name: "colors", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
@@ -159,6 +164,9 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 			if prefix != "" {
 				path = prefix + "." + child.name
 			}
+			if version == 1 && path == "font.descriptors" {
+				continue
+			}
 			apply := child.apply
 			if apply == "" {
 				apply = inheritedApply
@@ -216,6 +224,7 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 	collectPresence(root, rootSchema, "", document.Present)
 	if version == 1 {
 		delete(document.Present, "color_scheme")
+		delete(document.Present, "font.descriptors")
 	}
 	if root.RawGetString("config_version") != lua.LNil {
 		document.Present["config_version"] = struct{}{}
