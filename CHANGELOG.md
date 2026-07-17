@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Versioned configuration documents with strict v2 field/type diagnostics, exact unversioned v1 compatibility, presence tracking, and in-memory migration scaffolding.
 - A candidate-only canonical configuration source graph with bounded include traversal, dependency capture, declarative side-effect guards, and transactional Teal staging.
 - A candidate-only schema composition engine with deterministic record/map/list/function merge, immutable unset tombstones, bounded node counts, and value-free provenance chains.
+- Candidate-only named environment/profile declarations with deterministic selection precedence, same-name merge, and environment-then-profile provenance layers.
 
 ### Fixed
 

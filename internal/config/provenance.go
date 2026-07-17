@@ -8,9 +8,11 @@ import (
 type ProvenanceLayer string
 
 const (
-	LayerDefaults ProvenanceLayer = "defaults"
-	LayerInclude  ProvenanceLayer = "include"
-	LayerPrimary  ProvenanceLayer = "primary"
+	LayerDefaults    ProvenanceLayer = "defaults"
+	LayerInclude     ProvenanceLayer = "include"
+	LayerPrimary     ProvenanceLayer = "primary"
+	LayerEnvironment ProvenanceLayer = "environment"
+	LayerProfile     ProvenanceLayer = "profile"
 )
 
 type ProvenanceOrigin struct {

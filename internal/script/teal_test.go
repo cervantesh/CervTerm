@@ -77,6 +77,10 @@ func TestTealConfigUnsetTypeContract(t *testing.T) {
 local cfg: cervterm.Config = {
   config_version = 2,
   font = { family = "Mono", size = cervterm.config.unset, ligatures = true },
+  default_environment = "windows",
+  default_profile = "work",
+  environments = { windows = { font = { family = "Env", size = 12, ligatures = true } } },
+  profiles = { work = { font = { family = cervterm.config.unset, size = 14, ligatures = false } } },
 }
 return cfg
 `
