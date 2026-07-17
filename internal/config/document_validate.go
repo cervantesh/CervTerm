@@ -106,6 +106,8 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		return validateStringList(source, path, value)
 	case KindStringMap:
 		return validateStringMap(source, path, value, allowUnset)
+	case KindIndexedColorMap:
+		return validateIndexedColorMap(source, path, value, allowUnset)
 	case KindKeyList:
 		return validateKeyList(source, path, value)
 	case KindEvents:
@@ -162,6 +164,46 @@ func validateANSIList(source, path string, value lua.LValue) error {
 		}
 	}
 	return nil
+}
+
+func validateIndexedColorMap(source, path string, value lua.LValue, allowUnset bool) error {
+	table, ok := value.(*lua.LTable)
+	if !ok {
+		return typeError(source, path, KindIndexedColorMap, value)
+	}
+	var failures []string
+	table.ForEach(func(key, value lua.LValue) {
+		number, keyOK := key.(lua.LNumber)
+		parsed := float64(number)
+		if !keyOK || math.IsNaN(parsed) || math.IsInf(parsed, 0) || math.Trunc(parsed) != parsed || parsed < firstIndexedColor || parsed > 255 {
+			failures = append(failures, fmt.Sprintf("%s: map key %q must be an integer between 16 and 255", path, key.String()))
+			return
+		}
+		entryPath := fmt.Sprintf("%s[%d]", path, int(parsed))
+		if allowUnset && isUnsetValue(value) {
+			return
+		}
+		color, valueOK := value.(lua.LString)
+		if !valueOK {
+			failures = append(failures, fmt.Sprintf("%s: must be string%s, got %s", entryPath, unsetExpectation(allowUnset), value.Type().String()))
+			return
+		}
+		if !isHexRGBColor(string(color)) {
+			failures = append(failures, fmt.Sprintf("%s: must be #RRGGBB", entryPath))
+		}
+	})
+	if len(failures) != 0 {
+		sort.Strings(failures)
+		return fmt.Errorf("%s: %s", sourceLabel(source), failures[0])
+	}
+	return nil
+}
+
+func unsetExpectation(allowUnset bool) string {
+	if allowUnset {
+		return " or cervterm.config.unset"
+	}
+	return ""
 }
 
 func validateStringMap(source, path string, value lua.LValue, allowUnset bool) error {

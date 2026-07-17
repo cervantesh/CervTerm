@@ -59,3 +59,27 @@ func TestANSI256ColorCompatibility(t *testing.T) {
 		}
 	}
 }
+
+func TestColorResolverSparseIndexedOverrides(t *testing.T) {
+	resolver := DefaultColorResolver()
+	neighbor := resolver.ResolveFG(IndexedColor(195))
+	if !resolver.SetIndexed(196, RGB{R: 1, G: 2, B: 3}) {
+		t.Fatal("index 196 override was rejected")
+	}
+	if got := resolver.ResolveFG(IndexedColor(196)); got != (RGB{R: 1, G: 2, B: 3}) {
+		t.Fatalf("index 196 = %#v", got)
+	}
+	if got := resolver.ResolveFG(IndexedColor(195)); got != neighbor {
+		t.Fatalf("neighbor changed = %#v, want %#v", got, neighbor)
+	}
+	ansiBefore := resolver.ResolveFG(IndexedColor(1))
+	if resolver.SetIndexed(1, RGB{}) || resolver.ResolveFG(IndexedColor(1)) != ansiBefore {
+		t.Fatal("sparse override changed ANSI-owned index")
+	}
+	for index := 0; index <= 255; index++ {
+		defaults := DefaultColorResolver()
+		if got, want := defaults.ResolveFG(IndexedColor(uint8(index))), ANSI256Color(index); got != want {
+			t.Fatalf("default resolver index %d = %#v, want %#v", index, got, want)
+		}
+	}
+}

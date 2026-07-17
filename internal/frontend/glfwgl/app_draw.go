@@ -81,7 +81,7 @@ func (a *App) draw() {
 		var cursorRowOrder []int
 		for row := 0; row < a.snap.Rows; row++ {
 			rowsDrawn++
-			order := a.drawRow(row, background, selectionColor, defaultFG, colorResolver)
+			order := a.drawRow(row, background, selectionColor, defaultFG, &colorResolver)
 			if row == a.snap.CursorRow {
 				cursorRowOrder = order
 			}

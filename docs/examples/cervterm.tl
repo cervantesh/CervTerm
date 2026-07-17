@@ -28,6 +28,7 @@ local config: cervterm.Config = {
       "#57627A", "#FF7AA8", "#A6FFB5", "#FFE68A",
       "#9BB8FF", "#E5A7FF", "#90F4FF", "#FFFFFF",
     },
+    -- Optional: indexed_colors = { [16] = "#102030", [196] = "#FF1010" },
   },
   scrolling = {
     history = 2000,

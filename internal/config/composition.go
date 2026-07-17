@@ -145,6 +145,10 @@ func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchem
 			if err := b.mergeStringMap(dst, child, path, value); err != nil {
 				return err
 			}
+		case KindIndexedColorMap:
+			if err := b.mergeIndexedColorMap(dst, child, path, value); err != nil {
+				return err
+			}
 		case KindEvents:
 			if err := b.mergeEvents(dst, child, path, value); err != nil {
 				return err
@@ -202,6 +206,51 @@ func (b *compositionBuilder) mergeStringMap(dst *lua.LTable, schema fieldSchema,
 		b.provenance.set(entryPath, b.origin, false, schema.sensitive)
 	}
 	return nil
+}
+
+func (b *compositionBuilder) mergeIndexedColorMap(dst *lua.LTable, schema fieldSchema, path string, value lua.LValue) error {
+	source, ok := value.(*lua.LTable)
+	if !ok {
+		return nil
+	}
+	target, ok := dst.RawGetString(schema.name).(*lua.LTable)
+	if !ok {
+		target = b.state.NewTable()
+		dst.RawSetString(schema.name, target)
+	}
+	keys := indexedColorKeys(source)
+	for _, key := range keys {
+		entry := source.RawGetInt(key)
+		entryPath := indexedColorEntryPath(path, key)
+		if isUnsetValue(entry) && b.document.AuthoredVersion == 2 {
+			if err := b.consume(1, entryPath); err != nil {
+				return err
+			}
+			target.RawSetInt(key, lua.LNil)
+			b.provenance.set(entryPath, b.origin, true, schema.sensitive)
+			continue
+		}
+		if _, ok := entry.(lua.LString); !ok {
+			continue
+		}
+		if err := b.consume(1, entryPath); err != nil {
+			return err
+		}
+		target.RawSetInt(key, entry)
+		b.provenance.set(entryPath, b.origin, false, schema.sensitive)
+	}
+	return nil
+}
+
+func indexedColorKeys(table *lua.LTable) []int {
+	keys := make([]int, 0, table.Len())
+	table.ForEach(func(key, _ lua.LValue) {
+		if number, ok := key.(lua.LNumber); ok {
+			keys = append(keys, int(number))
+		}
+	})
+	sort.Ints(keys)
+	return keys
 }
 
 func (b *compositionBuilder) mergeEvents(dst *lua.LTable, schema fieldSchema, path string, value lua.LValue) error {
@@ -291,7 +340,7 @@ func (b *compositionBuilder) seedDefaults(schema fieldSchema, prefix string) {
 			for _, child := range field.children {
 				seed(child, joinPath(path, child.name))
 			}
-		case KindStringMap, KindKeyList, KindEvents:
+		case KindStringMap, KindIndexedColorMap, KindKeyList, KindEvents:
 			// These surfaces have no fixed built-in winner: map provenance begins
 			// at concrete keys, while bindings and callbacks are absent by default.
 		default:
@@ -332,7 +381,7 @@ func fixedLeafPaths(schema fieldSchema, path string) []schemaLeaf {
 
 func legacyValueCompatible(value lua.LValue, kind ValueKind) bool {
 	switch kind {
-	case KindTable, KindStringList, KindStringMap, KindKeyList, KindEvents:
+	case KindTable, KindStringList, KindStringMap, KindIndexedColorMap, KindKeyList, KindEvents:
 		_, ok := value.(*lua.LTable)
 		return ok
 	case KindString:
@@ -351,4 +400,8 @@ func legacyValueCompatible(value lua.LValue, kind ValueKind) bool {
 
 func mapEntryPath(path, key string) string {
 	return path + "[" + strconv.Quote(key) + "]"
+}
+
+func indexedColorEntryPath(path string, key int) string {
+	return path + "[" + strconv.Itoa(key) + "]"
 }

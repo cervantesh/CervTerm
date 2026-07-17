@@ -93,12 +93,29 @@ func ANSIColors() [16]RGB { return ansi16 }
 type ColorResolver struct {
 	DefaultFG RGB
 	DefaultBG RGB
-	ANSI      [16]RGB
+	indexed   [256]RGB
 }
 
 func NewColorResolver(defaultFG, defaultBG RGB, ansi [16]RGB) ColorResolver {
-	return ColorResolver{DefaultFG: defaultFG, DefaultBG: defaultBG, ANSI: ansi}
+	resolver := ColorResolver{DefaultFG: defaultFG, DefaultBG: defaultBG}
+	for index := range resolver.indexed {
+		resolver.indexed[index] = resolveIndexedColor(uint8(index), ansi)
+	}
+	return resolver
 }
+
+// SetIndexed replaces one xterm fallback entry. ANSI indexes remain owned by
+// the dedicated 16-color palette and cannot be changed through this method.
+func (r *ColorResolver) SetIndexed(index uint8, value RGB) bool {
+	if r == nil || index < 16 {
+		return false
+	}
+	r.indexed[index] = value
+	return true
+}
+
+// IndexedRGB returns the effective physical color for one palette index.
+func (r ColorResolver) IndexedRGB(index uint8) RGB { return r.indexed[index] }
 
 func DefaultColorResolver() ColorResolver {
 	return NewColorResolver(DefaultFG, DefaultBG, ansi16)
@@ -116,7 +133,7 @@ func (r ColorResolver) resolve(color LogicalColor, defaultColor RGB) RGB {
 	switch color.Kind() {
 	case ColorIndexed:
 		index, _ := color.Index()
-		return resolveIndexedColor(index, r.ANSI)
+		return r.indexed[index]
 	case ColorRGB:
 		rgb, _ := color.RGB()
 		return rgb
