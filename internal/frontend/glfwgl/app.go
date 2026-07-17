@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"cervterm/internal/config"
-	"cervterm/internal/fontglyph"
 	"cervterm/internal/frontend/gpu"
 	"cervterm/internal/input"
 	"cervterm/internal/metrics"
@@ -29,6 +28,7 @@ type App struct {
 	chrome                 chromeColors
 	desiredCfg             config.Config
 	composedCfg            config.Config
+	safeFonts              bool
 	composedProvenance     []config.ProvenanceRecord
 	runtimeScopes          config.RuntimeScopes
 	configScope            config.ConfigScopeID
@@ -132,22 +132,6 @@ type App struct {
 	scrollbar        scrollbarState
 }
 
-func Run() error {
-	return RunWithConfig(config.Defaults())
-}
-
-func RunWithConfig(cfg config.Config) error {
-	return RunWithOptions(cfg, nil)
-}
-
-func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
-	return RunWithSource(cfg, rt, "")
-}
-
-func RunWithSource(cfg config.Config, rt *script.Runtime, sourcePath string) error {
-	return runWithSource(cfg, rt, nil, nil, nil, []string{sourcePath}, nil, sourcePath, script.CandidateOptions{})
-}
-
 func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, watchPaths []string, watchHashes map[string][32]byte, sourcePath string, options script.CandidateOptions) error {
 	runtime.LockOSThread()
 	var initialProvenance []config.ProvenanceRecord
@@ -156,10 +140,14 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 		initialProvenance = bundle.Provenance()
 		initialOptions = bundle.Options()
 	}
+	authoredCfg := cfg.Clone()
+	safeFonts := safeFontsMode.Swap(false)
+	activeCfg := effectiveStartupConfig(authoredCfg, safeFonts)
 	app := &App{
-		cfg:                    cfg.Clone(),
-		desiredCfg:             cfg.Clone(),
-		composedCfg:            cfg.Clone(),
+		cfg:                    activeCfg,
+		desiredCfg:             authoredCfg.Clone(),
+		composedCfg:            authoredCfg.Clone(),
+		safeFonts:              safeFonts,
 		configStateInitialized: true,
 		composedProvenance:     initialProvenance,
 		configPath:             sourcePath,
@@ -179,19 +167,6 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 	}
 	app.configScope = app.runtimeScopes.NewScope()
 	app.configWatch = newConfigWatchState(watchPaths...)
-	historyCapacity := cfg.Scrolling.History
-	hideCursorWhenScrolled := cfg.Scrolling.HideCursorWhenScrolled
-	app.mux = termmux.New(nil, termmux.Options{
-		ScrollbackCapacity:     &historyCapacity,
-		HideCursorWhenScrolled: &hideCursorWhenScrolled,
-		Wake:                   app.wakeMainLoop,
-		SetClipboard: func(_ termmux.PaneID, text string) {
-			if app.window != nil && cfg.Clipboard.OSC52 == "write" {
-				app.window.SetClipboardString(text)
-			}
-		},
-	})
-	app.mux.SetPaletteBase(configuredPaletteBase(app.cfg.Colors))
 	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {
 		app.statsSpec, app.statsSpecOK = spec, true
 	}
@@ -226,10 +201,13 @@ func (a *App) runWindow() error {
 		return err
 	}
 	defer glfw.Terminate()
-	// Stop reader goroutines while GLFW is still initialized. Clearing wakeReady
-	// first prevents new wake attempts; Shutdown joins readers that may already
-	// have observed true before glfw.Terminate runs.
-	defer func() { _ = a.mux.Shutdown() }()
+	// Stop reader goroutines while GLFW is still initialized. The mux is created
+	// only after the prepared atlas is adopted, so every early return is nil-safe.
+	defer func() {
+		if a.mux != nil {
+			_ = a.mux.Shutdown()
+		}
+	}()
 	// Registered after the Terminate defer so it runs first (LIFO): the reader
 	// must stop posting wakes before GLFW tears down.
 	a.wakeReady.Store(true)
@@ -272,21 +250,43 @@ func (a *App) runWindow() error {
 	// The GL context is current; build the renderer now so the atlas (which owns
 	// the page geometry) can configure its textures in its own constructor.
 	a.r = newGLRenderer(w)
+	rendererAdopted := false
+	defer func() {
+		if !rendererAdopted && a.r != nil {
+			a.r.Destroy()
+		}
+	}()
 	// -1 (not 0) so the first draw always drives Resize, even if the initial
 	// framebuffer is 0x0 (0 is a valid size, so it cannot double as the sentinel).
 	a.lastFBW, a.lastFBH = -1, -1
 	sx, sy := w.GetContentScale()
 	a.applyScale(sx, sy)
-	atlas, err := newGlyphAtlasWithSpec(a.r, fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(sx, sy), TextRaster: a.effectiveTextRaster()}, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+	stages := defaultFontInstallationStages()
+	plan, err := newFontInstallationPlan(a.cfg, effectiveDPI(sx, sy), a.effectiveTextRaster(), newAtlasBackend)
+	if err != nil {
+		return err
+	}
+	prepared, err := prepareFontInstallation(plan, stages)
+	if err != nil {
+		return err
+	}
+	defer prepared.Close()
+	atlas, err := prepared.adopt(a.r, stages)
 	if err != nil {
 		return err
 	}
 	a.atlas = atlas
-	defer func() { a.atlas.close() }()
+	rendererAdopted = true
+	defer func() {
+		if a.atlas != nil {
+			a.atlas.close()
+		}
+	}()
 	// Probe ligature support once (not per frame): stays off with SimpleShaper.
 	a.ligaturesActive = a.cfg.Font.Ligatures && atlas.supportsLigatures()
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
+	a.initMux()
 	// Every fallible window/renderer/font resource now exists. Publish staged v2
 	// Teal immediately before the remaining in-memory activation and PTY spawn.
 	if watchHashesChanged(a.configWatchHashes) {

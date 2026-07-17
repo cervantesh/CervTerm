@@ -29,6 +29,16 @@ func (v *repeatedFlagValues) Set(value string) error {
 	return nil
 }
 
+type frontendStartupFlags struct {
+	safeFonts bool
+}
+
+func registerFrontendStartupFlags(flags *flag.FlagSet) *frontendStartupFlags {
+	values := &frontendStartupFlags{}
+	flags.BoolVar(&values.safeFonts, "safe-fonts", false, "force the embedded Go Mono startup font")
+	return values
+}
+
 type compositionFlags struct {
 	environment optionalFlagValue
 	profile     optionalFlagValue

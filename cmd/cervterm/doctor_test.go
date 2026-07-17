@@ -111,3 +111,20 @@ func TestRunDoctorReturnsFailureForInvalidComposedConfig(t *testing.T) {
 		t.Fatalf("doctor failure output missing load error\n%s", output)
 	}
 }
+
+func TestRunDoctorReportsSafeFontsEffectiveFamily(t *testing.T) {
+	path := t.TempDir() + "/cervterm.lua"
+	if err := os.WriteFile(path, []byte(`return { font = { family = "Configured Missing Family" } }`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := captureStdout(t, func() {
+		if code := runDoctor(doctorOptions{ConfigPath: path, LogPath: "-", SafeFonts: true}); code != 0 {
+			t.Fatalf("runDoctor exit code = %d, want 0", code)
+		}
+	})
+	for _, want := range []string{"safe-fonts: enabled", "font-configured-family: Configured Missing Family", "font-family: Go Mono"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("doctor safe-font output missing %q\n%s", want, output)
+		}
+	}
+}

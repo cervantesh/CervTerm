@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"cervterm/internal/unicodecluster"
 
@@ -59,6 +60,7 @@ type GlyphInspection struct {
 }
 
 // Backend rasterizes Unicode codepoints and pre-shaped text clusters into metric-bearing glyph images.
+// Backends are owned by the frontend render thread; Rasterize, inspection, and Close must not be called concurrently.
 type Backend interface {
 	CellMetrics() (width int, height int, baseline int)
 	Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool)
@@ -75,6 +77,7 @@ type OpenTypeBackend struct {
 	faces           []loadedFace
 	fallbackSpec    Spec // spec for lazily-loaded fallback faces
 	fallbacksLoaded bool
+	closed          bool // main-thread lifecycle flag
 	cellW           int
 	cellH           int
 	baseline        int
@@ -82,18 +85,20 @@ type OpenTypeBackend struct {
 	shaper          Shaper
 	dwRaster        glyphRasterizer
 	subpixelText    bool
+	closeOnce       sync.Once
 }
 
 type loadedFace struct {
-	face       font.Face
-	sfnt       *sfnt.Font
-	tables     ColorTables
-	sbix       *sbixExtractor
-	cbdt       *cbdtExtractor
-	colr       *colrParser
-	svg        *svgExtractor
-	sourcePath string
-	faceIndex  int
+	face        font.Face
+	sfnt        *sfnt.Font
+	tables      ColorTables
+	sbix        *sbixExtractor
+	cbdt        *cbdtExtractor
+	colr        *colrParser
+	svg         *svgExtractor
+	sourcePath  string
+	faceIndex   int
+	cacheHandle *parsedFontHandle
 }
 
 func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
@@ -120,7 +125,7 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 }
 
 func embeddedGoMono(spec Spec) (loadedFace, font.Metrics, error) {
-	return loadCachedFaceIndex("embedded:gomono", 0, spec, func() ([]byte, error) { return gomono.TTF, nil })
+	return loadCachedFaceIndexKnownSize("embedded:gomono", 0, int64(len(gomono.TTF)), spec, func() ([]byte, error) { return gomono.TTF, nil })
 }
 
 func primaryFace(spec Spec) (loadedFace, font.Metrics, error) {
@@ -133,9 +138,7 @@ func primaryFace(spec Spec) (loadedFace, font.Metrics, error) {
 		return embeddedGoMono(spec)
 	}
 	log.Printf("configured font family %q resolved to %s face %d", spec.Family, resolution.Regular, resolution.FaceIndex)
-	face, metrics, err := loadCachedFaceIndex(resolution.Regular, resolution.FaceIndex, spec, func() ([]byte, error) {
-		return os.ReadFile(resolution.Regular)
-	})
+	face, metrics, err := loadCachedFileFaceIndex(resolution.Regular, resolution.FaceIndex, spec)
 	if err != nil {
 		log.Printf("configured font family %q could not be loaded/parsed from %s: %v; falling back to Go Mono", spec.Family, resolution.Regular, err)
 		return embeddedGoMono(spec)
@@ -169,10 +172,24 @@ func (b *OpenTypeBackend) CellMetrics() (width int, height int, baseline int) {
 }
 
 func (b *OpenTypeBackend) Close() {
-	if b != nil && b.dwRaster != nil {
-		b.dwRaster.Close()
-		b.dwRaster = nil
+	if b == nil {
+		return
 	}
+	b.closeOnce.Do(func() {
+		b.closed = true
+		for i := range b.faces {
+			if closer, ok := b.faces[i].face.(interface{ Close() error }); ok {
+				_ = closer.Close()
+			}
+			b.faces[i].face = nil
+			b.faces[i].cacheHandle.release()
+			b.faces[i].cacheHandle = nil
+		}
+		if b.dwRaster != nil {
+			b.dwRaster.Close()
+			b.dwRaster = nil
+		}
+	})
 }
 
 func (b *OpenTypeBackend) TextRasterEngine() string {
@@ -186,7 +203,7 @@ func (b *OpenTypeBackend) TextRasterEngine() string {
 }
 
 func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool) {
-	if r == 0 || r < 32 {
+	if b == nil || b.closed || r == 0 || r < 32 {
 		return RasterizedGlyph{}, false
 	}
 	lf, bounds, advance, ok := b.faceForRune(r)
@@ -257,12 +274,15 @@ func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool
 }
 
 func (b *OpenTypeBackend) RasterizeCluster(cluster string, cellSpan int) (RasterizedGlyph, bool) {
+	if b == nil || b.closed {
+		return RasterizedGlyph{}, false
+	}
 	glyph, _, ok := b.rasterizeCluster(cluster, cellSpan)
 	return glyph, ok
 }
 
 func (b *OpenTypeBackend) rasterizeCluster(cluster string, cellSpan int) (RasterizedGlyph, loadedFace, bool) {
-	if cluster == "" {
+	if b == nil || b.closed || cluster == "" {
 		return RasterizedGlyph{}, loadedFace{}, false
 	}
 	if composed, ok := normalizeClusterToSingleRune(cluster); ok {
@@ -332,6 +352,9 @@ func (b *OpenTypeBackend) rasterizeClusterWithFace(cluster string, cellSpan int,
 
 func (b *OpenTypeBackend) InspectClusterGlyph(cluster string, cellSpan int) GlyphInspection {
 	info := GlyphInspection{}
+	if b == nil || b.closed {
+		return info
+	}
 	glyph, face, ok := b.rasterizeCluster(cluster, cellSpan)
 	if !ok {
 		return info
@@ -412,6 +435,9 @@ func (b *OpenTypeBackend) rasterizeBitmapColorGlyph(lf loadedFace, r rune, cellS
 }
 
 func (b *OpenTypeBackend) faceForRune(r rune) (loadedFace, fixed.Rectangle26_6, fixed.Int26_6, bool) {
+	if b == nil || b.closed {
+		return loadedFace{}, fixed.Rectangle26_6{}, 0, false
+	}
 	if face, bounds, advance, ok := b.searchRune(r); ok {
 		return face, bounds, advance, true
 	}
@@ -443,7 +469,7 @@ func (b *OpenTypeBackend) searchRune(r rune) (loadedFace, fixed.Rectangle26_6, f
 // ensureFallbacks appends the fallback faces to b.faces on first use. Idempotent
 // and main-thread only (glyph lookup runs during draw prep on the loop thread).
 func (b *OpenTypeBackend) ensureFallbacks() {
-	if b.fallbacksLoaded {
+	if b == nil || b.closed || b.fallbacksLoaded {
 		return
 	}
 	b.fallbacksLoaded = true
@@ -465,6 +491,9 @@ func (b *OpenTypeBackend) faceHasColorGlyph(face loadedFace, r rune) bool {
 	return face.colr != nil || face.svg != nil
 }
 func (b *OpenTypeBackend) faceForCluster(cluster string) (loadedFace, bool) {
+	if b == nil || b.closed {
+		return loadedFace{}, false
+	}
 	for _, face := range b.clusterFaceCandidates(cluster) {
 		return face, true
 	}
@@ -479,14 +508,17 @@ func (b *OpenTypeBackend) faceForCluster(cluster string) (loadedFace, bool) {
 }
 
 func (b *OpenTypeBackend) clusterFaceCandidates(cluster string) []loadedFace {
+	if b == nil || b.closed {
+		return nil
+	}
 	var out []loadedFace
 	appendFace := func(face loadedFace, ok bool) {
 		if !ok {
 			return
 		}
-		key := strings.ToLower(filepath.Clean(face.sourcePath))
+		key := fontCacheKey(face.sourcePath, face.faceIndex)
 		for _, existing := range out {
-			if strings.ToLower(filepath.Clean(existing.sourcePath)) == key {
+			if fontCacheKey(existing.sourcePath, existing.faceIndex) == key {
 				return
 			}
 		}
@@ -599,7 +631,7 @@ func DiagnoseEmojiFonts() EmojiFontDiagnostics {
 func loadFallbackFaces(spec Spec) []loadedFace {
 	var faces []loadedFace
 	for _, path := range fallbackFontPaths() {
-		face, _, err := loadCachedFaceIndex(path, 0, spec, func() ([]byte, error) { return os.ReadFile(path) })
+		face, _, err := loadCachedFileFaceIndex(path, 0, spec)
 		if err != nil {
 			continue
 		}

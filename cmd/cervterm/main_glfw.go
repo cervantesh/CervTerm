@@ -23,6 +23,7 @@ func main() {
 	configPath := flag.String("config", "", "path to cervterm.lua or cervterm.tl")
 	compositionFlags := registerCompositionFlags(flag.CommandLine)
 	explainFlags := registerExplainConfigFlags(flag.CommandLine)
+	frontendFlags := registerFrontendStartupFlags(flag.CommandLine)
 	showVersion := flag.Bool("version", false, "print CervTerm version")
 	showBuildInfo := flag.Bool("build-info", false, "print CervTerm build information")
 	printDefaultConfig := flag.Bool("print-default-config", false, "print default Lua configuration")
@@ -61,7 +62,7 @@ func main() {
 		for _, warning := range fontglyph.DiagnoseEmojiFonts().Warnings {
 			warnings = append(warnings, warning)
 		}
-		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath, EmojiWarnings: warnings, ContentScale: "not probed in diagnostic mode", CandidateOptions: candidateOptions}))
+		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath, EmojiWarnings: warnings, ContentScale: "not probed in diagnostic mode", CandidateOptions: candidateOptions, SafeFonts: frontendFlags.safeFonts}))
 	}
 	logFile, err := applog.Setup(applog.ResolvePath(*logPath))
 	if err != nil {
@@ -129,6 +130,7 @@ func main() {
 		}
 		log.Fatal(err)
 	}
+	glfwgl.SetSafeFontsMode(frontendFlags.safeFonts)
 	if err := glfwgl.RunWithVersioned(loaded, path); err != nil {
 		log.Fatal(err)
 	}
