@@ -511,7 +511,7 @@ func TestReloadSelectedIncludedColorSchemeChangesAtomicallyAndInvalidEditPreserv
 	dir := t.TempDir()
 	primary := filepath.Join(dir, "cervterm.lua")
 	include := filepath.Join(dir, "schemes.lua")
-	writeReloadConfig(t, include, `return {config_version=2,color_schemes={selected={foreground="#112233",background="#080B12",indexed_colors={[16]="#161616"}}}}`)
+	writeReloadConfig(t, include, `return {config_version=2,color_schemes={selected={foreground="#112233",background="#080B12",chrome_background="#101112",chrome_muted="#202122",accent="#303132",split="#404142",search_match="#505152",error="#606162",indexed_colors={[16]="#161616"}}}}`)
 	writeReloadConfig(t, primary, `return {config_version=2,includes={"schemes.lua"},color_scheme="selected"}`)
 	loaded, err := script.LoadVersioned(primary, config.Defaults(), script.CandidateOptions{})
 	if err != nil {
@@ -533,7 +533,7 @@ func TestReloadSelectedIncludedColorSchemeChangesAtomicallyAndInvalidEditPreserv
 		}
 	}()
 	initialRT := app.scriptRT
-	writeReloadConfig(t, include, `return {config_version=2,color_schemes={selected={foreground="#AABBCC",background="#102030",indexed_colors={[16]="#262626"}}}}`)
+	writeReloadConfig(t, include, `return {config_version=2,color_schemes={selected={foreground="#AABBCC",background="#102030",chrome_background="#11121314",chrome_muted="#21222324",accent="#31323334",split="#41424344",search_match="#51525354",error="#61626364",indexed_colors={[16]="#262626"}}}}`)
 	if err := app.reloadConfig(); err != nil {
 		t.Fatalf("reload selected included scheme: %v", err)
 	}
@@ -541,10 +541,13 @@ func TestReloadSelectedIncludedColorSchemeChangesAtomicallyAndInvalidEditPreserv
 		t.Fatal("successful scheme reload did not replace runtime atomically")
 	}
 	if app.cfg.ColorScheme != "selected" || app.cfg.Colors.Foreground != "#AABBCC" || app.cfg.Colors.Background != "#102030" || app.cfg.Colors.IndexedColors.Lookup(16) != "#262626" {
-		t.Fatalf("reloaded selected scheme = %#v", app.cfg)
+		t.Fatalf("reloaded selected scheme base colors = %#v", app.cfg)
+	}
+	if app.cfg.Colors.ChromeBackground != "#11121314" || app.cfg.Colors.ChromeMuted != "#21222324" || app.cfg.Colors.Accent != "#31323334" || app.cfg.Colors.Split != "#41424344" || app.cfg.Colors.SearchMatch != "#51525354" || app.cfg.Colors.Error != "#61626364" {
+		t.Fatalf("reloaded selected scheme semantic chrome = %#v", app.cfg.Colors)
 	}
 	beforeConfig, beforeDesired, beforeRT, beforeBundle := app.cfg, app.DesiredConfig(), app.scriptRT, app.scriptBundle
-	writeReloadConfig(t, include, `return {config_version=2,color_schemes={selected={foreground="#DDEEFF",background="invalid"}}}`)
+	writeReloadConfig(t, include, `return {config_version=2,color_schemes={selected={foreground="#DDEEFF",search_match="invalid"}}}`)
 	if err := app.reloadConfig(); err == nil || !strings.Contains(err.Error(), "must be #RRGGBB or #RRGGBBAA") {
 		t.Fatalf("invalid scheme reload error = %v", err)
 	}

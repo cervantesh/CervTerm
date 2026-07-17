@@ -12,7 +12,6 @@ import (
 	"cervterm/internal/frontend/gpu"
 	termmux "cervterm/internal/mux"
 	"cervterm/internal/render"
-	cervtermtheme "cervterm/internal/theme"
 )
 
 // hudCache holds the cached HUD rows and the inputs they were built from; see
@@ -23,6 +22,7 @@ type hudCache struct {
 	notice    string
 	showStats bool
 	cols      int
+	chrome    chromeColors
 	rows      int
 	statsAt   time.Time
 }
@@ -40,9 +40,9 @@ func (a *App) draw() {
 	}
 	a.r.BeginFrame(w, h)
 
-	palette := cervtermtheme.DefaultPalette()
-	background := configColor(a.cfg.Colors.Background, themeColor(palette.Background))
-	cursorColor := configColor(a.cfg.Colors.Cursor, themeColor(palette.Accent))
+	a.chrome = resolveChromeColors(a.cfg)
+	background := configColor(a.cfg.Colors.Background, color.RGBA{0x08, 0x0B, 0x12, 0xFF})
+	cursorColor := configColor(a.cfg.Colors.Cursor, a.chrome.accent)
 	selectionColor := configColor(a.cfg.Colors.SelectionBackground, color.RGBA{0x2A, 0x63, 0x77, 0xFF})
 	defaultFG := configColor(a.cfg.Colors.Foreground, rgb(core.DefaultFG))
 	colorResolver := configuredColorResolver(a.cfg.Colors)
@@ -108,14 +108,14 @@ func (a *App) draw() {
 	a.paddingX, a.paddingY = basePaddingX, basePaddingY
 	for _, divider := range layout.Dividers {
 		r := divider.Pixels
-		a.fillRect(float32(r.X), float32(r.Y), float32(r.Width), float32(r.Height), color.RGBA{0x4A, 0x52, 0x63, 0xFF})
+		a.fillRect(float32(r.X), float32(r.Y), float32(r.Width), float32(r.Height), a.chrome.split)
 	}
 	if view, ok := a.mux.PaneView(focused); ok {
 		r := view.Geometry.Pixels
 		if r.Width > 0 && r.Height > 0 {
-			accent := cursorColor
+			accent := a.chrome.accent
 			if view.State == termmux.PaneStateExited || view.State == termmux.PaneStateFailed {
-				accent = color.RGBA{0xD8, 0x72, 0x72, 0xFF}
+				accent = a.chrome.error
 			}
 			a.fillRect(float32(r.X), float32(r.Y), float32(r.Width), 1, accent)
 			a.fillRect(float32(r.X), float32(r.Bottom()-1), float32(r.Width), 1, accent)
@@ -134,9 +134,9 @@ func (a *App) draw() {
 	a.retainVisibleFontContexts(layout)
 	a.damage.rowsDrawn = rowsDrawn
 	a.prepareStatusBand(w)
-	a.drawHUD(w, h, palette, frameNow)
-	a.drawStatusBand(w, palette)
-	a.drawSearchBar(w, h, palette)
+	a.drawHUD(w, h, a.chrome, frameNow)
+	a.drawStatusBand(w, a.chrome)
+	a.drawSearchBar(w, h, a.chrome)
 	a.drawScrollbar(frameNow, background, w, h)
 	a.lastBlinkPhase = frameBlink
 	if a.showStats {
@@ -165,7 +165,7 @@ func (a *App) updateFPS() {
 // the 500ms stats window elapsed, cols/rows changed, or the visible notice
 // text differs from what was cached. The notice is independent of showStats, so
 // all four (showStats, notice) combinations are handled.
-func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
+func (a *App) refreshHUDCache(chrome chromeColors, now time.Time) {
 	noticeVisible := a.notice != "" && now.Before(a.noticeUntil)
 	curNotice := ""
 	if noticeVisible {
@@ -177,7 +177,7 @@ func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
 	statsStale := a.showStats && (!a.hud.showStats ||
 		a.cols != a.hud.cols || a.rows != a.hud.rows ||
 		now.Sub(a.hud.statsAt) >= 500*time.Millisecond)
-	if !statsStale && curNotice == a.hud.notice && a.showStats == a.hud.showStats {
+	if !statsStale && curNotice == a.hud.notice && a.showStats == a.hud.showStats && chrome == a.hud.chrome {
 		return
 	}
 
@@ -188,24 +188,25 @@ func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
 		a.hud.lines = append(a.hud.lines,
 			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.effectiveTextRaster(), a.cfg.Font.Family, a.FontSize()),
 			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
-		a.hud.colors = append(a.hud.colors, themeColor(palette.Muted), themeColor(palette.Muted))
+		a.hud.colors = append(a.hud.colors, chrome.muted, chrome.muted)
 		a.hud.statsAt = now
 	}
 	if noticeVisible {
 		a.hud.lines = append(a.hud.lines, a.notice)
-		a.hud.colors = append(a.hud.colors, themeColor(palette.Accent))
+		a.hud.colors = append(a.hud.colors, chrome.accent)
 	}
 	a.hud.showStats = a.showStats
 	a.hud.notice = curNotice
 	a.hud.cols, a.hud.rows = a.cols, a.rows
+	a.hud.chrome = chrome
 }
 
 // drawHUD overlays the optional two-row stats panel (toggled by the stats
 // hotkey) and any transient notice on top of the terminal, so the terminal
 // itself has no permanent chrome.
-func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette, now time.Time) {
-	a.refreshHUDCache(palette, now)
-	a.paint(hudLayout(a.hud.lines, a.hud.colors, a.cellW, a.cellH, a.uiScale, themeColor(palette.Accent)))
+func (a *App) drawHUD(w, h int, chrome chromeColors, now time.Time) {
+	a.refreshHUDCache(chrome, now)
+	a.paint(hudLayout(a.hud.lines, a.hud.colors, a.cellW, a.cellH, a.uiScale, chrome.background, chrome.accent))
 }
 
 // paint executes a draw-list, translating each command into the corresponding
@@ -225,16 +226,12 @@ func (a *App) paint(cmds []drawCmd) {
 	}
 }
 
-// searchHighlightColor tints the current match cells under the glyphs, a warm
-// amber distinct from the cool selection fill so the two never read as the same.
-var searchHighlightColor = color.RGBA{0x7A, 0x5C, 0x12, 0xFF}
-
 // drawSearchBar renders the modal search overlay at the bottom of the window,
 // mirroring drawHUD's translucent-fill + accent-line + drawString style. It is
 // drawn only while the bar is open; closing repaints a clean frame (the search
 // state is in the damage global-fallback list).
-func (a *App) drawSearchBar(w, h int, palette cervtermtheme.Palette) {
-	a.paint(searchBarLayout(a.search.active, string(a.search.query), a.search.hasMatch, w, h, a.cellH, a.uiScale, themeColor(palette.Accent), themeColor(palette.Muted)))
+func (a *App) drawSearchBar(w, h int, chrome chromeColors) {
+	a.paint(searchBarLayout(a.search.active, string(a.search.query), a.search.hasMatch, w, h, a.cellH, a.uiScale, chrome.background, chrome.accent, chrome.muted))
 }
 
 func (a *App) drawTextDecorations(x, y, w, h float32, c color.RGBA, attr core.Attr) {
@@ -343,8 +340,6 @@ func (a *App) replaceRect(x, y, w, h float32, c color.RGBA) {
 func (a *App) fillRect(x, y, w, h float32, c color.RGBA) {
 	a.r.FillRect(x, y, w, h, c)
 }
-
-func themeColor(c cervtermtheme.Color) color.RGBA { return color.RGBA{c.R, c.G, c.B, 0xFF} }
 
 func rgb(c core.RGB) color.RGBA { return color.RGBA{c.R, c.G, c.B, 0xFF} }
 func brighten(c color.RGBA) color.RGBA {

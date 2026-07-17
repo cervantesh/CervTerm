@@ -26,6 +26,7 @@ type App struct {
 	meter                  metrics.Meter
 	snap                   render.Snapshot
 	cfg                    config.Config
+	chrome                 chromeColors
 	desiredCfg             config.Config
 	composedCfg            config.Config
 	composedProvenance     []config.ProvenanceRecord
