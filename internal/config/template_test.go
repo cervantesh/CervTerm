@@ -33,3 +33,21 @@ func TestDefaultLuaContainsAppearanceSchema(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultLuaDocumentsTypedAndCallbackActions(t *testing.T) {
+	template := DefaultLua()
+	for _, fragment := range []string{
+		`local cervterm = require("cervterm")`,
+		"cervterm.action.CopySelection",
+		"cervterm.action.ScrollPage(1)",
+		"cervterm.action.Zoom(1)",
+		`cervterm.action.SplitPane("columns")`,
+		"cervterm.action.Multiple",
+		`label = "Send greeting"`,
+		"one-second watchdog",
+	} {
+		if !strings.Contains(template, fragment) {
+			t.Fatalf("default Lua template missing %q", fragment)
+		}
+	}
+}

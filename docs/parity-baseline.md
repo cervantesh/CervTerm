@@ -94,3 +94,6 @@ Every roadmap phase records:
 ## Current Capability Source
 
 `docs/parity-support-matrix.json` is the machine-readable feature/status source. Update it in the same PR that changes a feature from `planned` to `partial` or `supported`.
+
+Completed phase evidence:
+- [Phase 1 — Typed Action Engine](validation/phase-1-typed-action-engine.md)
