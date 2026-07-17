@@ -27,6 +27,10 @@ type App struct {
 	meter                  metrics.Meter
 	snap                   render.Snapshot
 	cfg                    config.Config
+	desiredCfg             config.Config
+	configStateInitialized bool
+	pendingConfig          []config.ConfigChange
+	lastConfigReloadError  string
 	configPath             string
 	configWatch            configWatchState
 	configWatchHashes      map[string][32]byte
@@ -160,20 +164,22 @@ func RunWithVersioned(loaded script.VersionedSource, sourcePath string) error {
 func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, watchPaths []string, watchHashes map[string][32]byte, sourcePath string) error {
 	runtime.LockOSThread()
 	app := &App{
-		cfg:               cfg,
-		configPath:        sourcePath,
-		scriptRT:          rt,
-		scriptBundle:      bundle,
-		scriptActivation:  activation,
-		legacyTransition:  legacyTransition,
-		configWatchHashes: watchHashes,
-		cellW:             9,
-		cellH:             16,
-		uiScale:           1,
-		blinkStart:        time.Now(),
-		paneUI:            make(map[termmux.PaneID]*paneUIState),
-		pendingPaneScroll: make(map[termmux.PaneID]int),
-		pendingPaneResize: make(map[termmux.PaneID]termmux.PaneGeometry),
+		cfg:                    cfg.Clone(),
+		desiredCfg:             cfg.Clone(),
+		configStateInitialized: true,
+		configPath:             sourcePath,
+		scriptRT:               rt,
+		scriptBundle:           bundle,
+		scriptActivation:       activation,
+		legacyTransition:       legacyTransition,
+		configWatchHashes:      watchHashes,
+		cellW:                  9,
+		cellH:                  16,
+		uiScale:                1,
+		blinkStart:             time.Now(),
+		paneUI:                 make(map[termmux.PaneID]*paneUIState),
+		pendingPaneScroll:      make(map[termmux.PaneID]int),
+		pendingPaneResize:      make(map[termmux.PaneID]termmux.PaneGeometry),
 	}
 	app.configWatch = newConfigWatchState(watchPaths...)
 	historyCapacity := cfg.Scrolling.History

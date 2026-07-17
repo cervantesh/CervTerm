@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	termaction "cervterm/internal/action"
 	"cervterm/internal/config"
 	"cervterm/internal/fontglyph"
 	termmux "cervterm/internal/mux"
@@ -267,9 +268,16 @@ func TestReloadFailurePreservesConfigAndRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rt.Close()
 	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	defer func() {
+		if app.scriptRT != nil {
+			app.scriptRT.Close()
+		}
+	}()
 	app.configWatch = newConfigWatchState(path)
+	app.ensureConfigState()
+	desiredBefore := app.DesiredConfig()
+	pendingBefore := app.PendingConfigChanges()
 	before := app.cfg
 	writeReloadConfig(t, path, `return { colors = { background = "bad" } }`)
 	if err := app.reloadConfig(); err == nil {
@@ -281,9 +289,22 @@ func TestReloadFailurePreservesConfigAndRuntime(t *testing.T) {
 	if !reflect.DeepEqual(app.cfg, before) {
 		t.Fatalf("failed reload mutated active config: %#v", app.cfg)
 	}
+	if !reflect.DeepEqual(app.DesiredConfig(), desiredBefore) || !reflect.DeepEqual(app.PendingConfigChanges(), pendingBefore) {
+		t.Fatal("failed reload mutated desired or pending config state")
+	}
+	if app.LastConfigReloadError() == "" {
+		t.Fatal("failed reload did not retain diagnostic error")
+	}
+	writeReloadConfig(t, path, `return {}`)
+	if err := app.reloadConfig(); err != nil {
+		t.Fatalf("recovery reload: %v", err)
+	}
+	if app.LastConfigReloadError() != "" {
+		t.Fatalf("successful recovery retained error %q", app.LastConfigReloadError())
+	}
 }
 
-func TestReloadCommitsLiveFieldsAndReportsRestartFields(t *testing.T) {
+func TestReloadCommitsLiveFieldsAndRetainsScopedPendingChanges(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cervterm.lua")
 	writeReloadConfig(t, path, `return {}`)
 	cfg, rt, err := script.Load(path, config.Defaults())
@@ -296,23 +317,109 @@ func TestReloadCommitsLiveFieldsAndReportsRestartFields(t *testing.T) {
 		window = { opacity = 0.8 },
 		colors = { background = "#010203FF" },
 		scrolling = { history = 7, wheel_multiplier = 4, hide_cursor_when_scrolled = false },
-		shell = { program = "not-live" },
+		cursor = { shape = "block", blink = false, blink_interval_ms = 500, thickness = 0.2 },
+		shell = { program = "future-shell" },
+		font = { family = "Future Font" },
 	}`)
 	if err := app.reloadConfig(); err != nil {
 		t.Fatalf("reloadConfig: %v", err)
 	}
-	defer app.scriptRT.Close()
+	defer func() {
+		if app.scriptRT != nil {
+			app.scriptRT.Close()
+		}
+	}()
 	if app.scriptRT == rt {
 		t.Fatal("successful reload did not replace runtime")
 	}
-	if app.cfg.Window.Opacity != .8 || app.cfg.Colors.Background != "#010203FF" || app.cfg.Scrolling.History != 7 {
+	if app.cfg.Window.Opacity != .8 || app.cfg.Colors.Background != "#010203FF" || app.cfg.Scrolling.History != 7 || app.cfg.Cursor.Shape != "block" || app.cfg.Cursor.Blink {
 		t.Fatalf("live fields not committed: %#v", app.cfg)
 	}
-	if app.cfg.Shell.Program == "not-live" {
-		t.Fatal("startup-only shell field was hot-applied")
+	if app.cfg.Shell.Program == "future-shell" || app.cfg.Font.Family == "Future Font" {
+		t.Fatal("non-live scoped field was hot-applied")
 	}
-	if app.notice == "" {
-		t.Fatal("reload did not produce visible notice")
+	if app.DesiredConfig().Shell.Program != "future-shell" || app.DesiredConfig().Font.Family != "Future Font" {
+		t.Fatal("desired config did not retain candidate values")
+	}
+	wantPending := []config.ConfigChange{{Path: "font.family", Scope: config.ApplyRestart}, {Path: "shell.program", Scope: config.ApplyNewPane}}
+	if got := app.PendingConfigChanges(); !reflect.DeepEqual(got, wantPending) {
+		t.Fatalf("pending changes = %#v, want %#v", got, wantPending)
+	}
+	if !strings.Contains(app.notice, "font.family (restart)") || !strings.Contains(app.notice, "shell.program (new_pane)") {
+		t.Fatalf("scoped notice = %q", app.notice)
+	}
+	if app.LastConfigReloadError() != "" {
+		t.Fatalf("successful reload retained error %q", app.LastConfigReloadError())
+	}
+	writeReloadConfig(t, path, `return {}`)
+	if err := app.reloadConfig(); err != nil {
+		t.Fatalf("revert scoped config: %v", err)
+	}
+	if got := app.PendingConfigChanges(); len(got) != 0 {
+		t.Fatalf("reverted pending changes = %#v", got)
+	}
+	if app.notice != "config reloaded" {
+		t.Fatalf("revert notice = %q", app.notice)
+	}
+}
+
+func TestRuntimeLiveSetterPreservesUnrelatedDesiredPendingChanges(t *testing.T) {
+	app := newRunningMuxTestApp(t)
+	app.cfg = config.Defaults()
+	app.cfg.Colors.Background = "#080B12"
+	app.desiredCfg = app.cfg.Clone()
+	app.desiredCfg.Shell.Program = "future-shell"
+	app.desiredCfg.Font.Family = "Future Font"
+	app.configStateInitialized = true
+	app.pendingConfig = config.PendingConfigChanges(app.desiredCfg, app.cfg)
+
+	next := app.RuntimeConfig()
+	next.Window.Opacity = 0.8
+	if err := app.ApplyRuntimeConfig(next); err != nil {
+		t.Fatal(err)
+	}
+	if app.EffectiveConfig().Window.Opacity != 0.8 || app.DesiredConfig().Window.Opacity != 0.8 {
+		t.Fatal("runtime live setter did not update desired and effective live value")
+	}
+	if app.DesiredConfig().Shell.Program != "future-shell" || app.DesiredConfig().Font.Family != "Future Font" {
+		t.Fatal("runtime live setter erased unrelated desired values")
+	}
+	want := []config.ConfigChange{{Path: "font.family", Scope: config.ApplyRestart}, {Path: "shell.program", Scope: config.ApplyNewPane}}
+	if got := app.PendingConfigChanges(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("pending after runtime setter = %#v", got)
+	}
+}
+
+func TestNewPaneUsesDesiredShellWithoutChangingEffectiveWindowConfig(t *testing.T) {
+	factory := &capturingTestFactory{}
+	mux := termmux.New(factory, termmux.Options{})
+	_, pane, events, err := mux.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = mux.Shutdown() }()
+	app := &App{cfg: config.Defaults(), mux: mux, focusedPane: pane, paneUI: make(map[termmux.PaneID]*paneUIState), pendingPaneScroll: make(map[termmux.PaneID]int)}
+	app.handleMuxEvents(events)
+	app.ensureConfigState()
+	app.desiredCfg.Shell.Program = "future-shell"
+	app.desiredCfg.Shell.Args = []string{"--future"}
+	app.desiredCfg.Shell.WorkingDirectory = "future-directory"
+	app.desiredCfg.Shell.Env = map[string]string{"FUTURE": "1"}
+	app.pendingConfig = config.PendingConfigChanges(app.desiredCfg, app.cfg)
+	factory.reset()
+
+	if err := app.executeSplitAction(pane, termaction.SplitPane{Axis: termaction.SplitColumns}); err != nil {
+		t.Fatal(err)
+	}
+	spawn, ok := factory.last()
+	if !ok {
+		t.Fatal("split did not spawn a new pane")
+	}
+	if spawn.ShellProgram != "future-shell" || !reflect.DeepEqual(spawn.ShellArgs, []string{"--future"}) || spawn.WorkingDirectory != "future-directory" || spawn.Env["FUTURE"] != "1" {
+		t.Fatalf("new pane spawn options = %#v", spawn)
+	}
+	if app.EffectiveConfig().Shell.Program == "future-shell" {
+		t.Fatal("new-pane desired shell leaked into effective window config")
 	}
 }
 
