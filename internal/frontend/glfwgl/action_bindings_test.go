@@ -291,3 +291,30 @@ func TestKeyPipelineClipboardRepeatsDoNotLeakToPTY(t *testing.T) {
 	a.handleKeyEvent(glfw.KeyC, glfw.Repeat, glfw.ModControl|glfw.ModShift)
 	assertNoRecordedPaneInput(t, factory)
 }
+
+func TestKeyPipelineRuntimeConfigCallbackUsesPaneHost(t *testing.T) {
+	path := t.TempDir() + "/cervterm.lua"
+	source := `return { keys = { { key = "g", action = function(term)
+		term:set_background("#010203FF")
+		term:set_window_opacity(0.73)
+		if term:background() ~= "#010203FF" then error("background getter is stale") end
+		if term:window_opacity() ~= 0.73 then error("opacity getter is stale") end
+	end } } }`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, runtime, err := script.Load(path, config.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runtime.Close)
+	a := newMuxTestApp(t, 20, 10)
+	a.cfg, a.scriptRT = cfg, runtime
+	a.handleKeyEvent(glfw.KeyG, glfw.Press, 0)
+	if a.cfg.Colors.Background != "#010203FF" || a.cfg.Window.Opacity != 0.73 {
+		t.Fatalf("runtime config = background %q opacity %v", a.cfg.Colors.Background, a.cfg.Window.Opacity)
+	}
+	if strings.Contains(a.notice, "runtime configuration is unavailable") || strings.Contains(a.notice, "script") {
+		t.Fatalf("runtime config callback notice = %q", a.notice)
+	}
+}
