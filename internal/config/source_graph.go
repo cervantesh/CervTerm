@@ -55,6 +55,7 @@ type SourceGraph struct {
 	StagedTeal   []StagedTeal
 	stageRoot    string
 	ownsStage    bool
+	state        *lua.LState
 }
 
 func (g *SourceGraph) Close() error {
@@ -110,7 +111,7 @@ func BuildSourceGraph(state *lua.LState, primary string, options SourceGraphOpti
 	if err != nil {
 		return nil, err
 	}
-	graph := &SourceGraph{stageRoot: stageRoot, ownsStage: ownsStage}
+	graph := &SourceGraph{stageRoot: stageRoot, ownsStage: ownsStage, state: state}
 	capture, err := installDependencyCapture(state)
 	if err != nil {
 		_ = graph.Close()
@@ -213,7 +214,7 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 	if err != nil {
 		return "", err
 	}
-	document, err := decodeDocument(canonical, root, graphDocumentFields)
+	document, err := decodeCompositionDocument(canonical, root, graphDocumentFields)
 	if err != nil {
 		return "", err
 	}
