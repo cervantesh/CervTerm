@@ -16,7 +16,7 @@ func NewTerminalWithHistory(cols, rows, history int) *Terminal {
 	} else if history > maxScrollbackRows {
 		history = maxScrollbackRows
 	}
-	t := &Terminal{cols: cols, rows: rows, scrollbackCapacity: history, attr: Attr{FG: DefaultColor(), BG: DefaultColor()}, scrollBottom: rows - 1, cursorVisible: true, autoWrap: true}
+	t := &Terminal{cols: cols, rows: rows, scrollbackCapacity: history, attr: Attr{FG: DefaultColor(), BG: DefaultColor()}, paletteBase: DefaultPaletteBase(), scrollBottom: rows - 1, cursorVisible: true, autoWrap: true}
 	t.cells = make([]Cell, cols*rows)
 	t.rowWrapped = make([]bool, rows)
 	t.resetTabStops()

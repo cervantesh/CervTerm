@@ -33,6 +33,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Live sparse `colors.indexed_colors` overrides for xterm indices 16–255, with per-key composition/provenance and algorithmic fallback.
 - Local v2 `color_schemes` catalogs and live `color_scheme` selection with deterministic composition, inline color precedence, provenance, diagnostics, Teal types, and atomic reload.
 - Six live semantic chrome colors for application surfaces, muted text, accents, pane dividers, search matches, and error state, available in inline colors and local named schemes.
+- Bounded pane-local OSC 4/10/11 palette set/query and OSC 104/110/111 reset support, with canonical replies, live base-palette reload, and logical scrollback reprojection.
 
 ### Fixed
 

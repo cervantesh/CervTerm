@@ -191,6 +191,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 			}
 		},
 	})
+	app.mux.SetPaletteBase(configuredPaletteBase(app.cfg.Colors))
 	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {
 		app.statsSpec, app.statsSpecOK = spec, true
 	}
