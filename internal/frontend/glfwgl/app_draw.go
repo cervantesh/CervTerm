@@ -45,6 +45,7 @@ func (a *App) draw() {
 	cursorColor := configColor(a.cfg.Colors.Cursor, themeColor(palette.Accent))
 	selectionColor := configColor(a.cfg.Colors.SelectionBackground, color.RGBA{0x2A, 0x63, 0x77, 0xFF})
 	defaultFG := configColor(a.cfg.Colors.Foreground, rgb(core.DefaultFG))
+	colorResolver := configuredColorResolver(a.cfg.Colors)
 	a.updateFPS()
 	a.r.Clear(background)
 
@@ -80,7 +81,7 @@ func (a *App) draw() {
 		var cursorRowOrder []int
 		for row := 0; row < a.snap.Rows; row++ {
 			rowsDrawn++
-			order := a.drawRow(row, background, selectionColor, defaultFG)
+			order := a.drawRow(row, background, selectionColor, defaultFG, colorResolver)
 			if row == a.snap.CursorRow {
 				cursorRowOrder = order
 			}

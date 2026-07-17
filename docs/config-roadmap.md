@@ -162,6 +162,8 @@ colors = {
 }
 ```
 
+Implemented: `colors.ansi` is a live dense list of exactly 16 `#RRGGBB` entries. Omission preserves the palette shown above; indexed `16..255` continue to use the xterm cube/grayscale until `indexed_colors` lands.
+
 Near-term fields:
 
 - `foreground`

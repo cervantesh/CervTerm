@@ -1,23 +1,18 @@
 package core
 
 type Attr struct {
-	FG, BG                                RGB
+	FG, BG                                LogicalColor
 	Bold, Dim, Italic, Underline, Inverse bool
 	Strikethrough, Blink                  bool
 }
 
-// HasExplicitBG reports whether the cell carries a background color other than
-// the terminal default. "What counts as the default background" is a domain rule,
-// kept here so renderers ask instead of comparing against a concrete RGB.
-//
-// DEFERRED: a fuller fix would add an explicit "default" flag to Attr rather than
-// inferring it by RGB equality, but that changes the value-object layout and
-// touches the parser, for low payoff; sentinel comparison stays for now.
-func (a Attr) HasExplicitBG() bool { return a.BG != DefaultBG }
+// HasExplicitBG reports whether the cell carries a non-default logical
+// background, including an RGB literal equal to the current physical default.
+func (a Attr) HasExplicitBG() bool { return !a.BG.IsDefault() }
 
-// HasExplicitFG reports whether the cell carries a foreground color other than
-// the terminal default. See HasExplicitBG for the deferred-fix note.
-func (a Attr) HasExplicitFG() bool { return a.FG != DefaultFG }
+// HasExplicitFG reports whether the cell carries a non-default logical
+// foreground, including an RGB literal equal to the current physical default.
+func (a Attr) HasExplicitFG() bool { return !a.FG.IsDefault() }
 
 type Cell struct {
 	// noCompare keeps Cell non-comparable (it always was, via the old []rune

@@ -246,6 +246,26 @@ func TestLoadLuaEvaluatesSourceOnce(t *testing.T) {
 	}
 }
 
+func TestANSIListStrictShapeAndColorValidation(t *testing.T) {
+	valid := `{"#000000","#010101","#020202","#030303","#040404","#050505","#060606","#070707","#080808","#090909","#0A0A0A","#0B0B0B","#0C0C0C","#0D0D0D","#0E0E0E","#0F0F0F"}`
+	cfg, err := LoadLua(writeLuaDocument(t, `return {config_version=2,colors={ansi=`+valid+`}}`), Defaults())
+	if err != nil || cfg.Colors.ANSI[15] != "#0F0F0F" {
+		t.Fatalf("valid ANSI list cfg=%#v err=%v", cfg.Colors.ANSI, err)
+	}
+	short := `{"#000000","#010101"}`
+	if _, err := LoadLua(writeLuaDocument(t, `return {config_version=2,colors={ansi=`+short+`}}`), Defaults()); err == nil || !strings.Contains(err.Error(), "exactly 16") {
+		t.Fatalf("short ANSI error = %v", err)
+	}
+	sparse := `{[1]="#000000",[16]="#FFFFFF"}`
+	if _, err := LoadLua(writeLuaDocument(t, `return {config_version=2,colors={ansi=`+sparse+`}}`), Defaults()); err == nil || !strings.Contains(err.Error(), "dense") {
+		t.Fatalf("sparse ANSI error = %v", err)
+	}
+	alpha := strings.Replace(valid, `"#0F0F0F"`, `"#0F0F0F80"`, 1)
+	if _, err := LoadLua(writeLuaDocument(t, `return {config_version=2,colors={ansi=`+alpha+`}}`), Defaults()); err == nil || !strings.Contains(err.Error(), "colors.ansi[16]") {
+		t.Fatalf("alpha ANSI error = %v", err)
+	}
+}
+
 func writeLuaDocument(t *testing.T, source string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "cervterm.lua")

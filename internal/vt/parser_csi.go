@@ -230,23 +230,23 @@ func (p *Parser) dispatchSGR(t *core.Terminal) {
 		case v == 29:
 			t.SetStrikethrough(false)
 		case v >= 30 && v <= 37:
-			t.SetFG(core.ANSIColor(v - 30))
+			t.SetFG(core.IndexedColor(uint8(v - 30)))
 		case v == 38:
 			consumed := p.dispatchExtendedColor(t, true, i)
 			i += consumed
 		case v == 39:
-			t.SetFG(core.DefaultFG)
+			t.SetFG(core.DefaultColor())
 		case v >= 40 && v <= 47:
-			t.SetBG(core.ANSIColor(v - 40))
+			t.SetBG(core.IndexedColor(uint8(v - 40)))
 		case v == 48:
 			consumed := p.dispatchExtendedColor(t, false, i)
 			i += consumed
 		case v == 49:
-			t.SetBG(core.DefaultBG)
+			t.SetBG(core.DefaultColor())
 		case v >= 90 && v <= 97:
-			t.SetFG(core.ANSIColor(8 + v - 90))
+			t.SetFG(core.IndexedColor(uint8(8 + v - 90)))
 		case v >= 100 && v <= 107:
-			t.SetBG(core.ANSIColor(8 + v - 100))
+			t.SetBG(core.IndexedColor(uint8(8 + v - 100)))
 		}
 	}
 }
@@ -261,7 +261,7 @@ func (p *Parser) dispatchExtendedColor(t *core.Terminal, foreground bool, start 
 		if start+2 >= p.paramCount {
 			return 1
 		}
-		color := core.ANSI256Color(p.params[start+2])
+		color := sgrIndexedColor(p.params[start+2])
 		if foreground {
 			t.SetFG(color)
 		} else {
@@ -272,7 +272,7 @@ func (p *Parser) dispatchExtendedColor(t *core.Terminal, foreground bool, start 
 		if start+4 >= p.paramCount {
 			return 1
 		}
-		color := core.RGB{R: sgrByte(p.params[start+2]), G: sgrByte(p.params[start+3]), B: sgrByte(p.params[start+4])}
+		color := core.RGBColor(core.RGB{R: sgrByte(p.params[start+2]), G: sgrByte(p.params[start+3]), B: sgrByte(p.params[start+4])})
 		if foreground {
 			t.SetFG(color)
 		} else {
@@ -282,6 +282,15 @@ func (p *Parser) dispatchExtendedColor(t *core.Terminal, foreground bool, start 
 	default:
 		return 0
 	}
+}
+
+func sgrIndexedColor(index int) core.LogicalColor {
+	if index >= 0 && index <= 255 {
+		return core.IndexedColor(uint8(index))
+	}
+	// Preserve the previous malformed/out-of-range fallback as an explicit RGB
+	// value while keeping the logical indexed domain limited to 0..255.
+	return core.RGBColor(core.ANSI256Color(index))
 }
 
 func sgrByte(v int) uint8 {

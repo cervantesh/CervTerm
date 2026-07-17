@@ -5,11 +5,12 @@ package glfwgl
 import (
 	"image/color"
 
+	"cervterm/internal/core"
 	"cervterm/internal/render"
 	termsel "cervterm/internal/selection"
 )
 
-func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) []int {
+func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, resolver core.ColorResolver) []int {
 	rowCells := a.snap.Cells[r*a.snap.Cols : (r+1)*a.snap.Cols]
 	var order []int
 	if a.cfg.Render.Bidi {
@@ -38,7 +39,7 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 		x := a.paddingX + float32(visualCol)*a.cellW
 		y := a.paddingY + float32(r)*a.cellH
 		if cell.Attr.HasExplicitBG() {
-			a.fillRect(x, y, a.cellW, a.cellH, rgb(cell.Attr.BG))
+			a.fillRect(x, y, a.cellW, a.cellH, rgb(resolver.ResolveBG(cell.Attr.BG)))
 		}
 		if a.selection.active && termsel.Contains(termsel.Range{Start: a.selection.start, End: a.selection.end}, termsel.Point{Row: r, Col: logicalCol}) {
 			a.fillRect(x, y, a.cellW, a.cellH, selectionColor)
@@ -49,11 +50,11 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA) [
 		}
 		fg := defaultFG
 		if cell.Attr.HasExplicitFG() {
-			fg = rgb(cell.Attr.FG)
+			fg = rgb(resolver.ResolveFG(cell.Attr.FG))
 		}
 		bg := background
 		if cell.Attr.HasExplicitBG() {
-			bg = rgb(cell.Attr.BG)
+			bg = rgb(resolver.ResolveBG(cell.Attr.BG))
 		}
 		if cell.Attr.Inverse {
 			fg, bg = bg, fg

@@ -21,6 +21,13 @@ local config: cervterm.Config = {
     background = "#080B12E6",
     cursor = "#60E8F0",
     selection_background = "#2A6377",
+    -- black/red/green/yellow/blue/purple/cyan/white, then bright variants
+    ansi = {
+      "#1B2232", "#FF5C8A", "#8BF59A", "#F8D866",
+      "#7AA2FF", "#D88CFF", "#60E8F0", "#D8DEEA",
+      "#57627A", "#FF7AA8", "#A6FFB5", "#FFE68A",
+      "#9BB8FF", "#E5A7FF", "#90F4FF", "#FFFFFF",
+    },
   },
   scrolling = {
     history = 2000,
