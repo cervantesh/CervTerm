@@ -121,31 +121,65 @@ func (a *App) reloadConfig() error {
 		return fmt.Errorf("no config source is active")
 	}
 	sourceBefore, _ := fileSignature(a.configPath)
-	candidateCfg, candidateRT, err := script.Load(a.configPath, config.Defaults())
+	loaded, err := script.LoadVersioned(a.configPath, config.Defaults(), script.CandidateOptions{})
 	if err != nil {
 		return err
 	}
-	if err := candidateCfg.Validate(); err != nil {
-		candidateRT.Close()
+	candidate, candidateRT := loaded.Candidate, loaded.Runtime
+	legacyTransition := loaded.LegacyTransition
+	defer func() {
+		if candidate != nil {
+			candidate.Close()
+		} else if candidateRT != nil {
+			candidateRT.Close()
+		}
+	}()
+	defer func() {
+		if legacyTransition != nil {
+			if err := legacyTransition.Rollback(); err != nil {
+				log.Printf("rollback legacy Teal transition: %v", err)
+			}
+		}
+	}()
+	var activation *script.CandidateActivation
+	if candidate != nil {
+		activation, err = candidate.PrepareActivation()
+		if err != nil {
+			return err
+		}
+	}
+	prepared, err := a.prepareLiveConfig(loaded.Config)
+	if err != nil {
 		return err
 	}
-	restartRequired := restartRequiredChanges(a.cfg, candidateCfg)
-	if err := a.applyLiveConfig(candidateCfg); err != nil {
-		candidateRT.Close()
-		return err
+	defer prepared.Close()
+	if candidate != nil {
+		if _, err := candidate.PublishTeal(a.tealPublicationOptions); err != nil {
+			return err
+		}
+		candidateRT = activation.Commit()
 	}
-	oldRT := a.scriptRT
+	restartRequired := restartRequiredChanges(a.cfg, loaded.Config)
+	oldBundle, oldRT := a.scriptBundle, a.scriptRT
+	a.commitLiveConfig(prepared)
+	a.scriptBundle = candidate
 	a.scriptRT = candidateRT
+	candidate, candidateRT = nil, nil
+	if legacyTransition != nil {
+		legacyTransition.Commit()
+		legacyTransition = nil
+	}
 	a.status.seq = -1
 	a.overlays.seq = -1
 	a.configWatch.acknowledge()
 	if sourceAfter, ok := fileSignature(a.configPath); ok && sourceAfter != sourceBefore {
-		// The source changed while Teal/Lua was being evaluated. The committed
-		// candidate is valid, but immediately queue the newer edit rather than
-		// letting acknowledge swallow it.
+		// The source changed while the candidate was being evaluated. Commit the
+		// valid snapshot and queue the newer edit rather than swallowing it.
 		a.reloadPending = true
 	}
-	if oldRT != nil {
+	if oldBundle != nil {
+		oldBundle.Close()
+	} else if oldRT != nil {
 		oldRT.Close()
 	}
 	if restartRequired {
@@ -167,26 +201,48 @@ func restartRequiredChanges(current, candidate config.Config) bool {
 	return !reflect.DeepEqual(live, candidate)
 }
 
-// applyLiveConfig is the single main-thread mutation path shared by reload and
-// runtime setters. It updates terminal policy, compositor appearance, and any
-// derived raster state only after the complete candidate validates.
-func (a *App) applyLiveConfig(next config.Config) error {
+// preparedLiveConfig owns all resources created by the fallible preparation
+// phase until commit transfers them to the App or Close aborts them.
+type preparedLiveConfig struct {
+	next             config.Config
+	preparedContexts map[atlasFontKey]*atlasFontContext
+	rasterChanged    bool
+	committed        bool
+}
+
+func (p *preparedLiveConfig) Close() {
+	if p == nil || p.committed {
+		return
+	}
+	closePreparedRasterContexts(p.preparedContexts)
+	p.preparedContexts = nil
+}
+
+// prepareLiveConfig validates and constructs every fallible frontend resource
+// without mutating active application state.
+func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error) {
 	if err := next.Validate(); err != nil {
-		return err
+		return nil, err
 	}
 	oldRaster := a.effectiveTextRaster()
 	liveNext := a.cfg
 	liveNext.Colors = next.Colors
 	newRaster := effectiveTextRasterFor(liveNext)
-	rasterChanged := a.atlas != nil && oldRaster != newRaster
-	var preparedContexts map[atlasFontKey]*atlasFontContext
-	if rasterChanged {
-		var err error
-		preparedContexts, err = a.prepareRasterContexts(newRaster)
+	prepared := &preparedLiveConfig{next: next, rasterChanged: a.atlas != nil && oldRaster != newRaster}
+	if prepared.rasterChanged {
+		contexts, err := a.prepareRasterContexts(newRaster)
 		if err != nil {
-			return fmt.Errorf("prepare text raster: %w", err)
+			return nil, fmt.Errorf("prepare text raster: %w", err)
 		}
+		prepared.preparedContexts = contexts
 	}
+	return prepared, nil
+}
+
+// commitLiveConfig is the mechanically infallible main-thread mutation phase.
+// The caller must have completed every fallible operation before invoking it.
+func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
+	next := prepared.next
 	oldScrollbar := a.cfg.Scrollbar
 	a.mux.SetScrollbackCapacity(next.Scrolling.History)
 	a.mux.SetHideCursorWhenScrolled(next.Scrolling.HideCursorWhenScrolled)
@@ -197,9 +253,11 @@ func (a *App) applyLiveConfig(next config.Config) error {
 	a.cfg.Scrolling = next.Scrolling
 	a.cfg.Scrollbar = next.Scrollbar
 	a.applyWindowAppearance()
-	if rasterChanged {
-		a.installPreparedRasterContexts(preparedContexts)
+	if prepared.rasterChanged {
+		a.installPreparedRasterContexts(prepared.preparedContexts)
 	}
+	prepared.preparedContexts = nil
+	prepared.committed = true
 	if !a.cfg.Scrollbar.Enabled {
 		a.scrollbar = scrollbarState{}
 	} else {
@@ -210,6 +268,17 @@ func (a *App) applyLiveConfig(next config.Config) error {
 	}
 	a.damage.valid = false
 	a.requestRedraw()
+}
+
+// applyLiveConfig preserves the existing runtime-setter contract while sharing
+// the prepare/commit seam used by atomic configuration activation.
+func (a *App) applyLiveConfig(next config.Config) error {
+	prepared, err := a.prepareLiveConfig(next)
+	if err != nil {
+		return err
+	}
+	defer prepared.Close()
+	a.commitLiveConfig(prepared)
 	return nil
 }
 
@@ -219,7 +288,11 @@ func (a *App) prepareRasterContexts(textRaster string) (map[atlasFontKey]*atlasF
 	if a.mux != nil && len(a.mux.PaneIDs()) > 0 {
 		sizes = sizes[:0]
 		for _, id := range a.mux.PaneIDs() {
-			sizes = append(sizes, a.ensurePaneUI(id).font.fontSize)
+			size := a.cfg.Font.Size
+			if state := a.paneUI[id]; state != nil && state.font.fontSize > 0 {
+				size = state.font.fontSize
+			}
+			sizes = append(sizes, size)
 		}
 	}
 	for _, size := range sizes {
