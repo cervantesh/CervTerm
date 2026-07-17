@@ -280,7 +280,7 @@ func validateColorSchemeMap(source, path string, value lua.LValue, _ bool) error
 		if err := validateStrictTable(source, palettePath, palette, colorSchemeSchema, false, nil, true); err != nil {
 			return err
 		}
-		for _, field := range []string{"foreground", "background", "cursor", "selection_background"} {
+		for _, field := range []string{"foreground", "background", "cursor", "selection_background", "chrome_background", "chrome_muted", "accent", "split", "search_match", "error"} {
 			entry := palette.RawGetString(field)
 			if entry == lua.LNil || isUnsetValue(entry) {
 				continue

@@ -7,6 +7,7 @@ import (
 )
 
 var (
+	testChrome = color.RGBA{0x10, 0x20, 0x30, 0xEE}
 	testAccent = color.RGBA{0x33, 0x99, 0xFF, 0xFF}
 	testMuted  = color.RGBA{0x66, 0x66, 0x66, 0xFF}
 )
@@ -19,10 +20,10 @@ const (
 // --- hudLayout ---
 
 func TestHUDLayoutEmpty(t *testing.T) {
-	if got := hudLayout(nil, nil, tCellW, tCellH, 1, testAccent); got != nil {
+	if got := hudLayout(nil, nil, tCellW, tCellH, 1, testChrome, testAccent); got != nil {
 		t.Fatalf("expected nil for empty lines, got %v", got)
 	}
-	if got := hudLayout([]string{}, []color.RGBA{}, tCellW, tCellH, 1, testAccent); got != nil {
+	if got := hudLayout([]string{}, []color.RGBA{}, tCellW, tCellH, 1, testChrome, testAccent); got != nil {
 		t.Fatalf("expected nil for zero-length lines, got %v", got)
 	}
 }
@@ -31,9 +32,9 @@ func TestHUDLayoutNoticeOnly(t *testing.T) {
 	lines := []string{"hi"}
 	colors := []color.RGBA{testAccent}
 	pad := float32(6)
-	got := hudLayout(lines, colors, tCellW, tCellH, 1, testAccent)
+	got := hudLayout(lines, colors, tCellW, tCellH, 1, testChrome, testAccent)
 	want := []drawCmd{
-		{kind: cmdRect, x: pad, y: pad, w: 2*tCellW + 2*pad, h: tCellH + 2*pad, col: chromeBoxColor},
+		{kind: cmdRect, x: pad, y: pad, w: 2*tCellW + 2*pad, h: tCellH + 2*pad, col: testChrome},
 		{kind: cmdRect, x: pad, y: pad, w: 2*tCellW + 2*pad, h: 1, col: testAccent},
 		{kind: cmdText, x: pad + pad, y: pad + pad, text: "hi", col: testAccent},
 	}
@@ -52,9 +53,12 @@ func TestHUDLayoutStatsOnly(t *testing.T) {
 	lines := []string{"short", "a wider line"}
 	colors := []color.RGBA{testMuted, testMuted}
 	pad := float32(6)
-	got := hudLayout(lines, colors, tCellW, tCellH, 1, testAccent)
+	got := hudLayout(lines, colors, tCellW, tCellH, 1, testChrome, testAccent)
 	if len(got) != 4 {
 		t.Fatalf("expected 4 cmds, got %d", len(got))
+	}
+	if got[0].col != testChrome {
+		t.Fatalf("stats background = %v, want custom chrome %v", got[0].col, testChrome)
 	}
 	widest := len([]rune("a wider line")) // 12
 	wantBW := float32(widest)*tCellW + 2*pad
@@ -74,7 +78,7 @@ func TestHUDLayoutStatsPlusNotice(t *testing.T) {
 	lines := []string{"one", "two", "three"}
 	colors := []color.RGBA{testMuted, testMuted, testAccent}
 	pad := float32(6)
-	got := hudLayout(lines, colors, tCellW, tCellH, 1, testAccent)
+	got := hudLayout(lines, colors, tCellW, tCellH, 1, testChrome, testAccent)
 	if len(got) != 5 {
 		t.Fatalf("expected 5 cmds, got %d", len(got))
 	}
@@ -88,7 +92,7 @@ func TestHUDLayoutRuneWidth(t *testing.T) {
 	lines := []string{"ñoño"} // 4 runes, more bytes
 	colors := []color.RGBA{testAccent}
 	pad := float32(6)
-	got := hudLayout(lines, colors, tCellW, tCellH, 1, testAccent)
+	got := hudLayout(lines, colors, tCellW, tCellH, 1, testChrome, testAccent)
 	wantBW := float32(4)*tCellW + 2*pad
 	if got[0].w != wantBW {
 		t.Fatalf("bw = %v, want %v (rune count, not bytes)", got[0].w, wantBW)
@@ -100,7 +104,7 @@ func TestHUDLayoutUIScale(t *testing.T) {
 	colors := []color.RGBA{testAccent}
 
 	// uiScale = 2 → pad = 12, accent thickness = 2
-	got := hudLayout(lines, colors, tCellW, tCellH, 2, testAccent)
+	got := hudLayout(lines, colors, tCellW, tCellH, 2, testChrome, testAccent)
 	if got[0].x != 12 || got[0].y != 12 {
 		t.Fatalf("uiScale=2 box origin = (%v,%v), want (12,12)", got[0].x, got[0].y)
 	}
@@ -112,7 +116,7 @@ func TestHUDLayoutUIScale(t *testing.T) {
 	}
 
 	// uiScale = 0.5 → accent thickness clamps to 1
-	got = hudLayout(lines, colors, tCellW, tCellH, 0.5, testAccent)
+	got = hudLayout(lines, colors, tCellW, tCellH, 0.5, testChrome, testAccent)
 	if got[1].h != 1 {
 		t.Fatalf("uiScale=0.5 accent thickness = %v, want 1 (clamped)", got[1].h)
 	}
@@ -121,7 +125,7 @@ func TestHUDLayoutUIScale(t *testing.T) {
 // --- searchBarLayout ---
 
 func TestSearchBarInactive(t *testing.T) {
-	if got := searchBarLayout(false, "foo", true, 800, 600, tCellH, 1, testAccent, testMuted); got != nil {
+	if got := searchBarLayout(false, "foo", true, 800, 600, tCellH, 1, testChrome, testAccent, testMuted); got != nil {
 		t.Fatalf("expected nil when inactive, got %v", got)
 	}
 }
@@ -129,7 +133,7 @@ func TestSearchBarInactive(t *testing.T) {
 func TestSearchBarEmptyQuery(t *testing.T) {
 	winW, winH := 800, 600
 	pad := float32(6)
-	got := searchBarLayout(true, "", true, winW, winH, tCellH, 1, testAccent, testMuted)
+	got := searchBarLayout(true, "", true, winW, winH, tCellH, 1, testChrome, testAccent, testMuted)
 	if len(got) != 3 {
 		t.Fatalf("expected 3 cmds, got %d", len(got))
 	}
@@ -141,6 +145,9 @@ func TestSearchBarEmptyQuery(t *testing.T) {
 	if got[0].w != float32(winW) {
 		t.Fatalf("box w = %v, want %v", got[0].w, float32(winW))
 	}
+	if got[0].col != testChrome {
+		t.Fatalf("search background = %v, want custom chrome %v", got[0].col, testChrome)
+	}
 	if got[2].text != "buscar: " {
 		t.Fatalf("text = %q, want %q", got[2].text, "buscar: ")
 	}
@@ -150,7 +157,7 @@ func TestSearchBarEmptyQuery(t *testing.T) {
 }
 
 func TestSearchBarQueryHasMatch(t *testing.T) {
-	got := searchBarLayout(true, "foo", true, 800, 600, tCellH, 1, testAccent, testMuted)
+	got := searchBarLayout(true, "foo", true, 800, 600, tCellH, 1, testChrome, testAccent, testMuted)
 	if got[2].text != "buscar: foo  [enter: siguiente]" {
 		t.Fatalf("text = %q", got[2].text)
 	}
@@ -160,7 +167,7 @@ func TestSearchBarQueryHasMatch(t *testing.T) {
 }
 
 func TestSearchBarQueryNoMatch(t *testing.T) {
-	got := searchBarLayout(true, "foo", false, 800, 600, tCellH, 1, testAccent, testMuted)
+	got := searchBarLayout(true, "foo", false, 800, 600, tCellH, 1, testChrome, testAccent, testMuted)
 	if got[2].text != "buscar: foo  sin resultados" {
 		t.Fatalf("text = %q", got[2].text)
 	}
@@ -172,7 +179,7 @@ func TestSearchBarQueryNoMatch(t *testing.T) {
 // --- statusBandLayout ---
 
 func TestStatusBandEmpty(t *testing.T) {
-	if got := statusBandLayout("", 100, 800, 4, tCellH, 1, testAccent); got != nil {
+	if got := statusBandLayout("", 100, 800, 4, tCellH, 1, testChrome, testAccent); got != nil {
 		t.Fatalf("expected nil for empty display, got %v", got)
 	}
 }
@@ -182,7 +189,7 @@ func TestStatusBandNormal(t *testing.T) {
 	bandWidth := float32(120)
 	paddingY := float32(4)
 	pad := float32(6)
-	got := statusBandLayout("status", bandWidth, winW, paddingY, tCellH, 1, testAccent)
+	got := statusBandLayout("status", bandWidth, winW, paddingY, tCellH, 1, testChrome, testAccent)
 	if len(got) != 3 {
 		t.Fatalf("expected 3 cmds, got %d", len(got))
 	}
@@ -192,6 +199,9 @@ func TestStatusBandNormal(t *testing.T) {
 	}
 	if got[0].h != tCellH {
 		t.Fatalf("box h = %v, want cellH %v", got[0].h, float32(tCellH))
+	}
+	if got[0].col != testChrome {
+		t.Fatalf("status background = %v, want custom chrome %v", got[0].col, testChrome)
 	}
 	// text at (bx+pad, paddingY) — y WITHOUT pad
 	if got[2].x != wantBx+pad {
@@ -205,7 +215,7 @@ func TestStatusBandNormal(t *testing.T) {
 func TestStatusBandFullWidth(t *testing.T) {
 	winW := 800
 	bandWidth := float32(winW)
-	got := statusBandLayout("full", bandWidth, winW, 4, tCellH, 1, testAccent)
+	got := statusBandLayout("full", bandWidth, winW, 4, tCellH, 1, testChrome, testAccent)
 	if got[0].x != 0 {
 		t.Fatalf("bx = %v, want 0 when bandWidth == winW", got[0].x)
 	}

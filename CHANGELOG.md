@@ -32,6 +32,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Logical default/indexed/truecolor cell attributes and a live configurable 16-color ANSI palette resolved during rendering, allowing existing scrollback to recolor without reparsing.
 - Live sparse `colors.indexed_colors` overrides for xterm indices 16–255, with per-key composition/provenance and algorithmic fallback.
 - Local v2 `color_schemes` catalogs and live `color_scheme` selection with deterministic composition, inline color precedence, provenance, diagnostics, Teal types, and atomic reload.
+- Six live semantic chrome colors for application surfaces, muted text, accents, pane dividers, search matches, and error state, available in inline colors and local named schemes.
 
 ### Fixed
 

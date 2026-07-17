@@ -22,6 +22,12 @@ local record cervterm
     background: string
     cursor: string
     selection_background: string
+    chrome_background: string
+    chrome_muted: string
+    accent: string
+    split: string
+    search_match: string
+    error: string
     ansi: {string}
     indexed_colors: {integer: string}
   end
@@ -159,6 +165,12 @@ local record cervterm
     background: string | Unset
     cursor: string | Unset
     selection_background: string | Unset
+    chrome_background: string | Unset
+    chrome_muted: string | Unset
+    accent: string | Unset
+    split: string | Unset
+    search_match: string | Unset
+    error: string | Unset
     ansi: {string} | Unset
     indexed_colors: {integer: (string | Unset)} | Unset
   end
@@ -168,6 +180,12 @@ local record cervterm
     background: string | Unset
     cursor: string | Unset
     selection_background: string | Unset
+    chrome_background: string | Unset
+    chrome_muted: string | Unset
+    accent: string | Unset
+    split: string | Unset
+    search_match: string | Unset
+    error: string | Unset
     ansi: {string} | Unset
     indexed_colors: {integer: (string | Unset)} | Unset
   end

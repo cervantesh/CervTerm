@@ -78,6 +78,12 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Colors.Background = stringField(tbl, "background", cfg.Colors.Background)
 		cfg.Colors.Cursor = stringField(tbl, "cursor", cfg.Colors.Cursor)
 		cfg.Colors.SelectionBackground = stringField(tbl, "selection_background", cfg.Colors.SelectionBackground)
+		cfg.Colors.ChromeBackground = stringField(tbl, "chrome_background", cfg.Colors.ChromeBackground)
+		cfg.Colors.ChromeMuted = stringField(tbl, "chrome_muted", cfg.Colors.ChromeMuted)
+		cfg.Colors.Accent = stringField(tbl, "accent", cfg.Colors.Accent)
+		cfg.Colors.Split = stringField(tbl, "split", cfg.Colors.Split)
+		cfg.Colors.SearchMatch = stringField(tbl, "search_match", cfg.Colors.SearchMatch)
+		cfg.Colors.Error = stringField(tbl, "error", cfg.Colors.Error)
 		cfg.Colors.ANSI = ansiField(tbl, "ansi", cfg.Colors.ANSI)
 		cfg.Colors.IndexedColors = indexedColorsField(tbl, "indexed_colors", cfg.Colors.IndexedColors)
 	}

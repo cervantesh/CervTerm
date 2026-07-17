@@ -34,11 +34,17 @@ func TestDiagnoseConfigUsesDeterministicSchemaLeafOrderAndJSONValues(t *testing.
 		t.Fatalf("diagnostic order = %v, want %v", got, want)
 	}
 	checks := map[string]string{
-		"config_version": "2",
-		"window.width":   "1100",
-		"font.family":    `"Go Mono"`,
-		"font.ligatures": "false",
-		"shell.args":     `["pwsh","-NoLogo"]`,
+		"config_version":           "2",
+		"window.width":             "1100",
+		"font.family":              `"Go Mono"`,
+		"font.ligatures":           "false",
+		"colors.chrome_background": `"#10141CF0"`,
+		"colors.chrome_muted":      `"#A8B3C7FF"`,
+		"colors.accent":            `"#60E8F0FF"`,
+		"colors.split":             `"#4A5263FF"`,
+		"colors.search_match":      `"#7A5C12FF"`,
+		"colors.error":             `"#D87272FF"`,
+		"shell.args":               `["pwsh","-NoLogo"]`,
 	}
 	for path, wantValue := range checks {
 		if gotValue := values[path]; gotValue != wantValue {
