@@ -43,6 +43,7 @@ type ColorsConfig struct {
 	Background          string
 	Cursor              string
 	SelectionBackground string
+	ANSI                [16]string
 }
 
 type ScrollingConfig struct {
@@ -106,8 +107,14 @@ func Defaults() Config {
 			Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6, DynamicTitle: true,
 			Opacity: 1.0, Blur: true,
 		},
-		Font:      FontConfig{Family: "Go Mono", Size: 14, Ligatures: false},
-		Colors:    ColorsConfig{Foreground: "#E6E1D8", Background: "#080B12E6", Cursor: "#60E8F0", SelectionBackground: "#2A6377"},
+		Font: FontConfig{Family: "Go Mono", Size: 14, Ligatures: false},
+		Colors: ColorsConfig{
+			Foreground: "#E6E1D8", Background: "#080B12E6", Cursor: "#60E8F0", SelectionBackground: "#2A6377",
+			ANSI: [16]string{
+				"#1B2232", "#FF5C8A", "#8BF59A", "#F8D866", "#7AA2FF", "#D88CFF", "#60E8F0", "#D8DEEA",
+				"#57627A", "#FF7AA8", "#A6FFB5", "#FFE68A", "#9BB8FF", "#E5A7FF", "#90F4FF", "#FFFFFF",
+			},
+		},
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
 		Scrollbar: ScrollbarConfig{
 			Enabled: true, ReservedWidthPX: 12, WidthPX: 8, MarginPX: 2, RadiusPX: 4, MinThumbPX: 24,
@@ -204,6 +211,11 @@ func (c Config) Validate() error {
 			errs = append(errs, fmt.Errorf("colors.%s must be #RRGGBB or #RRGGBBAA", name))
 		}
 	}
+	for index, value := range c.Colors.ANSI {
+		if !isHexRGBColor(value) {
+			errs = append(errs, fmt.Errorf("colors.ansi[%d] must be #RRGGBB", index+1))
+		}
+	}
 	for name, value := range map[string]string{
 		"track_color": c.Scrollbar.TrackColor, "thumb_color": c.Scrollbar.ThumbColor,
 		"thumb_hover_color": c.Scrollbar.ThumbHoverColor, "thumb_press_color": c.Scrollbar.ThumbPressColor,
@@ -219,9 +231,14 @@ func (c Config) Validate() error {
 }
 
 var hexColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$`)
+var hexRGBColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 func isHexColor(value string) bool {
 	return hexColorPattern.MatchString(value)
+}
+
+func isHexRGBColor(value string) bool {
+	return hexRGBColorPattern.MatchString(value)
 }
 
 // BackgroundAlpha returns the configured background alpha. Invalid colors are

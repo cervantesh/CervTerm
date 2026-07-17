@@ -38,6 +38,7 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Colors.Background != effective.Colors.Background, "colors.background", ApplyLive)
 	changes = appendChange(changes, desired.Colors.Cursor != effective.Colors.Cursor, "colors.cursor", ApplyLive)
 	changes = appendChange(changes, desired.Colors.SelectionBackground != effective.Colors.SelectionBackground, "colors.selection_background", ApplyLive)
+	changes = appendChange(changes, desired.Colors.ANSI != effective.Colors.ANSI, "colors.ansi", ApplyLive)
 
 	changes = appendChange(changes, desired.Scrolling.History != effective.Scrolling.History, "scrolling.history", ApplyLive)
 	changes = appendChange(changes, desired.Scrolling.WheelMultiplier != effective.Scrolling.WheelMultiplier, "scrolling.wheel_multiplier", ApplyLive)

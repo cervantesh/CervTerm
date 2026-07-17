@@ -16,6 +16,8 @@ Strict partial `environments` and `profiles` maps plus `default_environment` and
 
 Repeatable `--config-override PATH=VALUE` inputs apply left-to-right after the selected profile. Paths/capabilities come from schema metadata; scalar/list values use JSON except schema-known strings may be unquoted. Sensitive environment maps, callbacks, bindings, records, and composition metadata cannot be supplied this way. Raw values are not retained in provenance or diagnostics. Explicit selection/override flags require v2 and are snapshotted for reload.
 
+`colors.ansi` is a live, CLI-override-capable dense list of exactly 16 `#RRGGBB` strings in this order: black, red, green, yellow, blue, purple, cyan, white, then their eight bright variants. Alpha forms are rejected. It is not available through process-local runtime setters.
+
 `--explain-config` and repeatable `--explain-config-field PATH` evaluate this same v2 composition in diagnostic-only mode, then print deterministic selection, graph, resolved values, application scopes, and provenance without activating callbacks or publishing Teal. Sensitive maps are redacted and callback bodies are never rendered.
 
 ## Keybindings
