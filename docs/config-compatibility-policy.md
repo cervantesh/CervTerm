@@ -6,7 +6,7 @@ CervTerm is pre-1.0, but configuration changes still require an explicit compati
 
 1. Existing valid configuration keeps the same behavior unless a release note identifies a deliberate breaking correction.
 2. New fields are optional and default to the behavior from the preceding release.
-3. Unknown fields remain actionable errors; they are not silently ignored.
+3. Unknown fields are actionable errors in strict schemas (v2+). During the v1 compatibility window, the historical permissive loader remains behavior-compatible and `doctor` reports warnings instead of newly rejecting a file.
 4. A reload candidate is parsed and validated completely before replacing the active config, bindings, or script runtime.
 5. A failed reload preserves the last valid runtime and reports source path and field context.
 6. Every public field changes the Go schema, Lua loader, Teal declarations, generated template, validation, reload classification, tests, and docs together.
@@ -15,6 +15,8 @@ CervTerm is pre-1.0, but configuration changes still require an explicit compati
 ## Schema Versions and Migrations
 
 Schema versioning begins in parity-roadmap Phase 2 after ADR-0002 is accepted. Until then, the existing unversioned schema is treated as v1.
+
+ADR-0002 defines explicit v2 strictness. Unversioned/v1 files retain the historical behavior in which unknown or mistyped ordinary fields are ignored, because retroactive rejection would break configurations that currently load. The reserved `config_version` discriminator is the sole strict v1 exception. This compatibility exception ends only through the deprecation lifecycle below; migration/doctor diagnostics must identify what v2 will reject.
 
 A future migration must:
 
