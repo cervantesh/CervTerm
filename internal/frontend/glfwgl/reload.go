@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"sort"
 	"time"
 
 	"cervterm/internal/config"
@@ -26,66 +27,147 @@ type configFileSignature struct {
 	hash    [sha256.Size]byte
 }
 
+type configFileObservation struct {
+	signature configFileSignature
+	exists    bool
+}
+
+type configWatchSnapshot struct {
+	generation uint64
+	files      map[string]configFileObservation
+}
+
 type configWatchState struct {
-	path        string
-	last        configFileSignature
+	paths       []string
+	baseline    map[string]configFileObservation
+	observed    map[string]configFileObservation
 	initialized bool
+	generation  uint64
 	nextPoll    time.Time
 	dirtySince  time.Time
 }
 
-func newConfigWatchState(path string) configWatchState {
-	w := configWatchState{path: path}
-	w.acknowledge()
+func newConfigWatchState(paths ...string) configWatchState {
+	w := configWatchState{}
+	w.acknowledge(paths)
 	return w
 }
 
-func fileSignature(path string) (configFileSignature, bool) {
+func fileObservation(path string) configFileObservation {
 	info, err := os.Stat(path)
 	if err != nil || info.IsDir() {
-		return configFileSignature{}, false
+		return configFileObservation{}
 	}
-	content, err := os.ReadFile(path)
+	hash, err := config.FileSourceWatchHash(path)
 	if err != nil {
-		return configFileSignature{}, false
+		return configFileObservation{}
 	}
-	return configFileSignature{modTime: info.ModTime().UnixNano(), size: info.Size(), hash: sha256.Sum256(content)}, true
+	return configFileObservation{exists: true, signature: configFileSignature{modTime: info.ModTime().UnixNano(), size: info.Size(), hash: hash}}
 }
 
-func (w *configWatchState) acknowledge() {
-	if w.path == "" {
-		return
+func fileSignature(path string) (configFileSignature, bool) {
+	observation := fileObservation(path)
+	return observation.signature, observation.exists
+}
+
+func normalizeWatchPaths(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	result := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		result = append(result, path)
 	}
-	if sig, ok := fileSignature(w.path); ok {
-		w.last = sig
-		w.initialized = true
+	sort.Strings(result)
+	return result
+}
+
+func observeWatchPaths(paths []string) map[string]configFileObservation {
+	observed := make(map[string]configFileObservation, len(paths))
+	for _, path := range paths {
+		observed[path] = fileObservation(path)
 	}
+	return observed
+}
+
+func (w *configWatchState) acknowledge(paths []string) {
+	w.paths = normalizeWatchPaths(paths)
+	w.baseline = observeWatchPaths(w.paths)
+	w.observed = cloneWatchObservations(w.baseline)
+	w.initialized = len(w.paths) > 0
+	w.generation++
 	w.dirtySince = time.Time{}
 }
 
-// poll reports one debounced source-file change. It watches only the selected
-// source path, so compiling a .tl file cannot recursively trigger on its .lua
-// sibling.
+func cloneWatchObservations(source map[string]configFileObservation) map[string]configFileObservation {
+	clone := make(map[string]configFileObservation, len(source))
+	for path, observation := range source {
+		clone[path] = observation
+	}
+	return clone
+}
+
+func (w *configWatchState) snapshot() configWatchSnapshot {
+	return configWatchSnapshot{generation: w.generation, files: observeWatchPaths(w.paths)}
+}
+
+func (w *configWatchState) changedSince(snapshot configWatchSnapshot) bool {
+	return !reflect.DeepEqual(snapshot.files, observeWatchPaths(mapsKeys(snapshot.files)))
+}
+
+func watchHashesChanged(hashes map[string][32]byte) bool {
+	for path, expected := range hashes {
+		observation := fileObservation(path)
+		if !observation.exists || observation.signature.hash != expected {
+			return true
+		}
+	}
+	return false
+}
+
+func configWatchSnapshotsDiffer(left, right configWatchSnapshot) bool {
+	return left.generation != right.generation || !reflect.DeepEqual(left.files, right.files)
+}
+
+func mapsKeys(values map[string]configFileObservation) []string {
+	paths := make([]string, 0, len(values))
+	for path := range values {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+// poll reports one debounced change across the complete active source graph.
+// Missing files are observations too, so deletion/rename triggers a reload.
 func (w *configWatchState) poll(now time.Time) bool {
-	if w.path == "" || now.Before(w.nextPoll) {
+	if len(w.paths) == 0 || now.Before(w.nextPoll) {
 		return false
 	}
 	w.nextPoll = now.Add(configPollInterval)
-	sig, ok := fileSignature(w.path)
-	if !ok {
-		return false
-	}
+	current := observeWatchPaths(w.paths)
 	if !w.initialized {
-		w.last, w.initialized = sig, true
+		w.baseline, w.observed, w.initialized = current, cloneWatchObservations(current), true
 		return false
 	}
-	if sig != w.last {
-		w.last = sig
-		w.dirtySince = now
+	if !reflect.DeepEqual(current, w.observed) {
+		w.observed = current
+		if reflect.DeepEqual(current, w.baseline) {
+			w.dirtySince = time.Time{}
+		} else {
+			w.dirtySince = now
+		}
 		return false
 	}
 	if !w.dirtySince.IsZero() && now.Sub(w.dirtySince) >= configReloadDebounce {
+		w.baseline = cloneWatchObservations(current)
 		w.dirtySince = time.Time{}
+		w.generation++
 		return true
 	}
 	return false
@@ -120,7 +202,7 @@ func (a *App) reloadConfig() error {
 	if a.configPath == "" {
 		return fmt.Errorf("no config source is active")
 	}
-	sourceBefore, _ := fileSignature(a.configPath)
+	watchBefore := a.configWatch.snapshot()
 	loaded, err := script.LoadVersioned(a.configPath, config.Defaults(), script.CandidateOptions{})
 	if err != nil {
 		return err
@@ -153,12 +235,15 @@ func (a *App) reloadConfig() error {
 		return err
 	}
 	defer prepared.Close()
+	candidateFilesChanged := watchHashesChanged(loaded.WatchHashes)
 	if candidate != nil {
 		if _, err := candidate.PublishTeal(a.tealPublicationOptions); err != nil {
 			return err
 		}
 		candidateRT = activation.Commit()
 	}
+	watchAfterEvaluation := a.configWatch.snapshot()
+	changedDuringEvaluation := configWatchSnapshotsDiffer(watchBefore, watchAfterEvaluation)
 	restartRequired := restartRequiredChanges(a.cfg, loaded.Config)
 	oldBundle, oldRT := a.scriptBundle, a.scriptRT
 	a.commitLiveConfig(prepared)
@@ -171,10 +256,12 @@ func (a *App) reloadConfig() error {
 	}
 	a.status.seq = -1
 	a.overlays.seq = -1
-	a.configWatch.acknowledge()
-	if sourceAfter, ok := fileSignature(a.configPath); ok && sourceAfter != sourceBefore {
-		// The source changed while the candidate was being evaluated. Commit the
-		// valid snapshot and queue the newer edit rather than swallowing it.
+	a.configWatch.acknowledge(loaded.WatchPaths)
+	changedBeforeAcknowledgement := a.configWatch.changedSince(watchAfterEvaluation)
+	candidateFilesChanged = candidateFilesChanged || watchHashesChanged(loaded.WatchHashes)
+	if changedDuringEvaluation || changedBeforeAcknowledgement || candidateFilesChanged {
+		// An active source/include/module changed during evaluation or in the
+		// commit window. Queue a newer generation rather than acknowledging it away.
 		a.reloadPending = true
 	}
 	if oldBundle != nil {

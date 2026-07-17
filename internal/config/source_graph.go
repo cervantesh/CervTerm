@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,6 +38,9 @@ func DefaultSourceGraphOptions() SourceGraphOptions {
 type SourceNode struct {
 	RequestedPath string
 	CanonicalPath string
+	SelectedPath  string
+	SelectedPaths []string
+	Hash          [sha256.Size]byte
 	Size          int64
 	Document      Document
 	Teal          *StagedTeal
@@ -198,13 +202,14 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 		}
 		return "", err
 	}
+	selectedPath, err := filepath.Abs(resolved)
+	if err != nil {
+		return "", fmt.Errorf("resolve config source %q: %w", resolved, err)
+	}
+	selectedPath = filepath.Clean(selectedPath)
 	loadSourcePath := canonical
 	if primary && b.allowLegacyPrimary {
-		loadSourcePath, err = filepath.Abs(resolved)
-		if err != nil {
-			return "", fmt.Errorf("resolve primary config %q: %w", resolved, err)
-		}
-		loadSourcePath = filepath.Clean(loadSourcePath)
+		loadSourcePath = selectedPath
 	}
 	extension := strings.ToLower(filepath.Ext(loadSourcePath))
 	if extension != ".lua" && extension != ".tl" {
@@ -217,6 +222,15 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 	if record := b.records[identity]; record != nil {
 		if parent != "" {
 			b.graph.Edges = append(b.graph.Edges, SourceEdge{From: parent, To: record.node.CanonicalPath, Requested: requested})
+		}
+		record.node.SelectedPaths = appendUniquePath(record.node.SelectedPaths, selectedPath)
+		if record.done {
+			for index := range b.graph.Sources {
+				if b.graph.Sources[index].CanonicalPath == record.node.CanonicalPath {
+					b.graph.Sources[index].SelectedPaths = append([]string(nil), record.node.SelectedPaths...)
+					break
+				}
+			}
 		}
 		if record.active {
 			return "", b.cycleError(record.node.CanonicalPath)
@@ -235,13 +249,18 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 	}
 	b.aggregate += info.Size()
 	b.explicit[identity] = canonical
-	record := &sourceRecord{node: SourceNode{RequestedPath: requested, CanonicalPath: canonical, Size: info.Size()}, info: info, active: true}
+	sourceContent, err := os.ReadFile(loadSourcePath)
+	if err != nil {
+		return "", fmt.Errorf("read config source %q: %w", loadSourcePath, err)
+	}
+	record := &sourceRecord{node: SourceNode{RequestedPath: requested, CanonicalPath: canonical, SelectedPath: selectedPath, SelectedPaths: []string{selectedPath}, Hash: SourceWatchHash(canonical, sourceContent), Size: info.Size()}, info: info, active: true}
 	b.records[identity] = record
 	b.stack = append(b.stack, identity)
 	if parent != "" {
 		b.graph.Edges = append(b.graph.Edges, SourceEdge{From: parent, To: canonical, Requested: requested})
 	}
 	evaluationPath := loadSourcePath
+	evaluationContent := sourceContent
 	if extension == ".tl" {
 		staged, err := stageTealSource(loadSourcePath, b.graph.stageRoot)
 		if err != nil {
@@ -255,6 +274,10 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 		record.node.Teal = &staged
 		b.graph.StagedTeal = append(b.graph.StagedTeal, staged)
 		evaluationPath = staged.EvaluationLua
+		evaluationContent, err = os.ReadFile(evaluationPath)
+		if err != nil {
+			return "", fmt.Errorf("read staged Teal output %q: %w", evaluationPath, err)
+		}
 	}
 	restoreGuard := setDeclarativeIncludeGuard(b.state, !primary)
 	displayPath := evaluationPath
@@ -265,7 +288,7 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 	if primary && b.allowLegacyPrimary {
 		sourceLabel = loadSourcePath
 	}
-	root, err := evaluateGraphSource(b.state, sourceLabel, evaluationPath, displayPath)
+	root, err := evaluateGraphSource(b.state, sourceLabel, evaluationPath, displayPath, evaluationContent)
 	restoreGuard()
 	if err != nil {
 		return "", err
@@ -334,18 +357,8 @@ func (b *sourceGraphBuilder) cycleError(canonical string) error {
 	return fmt.Errorf("config include cycle: %s", strings.Join(paths, " -> "))
 }
 
-func evaluateGraphSource(state *lua.LState, sourcePath, evaluationPath, displayPath string) (*lua.LTable, error) {
-	var function *lua.LFunction
-	var err error
-	if evaluationPath == displayPath {
-		function, err = state.LoadFile(evaluationPath)
-	} else {
-		data, readErr := os.ReadFile(evaluationPath)
-		if readErr != nil {
-			return nil, fmt.Errorf("evaluate config source %q via %q: %w", sourcePath, evaluationPath, readErr)
-		}
-		function, err = state.Load(bytes.NewReader(data), "@"+displayPath)
-	}
+func evaluateGraphSource(state *lua.LState, sourcePath, evaluationPath, displayPath string, content []byte) (*lua.LTable, error) {
+	function, err := state.Load(bytes.NewReader(content), "@"+displayPath)
 	if err != nil {
 		return nil, fmt.Errorf("evaluate config source %q via %q: %w", sourcePath, evaluationPath, err)
 	}
@@ -433,4 +446,13 @@ func sourceGraphStageRoot(configured string) (string, bool, error) {
 		return "", false, fmt.Errorf("create config staging directory: %w", err)
 	}
 	return root, true, nil
+}
+
+func appendUniquePath(paths []string, path string) []string {
+	for _, existing := range paths {
+		if existing == path {
+			return paths
+		}
+	}
+	return append(paths, path)
 }

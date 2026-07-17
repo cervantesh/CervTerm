@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,6 +23,33 @@ type SourceDependency struct {
 	Kind      DependencyKind
 	Requested string
 	Canonical string
+	Selected  string
+	Hash      [sha256.Size]byte
+}
+
+// SourceWatchHash binds evaluated bytes to their canonical file identity so a
+// symlink retarget is observable even when both targets have identical content.
+func SourceWatchHash(canonical string, content []byte) [sha256.Size]byte {
+	hash := sha256.New()
+	_, _ = hash.Write([]byte(canonicalIdentity(canonical)))
+	_, _ = hash.Write([]byte{0})
+	_, _ = hash.Write(content)
+	var result [sha256.Size]byte
+	copy(result[:], hash.Sum(nil))
+	return result
+}
+
+// FileSourceWatchHash hashes a regular local file and its resolved identity.
+func FileSourceWatchHash(path string) ([sha256.Size]byte, error) {
+	canonical, _, err := canonicalLocalFile(path)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	content, err := os.ReadFile(canonical)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return SourceWatchHash(canonical, content), nil
 }
 
 type dependencyCapture struct {
@@ -66,17 +94,22 @@ local cervterm_record_config_dependency = __cervterm_record_config_dependency
 local cervterm_original_require = require
 local cervterm_original_dofile = dofile
 local cervterm_original_loadfile = loadfile
+local function pack(...) return {n=select("#", ...), ...} end
+local function finish(kind, name, values)
+  cervterm_record_config_dependency(kind, name, "after")
+  return unpack(values, 1, values.n)
+end
 require = function(name)
-  cervterm_record_config_dependency("require", name)
-  return cervterm_original_require(name)
+  cervterm_record_config_dependency("require", name, "before")
+  return finish("require", name, pack(cervterm_original_require(name)))
 end
 dofile = function(path)
-  cervterm_record_config_dependency("dofile", path)
-  return cervterm_original_dofile(path)
+  cervterm_record_config_dependency("dofile", path, "before")
+  return finish("dofile", path, pack(cervterm_original_dofile(path)))
 end
 loadfile = function(path)
-  cervterm_record_config_dependency("loadfile", path)
-  return cervterm_original_loadfile(path)
+  cervterm_record_config_dependency("loadfile", path, "before")
+  return finish("loadfile", path, pack(cervterm_original_loadfile(path)))
 end
 `); err != nil {
 		capture.restore()
@@ -163,6 +196,7 @@ func (c *dependencyCapture) list() []SourceDependency {
 func (c *dependencyCapture) recordLua(state *lua.LState) int {
 	kind := DependencyKind(state.CheckString(1))
 	requested := state.CheckString(2)
+	phase := state.OptString(3, "before")
 	var resolved string
 	switch kind {
 	case DependencyRequire:
@@ -175,14 +209,29 @@ func (c *dependencyCapture) recordLua(state *lua.LState) int {
 	if resolved == "" {
 		return 0
 	}
+	selected, err := filepath.Abs(resolved)
+	if err != nil {
+		return 0
+	}
+	selected = filepath.Clean(selected)
 	canonical, _, err := canonicalLocalFile(resolved)
 	if err != nil {
 		// Preserve standard Lua's own error and return semantics. Dependency capture
 		// records only paths that resolve to an existing regular local file.
 		return 0
 	}
-	key := string(kind) + "\x00" + canonicalIdentity(canonical)
-	c.dependencies[key] = SourceDependency{Kind: kind, Requested: requested, Canonical: canonical}
+	content, err := os.ReadFile(canonical)
+	if err != nil {
+		return 0
+	}
+	key := string(kind) + "\x00" + canonicalIdentity(canonical) + "\x00" + canonicalIdentity(selected)
+	watchHash := SourceWatchHash(canonical, content)
+	if previous, ok := c.dependencies[key]; ok && phase == "after" && previous.Hash != watchHash {
+		// Retain the before-load hash. The frontend will compare it with the
+		// post-evaluation file and queue the newer generation.
+		return 0
+	}
+	c.dependencies[key] = SourceDependency{Kind: kind, Requested: requested, Canonical: canonical, Selected: selected, Hash: watchHash}
 	return 0
 }
 
