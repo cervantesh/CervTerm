@@ -6,6 +6,8 @@ func DefaultLua() string {
 	cfg := Defaults()
 	return fmt.Sprintf(`-- CervTerm default configuration.
 -- Save as cervterm.lua and edit values as needed.
+-- Uncomment when using typed key actions below:
+-- local cervterm = require("cervterm")
 return {
   window = {
     width = %d,
@@ -105,17 +107,24 @@ return {
   -- Ctrl+Shift+W close focused pane.
 
   -- keys = {
+  --   -- Typed actions are validated while loading and share built-in behavior:
+  --   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
+  --   { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
+  --   { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
+  --   { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },
+  --   { key = "m", mods = "ctrl+shift", action = cervterm.action.Multiple({
+  --     cervterm.action.FocusPane("left"), cervterm.action.ClosePane,
+  --   }) },
+  --   -- Function callbacks remain supported and run through the one-second watchdog:
   --   {
   --     key = "p",
   --     mods = "ctrl+shift",
+  --     label = "Send greeting",
   --     action = function(term)
   --       term:write("echo hola desde lua\r")
   --       term:notify("saludo enviado")
   --     end,
   --   },
-  --   -- Runtime zoom (font size is clamped to 6..72):
-  --   { key = "equal", mods = "ctrl", action = function(term) term:set_font_size(term:font_size() + 1) end },
-  --   { key = "minus", mods = "ctrl", action = function(term) term:set_font_size(term:font_size() - 1) end },
   -- },
   -- events = {
   --   output = function(term, data) end,
