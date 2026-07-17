@@ -257,3 +257,25 @@ func failedWatchPathsContain(expectations []config.SourceWatchExpectation, want 
 	}
 	return false
 }
+
+func TestLoadVersionedDiagnosticOnlyDoesNotPublishLegacyTeal(t *testing.T) {
+	if _, err := exec.LookPath("tl"); err != nil {
+		t.Skip("tl not installed")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.tl")
+	if err := os.WriteFile(path, []byte(`local cfg = {colors={background="#080B12"}}; return cfg`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadVersioned(path, config.Defaults(), CandidateOptions{DiagnosticOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer loaded.Runtime.Close()
+	if loaded.AuthoredVersion != 1 || loaded.LegacyTransition != nil {
+		t.Fatalf("diagnostic legacy ownership = %#v", loaded)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "config.lua")); !os.IsNotExist(err) {
+		t.Fatalf("diagnostic-only load published legacy Lua: %v", err)
+	}
+}
