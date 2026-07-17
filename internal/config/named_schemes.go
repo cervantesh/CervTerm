@@ -13,6 +13,12 @@ var colorSchemeSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	{name: "background", kind: KindString},
 	{name: "cursor", kind: KindString},
 	{name: "selection_background", kind: KindString},
+	{name: "chrome_background", kind: KindString},
+	{name: "chrome_muted", kind: KindString},
+	{name: "accent", kind: KindString},
+	{name: "split", kind: KindString},
+	{name: "search_match", kind: KindString},
+	{name: "error", kind: KindString},
 	{name: "ansi", kind: KindStringList},
 	{name: "indexed_colors", kind: KindIndexedColorMap},
 }}

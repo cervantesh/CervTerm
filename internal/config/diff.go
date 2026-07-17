@@ -40,6 +40,12 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Colors.Background != effective.Colors.Background, "colors.background", ApplyLive)
 	changes = appendChange(changes, desired.Colors.Cursor != effective.Colors.Cursor, "colors.cursor", ApplyLive)
 	changes = appendChange(changes, desired.Colors.SelectionBackground != effective.Colors.SelectionBackground, "colors.selection_background", ApplyLive)
+	changes = appendChange(changes, desired.Colors.ChromeBackground != effective.Colors.ChromeBackground, "colors.chrome_background", ApplyLive)
+	changes = appendChange(changes, desired.Colors.ChromeMuted != effective.Colors.ChromeMuted, "colors.chrome_muted", ApplyLive)
+	changes = appendChange(changes, desired.Colors.Accent != effective.Colors.Accent, "colors.accent", ApplyLive)
+	changes = appendChange(changes, desired.Colors.Split != effective.Colors.Split, "colors.split", ApplyLive)
+	changes = appendChange(changes, desired.Colors.SearchMatch != effective.Colors.SearchMatch, "colors.search_match", ApplyLive)
+	changes = appendChange(changes, desired.Colors.Error != effective.Colors.Error, "colors.error", ApplyLive)
 	changes = appendChange(changes, desired.Colors.ANSI != effective.Colors.ANSI, "colors.ansi", ApplyLive)
 	changes = appendChange(changes, desired.Colors.IndexedColors != effective.Colors.IndexedColors, "colors.indexed_colors", ApplyLive)
 

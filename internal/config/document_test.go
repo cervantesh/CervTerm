@@ -136,6 +136,7 @@ func TestV2StrictStructuralValidation(t *testing.T) {
 		{name: "foreign action userdata", body: `keys = {{key = "a", action = io.stdout}}`, wantErr: "userdata is not a cervterm action"},
 		{name: "unknown event", body: `events = {ready = function() end}`, wantErr: "events.ready: unknown field"},
 		{name: "bad event", body: `events = {bell = true}`, wantErr: "events.bell: must be a function"},
+		{name: "wrong semantic chrome scalar", body: `colors = { chrome_background = false }`, wantErr: "colors.chrome_background: must be string"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

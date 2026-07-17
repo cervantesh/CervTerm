@@ -44,6 +44,12 @@ type ColorsConfig struct {
 	Background          string
 	Cursor              string
 	SelectionBackground string
+	ChromeBackground    string
+	ChromeMuted         string
+	Accent              string
+	Split               string
+	SearchMatch         string
+	Error               string
 	ANSI                [16]string
 	IndexedColors       IndexedColorOverrides
 }
@@ -112,6 +118,8 @@ func Defaults() Config {
 		Font: FontConfig{Family: "Go Mono", Size: 14, Ligatures: false},
 		Colors: ColorsConfig{
 			Foreground: "#E6E1D8", Background: "#080B12E6", Cursor: "#60E8F0", SelectionBackground: "#2A6377",
+			ChromeBackground: "#10141CF0", ChromeMuted: "#A8B3C7FF", Accent: "#60E8F0FF",
+			Split: "#4A5263FF", SearchMatch: "#7A5C12FF", Error: "#D87272FF",
 			ANSI: [16]string{
 				"#1B2232", "#FF5C8A", "#8BF59A", "#F8D866", "#7AA2FF", "#D88CFF", "#60E8F0", "#D8DEEA",
 				"#57627A", "#FF7AA8", "#A6FFB5", "#FFE68A", "#9BB8FF", "#E5A7FF", "#90F4FF", "#FFFFFF",
@@ -207,7 +215,9 @@ func (c Config) Validate() error {
 	}
 	for name, value := range map[string]string{
 		"foreground": c.Colors.Foreground, "background": c.Colors.Background, "cursor": c.Colors.Cursor,
-		"selection_background": c.Colors.SelectionBackground,
+		"selection_background": c.Colors.SelectionBackground, "chrome_background": c.Colors.ChromeBackground,
+		"chrome_muted": c.Colors.ChromeMuted, "accent": c.Colors.Accent, "split": c.Colors.Split,
+		"search_match": c.Colors.SearchMatch, "error": c.Colors.Error,
 	} {
 		if !isHexColor(value) {
 			errs = append(errs, fmt.Errorf("colors.%s must be #RRGGBB or #RRGGBBAA", name))

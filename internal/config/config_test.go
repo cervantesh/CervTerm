@@ -176,6 +176,7 @@ func TestValidateAppearance(t *testing.T) {
 		{"radius too large", func(c *Config) { c.Scrollbar.RadiusPX = 5 }, true},
 		{"bad track mode", func(c *Config) { c.Scrollbar.TrackClick = "center" }, true},
 		{"bad thumb color", func(c *Config) { c.Scrollbar.ThumbColor = "cyan" }, true},
+		{"bad semantic chrome color", func(c *Config) { c.Colors.SearchMatch = "amber" }, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

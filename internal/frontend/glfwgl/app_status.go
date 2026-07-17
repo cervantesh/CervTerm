@@ -5,8 +5,6 @@ package glfwgl
 import (
 	"math"
 	"strings"
-
-	cervtermtheme "cervterm/internal/theme"
 )
 
 type statusGeometry struct {
@@ -77,6 +75,6 @@ func coveredTerminalRows(y, height, paddingY, cellH float32, rows int) (int, int
 	return first, last
 }
 
-func (a *App) drawStatusBand(windowWidth int, palette cervtermtheme.Palette) {
-	a.paint(statusBandLayout(a.status.display, a.status.geometry.width, windowWidth, a.paddingY, a.cellH, a.uiScale, themeColor(palette.Accent)))
+func (a *App) drawStatusBand(windowWidth int, chrome chromeColors) {
+	a.paint(statusBandLayout(a.status.display, a.status.geometry.width, windowWidth, a.paddingY, a.cellH, a.uiScale, chrome.background, chrome.accent))
 }

@@ -96,7 +96,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 3 — Complete Themes and Palettes
 **Scope:** named schemes, ANSI 16, indexed overrides, semantic chrome colors.
 
-**Status:** In progress. Slice 1 introduced logical default/indexed/RGB cells and live ANSI 16 resolution. Slice 2 added live sparse indexed overrides for 16–255 with numeric-key composition/provenance, xterm fallback, renderer-time O(1) resolution, and atomic reprojection. Slice 3 adds ADR-0009 local named schemes, selector precedence, value-free effective provenance, typed Teal/template examples, diagnostics, and atomic live reload. OSC palette mutation and semantic chrome tokens remain later Phase 3 slices.
+**Status:** In progress. Slices 1–4 are complete: logical default/indexed/RGB cells, live ANSI 16 resolution, sparse indexed overrides for 16–255, ADR-0009 local named schemes and selector precedence, and six semantic chrome tokens routed through status/search/HUD, pane divider/state, and search-match rendering. OSC palette mutation remains a later Phase 3 slice.
 
 **Work**
 - Introduce an application/theme palette; retain logical default/indexed/truecolor attributes in terminal core.

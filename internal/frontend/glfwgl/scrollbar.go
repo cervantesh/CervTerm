@@ -301,14 +301,14 @@ func (a *App) drawScrollbar(now time.Time, background color.RGBA, w, h int) {
 	if opacity <= 0 || g.history <= 0 {
 		return
 	}
-	track := withOpacity(configColor(a.cfg.Scrollbar.TrackColor, color.RGBA{}), opacity)
-	thumbHex := a.cfg.Scrollbar.ThumbColor
+	track := withOpacity(a.chrome.scrollTrack, opacity)
+	thumbColor := a.chrome.scrollThumb
 	if a.scrollbar.pressed || a.scrollbar.dragging {
-		thumbHex = a.cfg.Scrollbar.ThumbPressColor
+		thumbColor = a.chrome.scrollThumbPress
 	} else if a.scrollbar.hovered {
-		thumbHex = a.cfg.Scrollbar.ThumbHoverColor
+		thumbColor = a.chrome.scrollThumbHover
 	}
-	thumb := withOpacity(configColor(thumbHex, color.RGBA{}), opacity)
+	thumb := withOpacity(thumbColor, opacity)
 	radius := float32(a.cfg.Scrollbar.RadiusPX) * max(float32(1), a.uiScale)
 	a.fillRoundedRect(g.track, radius, track)
 	a.fillRoundedRect(g.thumb, radius, thumb)

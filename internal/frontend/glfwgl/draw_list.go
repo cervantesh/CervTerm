@@ -2,10 +2,6 @@ package glfwgl
 
 import "image/color"
 
-// chromeBoxColor is the shared translucent backdrop for all chrome surfaces
-// (HUD, search bar, status band). Alpha 0xF0 requires BLEND in the executor.
-var chromeBoxColor = color.RGBA{0x10, 0x14, 0x1C, 0xF0}
-
 type drawCmdKind uint8
 
 const (
@@ -25,7 +21,7 @@ type drawCmd struct {
 // draw-list: a translucent box, an accent top line, and one text command per
 // row. Pure layout — no GL. The box width uses the widest row measured in
 // runes, not bytes, so multibyte glyphs are sized correctly.
-func hudLayout(lines []string, colors []color.RGBA, cellW, cellH, uiScale float32, accent color.RGBA) []drawCmd {
+func hudLayout(lines []string, colors []color.RGBA, cellW, cellH, uiScale float32, background, accent color.RGBA) []drawCmd {
 	if len(lines) == 0 {
 		return nil
 	}
@@ -41,7 +37,7 @@ func hudLayout(lines []string, colors []color.RGBA, cellW, cellH, uiScale float3
 	bh := float32(len(lines))*cellH + 2*pad
 	cmds := make([]drawCmd, 0, len(lines)+2)
 	cmds = append(cmds,
-		drawCmd{kind: cmdRect, x: bx, y: by, w: bw, h: bh, col: chromeBoxColor},
+		drawCmd{kind: cmdRect, x: bx, y: by, w: bw, h: bh, col: background},
 		drawCmd{kind: cmdRect, x: bx, y: by, w: bw, h: max(1, uiScale), col: accent},
 	)
 	for i, ln := range lines {
@@ -53,7 +49,7 @@ func hudLayout(lines []string, colors []color.RGBA, cellW, cellH, uiScale float3
 // searchBarLayout composes the modal search overlay pinned to the bottom of the
 // window. Pure layout — no GL. Returns nil when the bar is inactive. The text
 // color is muted only when the query is non-empty and has no match.
-func searchBarLayout(active bool, query string, hasMatch bool, winW, winH int, cellH, uiScale float32, accent, muted color.RGBA) []drawCmd {
+func searchBarLayout(active bool, query string, hasMatch bool, winW, winH int, cellH, uiScale float32, background, accent, muted color.RGBA) []drawCmd {
 	if !active {
 		return nil
 	}
@@ -74,7 +70,7 @@ func searchBarLayout(active bool, query string, hasMatch bool, winW, winH int, c
 		textColor = muted
 	}
 	return []drawCmd{
-		{kind: cmdRect, x: 0, y: by, w: float32(winW), h: bh, col: chromeBoxColor},
+		{kind: cmdRect, x: 0, y: by, w: float32(winW), h: bh, col: background},
 		{kind: cmdRect, x: 0, y: by, w: float32(winW), h: max(1, uiScale), col: accent},
 		{kind: cmdText, x: pad, y: by + pad, text: line, col: textColor},
 	}
@@ -83,7 +79,7 @@ func searchBarLayout(active bool, query string, hasMatch bool, winW, winH int, c
 // statusBandLayout composes the right-aligned status band. Pure layout — no GL.
 // Returns nil when there is nothing to display. The text baseline is by WITHOUT
 // the pad offset, preserving the existing vertical asymmetry.
-func statusBandLayout(display string, bandWidth float32, winW int, paddingY, cellH, uiScale float32, accent color.RGBA) []drawCmd {
+func statusBandLayout(display string, bandWidth float32, winW int, paddingY, cellH, uiScale float32, background, accent color.RGBA) []drawCmd {
 	if display == "" {
 		return nil
 	}
@@ -91,7 +87,7 @@ func statusBandLayout(display string, bandWidth float32, winW int, paddingY, cel
 	bx := float32(winW) - bandWidth
 	by := paddingY
 	return []drawCmd{
-		{kind: cmdRect, x: bx, y: by, w: bandWidth, h: cellH, col: chromeBoxColor},
+		{kind: cmdRect, x: bx, y: by, w: bandWidth, h: cellH, col: background},
 		{kind: cmdRect, x: bx, y: by, w: bandWidth, h: max(1, uiScale), col: accent},
 		{kind: cmdText, x: bx + pad, y: by, text: display, col: accent},
 	}
