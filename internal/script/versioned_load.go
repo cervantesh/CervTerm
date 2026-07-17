@@ -18,6 +18,8 @@ type VersionedSource struct {
 	Runtime          *Runtime
 	Candidate        *CandidateBundle
 	LegacyTransition *config.LegacyTealTransition
+	WatchPaths       []string
+	WatchHashes      map[string][32]byte
 	AuthoredVersion  int
 }
 
@@ -128,7 +130,7 @@ func LoadVersioned(path string, base config.Config, options CandidateOptions) (V
 		if err != nil {
 			return VersionedSource{}, err
 		}
-		return VersionedSource{Config: bundle.Config(), Candidate: bundle, AuthoredVersion: 2}, nil
+		return VersionedSource{Config: bundle.Config(), Candidate: bundle, WatchPaths: bundle.WatchPaths(), WatchHashes: bundle.WatchHashes(), AuthoredVersion: 2}, nil
 	}
 	if err := validateEvaluatedScripting(evaluation.graph); err != nil {
 		return VersionedSource{}, err
@@ -169,6 +171,8 @@ func LoadVersioned(path string, base config.Config, options CandidateOptions) (V
 			return VersionedSource{}, rollbackTransition(removeErr)
 		}
 	}
+	watchPaths := watchPathsForGraph(evaluation.graph)
+	watchHashes := watchHashesForGraph(evaluation.graph)
 	_ = evaluation.graph.Close()
 	evaluation.graph = nil
 	runtime := &Runtime{
@@ -176,5 +180,5 @@ func LoadVersioned(path string, base config.Config, options CandidateOptions) (V
 		statuses: evaluation.statuses, overlays: evaluation.overlays, dispatchTimeout: time.Second,
 	}
 	evaluation.state = nil
-	return VersionedSource{Config: cloneCandidateConfig(resolved), Runtime: runtime, LegacyTransition: legacyTransition, AuthoredVersion: 1}, nil
+	return VersionedSource{Config: cloneCandidateConfig(resolved), Runtime: runtime, LegacyTransition: legacyTransition, WatchPaths: watchPaths, WatchHashes: watchHashes, AuthoredVersion: 1}, nil
 }

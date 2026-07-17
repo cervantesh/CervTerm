@@ -2,6 +2,7 @@ package script
 
 import (
 	"fmt"
+	"sort"
 
 	"cervterm/internal/config"
 )
@@ -98,6 +99,64 @@ func (b *CandidateBundle) Dependencies() []config.SourceDependency {
 		return nil
 	}
 	return append([]config.SourceDependency(nil), b.graph.Dependencies...)
+}
+
+// WatchPaths returns every declarative source and captured local module owned by
+// the candidate graph in stable canonical order.
+func (b *CandidateBundle) WatchPaths() []string {
+	if b == nil {
+		return nil
+	}
+	return watchPathsForGraph(b.graph)
+}
+
+func watchPathsForGraph(graph *config.SourceGraph) []string {
+	if graph == nil {
+		return nil
+	}
+	paths := make(map[string]struct{}, len(graph.Sources)+len(graph.Dependencies))
+	for _, source := range graph.Sources {
+		paths[source.CanonicalPath] = struct{}{}
+		for _, selected := range source.SelectedPaths {
+			paths[selected] = struct{}{}
+		}
+	}
+	for _, dependency := range graph.Dependencies {
+		paths[dependency.Canonical] = struct{}{}
+		paths[dependency.Selected] = struct{}{}
+	}
+	result := make([]string, 0, len(paths))
+	for path := range paths {
+		result = append(result, path)
+	}
+	sort.Strings(result)
+	return result
+}
+
+// WatchHashes returns the exact source/module bytes captured for evaluation.
+func (b *CandidateBundle) WatchHashes() map[string][32]byte {
+	if b == nil {
+		return nil
+	}
+	return watchHashesForGraph(b.graph)
+}
+
+func watchHashesForGraph(graph *config.SourceGraph) map[string][32]byte {
+	if graph == nil {
+		return nil
+	}
+	hashes := make(map[string][32]byte, len(graph.Sources)+len(graph.Dependencies))
+	for _, source := range graph.Sources {
+		hashes[source.CanonicalPath] = source.Hash
+		for _, selected := range source.SelectedPaths {
+			hashes[selected] = source.Hash
+		}
+	}
+	for _, dependency := range graph.Dependencies {
+		hashes[dependency.Canonical] = dependency.Hash
+		hashes[dependency.Selected] = dependency.Hash
+	}
+	return hashes
 }
 
 // PublishTeal performs the deferred transactional Teal publication once. A

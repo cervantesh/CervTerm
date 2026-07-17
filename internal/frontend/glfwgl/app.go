@@ -4,6 +4,7 @@ package glfwgl
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"runtime"
 	"sync/atomic"
@@ -28,6 +29,7 @@ type App struct {
 	cfg                    config.Config
 	configPath             string
 	configWatch            configWatchState
+	configWatchHashes      map[string][32]byte
 	reloadPending          bool
 	tealPublicationOptions config.TealPublicationOptions
 	mux                    *termmux.Mux
@@ -131,7 +133,7 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 }
 
 func RunWithSource(cfg config.Config, rt *script.Runtime, sourcePath string) error {
-	return runWithSource(cfg, rt, nil, nil, nil, sourcePath)
+	return runWithSource(cfg, rt, nil, nil, nil, []string{sourcePath}, nil, sourcePath)
 }
 
 // RunWithCandidate consumes candidate ownership even when frontend startup fails.
@@ -144,7 +146,7 @@ func RunWithCandidate(candidate *script.CandidateBundle, sourcePath string) erro
 		candidate.Close()
 		return err
 	}
-	return runWithSource(candidate.Config(), nil, candidate, activation, nil, sourcePath)
+	return runWithSource(candidate.Config(), nil, candidate, activation, nil, candidate.WatchPaths(), candidate.WatchHashes(), sourcePath)
 }
 
 // RunWithVersioned consumes all ownership carried by a version-aware load.
@@ -152,10 +154,10 @@ func RunWithVersioned(loaded script.VersionedSource, sourcePath string) error {
 	if loaded.Candidate != nil {
 		return RunWithCandidate(loaded.Candidate, sourcePath)
 	}
-	return runWithSource(loaded.Config, loaded.Runtime, nil, nil, loaded.LegacyTransition, sourcePath)
+	return runWithSource(loaded.Config, loaded.Runtime, nil, nil, loaded.LegacyTransition, loaded.WatchPaths, loaded.WatchHashes, sourcePath)
 }
 
-func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, sourcePath string) error {
+func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, watchPaths []string, watchHashes map[string][32]byte, sourcePath string) error {
 	runtime.LockOSThread()
 	app := &App{
 		cfg:               cfg,
@@ -164,6 +166,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 		scriptBundle:      bundle,
 		scriptActivation:  activation,
 		legacyTransition:  legacyTransition,
+		configWatchHashes: watchHashes,
 		cellW:             9,
 		cellH:             16,
 		uiScale:           1,
@@ -172,7 +175,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 		pendingPaneScroll: make(map[termmux.PaneID]int),
 		pendingPaneResize: make(map[termmux.PaneID]termmux.PaneGeometry),
 	}
-	app.configWatch = newConfigWatchState(sourcePath)
+	app.configWatch = newConfigWatchState(watchPaths...)
 	historyCapacity := cfg.Scrolling.History
 	hideCursorWhenScrolled := cfg.Scrolling.HideCursorWhenScrolled
 	app.mux = termmux.New(nil, termmux.Options{
@@ -281,6 +284,9 @@ func (a *App) runWindow() error {
 	a.cellH = float32(atlas.cellH)
 	// Every fallible window/renderer/font resource now exists. Publish staged v2
 	// Teal immediately before the remaining in-memory activation and PTY spawn.
+	if watchHashesChanged(a.configWatchHashes) {
+		return fmt.Errorf("configuration sources changed during frontend preparation; reload the newest generation")
+	}
 	if a.scriptBundle != nil {
 		if _, err := a.scriptBundle.PublishTeal(a.tealPublicationOptions); err != nil {
 			return err

@@ -53,7 +53,9 @@ Candidate `CLIOverride` values apply left-to-right after the selected profile. P
 
 Frontend live application is split into fallible `prepareLiveConfig` and mechanically infallible `commitLiveConfig`. Startup prepares GLFW/GL/font resources, publishes staged v2 Teal, commits the candidate runtime, then spawns the PTY. Reload prepares every raster resource without creating pane UI state, publishes Teal, swaps config/runtime/bundle on the main thread, and only then closes the old owner. Publication/resource faults preserve the last-known-good active state; v2-to-v1 journal rollback restores external artifacts as well.
 
-Composition is active only for explicitly authored v2. Public legacy `script.Load` remains available, the executable exposes no CLI override flag yet, and automatic watching still tracks only the primary source; dependency-graph watching and desired/effective diff classification remain later slices.
+Composition is active only for explicitly authored v2. Active reload watching now follows the complete evaluated graph: primary, declarative includes and aliases, plus evaluation-time local `require`/`dofile`/`loadfile` dependencies. Digests bind canonical identity to the exact bytes loaded, selected symlink aliases remain watched, missing files trigger reload, and whole-graph debounce coalesces editor writes. Reload snapshots the old graph and compares new candidate digests before and after commit so edits during evaluation cannot be acknowledged away. Modules loaded only later by runtime callbacks are outside this graph by design.
+
+Public legacy `script.Load` remains available and the executable exposes no CLI override flag yet. Desired/effective diff classification and runtime/window scopes remain later slices.
 
 ## Verifiable measurements
 
