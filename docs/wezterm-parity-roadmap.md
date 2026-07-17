@@ -75,7 +75,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 2 — Versioned Composed Configuration
 **Scope:** schema versions, includes/modules, profiles/environment/CLI/window overrides, provenance, migrations, dependency-aware reload.
 
-**Status:** In progress. Slices 1–8 provide versioned composition, selection/CLI candidate layers, provenance, transactional Teal publication, aggregate bundle ownership, and atomic explicit-v2 activation. Slice 9 watches the complete evaluated source/include/module graph with identity-bound byte digests, alias and deletion handling, whole-graph debounce, and generation-safe reload acknowledgement. CLI override wiring, runtime scopes, and desired/effective diff classification remain later slices.
+**Status:** In progress. Slices 1–9 provide versioned composition, candidate layers/provenance, transactional Teal publication, atomic activation, and complete evaluated-graph watching. Slice 10 adds exhaustive schema-owned application scopes, detached desired/effective state, value-free pending diagnostics, live cursor policy, and new-pane shell semantics. CLI override wiring, durable `ConfigScopeID` runtime patches/provenance, doctor/explain integration, and multi-window realization remain later slices.
 
 **Work**
 - Apply accepted ADR-0002.

@@ -121,6 +121,19 @@ func Defaults() Config {
 	}
 }
 
+// Clone returns a detached configuration copy, including mutable shell values.
+func (c Config) Clone() Config {
+	c.Shell.Args = append([]string(nil), c.Shell.Args...)
+	if c.Shell.Env != nil {
+		environment := make(map[string]string, len(c.Shell.Env))
+		for key, value := range c.Shell.Env {
+			environment[key] = value
+		}
+		c.Shell.Env = environment
+	}
+	return c
+}
+
 func (c Config) Validate() error {
 	var errs []error
 	if c.Window.Width < 100 || c.Window.Height < 100 {
