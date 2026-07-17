@@ -827,3 +827,102 @@ func TestRequestConfigReloadIsDeferred(t *testing.T) {
 		t.Fatal("request should only mark pending reload")
 	}
 }
+
+func TestReloadRetainsStartupSelectionAndCLIOverrides(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.lua")
+	writeReloadConfig(t, path, `return {config_version=2,colors={background="#080B12"},window={opacity=0.4},environments={windows={window={opacity=0.5}}},profiles={work={window={opacity=0.6}}}}`)
+	environment, profile := "windows", "work"
+	options := script.CandidateOptions{Composition: config.CompositionOptions{
+		Selection:    config.SelectionOptions{EnvironmentOverride: &environment, ProfileOverride: &profile, GOOS: "linux"},
+		CLIOverrides: []config.CLIOverride{{ArgumentIndex: 7, Path: "window.opacity", Value: "0.7"}},
+	}}
+	loaded, err := script.LoadVersioned(path, config.Defaults(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activation, err := loaded.Candidate.PrepareActivation()
+	if err != nil {
+		loaded.Candidate.Close()
+		t.Fatal(err)
+	}
+	app := &App{
+		cfg: loaded.Config, desiredCfg: loaded.Config, composedCfg: loaded.Config, configStateInitialized: true,
+		scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, candidateOptions: loaded.Candidate.Options(),
+		configPath: path, configWatch: newConfigWatchState(path), mux: termmux.New(nil, termmux.Options{}), paneUI: make(map[termmux.PaneID]*paneUIState),
+	}
+	defer app.scriptBundle.Close()
+	if app.cfg.Window.Opacity != 0.7 {
+		t.Fatalf("startup override opacity = %v", app.cfg.Window.Opacity)
+	}
+	// Mutating caller-owned inputs cannot change the frontend's reload snapshot.
+	environment, profile = "mutated", "mutated"
+	options.Composition.CLIOverrides[0].Value = "0.1"
+	writeReloadConfig(t, path, `return {config_version=2,colors={background="#080B12"},window={opacity=0.45},environments={windows={window={opacity=0.55}}},profiles={work={window={opacity=0.65}}}}`)
+	if err := app.reloadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if app.cfg.Window.Opacity != 0.7 {
+		t.Fatalf("reload lost CLI override: %v", app.cfg.Window.Opacity)
+	}
+	selection := app.scriptBundle.Selection()
+	if selection.Environment == nil || selection.Environment.Name != "windows" || selection.Profile == nil || selection.Profile.Name != "work" {
+		t.Fatalf("reload selection = %#v", selection)
+	}
+	var opacity config.ProvenanceRecord
+	for _, record := range app.scriptBundle.Provenance() {
+		if record.Path == "window.opacity" {
+			opacity = record
+			break
+		}
+	}
+	if opacity.Winner.Layer != config.LayerCLI || !opacity.Winner.HasCLIArgumentIndex || opacity.Winner.CLIArgumentIndex != 7 {
+		t.Fatalf("reload CLI provenance = %#v", opacity)
+	}
+	oldBundle, oldConfig := app.scriptBundle, app.cfg
+	writeReloadConfig(t, path, `return {colors={background="#080B12"},window={opacity=0.9}}`)
+	if err := app.reloadConfig(); err == nil || !strings.Contains(err.Error(), "require config_version=2") {
+		t.Fatalf("v1 transition with explicit options error = %v", err)
+	}
+	if app.scriptBundle != oldBundle || !reflect.DeepEqual(app.cfg, oldConfig) {
+		t.Fatal("rejected v1 transition changed active bundle or config")
+	}
+}
+
+func TestReloadV1ToV2RetainsAmbientSelectionSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.lua")
+	writeReloadConfig(t, path, `return {colors={background="#080B12"}}`)
+	environment, profile := "windows", "work"
+	options := script.CandidateOptions{Composition: config.CompositionOptions{Selection: config.SelectionOptions{
+		EnvironmentVariableValue: &environment, ProfileVariableValue: &profile, GOOS: "linux",
+	}}}
+	loaded, err := script.LoadVersioned(path, config.Defaults(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &App{
+		cfg: loaded.Config, desiredCfg: loaded.Config, composedCfg: loaded.Config, configStateInitialized: true,
+		scriptRT: loaded.Runtime, candidateOptions: loaded.Options, configPath: path, configWatch: newConfigWatchState(path),
+		mux: termmux.New(nil, termmux.Options{}), paneUI: make(map[termmux.PaneID]*paneUIState),
+	}
+	defer func() {
+		if app.scriptBundle != nil {
+			app.scriptBundle.Close()
+		} else if app.scriptRT != nil {
+			app.scriptRT.Close()
+		}
+	}()
+	environment, profile = "mutated", "mutated"
+	writeReloadConfig(t, path, `return {config_version=2,colors={background="#080B12"},environments={windows={window={opacity=0.8}}},profiles={work={window={opacity=0.7}}}}`)
+	if err := app.reloadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	selection := app.scriptBundle.Selection()
+	if selection.Environment == nil || selection.Environment.Name != "windows" || selection.Environment.Basis != config.SelectionEnvironmentVariable || selection.Profile == nil || selection.Profile.Name != "work" || selection.Profile.Basis != config.SelectionEnvironmentVariable {
+		t.Fatalf("v1-to-v2 retained selection = %#v", selection)
+	}
+	if app.cfg.Window.Opacity != 0.7 {
+		t.Fatalf("v1-to-v2 selected profile opacity = %v", app.cfg.Window.Opacity)
+	}
+}

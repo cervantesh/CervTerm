@@ -75,13 +75,32 @@ Generate a default config:
 .\cervterm.exe --print-default-config > cervterm.lua
 ```
 
-The generated template declares `config_version = 2`, which enables strict field and type diagnostics. Existing unversioned configurations remain v1-compatible. Phase 2 composition keys such as `includes`, `profiles`, and `environments` are reserved but are not available in this slice.
+The generated template declares `config_version = 2`, which enables strict field/type diagnostics, includes, named environments/profiles, and typed process overrides. Existing unversioned configurations remain v1-compatible. Explicit `--environment`, `--profile`, or `--config-override` inputs require a v2 source; ambient selection variables are ignored by v1 for compatibility.
 
 Run with an explicit config:
 
 ```cmd
 .\cervterm.exe --config .\cervterm.lua
 ```
+
+Select named v2 layers. Flags win over the corresponding process variables; configured defaults and an exact host-OS environment are lower-priority fallbacks:
+
+```cmd
+set CERVTERM_ENV=windows
+set CERVTERM_PROFILE=work
+.\cervterm.exe --config .\cervterm.lua --environment windows --profile work
+```
+
+Apply typed v2 overrides after the selected profile. Repeat the flag to apply values left-to-right; the last occurrence for a path wins. Values use JSON syntax except schema-known strings may be unquoted:
+
+```cmd
+.\cervterm.exe --config .\cervterm.lua ^
+  --config-override window.opacity=0.85 ^
+  --config-override scrolling.history=4000 ^
+  --config-override shell.args="[\"pwsh\",\"-NoLogo\"]"
+```
+
+Unknown, unsupported, invalid, and sensitive paths such as `shell.env` are rejected. Raw override values are not written to diagnostics or provenance. The startup selection and ordered overrides are snapshotted and reused unchanged by automatic reload.
 
 ## Logs
 

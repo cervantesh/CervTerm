@@ -13,6 +13,37 @@ type CandidateOptions struct {
 	SourceGraph config.SourceGraphOptions
 }
 
+// Clone detaches pointer and slice inputs so startup selection is stable across reload.
+func (o CandidateOptions) Clone() CandidateOptions {
+	clone := o
+	selection := o.Composition.Selection
+	if selection.EnvironmentOverride != nil {
+		value := *selection.EnvironmentOverride
+		selection.EnvironmentOverride = &value
+	}
+	if selection.EnvironmentVariableValue != nil {
+		value := *selection.EnvironmentVariableValue
+		selection.EnvironmentVariableValue = &value
+	}
+	if selection.ProfileOverride != nil {
+		value := *selection.ProfileOverride
+		selection.ProfileOverride = &value
+	}
+	if selection.ProfileVariableValue != nil {
+		value := *selection.ProfileVariableValue
+		selection.ProfileVariableValue = &value
+	}
+	clone.Composition.Selection = selection
+	clone.Composition.CLIOverrides = append([]config.CLIOverride(nil), o.Composition.CLIOverrides...)
+	return clone
+}
+
+// RequiresVersion2 reports whether explicit process inputs need composition.
+func (o CandidateOptions) RequiresVersion2() bool {
+	selection := o.Composition.Selection
+	return selection.EnvironmentOverride != nil || selection.ProfileOverride != nil || len(o.Composition.CLIOverrides) != 0
+}
+
 // CandidateBundle owns every resource created for one validated composed v2
 // candidate until a future atomic frontend transfer or Close. Like Runtime, its
 // lifecycle methods are main-thread-only and must not be called concurrently.
@@ -21,6 +52,7 @@ type CandidateBundle struct {
 	runtime     *Runtime
 	graph       *config.SourceGraph
 	composition config.Composition
+	options     CandidateOptions
 	publication config.TealPublicationResult
 	published   bool
 	closed      bool
@@ -83,6 +115,14 @@ func (b *CandidateBundle) Provenance() []config.ProvenanceRecord {
 		return nil
 	}
 	return b.composition.Provenance.Records()
+}
+
+// Options returns the detached startup selection and override snapshot.
+func (b *CandidateBundle) Options() CandidateOptions {
+	if b == nil {
+		return CandidateOptions{}
+	}
+	return b.options.Clone()
 }
 
 // Selection returns a detached copy of candidate selection decisions.

@@ -52,7 +52,7 @@ func (a *App) reloadConfig() (resultErr error) {
 		return fmt.Errorf("no config source is active")
 	}
 	watchBefore := a.configWatch.snapshot()
-	loaded, err := script.LoadVersioned(a.configPath, config.Defaults(), script.CandidateOptions{})
+	loaded, err := script.LoadVersioned(a.configPath, config.Defaults(), a.candidateOptions.Clone())
 	if err != nil {
 		return err
 	}
@@ -76,6 +76,9 @@ func (a *App) reloadConfig() (resultErr error) {
 			}
 		}
 	}()
+	if loaded.AuthoredVersion != 2 && a.candidateOptions.RequiresVersion2() {
+		return fmt.Errorf("--environment, --profile, and --config-override require config_version=2")
+	}
 	resolvedDesired, runtimeRecords, err := a.runtimeScopes.Apply(a.configScope, loaded.Config)
 	if err != nil {
 		return fmt.Errorf("reapply runtime config scope %s: %w", a.configScope, err)

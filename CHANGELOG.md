@@ -26,6 +26,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Dependency-aware hot reload for the complete evaluated config graph, including include/module aliases, deletion and symlink retarget detection, coalesced debounce, and generation-safe acknowledgement.
 - Schema-owned live/new-pane/new-window/recreate/restart classifications with detached desired/effective state, exact pending diagnostics, live cursor reload, and desired shell settings for future panes.
 - Durable process-local `ConfigScopeID` patches for live Lua setters, with shared typed decoding, reload revalidation, explicit clearing, stale-scope rejection, and runtime provenance chains.
+- Executable v2 environment/profile selection and repeatable typed `--config-override` inputs, snapshotted consistently across startup and reload.
 
 ### Fixed
 
