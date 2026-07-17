@@ -1,8 +1,8 @@
 # CervTerm scripting
 
 CervTerm can load `cervterm.lua` or `cervterm.tl` as both configuration and a
-small extension runtime. The supported extension points are user keybindings and
-terminal event handlers that run Lua functions.
+small extension runtime. Keybindings accept typed `cervterm.action` values or
+watchdog-protected Lua functions; terminal event handlers use Lua functions.
 
 ## Keybindings
 

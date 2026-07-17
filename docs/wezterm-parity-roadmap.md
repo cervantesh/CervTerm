@@ -54,12 +54,14 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 **Rollback:** documentation/artifact-only.
 
 ## Phase 1 — Typed Action Engine
-**Scope:** One toolkit-neutral registry for keyboard, mouse, Lua, palette, quick select, launch menu, pane/tab/window/workspace actions.
+**Scope:** One toolkit-neutral action foundation for current keyboard/Lua commands and future mouse, palette, quick-select, launch-menu, pane, tab, window, and workspace consumers.
+
+**Status:** Complete. The typed model, frontend executor, Lua/Teal contract, and final input-pipeline cleanup landed in PRs [#123](https://github.com/cervantesh/CervTerm/pull/123) through [#126](https://github.com/cervantesh/CervTerm/pull/126). See [Phase 1 validation evidence](validation/phase-1-typed-action-engine.md).
 
 **Work**
 - Accept ADR-0003.
 - Add `internal/action` with typed arguments, metadata/labels, target resolution, context, validation, and serialization.
-- Port current copy/paste/search/scroll/zoom/reload/split/focus/resize/close actions first.
+- Port current copy/paste/search/scroll/zoom/reload/split/focus/close actions first; pane resize/swap/move actions remain Phase 6 scope.
 - Retain Lua callbacks through an explicit bounded callback action and watchdog.
 - Define precedence: active modal > safety/reload > user binding > built-in > PTY encoding.
 - Add action sequences and explicit stop-on-error behavior.
@@ -336,4 +338,4 @@ Stop and return to architecture review if:
 - renderer selection becomes a prerequisite.
 
 ## Immediate Next Action
-After Phase 0 merges, review ADR-0003's action schema, targeting, serialization, precedence, and callback evidence. Begin Phase 1 only after ADR-0003 is Accepted.
+Review and accept ADR-0002's schema version, composition precedence, provenance, migration, dependency watching, and reload rollback decisions. Begin Phase 2 implementation only after that architecture gate is accepted.
