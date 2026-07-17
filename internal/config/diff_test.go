@@ -21,6 +21,7 @@ func fullyDifferentConfig(base Config) Config {
 	value.Colors.Background = "#020202"
 	value.Colors.Cursor = "#030303"
 	value.Colors.SelectionBackground = "#040404"
+	value.Colors.ANSI[0] = "#111111"
 	value.Scrolling.History++
 	value.Scrolling.WheelMultiplier++
 	value.Scrolling.HideCursorWhenScrolled = !value.Scrolling.HideCursorWhenScrolled
@@ -78,8 +79,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 51 {
-		t.Fatalf("config leaf count = %d, want 51", len(changes))
+	if len(changes) != 52 {
+		t.Fatalf("config leaf count = %d, want 52", len(changes))
 	}
 }
 

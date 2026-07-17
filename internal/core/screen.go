@@ -84,10 +84,12 @@ func (t *Terminal) PlainText() string {
 	return b.String()
 }
 
-func (t *Terminal) blank() Cell { return Cell{Rune: ' ', Attr: Attr{FG: DefaultFG, BG: DefaultBG}} }
+func (t *Terminal) blank() Cell {
+	return Cell{Rune: ' ', Attr: Attr{FG: DefaultColor(), BG: DefaultColor()}}
+}
 
 func isBlankRow(row []Cell) bool {
-	blankAttr := Attr{FG: DefaultFG, BG: DefaultBG}
+	blankAttr := Attr{FG: DefaultColor(), BG: DefaultColor()}
 	for _, cell := range row {
 		if (cell.Rune != 0 && cell.Rune != ' ') || cell.HasCombining() || cell.Attr != blankAttr || cell.WideContinuation {
 			return false

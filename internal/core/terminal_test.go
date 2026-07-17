@@ -362,8 +362,8 @@ func TestTerminalEraseCharsClearsIntersectedWideCellPairs(t *testing.T) {
 
 	t.Run("uses active rendition", func(t *testing.T) {
 		term := NewTerminal(3, 1)
-		fg := RGB{R: 1, G: 2, B: 3}
-		bg := RGB{R: 4, G: 5, B: 6}
+		fg := RGBColor(RGB{R: 1, G: 2, B: 3})
+		bg := RGBColor(RGB{R: 4, G: 5, B: 6})
 		term.SetFG(fg)
 		term.SetBG(bg)
 		term.PutRune('x')
@@ -474,13 +474,13 @@ func TestTerminalSaveRestoreCursor(t *testing.T) {
 
 func TestTerminalAttributes(t *testing.T) {
 	term := NewTerminal(4, 1)
-	term.SetFG(ANSIColor(2))
-	term.SetBG(ANSIColor(4))
+	term.SetFG(IndexedColor(2))
+	term.SetBG(IndexedColor(4))
 	term.SetBold(true)
 	term.PutRune('x')
 
 	cell := copyCells(term)[0]
-	if cell.Rune != 'x' || cell.Attr.FG != ANSIColor(2) || cell.Attr.BG != ANSIColor(4) || !cell.Attr.Bold {
+	if cell.Rune != 'x' || cell.Attr.FG != IndexedColor(2) || cell.Attr.BG != IndexedColor(4) || !cell.Attr.Bold {
 		t.Fatalf("unexpected cell: %#v", cell)
 	}
 }

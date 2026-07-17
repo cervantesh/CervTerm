@@ -2,6 +2,7 @@ package config
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -30,6 +31,21 @@ func TestDefaultsValidate(t *testing.T) {
 	}
 	if cfg.Clipboard.OSC52 != "off" {
 		t.Fatalf("clipboard.osc52 default = %q, want off", cfg.Clipboard.OSC52)
+	}
+}
+
+func TestANSIColorDefaultsAndValidation(t *testing.T) {
+	want := [16]string{
+		"#1B2232", "#FF5C8A", "#8BF59A", "#F8D866", "#7AA2FF", "#D88CFF", "#60E8F0", "#D8DEEA",
+		"#57627A", "#FF7AA8", "#A6FFB5", "#FFE68A", "#9BB8FF", "#E5A7FF", "#90F4FF", "#FFFFFF",
+	}
+	cfg := Defaults()
+	if cfg.Colors.ANSI != want {
+		t.Fatalf("colors.ansi defaults = %#v, want %#v", cfg.Colors.ANSI, want)
+	}
+	cfg.Colors.ANSI[3] = "#01020380"
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "colors.ansi[4]") {
+		t.Fatalf("Validate() error = %v, want indexed ANSI color error", err)
 	}
 }
 

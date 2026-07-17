@@ -36,6 +36,14 @@ return {
     background = %q,
     cursor = %q,
     selection_background = %q,
+    -- black/red/green/yellow/blue/purple/cyan/white, then bright variants.
+    -- ANSI entries require exactly #RRGGBB (alpha is not accepted).
+    ansi = {
+      %q, %q, %q, %q,
+      %q, %q, %q, %q,
+      %q, %q, %q, %q,
+      %q, %q, %q, %q,
+    },
   },
   scrolling = {
     -- Retained scrollback rows per pane; valid range 0..10000.
@@ -143,6 +151,10 @@ return {
 `, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY, cfg.Window.DynamicTitle, cfg.Window.Opacity, cfg.Window.Blur,
 		cfg.Font.Family, cfg.Font.Size, cfg.Font.Ligatures,
 		cfg.Colors.Foreground, cfg.Colors.Background, cfg.Colors.Cursor, cfg.Colors.SelectionBackground,
+		cfg.Colors.ANSI[0], cfg.Colors.ANSI[1], cfg.Colors.ANSI[2], cfg.Colors.ANSI[3],
+		cfg.Colors.ANSI[4], cfg.Colors.ANSI[5], cfg.Colors.ANSI[6], cfg.Colors.ANSI[7],
+		cfg.Colors.ANSI[8], cfg.Colors.ANSI[9], cfg.Colors.ANSI[10], cfg.Colors.ANSI[11],
+		cfg.Colors.ANSI[12], cfg.Colors.ANSI[13], cfg.Colors.ANSI[14], cfg.Colors.ANSI[15],
 		cfg.Scrolling.History, cfg.Scrolling.WheelMultiplier, cfg.Scrolling.HideCursorWhenScrolled,
 		cfg.Scrollbar.Enabled, cfg.Scrollbar.ReservedWidthPX, cfg.Scrollbar.WidthPX, cfg.Scrollbar.MarginPX, cfg.Scrollbar.RadiusPX, cfg.Scrollbar.MinThumbPX,
 		cfg.Scrollbar.TrackColor, cfg.Scrollbar.ThumbColor, cfg.Scrollbar.ThumbHoverColor, cfg.Scrollbar.ThumbPressColor,
