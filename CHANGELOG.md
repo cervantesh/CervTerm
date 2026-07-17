@@ -15,6 +15,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - A phased WezTerm-inspired parity roadmap, machine-readable support matrix, reproducible performance baseline tool, configuration compatibility policy, and proposed architecture decision gates.
 - A toolkit-neutral typed action model and frontend executor with deterministic registry metadata, semantic targets, strict bounded JSON serialization, sequences, callback metadata, trigger policies, and typed built-in key dispatch.
 - Typed Lua and Teal key actions, validated action composition, optional discovery labels, and legacy callback execution through the shared action executor and watchdog.
+- Versioned configuration documents with strict v2 field/type diagnostics, exact unversioned v1 compatibility, presence tracking, and in-memory migration scaffolding.
 
 ### Fixed
 

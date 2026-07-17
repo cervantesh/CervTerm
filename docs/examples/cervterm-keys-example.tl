@@ -1,6 +1,7 @@
 local cervterm = require("cervterm")
 
 local config = {
+  config_version = 2,
   keys = {
     {
       key = "p",

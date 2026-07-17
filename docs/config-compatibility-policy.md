@@ -14,11 +14,11 @@ CervTerm is pre-1.0, but configuration changes still require an explicit compati
 
 ## Schema Versions and Migrations
 
-Schema versioning begins in parity-roadmap Phase 2 after ADR-0002 is accepted. Until then, the existing unversioned schema is treated as v1.
+Schema v2 is available through explicit `config_version = 2`; generated templates opt in. Omitted version remains v1. Composition features are introduced only in later Phase 2 slices and currently fail with an actionable reserved-field diagnostic.
 
 ADR-0002 defines explicit v2 strictness. Unversioned/v1 files retain the historical behavior in which unknown or mistyped ordinary fields are ignored, because retroactive rejection would break configurations that currently load. The reserved `config_version` discriminator is the sole strict v1 exception. This compatibility exception ends only through the deprecation lifecycle below; migration/doctor diagnostics must identify what v2 will reject.
 
-A future migration must:
+Every migration must:
 
 - be deterministic and testable with golden input/output fixtures;
 - preserve user intent rather than only parse successfully;

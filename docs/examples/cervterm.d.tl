@@ -148,6 +148,7 @@ local record cervterm
   end
 
   record Config
+    config_version: integer | nil
     window: WindowConfig
     font: FontConfig
     colors: ColorsConfig

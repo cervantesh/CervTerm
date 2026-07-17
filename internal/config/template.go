@@ -9,6 +9,7 @@ func DefaultLua() string {
 -- Uncomment when using typed key actions below:
 -- local cervterm = require("cervterm")
 return {
+  config_version = 2,
   window = {
     width = %d,
     height = %d,
