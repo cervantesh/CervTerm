@@ -10,7 +10,7 @@ import (
 	termsel "cervterm/internal/selection"
 )
 
-func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, resolver core.ColorResolver) []int {
+func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, resolver *core.ColorResolver) []int {
 	rowCells := a.snap.Cells[r*a.snap.Cols : (r+1)*a.snap.Cols]
 	var order []int
 	if a.cfg.Render.Bidi {

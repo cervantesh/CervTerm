@@ -159,10 +159,11 @@ colors = {
       "#57627A", "#FF7AA8", "#A6FFB5", "#FFE68A",
       "#9BB8FF", "#E5A7FF", "#90F4FF", "#FFFFFF",
    },
+   indexed_colors = { [16] = "#102030", [196] = "#FF1010" },
 }
 ```
 
-Implemented: `colors.ansi` is a live dense list of exactly 16 `#RRGGBB` entries. Omission preserves the palette shown above; indexed `16..255` continue to use the xterm cube/grayscale until `indexed_colors` lands.
+Implemented: `colors.ansi` is a live dense list of exactly 16 `#RRGGBB` entries. `colors.indexed_colors` is a live sparse numeric map for indices 16–255; missing or unset entries retain the xterm cube/grayscale fallback.
 
 Near-term fields:
 
@@ -174,7 +175,7 @@ Near-term fields:
 - `cursor`
 - `selection_background`
 - `ansi`
-- `indexed_colors` later
+- `indexed_colors`
 
 ### `scrolling`
 
