@@ -35,6 +35,8 @@ type App struct {
 	configStateInitialized bool
 	pendingConfig          []config.ConfigChange
 	lastConfigReloadError  string
+	lastReloadNoticeError  string
+	lastReloadNoticeAt     time.Time
 	configPath             string
 	candidateOptions       script.CandidateOptions
 	configWatch            configWatchState

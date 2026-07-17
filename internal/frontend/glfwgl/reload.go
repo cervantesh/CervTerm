@@ -28,15 +28,43 @@ func (a *App) pollConfigReload(now time.Time) {
 	}
 }
 
+const configReloadFailureNoticeInterval = 30 * time.Second
+
+func (a *App) reportConfigReloadFailure(err error, now time.Time) bool {
+	message := err.Error()
+	if message == a.lastReloadNoticeError && !a.lastReloadNoticeAt.IsZero() && now.Sub(a.lastReloadNoticeAt) < configReloadFailureNoticeInterval {
+		return false
+	}
+	a.lastReloadNoticeError = message
+	a.lastReloadNoticeAt = now
+	log.Printf("config reload failed: %v", err)
+	a.Notify("config reload failed: " + message)
+	return true
+}
+
+func (a *App) clearConfigReloadFailureNotice() {
+	a.lastReloadNoticeError = ""
+	a.lastReloadNoticeAt = time.Time{}
+}
+
+func (a *App) acknowledgeConfigReloadFailure(before configWatchSnapshot, expectations []config.SourceWatchExpectation) {
+	changedDuringAttempt := configWatchSnapshotsDiffer(before, a.configWatch.snapshot())
+	failedSetChanged := a.configWatch.acknowledgeFailure(expectations)
+	if changedDuringAttempt || failedSetChanged {
+		a.reloadPending = true
+	}
+}
+
 func (a *App) applyPendingConfigReload() {
 	if !a.reloadPending {
 		return
 	}
 	a.reloadPending = false
 	if err := a.reloadConfig(); err != nil {
-		log.Printf("config reload failed: %v", err)
-		a.Notify("config reload failed: " + err.Error())
+		a.reportConfigReloadFailure(err, time.Now())
+		return
 	}
+	a.clearConfigReloadFailureNotice()
 }
 
 func (a *App) reloadConfig() (resultErr error) {
@@ -54,8 +82,16 @@ func (a *App) reloadConfig() (resultErr error) {
 	watchBefore := a.configWatch.snapshot()
 	loaded, err := script.LoadVersioned(a.configPath, config.Defaults(), a.candidateOptions.Clone())
 	if err != nil {
+		a.acknowledgeConfigReloadFailure(watchBefore, script.FailedWatchExpectations(err))
 		return err
 	}
+	failureExpectations := watchExpectations(loaded.WatchPaths)
+	defer func() {
+		if resultErr == nil {
+			return
+		}
+		a.acknowledgeConfigReloadFailure(watchBefore, failureExpectations)
+	}()
 	candidate, candidateRT := loaded.Candidate, loaded.Runtime
 	legacyTransition := loaded.LegacyTransition
 	var candidateProvenance []config.ProvenanceRecord
@@ -120,7 +156,7 @@ func (a *App) reloadConfig() (resultErr error) {
 	}
 	a.status.seq = -1
 	a.overlays.seq = -1
-	a.configWatch.acknowledge(loaded.WatchPaths)
+	a.configWatch.acknowledgeSuccess(loaded.WatchPaths)
 	changedBeforeAcknowledgement := a.configWatch.changedSince(watchAfterEvaluation)
 	candidateFilesChanged = candidateFilesChanged || watchHashesChanged(loaded.WatchHashes)
 	if changedDuringEvaluation || changedBeforeAcknowledgement || candidateFilesChanged {

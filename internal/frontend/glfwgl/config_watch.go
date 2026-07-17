@@ -35,6 +35,8 @@ type configWatchSnapshot struct {
 
 type configWatchState struct {
 	paths       []string
+	activePaths []string
+	failedPaths []string
 	baseline    map[string]configFileObservation
 	observed    map[string]configFileObservation
 	initialized bool
@@ -45,7 +47,7 @@ type configWatchState struct {
 
 func newConfigWatchState(paths ...string) configWatchState {
 	w := configWatchState{}
-	w.acknowledge(paths)
+	w.acknowledgeSuccess(paths)
 	return w
 }
 
@@ -83,6 +85,15 @@ func normalizeWatchPaths(paths []string) []string {
 	return result
 }
 
+func watchExpectations(paths []string) []config.SourceWatchExpectation {
+	normalized := normalizeWatchPaths(paths)
+	expectations := make([]config.SourceWatchExpectation, 0, len(normalized))
+	for _, path := range normalized {
+		expectations = append(expectations, config.SourceWatchExpectation{Path: path})
+	}
+	return expectations
+}
+
 func observeWatchPaths(paths []string) map[string]configFileObservation {
 	observed := make(map[string]configFileObservation, len(paths))
 	for _, path := range paths {
@@ -91,7 +102,30 @@ func observeWatchPaths(paths []string) map[string]configFileObservation {
 	return observed
 }
 
-func (w *configWatchState) acknowledge(paths []string) {
+func (w *configWatchState) acknowledge(paths []string) { w.acknowledgeSuccess(paths) }
+
+func (w *configWatchState) acknowledgeSuccess(paths []string) {
+	w.activePaths = normalizeWatchPaths(paths)
+	w.failedPaths = nil
+	w.installPaths(w.activePaths)
+}
+
+// acknowledgeFailure replaces the latest failure-only set while preserving the
+// last successful graph. It returns whether the failure set changed.
+func (w *configWatchState) acknowledgeFailure(expectations []config.SourceWatchExpectation) bool {
+	failed := make([]string, 0, len(expectations))
+	for _, expectation := range expectations {
+		failed = append(failed, expectation.Path)
+	}
+	failed = normalizeWatchPaths(failed)
+	changed := !reflect.DeepEqual(failed, w.failedPaths)
+	w.failedPaths = failed
+	union := append(append([]string(nil), w.activePaths...), w.failedPaths...)
+	w.installPaths(union)
+	return changed
+}
+
+func (w *configWatchState) installPaths(paths []string) {
 	w.paths = normalizeWatchPaths(paths)
 	w.baseline = observeWatchPaths(w.paths)
 	w.observed = cloneWatchObservations(w.baseline)

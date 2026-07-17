@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -301,6 +303,100 @@ func TestSourceGraphStagesTealWithoutPublishingAndRejectsCollision(t *testing.T)
 	})
 }
 
+func TestSourceGraphFailureExpectationsIncludeMissingNestedSource(t *testing.T) {
+	dir := t.TempDir()
+	primary := writeGraphLua(t, dir, "primary.lua", `return {config_version=2, includes={"child.lua"}}`)
+	child := writeGraphLua(t, dir, "child.lua", `return {config_version=2, includes={"missing.lua"}}`)
+	missing := filepath.Join(dir, "missing.lua")
+	state := lua.NewState()
+	defer state.Close()
+
+	_, err := BuildSourceGraph(state, primary, DefaultSourceGraphOptions())
+	if err == nil {
+		t.Fatal("expected missing nested include failure")
+	}
+	var failure *SourceGraphFailureError
+	if !errors.As(err, &failure) {
+		t.Fatalf("error type = %T, want *SourceGraphFailureError", err)
+	}
+	if failure.Unwrap() == nil || failure.Error() != failure.Unwrap().Error() {
+		t.Fatalf("failure did not preserve text/unwrap: %v", failure)
+	}
+	expectations := SourceGraphFailureExpectations(err)
+	for _, path := range []string{primary, child, missing} {
+		if !failureExpectationsContainPath(expectations, path) {
+			t.Errorf("missing watch expectation %q in %#v", path, expectations)
+		}
+	}
+	first := SourceGraphFailureExpectations(err)
+	first[0].Path = "mutated"
+	if SourceGraphFailureExpectations(err)[0].Path == "mutated" {
+		t.Fatal("failure expectations were not detached")
+	}
+}
+
+func TestSourceGraphFailureExpectationsIncludeMissingLuaDependencies(t *testing.T) {
+	tests := []struct {
+		name string
+		body func(dir, missing string) string
+	}{
+		{name: "dofile", body: func(_ string, missing string) string {
+			return `dofile(` + luaQuote(missing) + `); return {config_version=2}`
+		}},
+		{name: "loadfile", body: func(_ string, missing string) string {
+			return `assert(loadfile(` + luaQuote(missing) + `)); return {config_version=2}`
+		}},
+		{name: "require", body: func(dir, _ string) string {
+			return `package.path=` + luaQuote(filepath.Join(dir, "?.lua")) + `; require("missing"); return {config_version=2}`
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			missing := filepath.Join(dir, "missing.lua")
+			primary := writeGraphLua(t, dir, "primary.lua", tt.body(dir, missing))
+			state := lua.NewState()
+			defer state.Close()
+			_, err := BuildSourceGraph(state, primary, DefaultSourceGraphOptions())
+			if err == nil {
+				t.Fatal("expected dependency failure")
+			}
+			found := false
+			for _, expectation := range SourceGraphFailureExpectations(err) {
+				if expectation.Path == missing {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("missing dependency expectation %q in %#v", missing, SourceGraphFailureExpectations(err))
+			}
+		})
+	}
+}
+
+func TestSourceGraphFailureExpectationsIncludeExistingTealSource(t *testing.T) {
+	if _, err := exec.LookPath("tl"); err != nil {
+		t.Skip("tl not installed")
+	}
+	dir := t.TempDir()
+	path := writeGraphLua(t, dir, "broken.tl", `local value: string = 42; return {config_version=2}`)
+	state := lua.NewState()
+	defer state.Close()
+	_, err := BuildSourceGraph(state, path, DefaultSourceGraphOptions())
+	if err == nil {
+		t.Fatal("expected Teal check failure")
+	}
+	found := false
+	for _, expectation := range SourceGraphFailureExpectations(err) {
+		if expectation.Path == path {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("existing Teal source missing from %#v", SourceGraphFailureExpectations(err))
+	}
+}
+
 func writeGraphLua(t *testing.T, dir, name, content string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
@@ -340,4 +436,21 @@ func installFakeGraphTeal(t *testing.T, dir string) {
 		}
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func failureExpectationsContainPath(expectations []SourceWatchExpectation, want string) bool {
+	for _, expectation := range expectations {
+		if canonicalIdentity(expectation.Path) == canonicalIdentity(want) {
+			return true
+		}
+		if filepath.Base(expectation.Path) != filepath.Base(want) {
+			continue
+		}
+		gotParent, gotErr := os.Stat(filepath.Dir(expectation.Path))
+		wantParent, wantErr := os.Stat(filepath.Dir(want))
+		if gotErr == nil && wantErr == nil && os.SameFile(gotParent, wantParent) {
+			return true
+		}
+	}
+	return false
 }

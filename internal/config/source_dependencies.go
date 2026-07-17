@@ -65,6 +65,7 @@ type dependencyCapture struct {
 	loaders          *lua.LTable
 	loaderValues     []lua.LValue
 	dependencies     map[string]SourceDependency
+	expectations     map[string]SourceWatchExpectation
 }
 
 const dependencyRecorderGlobal = "__cervterm_record_config_dependency"
@@ -79,6 +80,7 @@ func installDependencyCapture(state *lua.LState) (*dependencyCapture, error) {
 		state: state, originalPackage: packageValue, packageTable: packageTable,
 		originalRequire: state.GetGlobal("require"), originalDoFile: state.GetGlobal("dofile"),
 		originalLoadFile: state.GetGlobal("loadfile"), dependencies: make(map[string]SourceDependency),
+		expectations: make(map[string]SourceWatchExpectation),
 	}
 	capture.loaders, _ = packageTable.RawGetString("loaders").(*lua.LTable)
 	if capture.loaders == nil {
@@ -200,7 +202,7 @@ func (c *dependencyCapture) recordLua(state *lua.LState) int {
 	var resolved string
 	switch kind {
 	case DependencyRequire:
-		resolved = c.resolveRequiredModule(requested)
+		resolved = c.resolveRequiredModule(requested, phase)
 	case DependencyDoFile, DependencyLoadFile:
 		resolved = requested
 	default:
@@ -214,12 +216,14 @@ func (c *dependencyCapture) recordLua(state *lua.LState) int {
 		return 0
 	}
 	selected = filepath.Clean(selected)
+	c.addExpectation(selected)
 	canonical, _, err := canonicalLocalFile(resolved)
 	if err != nil {
-		// Preserve standard Lua's own error and return semantics. Dependency capture
-		// records only paths that resolve to an existing regular local file.
+		// Preserve standard Lua's own error and return semantics while retaining
+		// the selected local path so creating the missing file can trigger retry.
 		return 0
 	}
+	c.addExpectation(canonical)
 	content, err := os.ReadFile(canonical)
 	if err != nil {
 		return 0
@@ -235,7 +239,7 @@ func (c *dependencyCapture) recordLua(state *lua.LState) int {
 	return 0
 }
 
-func (c *dependencyCapture) resolveRequiredModule(name string) string {
+func (c *dependencyCapture) resolveRequiredModule(name, phase string) string {
 	packageTable, ok := c.state.GetGlobal("package").(*lua.LTable)
 	if !ok {
 		return ""
@@ -256,10 +260,31 @@ func (c *dependencyCapture) resolveRequiredModule(name string) string {
 			continue
 		}
 		candidate := strings.ReplaceAll(pattern, "?", modulePath)
+		absolute, err := filepath.Abs(candidate)
+		if err == nil && phase == "before" {
+			c.addExpectation(filepath.Clean(absolute))
+		}
 		info, err := os.Stat(candidate)
 		if err == nil && info.Mode().IsRegular() {
 			return candidate
 		}
 	}
 	return ""
+}
+
+func (c *dependencyCapture) addExpectation(path string) {
+	if path == "" {
+		return
+	}
+	cleaned := filepath.Clean(path)
+	c.expectations[canonicalIdentity(cleaned)] = SourceWatchExpectation{Path: cleaned}
+}
+
+func (c *dependencyCapture) failureExpectations() []SourceWatchExpectation {
+	out := make([]SourceWatchExpectation, 0, len(c.expectations))
+	for _, expectation := range c.expectations {
+		out = append(out, expectation)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out
 }

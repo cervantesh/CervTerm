@@ -120,41 +120,44 @@ func buildCandidateBundleFromEvaluation(evaluation *candidateEvaluation, base co
 func LoadVersioned(path string, base config.Config, options CandidateOptions) (VersionedSource, error) {
 	evaluation, err := evaluateCandidate(path, options.SourceGraph, true)
 	if err != nil {
-		return VersionedSource{}, err
+		return VersionedSource{}, wrapVersionedLoadError(err, nil, config.SourceGraphFailureExpectations(err))
 	}
 	defer evaluation.close()
+	fail := func(err error) (VersionedSource, error) {
+		return VersionedSource{}, wrapVersionedLoadError(err, watchPathsForGraph(evaluation.graph), nil)
+	}
 	primary, ok := evaluation.graph.PrimaryNode()
 	if !ok {
-		return VersionedSource{}, fmt.Errorf("evaluated source graph has no primary document")
+		return fail(fmt.Errorf("evaluated source graph has no primary document"))
 	}
 	if primary.Document.AuthoredVersion == 2 {
 		bundle, err := buildCandidateBundleFromEvaluation(evaluation, base, options)
 		if err != nil {
-			return VersionedSource{}, err
+			return fail(err)
 		}
 		return VersionedSource{Config: bundle.Config(), Candidate: bundle, WatchPaths: bundle.WatchPaths(), WatchHashes: bundle.WatchHashes(), AuthoredVersion: 2, Options: options.Clone()}, nil
 	}
 	if err := validateEvaluatedScripting(evaluation.graph); err != nil {
-		return VersionedSource{}, err
+		return fail(err)
 	}
 	resolved := config.FromDocument(cloneCandidateConfig(base), primary.Document)
 	if err := resolved.Validate(); err != nil {
-		return VersionedSource{}, err
+		return fail(err)
 	}
 	bindings, err := loadBindings(primary.Document.Root)
 	if err != nil {
-		return VersionedSource{}, err
+		return fail(err)
 	}
 	events, err := loadEvents(primary.Document.Root)
 	if err != nil {
-		return VersionedSource{}, err
+		return fail(err)
 	}
 	var legacyTransition *config.LegacyTealTransition
 	if strings.HasSuffix(strings.ToLower(path), ".tl") {
 		if len(evaluation.graph.StagedTeal) == 1 {
 			legacyTransition, err = config.PrepareLegacyTealTransition(evaluation.graph.StagedTeal[0])
 			if err != nil {
-				return VersionedSource{}, err
+				return fail(err)
 			}
 		}
 		rollbackTransition := func(cause error) error {
@@ -165,12 +168,12 @@ func LoadVersioned(path string, base config.Config, options CandidateOptions) (V
 		}
 		generated, err := config.GenerateTeal(path)
 		if err != nil {
-			return VersionedSource{}, rollbackTransition(err)
+			return fail(rollbackTransition(err))
 		}
 		// Cleanly cross back to marker-free v1 only when a valid marker from this
 		// source exists. A failed removal restores the journal before returning.
 		if _, removeErr := config.RemoveOwnedTealMarker(generated, path); removeErr != nil && legacyTransition != nil {
-			return VersionedSource{}, rollbackTransition(removeErr)
+			return fail(rollbackTransition(removeErr))
 		}
 	}
 	watchPaths := watchPathsForGraph(evaluation.graph)
