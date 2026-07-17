@@ -49,6 +49,24 @@ func TestTypedDefaultTealExample(t *testing.T) {
 	}
 }
 
+func TestTypedActionsTealExample(t *testing.T) {
+	if _, err := exec.LookPath("tl"); err != nil {
+		t.Skip("tl not installed")
+	}
+	dir := t.TempDir()
+	copyFile(t, filepath.Join("..", "..", "docs", "examples", "cervterm.d.tl"), filepath.Join(dir, "cervterm.d.tl"))
+	copyFile(t, filepath.Join("..", "..", "docs", "examples", "cervterm-actions-example.tl"), filepath.Join(dir, "cervterm.tl"))
+	_, rt, err := Load(filepath.Join(dir, "cervterm.tl"), config.Defaults())
+	if err != nil {
+		t.Fatalf("typed actions Load failed: %v", err)
+	}
+	defer rt.Close()
+	bindings := rt.Bindings()
+	if len(bindings) != 4 || bindings[0].Label != "Copy selection" {
+		t.Fatalf("bindings = %#v", bindings)
+	}
+}
+
 func copyFile(t *testing.T, src, dst string) {
 	t.Helper()
 	data, err := os.ReadFile(src)
