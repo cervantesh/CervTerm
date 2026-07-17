@@ -154,6 +154,9 @@ func (b *compositionBuilder) applyCLIOverrides(overrides []CLIOverride) error {
 		if err != nil {
 			return fmt.Errorf("config override argument %d path %q: %w", override.ArgumentIndex, override.Path, err)
 		}
+		if err := validateStrictValue("CLI override", override.Path, value, resolved.field, false); err != nil {
+			return fmt.Errorf("config override argument %d path %q: %w", override.ArgumentIndex, override.Path, err)
+		}
 		if err := b.consume(cost, override.Path); err != nil {
 			return err
 		}

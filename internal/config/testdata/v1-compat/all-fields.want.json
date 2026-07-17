@@ -17,7 +17,25 @@
     "Foreground": "#010203",
     "Background": "#040506FF",
     "Cursor": "#070809",
-    "SelectionBackground": "#0A0B0C"
+    "SelectionBackground": "#0A0B0C",
+    "ANSI": [
+      "#1B2232",
+      "#FF5C8A",
+      "#8BF59A",
+      "#F8D866",
+      "#7AA2FF",
+      "#D88CFF",
+      "#60E8F0",
+      "#D8DEEA",
+      "#57627A",
+      "#FF7AA8",
+      "#A6FFB5",
+      "#FFE68A",
+      "#9BB8FF",
+      "#E5A7FF",
+      "#90F4FF",
+      "#FFFFFF"
+    ]
   },
   "Scrolling": {
     "History": 3210,

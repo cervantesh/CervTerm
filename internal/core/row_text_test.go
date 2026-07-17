@@ -6,7 +6,7 @@ import "testing"
 // selection/copy and term:line(): skip Rune==0 and WideContinuation padding
 // (never turn them into spaces), emit rune+combining, trim trailing blanks.
 func TestRowTextCanonicalPolicy(t *testing.T) {
-	attr := Attr{FG: DefaultFG, BG: DefaultBG}
+	attr := Attr{FG: DefaultColor(), BG: DefaultColor()}
 
 	cases := []struct {
 		name  string

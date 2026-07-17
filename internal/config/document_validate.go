@@ -100,6 +100,9 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 			return err
 		}
 	case KindStringList:
+		if path == "colors.ansi" {
+			return validateANSIList(source, path, value)
+		}
 		return validateStringList(source, path, value)
 	case KindStringMap:
 		return validateStringMap(source, path, value, allowUnset)
@@ -139,6 +142,23 @@ func validateStringList(source, path string, value lua.LValue) error {
 	for i := 1; i <= table.Len(); i++ {
 		if _, ok := table.RawGetInt(i).(lua.LString); !ok {
 			return typeError(source, fmt.Sprintf("%s[%d]", path, i), KindString, table.RawGetInt(i))
+		}
+	}
+	return nil
+}
+
+func validateANSIList(source, path string, value lua.LValue) error {
+	if err := validateStringList(source, path, value); err != nil {
+		return err
+	}
+	table := value.(*lua.LTable)
+	if table.Len() != 16 {
+		return documentError(source, path, "must contain exactly 16 entries, got %d", table.Len())
+	}
+	for index := 1; index <= table.Len(); index++ {
+		color := string(table.RawGetInt(index).(lua.LString))
+		if !isHexRGBColor(color) {
+			return documentError(source, fmt.Sprintf("%s[%d]", path, index), "must be #RRGGBB")
 		}
 	}
 	return nil

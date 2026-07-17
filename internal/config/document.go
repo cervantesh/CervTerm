@@ -95,6 +95,7 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	{name: "colors", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
 		{name: "foreground", kind: KindString}, {name: "background", kind: KindString, runtimeOverride: true},
 		{name: "cursor", kind: KindString}, {name: "selection_background", kind: KindString},
+		{name: "ansi", kind: KindStringList},
 	}},
 	{name: "scrolling", kind: KindTable, apply: ApplyLive, runtimeOverride: true, children: []fieldSchema{
 		{name: "history", kind: KindInteger}, {name: "wheel_multiplier", kind: KindInteger}, {name: "hide_cursor_when_scrolled", kind: KindBoolean},

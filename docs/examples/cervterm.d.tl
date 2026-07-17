@@ -22,6 +22,7 @@ local record cervterm
     background: string
     cursor: string
     selection_background: string
+    ansi: {string}
   end
 
   record ScrollingConfig
@@ -157,6 +158,7 @@ local record cervterm
     background: string | Unset
     cursor: string | Unset
     selection_background: string | Unset
+    ansi: {string} | Unset
   end
 
   record ScrollingDocument
