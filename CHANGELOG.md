@@ -20,6 +20,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - A candidate-only schema composition engine with deterministic record/map/list/function merge, immutable unset tombstones, bounded node counts, and value-free provenance chains.
 - Candidate-only named environment/profile declarations with deterministic selection precedence, same-name merge, and environment-then-profile provenance layers.
 - A candidate-only typed CLI override engine with schema capabilities, sensitive-path rejection, ordered post-profile application, and argument-index provenance.
+- Candidate-only transactional Teal output publication with ownership markers, byte-identical legacy adoption, commit-time identity checks, durable atomic replacement, and reverse rollback.
 
 ### Fixed
 
