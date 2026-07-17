@@ -75,9 +75,11 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 2 — Versioned Composed Configuration
 **Scope:** schema versions, includes/modules, profiles/environment/CLI/window overrides, provenance, migrations, dependency-aware reload.
 
+**Status:** Architecture gate accepted in ADR-0002; implementation has not started.
+
 **Work**
-- Accept ADR-0002.
-- Establish precedence: defaults < includes < primary config < selected profile/environment < CLI < runtime window override.
+- Apply accepted ADR-0002.
+- Establish precedence: defaults < includes < primary < selected environment < selected profile < CLI < per-window runtime override.
 - Add canonical-path source graph, include-cycle detection, deterministic deep-merge rules, and field provenance.
 - Add migration functions and golden fixtures; preserve v1 shorthand.
 - Watch the primary file and dependencies; build/validate a complete candidate before atomic swap.
@@ -319,7 +321,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Recommended Issue/PR Boundaries
 - One tracking epic per phase.
 - One ADR PR before each architectural phase.
-- Configuration phases: schema/types/template/docs PR, runtime integration PR, UX/manual evidence PR.
+- Configuration phases follow their ADR slices; every PR updates all applicable Go/Lua/Teal/template/reload/test/docs contracts, with a final evidence PR only for validation and status closeout.
 - Tabs: mux model PR, action integration PR, tab bar PR, move/lifecycle hardening PR.
 - Windows/workspaces: host controller PR, move actions PR, persistence PR.
 - Shell integration: OSC 8 PR, semantic zones PR, actions/UI PR, notification policy PR.
@@ -338,4 +340,4 @@ Stop and return to architecture review if:
 - renderer selection becomes a prerequisite.
 
 ## Immediate Next Action
-Review and accept ADR-0002's schema version, composition precedence, provenance, migration, dependency watching, and reload rollback decisions. Begin Phase 2 implementation only after that architecture gate is accepted.
+Implement Phase 2 slice 1 only: presence-aware raw v1/v2 documents, schema metadata, strict v2 validation, in-memory migrations, and compatibility goldens. Do not add includes until the v1 compatibility gate passes.
