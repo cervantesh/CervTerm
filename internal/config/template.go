@@ -44,6 +44,8 @@ return {
       %q, %q, %q, %q,
       %q, %q, %q, %q,
     },
+    -- Optional sparse xterm overrides; numeric keys must be 16..255.
+    -- indexed_colors = { [16] = "#102030", [196] = "#FF1010" },
   },
   scrolling = {
     -- Retained scrollback rows per pane; valid range 0..10000.

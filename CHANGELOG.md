@@ -30,6 +30,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Failed config attempts now watch the latest discovered and missing dependencies alongside the last successful graph, enabling automatic repair recovery with bounded repeated notices.
 - Read-only `--explain-config`/field filters and composed doctor diagnostics with deterministic provenance, graph reporting, sensitive-value redaction, and no frontend or Teal publication side effects.
 - Logical default/indexed/truecolor cell attributes and a live configurable 16-color ANSI palette resolved during rendering, allowing existing scrollback to recolor without reparsing.
+- Live sparse `colors.indexed_colors` overrides for xterm indices 16–255, with per-key composition/provenance and algorithmic fallback.
 
 ### Fixed
 

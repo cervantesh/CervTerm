@@ -18,6 +18,8 @@ Repeatable `--config-override PATH=VALUE` inputs apply left-to-right after the s
 
 `colors.ansi` is a live, CLI-override-capable dense list of exactly 16 `#RRGGBB` strings in this order: black, red, green, yellow, blue, purple, cyan, white, then their eight bright variants. Alpha forms are rejected. It is not available through process-local runtime setters.
 
+`colors.indexed_colors` is a live sparse numeric map for indices `16..255`; for example `{ [16] = "#102030", [196] = "#FF1010" }`. Missing or explicitly unset entries use the xterm cube/grayscale fallback. Numeric keys outside that range, string/fractional keys, alpha colors, and malformed values reject. The map merges and records provenance per numeric key. It is intentionally unavailable to CLI and runtime overrides.
+
 `--explain-config` and repeatable `--explain-config-field PATH` evaluate this same v2 composition in diagnostic-only mode, then print deterministic selection, graph, resolved values, application scopes, and provenance without activating callbacks or publishing Teal. Sensitive maps are redacted and callback bodies are never rendered.
 
 ## Keybindings

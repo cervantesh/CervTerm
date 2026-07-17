@@ -53,6 +53,14 @@ func findUnsetPath(table *lua.LTable, schema fieldSchema, prefix string) string 
 					return found[0]
 				}
 			}
+		case KindIndexedColorMap:
+			if nested, ok := value.(*lua.LTable); ok {
+				for _, key := range indexedColorKeys(nested) {
+					if isUnsetValue(nested.RawGetInt(key)) {
+						return indexedColorEntryPath(path, key)
+					}
+				}
+			}
 		case KindEvents:
 			if nested, ok := value.(*lua.LTable); ok {
 				for _, name := range eventFieldNames {

@@ -49,6 +49,7 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Colors.Cursor = stringField(tbl, "cursor", cfg.Colors.Cursor)
 		cfg.Colors.SelectionBackground = stringField(tbl, "selection_background", cfg.Colors.SelectionBackground)
 		cfg.Colors.ANSI = ansiField(tbl, "ansi", cfg.Colors.ANSI)
+		cfg.Colors.IndexedColors = indexedColorsField(tbl, "indexed_colors", cfg.Colors.IndexedColors)
 	}
 	if tbl := tableField(root, "scrolling"); tbl != nil {
 		cfg.Scrolling.History = intField(tbl, "history", cfg.Scrolling.History)
@@ -164,6 +165,22 @@ func ansiField(tbl *lua.LTable, key string, fallback [16]string) [16]string {
 			return fallback
 		}
 		out[index] = string(value)
+	}
+	return out
+}
+
+func indexedColorsField(tbl *lua.LTable, key string, fallback IndexedColorOverrides) IndexedColorOverrides {
+	mapTable, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	var out IndexedColorOverrides
+	for _, index := range indexedColorKeys(mapTable) {
+		value, ok := mapTable.RawGetInt(index).(lua.LString)
+		if !ok {
+			continue
+		}
+		_ = out.Set(uint8(index), string(value))
 	}
 	return out
 }

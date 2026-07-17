@@ -39,3 +39,28 @@ func TestConfiguredPaletteUsesConfiguredLogicalDefaults(t *testing.T) {
 		t.Fatalf("default background = %#v", got)
 	}
 }
+
+func TestConfiguredSparseIndexedOverridesPreserveFallbacks(t *testing.T) {
+	first := config.Defaults().Colors
+	second := first
+	if err := first.IndexedColors.Set(196, "#102030"); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.IndexedColors.Set(196, "#A0B0C0"); err != nil {
+		t.Fatal(err)
+	}
+	logical := core.IndexedColor(196)
+	if got := configuredColorResolver(first).ResolveFG(logical); got != (core.RGB{R: 0x10, G: 0x20, B: 0x30}) {
+		t.Fatalf("first indexed override = %#v", got)
+	}
+	if got := configuredColorResolver(second).ResolveFG(logical); got != (core.RGB{R: 0xA0, G: 0xB0, B: 0xC0}) {
+		t.Fatalf("second indexed override = %#v", got)
+	}
+	fallback := configuredColorResolver(first).ResolveFG(core.IndexedColor(195))
+	if fallback != core.ANSI256Color(195) {
+		t.Fatalf("neighbor fallback = %#v, want %#v", fallback, core.ANSI256Color(195))
+	}
+	if got := configuredColorResolver(first).ResolveFG(core.IndexedColor(1)); got != core.ANSIColor(1) {
+		t.Fatalf("ANSI index changed = %#v", got)
+	}
+}

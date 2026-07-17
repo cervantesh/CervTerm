@@ -44,6 +44,7 @@ type ColorsConfig struct {
 	Cursor              string
 	SelectionBackground string
 	ANSI                [16]string
+	IndexedColors       IndexedColorOverrides
 }
 
 type ScrollingConfig struct {
@@ -214,6 +215,11 @@ func (c Config) Validate() error {
 	for index, value := range c.Colors.ANSI {
 		if !isHexRGBColor(value) {
 			errs = append(errs, fmt.Errorf("colors.ansi[%d] must be #RRGGBB", index+1))
+		}
+	}
+	for slot, value := range c.Colors.IndexedColors {
+		if value != "" && !isHexRGBColor(value) {
+			errs = append(errs, fmt.Errorf("colors.indexed_colors[%d] must be #RRGGBB", slot+firstIndexedColor))
 		}
 	}
 	for name, value := range map[string]string{
