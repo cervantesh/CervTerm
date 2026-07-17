@@ -27,6 +27,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Schema-owned live/new-pane/new-window/recreate/restart classifications with detached desired/effective state, exact pending diagnostics, live cursor reload, and desired shell settings for future panes.
 - Durable process-local `ConfigScopeID` patches for live Lua setters, with shared typed decoding, reload revalidation, explicit clearing, stale-scope rejection, and runtime provenance chains.
 - Executable v2 environment/profile selection and repeatable typed `--config-override` inputs, snapshotted consistently across startup and reload.
+- Failed config attempts now watch the latest discovered and missing dependencies alongside the last successful graph, enabling automatic repair recovery with bounded repeated notices.
 
 ### Fixed
 
