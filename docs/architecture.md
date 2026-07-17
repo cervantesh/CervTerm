@@ -47,7 +47,9 @@ Named `environments` and `profiles` are strict partial documents. Same-name decl
 
 Candidate `CLIOverride` values apply left-to-right after the selected profile. Paths resolve against schema metadata; booleans/numbers/integers/lists use JSON and schema-known strings may be unquoted. Records, callbacks, bindings, composition metadata, and sensitive `shell.env` paths are rejected before values are decoded. Provenance records only the argument index and path, never the raw argument value. The decoder is pure and has no command-line wiring in this slice; final cross-field validation remains the candidate bundle caller's responsibility.
 
-This remains a candidate-only seam. Public loaders reject `includes`, selection metadata, and `unset`, the executable exposes no override flag, and no code invokes Teal publication for active configuration until config/runtime/graph ownership can transfer as one atomic bundle.
+`internal/script.BuildCandidateBundle` now creates the ownership unit needed for transfer: one validated composed `Config`, the single candidate Lua state and effective bindings/events plus primary timers/status/overlays, selection/provenance, dependency graph/staging, and deferred idempotent Teal publication. Every source's legacy fail-fast scripting surfaces validate before effective merge. Build failures close the Lua state and staging; bundle accessors detach mutable data; `Close` releases runtime then graph exactly once. Bundle lifecycle is serialized on the main thread.
+
+This remains a candidate-only seam. Public loaders reject `includes`, selection metadata, and `unset`, the executable exposes no override flag, and the frontend does not install candidate bundles or invoke Teal publication yet. The next slice must split fallible live-resource preparation from an infallible bundle transfer before activation.
 
 ## Verifiable measurements
 
