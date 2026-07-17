@@ -37,7 +37,11 @@ The mux is process-local and supports native column/row splits, stable split ide
 
 Primary evaluation occurs once before include traversal so it can declare edges. Includes and their nested `require`/`dofile`/`loadfile` calls run under a declarative guard: they may return values and typed actions but cannot register timers, status entries, or overlays. The instrumented standard loaders record canonical local module dependencies and v2 rejects replacement/custom loaders that would make reload completeness unknowable.
 
-Teal sources check and generate into a per-candidate owned staging directory (including beneath a caller-supplied staging parent); the graph reserves their eventual adjacent Lua paths and rejects source/derived-output collisions without publishing files. Candidate staging is removed when the graph closes. Public loaders still reject `includes` as unavailable in this slice: documents are not merged or installed until the next ADR-0002 slice adds deterministic merge and provenance.
+Teal sources check and generate into a per-candidate owned staging directory (including beneath a caller-supplied staging parent); the graph reserves their eventual adjacent Lua paths and rejects source/derived-output collisions without publishing files. Candidate staging is removed when the graph closes.
+
+`internal/config.ComposeSourceGraph` consumes that graph in deterministic post-order and builds a new root table in the same Lua state. Records merge recursively, `shell.env` merges by key, lists replace, event function slots replace independently, and `cervterm.config.unset` suppresses lower layers while allowing a higher value to win later. A 100,000-node/list-entry ceiling bounds composition. Provenance is retained per fixed schema leaf, map key, list, and event function with source versions and a low-to-high overwrite chain; it stores no raw values and marks sensitive paths.
+
+This remains a candidate-only seam. Public loaders reject `includes` and `unset` until Teal output publication and config/runtime/graph ownership can transfer as one atomic bundle; candidate composition does not mutate active configuration or publish generated files.
 
 ## Verifiable measurements
 

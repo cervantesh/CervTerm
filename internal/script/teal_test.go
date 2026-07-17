@@ -67,6 +67,28 @@ func TestTypedActionsTealExample(t *testing.T) {
 	}
 }
 
+func TestTealConfigUnsetTypeContract(t *testing.T) {
+	if _, err := exec.LookPath("tl"); err != nil {
+		t.Skip("tl not installed")
+	}
+	dir := t.TempDir()
+	copyFile(t, filepath.Join("..", "..", "docs", "examples", "cervterm.d.tl"), filepath.Join(dir, "cervterm.d.tl"))
+	source := `local cervterm = require("cervterm")
+local cfg: cervterm.Config = {
+  config_version = 2,
+  font = { family = "Mono", size = cervterm.config.unset, ligatures = true },
+}
+return cfg
+`
+	path := filepath.Join(dir, "cervterm.tl")
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.GenerateTeal(path); err != nil {
+		t.Fatalf("unset Teal contract failed: %v", err)
+	}
+}
+
 func copyFile(t *testing.T, src, dst string) {
 	t.Helper()
 	data, err := os.ReadFile(src)

@@ -17,6 +17,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Typed Lua and Teal key actions, validated action composition, optional discovery labels, and legacy callback execution through the shared action executor and watchdog.
 - Versioned configuration documents with strict v2 field/type diagnostics, exact unversioned v1 compatibility, presence tracking, and in-memory migration scaffolding.
 - A candidate-only canonical configuration source graph with bounded include traversal, dependency capture, declarative side-effect guards, and transactional Teal staging.
+- A candidate-only schema composition engine with deterministic record/map/list/function merge, immutable unset tombstones, bounded node counts, and value-free provenance chains.
 
 ### Fixed
 
