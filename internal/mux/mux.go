@@ -55,6 +55,7 @@ type Mux struct {
 	bootstrapped bool
 	bounds       PixelRect
 	paneMetrics  map[PaneID]CellMetrics
+	paletteBase  core.PaletteBase
 }
 
 func New(factory SessionFactory, options Options) *Mux {
@@ -72,6 +73,7 @@ func New(factory SessionFactory, options Options) *Mux {
 		panes:       make(map[PaneID]*pane),
 		closed:      make(map[PaneID]struct{}),
 		paneMetrics: make(map[PaneID]CellMetrics),
+		paletteBase: core.DefaultPaletteBase(),
 		incoming:    make(chan ingressRecord, options.IngressCapacity),
 		ctx:         ctx,
 		cancel:      cancel,
@@ -93,6 +95,7 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 	}
 	geometry := effectiveGeometry(layout.Panes[0])
 	p := newPane(geometry.Pane, geometry.Cols, geometry.Rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	p.terminal.SetPaletteBase(m.paletteBase)
 	p.geometry = geometry
 	if m.options.SetClipboard != nil {
 		p.parser.SetClipboard = func(text string) { m.options.SetClipboard(p.id, text) }
@@ -196,6 +199,7 @@ func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Ev
 
 	predictedID := m.model.nextPaneID
 	newPane := newPane(predictedID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	newPane.terminal.SetPaletteBase(m.paletteBase)
 	if m.options.SetClipboard != nil {
 		newPane.parser.SetClipboard = func(text string) { m.options.SetClipboard(newPane.id, text) }
 	}

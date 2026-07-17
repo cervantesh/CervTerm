@@ -257,6 +257,7 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	a.cfg.Window.Opacity = next.Window.Opacity
 	a.cfg.Window.Blur = next.Window.Blur
 	a.cfg.Colors = next.Colors
+	a.mux.SetPaletteBase(configuredPaletteBase(a.cfg.Colors))
 	a.cfg.Scrolling = next.Scrolling
 	a.cfg.Scrollbar = next.Scrollbar
 	a.cfg.Cursor = next.Cursor

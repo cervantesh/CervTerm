@@ -11,3 +11,4 @@
 | [0007-persist-workspace-layouts-not-live-processes.md](./0007-persist-workspace-layouts-not-live-processes.md) | Proposed | Persist workspace layouts, not live processes | 2026-07-16 | Before Phase 9 |
 | [0008-gate-terminal-originated-external-side-effects.md](./0008-gate-terminal-originated-external-side-effects.md) | Proposed | Gate terminal-originated external side effects | 2026-07-16 | Before Phase 10 |
 | [0009-compose-local-named-color-schemes-before-inline-colors.md](./0009-compose-local-named-color-schemes-before-inline-colors.md) | Accepted | Compose local named color schemes before inline colors | 2026-07-17 | Phase 3 |
+| [0010-keep-osc-palette-overrides-pane-local-and-bounded.md](./0010-keep-osc-palette-overrides-pane-local-and-bounded.md) | Accepted | Keep OSC palette overrides pane-local and bounded | 2026-07-17 | Phase 3 |
