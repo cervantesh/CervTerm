@@ -3,6 +3,7 @@
 package glfwgl
 
 import (
+	"errors"
 	"log"
 	"runtime"
 	"sync/atomic"
@@ -22,18 +23,19 @@ import (
 )
 
 type App struct {
-	meter             metrics.Meter
-	snap              render.Snapshot
-	cfg               config.Config
-	configPath        string
-	configWatch       configWatchState
-	reloadPending     bool
-	mux               *termmux.Mux
-	focusedPane       termmux.PaneID
-	paneUI            map[termmux.PaneID]*paneUIState
-	pendingMuxEvents  []termmux.Event
-	pendingPaneScroll map[termmux.PaneID]int
-	pendingPaneResize map[termmux.PaneID]termmux.PaneGeometry
+	meter                  metrics.Meter
+	snap                   render.Snapshot
+	cfg                    config.Config
+	configPath             string
+	configWatch            configWatchState
+	reloadPending          bool
+	tealPublicationOptions config.TealPublicationOptions
+	mux                    *termmux.Mux
+	focusedPane            termmux.PaneID
+	paneUI                 map[termmux.PaneID]*paneUIState
+	pendingMuxEvents       []termmux.Event
+	pendingPaneScroll      map[termmux.PaneID]int
+	pendingPaneResize      map[termmux.PaneID]termmux.PaneGeometry
 
 	transparentFramebuffer bool
 	transparencyWarned     bool
@@ -64,6 +66,9 @@ type App struct {
 	status           statusState
 	overlays         overlayRender
 	scriptRT         *script.Runtime
+	scriptBundle     *script.CandidateBundle
+	scriptActivation *script.CandidateActivation
+	legacyTransition *config.LegacyTealTransition
 	notice           string
 	noticeUntil      time.Time
 	suppressNextChar bool
@@ -126,11 +131,39 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 }
 
 func RunWithSource(cfg config.Config, rt *script.Runtime, sourcePath string) error {
+	return runWithSource(cfg, rt, nil, nil, nil, sourcePath)
+}
+
+// RunWithCandidate consumes candidate ownership even when frontend startup fails.
+func RunWithCandidate(candidate *script.CandidateBundle, sourcePath string) error {
+	if candidate == nil {
+		return errors.New("candidate bundle is required")
+	}
+	activation, err := candidate.PrepareActivation()
+	if err != nil {
+		candidate.Close()
+		return err
+	}
+	return runWithSource(candidate.Config(), nil, candidate, activation, nil, sourcePath)
+}
+
+// RunWithVersioned consumes all ownership carried by a version-aware load.
+func RunWithVersioned(loaded script.VersionedSource, sourcePath string) error {
+	if loaded.Candidate != nil {
+		return RunWithCandidate(loaded.Candidate, sourcePath)
+	}
+	return runWithSource(loaded.Config, loaded.Runtime, nil, nil, loaded.LegacyTransition, sourcePath)
+}
+
+func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, sourcePath string) error {
 	runtime.LockOSThread()
 	app := &App{
 		cfg:               cfg,
 		configPath:        sourcePath,
 		scriptRT:          rt,
+		scriptBundle:      bundle,
+		scriptActivation:  activation,
+		legacyTransition:  legacyTransition,
 		cellW:             9,
 		cellH:             16,
 		uiScale:           1,
@@ -156,9 +189,23 @@ func RunWithSource(cfg config.Config, rt *script.Runtime, sourcePath string) err
 		app.statsSpec, app.statsSpecOK = spec, true
 	}
 	app.initZoomHotkeys()
-	app.initActionBindings()
+	if activation == nil {
+		app.initActionBindings()
+	}
 	defer func() {
-		if app.scriptRT != nil {
+		if app.legacyTransition != nil {
+			if err := app.legacyTransition.Rollback(); err != nil {
+				log.Printf("rollback legacy Teal transition: %v", err)
+			}
+			app.legacyTransition = nil
+		}
+	}()
+	defer func() {
+		if app.scriptBundle != nil {
+			app.scriptBundle.Close()
+			app.scriptBundle = nil
+			app.scriptRT = nil
+		} else if app.scriptRT != nil {
 			app.scriptRT.Close()
 			app.scriptRT = nil
 		}
@@ -232,6 +279,22 @@ func (a *App) runWindow() error {
 	a.ligaturesActive = a.cfg.Font.Ligatures && atlas.supportsLigatures()
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
+	// Every fallible window/renderer/font resource now exists. Publish staged v2
+	// Teal immediately before the remaining in-memory activation and PTY spawn.
+	if a.scriptBundle != nil {
+		if _, err := a.scriptBundle.PublishTeal(a.tealPublicationOptions); err != nil {
+			return err
+		}
+	}
+	if a.scriptActivation != nil {
+		a.scriptRT = a.scriptActivation.Commit()
+		a.scriptActivation = nil
+		a.initActionBindings()
+	}
+	if a.legacyTransition != nil {
+		a.legacyTransition.Commit()
+		a.legacyTransition = nil
+	}
 	a.installCallbacks()
 	// Spawn the PTY now that cellW/cellH are final, sized to the real initial
 	// grid so no startup resize repaints the shell and duplicates its banner.

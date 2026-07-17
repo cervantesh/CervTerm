@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -67,6 +68,19 @@ func (g *SourceGraph) Close() error {
 	return err
 }
 
+// PrimaryNode returns the evaluated primary source document.
+func (g *SourceGraph) PrimaryNode() (SourceNode, bool) {
+	if g == nil {
+		return SourceNode{}, false
+	}
+	for _, source := range g.Sources {
+		if source.CanonicalPath == g.Primary {
+			return source, true
+		}
+	}
+	return SourceNode{}, false
+}
+
 type sourceRecord struct {
 	node   SourceNode
 	info   os.FileInfo
@@ -75,16 +89,17 @@ type sourceRecord struct {
 }
 
 type sourceGraphBuilder struct {
-	state       *lua.LState
-	options     SourceGraphOptions
-	graph       *SourceGraph
-	capture     *dependencyCapture
-	records     map[string]*sourceRecord
-	stack       []string
-	aggregate   int64
-	strict      bool
-	explicit    map[string]string
-	reservedLua map[string]string
+	state              *lua.LState
+	options            SourceGraphOptions
+	graph              *SourceGraph
+	capture            *dependencyCapture
+	records            map[string]*sourceRecord
+	stack              []string
+	aggregate          int64
+	strict             bool
+	allowLegacyPrimary bool
+	explicit           map[string]string
+	reservedLua        map[string]string
 }
 
 var sourceGraphConsumedKey = &lua.LUserData{Value: "cervterm.config.source_graph_consumed"}
@@ -103,6 +118,16 @@ var graphDocumentFields = map[string]fieldSchema{
 // The graph builds order/dependency evidence only; it does not merge documents or
 // mutate active application configuration.
 func BuildSourceGraph(state *lua.LState, primary string, options SourceGraphOptions) (*SourceGraph, error) {
+	return buildSourceGraph(state, primary, options, false)
+}
+
+// BuildVersionedSourceGraph admits an authored-v1 primary solely so the
+// application loader can dispatch after one evaluation. Includes remain v2-only.
+func BuildVersionedSourceGraph(state *lua.LState, primary string, options SourceGraphOptions) (*SourceGraph, error) {
+	return buildSourceGraph(state, primary, options, true)
+}
+
+func buildSourceGraph(state *lua.LState, primary string, options SourceGraphOptions, allowLegacyPrimary bool) (*SourceGraph, error) {
 	if state == nil {
 		return nil, fmt.Errorf("build config source graph: nil Lua state")
 	}
@@ -122,16 +147,26 @@ func BuildSourceGraph(state *lua.LState, primary string, options SourceGraphOpti
 		return nil, err
 	}
 	builder := &sourceGraphBuilder{
-		state: state, options: options, graph: graph, capture: capture,
+		state: state, options: options, graph: graph, capture: capture, allowLegacyPrimary: allowLegacyPrimary,
 		records: make(map[string]*sourceRecord), explicit: make(map[string]string), reservedLua: make(map[string]string),
 	}
-	defer capture.restore()
+	legacyCapture := false
+	defer func() {
+		if legacyCapture {
+			capture.restoreLegacy()
+		} else {
+			capture.restore()
+		}
+	}()
 	canonical, err := builder.build(primary, "", 0, true)
 	if err != nil {
 		_ = graph.Close()
 		return nil, err
 	}
 	graph.Primary = canonical
+	if primaryNode, ok := graph.PrimaryNode(); ok {
+		legacyCapture = primaryNode.Document.AuthoredVersion == 1
+	}
 	graph.Dependencies = capture.list()
 	sort.Slice(graph.Edges, func(i, j int) bool {
 		if graph.Edges[i].From == graph.Edges[j].From {
@@ -163,7 +198,15 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 		}
 		return "", err
 	}
-	extension := strings.ToLower(filepath.Ext(canonical))
+	loadSourcePath := canonical
+	if primary && b.allowLegacyPrimary {
+		loadSourcePath, err = filepath.Abs(resolved)
+		if err != nil {
+			return "", fmt.Errorf("resolve primary config %q: %w", resolved, err)
+		}
+		loadSourcePath = filepath.Clean(loadSourcePath)
+	}
+	extension := strings.ToLower(filepath.Ext(loadSourcePath))
 	if extension != ".lua" && extension != ".tl" {
 		return "", fmt.Errorf("config source %q must use .lua or .tl", canonical)
 	}
@@ -183,10 +226,11 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 	if len(b.records) >= b.options.MaxDeclarativeFiles {
 		return "", fmt.Errorf("config source count exceeds limit %d at %q", b.options.MaxDeclarativeFiles, canonical)
 	}
-	if info.Size() > b.options.MaxSourceBytes {
+	deferPrimaryLimits := primary && b.allowLegacyPrimary
+	if !deferPrimaryLimits && info.Size() > b.options.MaxSourceBytes {
 		return "", fmt.Errorf("config source %q size %d exceeds limit %d", canonical, info.Size(), b.options.MaxSourceBytes)
 	}
-	if b.aggregate+info.Size() > b.options.MaxAggregateBytes {
+	if !deferPrimaryLimits && b.aggregate+info.Size() > b.options.MaxAggregateBytes {
 		return "", fmt.Errorf("config aggregate source bytes exceed limit %d at %q", b.options.MaxAggregateBytes, canonical)
 	}
 	b.aggregate += info.Size()
@@ -197,9 +241,9 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 	if parent != "" {
 		b.graph.Edges = append(b.graph.Edges, SourceEdge{From: parent, To: canonical, Requested: requested})
 	}
-	evaluationPath := canonical
+	evaluationPath := loadSourcePath
 	if extension == ".tl" {
-		staged, err := stageTealSource(canonical, b.graph.stageRoot)
+		staged, err := stageTealSource(loadSourcePath, b.graph.stageRoot)
 		if err != nil {
 			return "", err
 		}
@@ -213,21 +257,37 @@ func (b *sourceGraphBuilder) build(requested, parent string, depth int, primary 
 		evaluationPath = staged.EvaluationLua
 	}
 	restoreGuard := setDeclarativeIncludeGuard(b.state, !primary)
-	root, err := evaluateGraphSource(b.state, canonical, evaluationPath)
+	displayPath := evaluationPath
+	if record.node.Teal != nil {
+		displayPath = record.node.Teal.PublishedLua
+	}
+	sourceLabel := canonical
+	if primary && b.allowLegacyPrimary {
+		sourceLabel = loadSourcePath
+	}
+	root, err := evaluateGraphSource(b.state, sourceLabel, evaluationPath, displayPath)
 	restoreGuard()
 	if err != nil {
 		return "", err
 	}
-	document, err := decodeCompositionDocument(canonical, root, graphDocumentFields)
+	document, err := decodeCompositionDocument(sourceLabel, root, graphDocumentFields)
 	if err != nil {
 		return "", err
 	}
 	record.node.Document = document
 	if primary {
-		if document.AuthoredVersion != 2 {
+		if document.AuthoredVersion != 2 && !b.allowLegacyPrimary {
 			return "", fmt.Errorf("config source graph requires config_version = 2 in primary %q", canonical)
 		}
-		b.strict = true
+		b.strict = document.AuthoredVersion == 2
+		if document.AuthoredVersion == 2 {
+			if info.Size() > b.options.MaxSourceBytes {
+				return "", fmt.Errorf("config source %q size %d exceeds limit %d", canonical, info.Size(), b.options.MaxSourceBytes)
+			}
+			if b.aggregate > b.options.MaxAggregateBytes {
+				return "", fmt.Errorf("config aggregate source bytes exceed limit %d at %q", b.options.MaxAggregateBytes, canonical)
+			}
+		}
 	}
 	if b.strict {
 		if err := b.capture.verifyStrict(); err != nil {
@@ -274,16 +334,31 @@ func (b *sourceGraphBuilder) cycleError(canonical string) error {
 	return fmt.Errorf("config include cycle: %s", strings.Join(paths, " -> "))
 }
 
-func evaluateGraphSource(state *lua.LState, sourcePath, evaluationPath string) (*lua.LTable, error) {
-	function, err := state.LoadFile(evaluationPath)
+func evaluateGraphSource(state *lua.LState, sourcePath, evaluationPath, displayPath string) (*lua.LTable, error) {
+	var function *lua.LFunction
+	var err error
+	if evaluationPath == displayPath {
+		function, err = state.LoadFile(evaluationPath)
+	} else {
+		data, readErr := os.ReadFile(evaluationPath)
+		if readErr != nil {
+			return nil, fmt.Errorf("evaluate config source %q via %q: %w", sourcePath, evaluationPath, readErr)
+		}
+		function, err = state.Load(bytes.NewReader(data), "@"+displayPath)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("evaluate config source %q via %q: %w", sourcePath, evaluationPath, err)
 	}
-	if err := state.CallByParam(lua.P{Fn: function, NRet: 1, Protect: true}); err != nil {
+	stackBase := state.GetTop()
+	if err := state.CallByParam(lua.P{Fn: function, NRet: lua.MultRet, Protect: true}); err != nil {
 		return nil, fmt.Errorf("evaluate config source %q via %q: %w", sourcePath, evaluationPath, err)
 	}
-	value := state.Get(-1)
-	state.Pop(1)
+	returns := state.GetTop() - stackBase
+	value := lua.LValue(lua.LNil)
+	if returns > 0 {
+		value = state.Get(-1)
+		state.Pop(returns)
+	}
 	root, ok := value.(*lua.LTable)
 	if !ok {
 		return nil, fmt.Errorf("config source %q must return a table, got %s", sourcePath, value.Type().String())

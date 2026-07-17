@@ -93,19 +93,27 @@ func main() {
 	if path == "" {
 		path = config.DiscoverPath()
 	}
-	var rt *script.Runtime
-	cfg := config.Defaults()
+	loaded := script.VersionedSource{Config: config.Defaults(), AuthoredVersion: 1}
 	if path != "" {
-		cfg, rt, err = script.Load(path, cfg)
-		if err != nil {
-			log.Fatal(err)
+		var loadErr error
+		loaded, loadErr = script.LoadVersioned(path, loaded.Config, script.CandidateOptions{})
+		if loadErr != nil {
+			log.Fatal(loadErr)
 		}
-		log.Printf("loaded config: %s", path)
+		log.Printf("loaded config v%d: %s", loaded.AuthoredVersion, path)
 	}
-	if err := cfg.Validate(); err != nil {
+	if err := loaded.Config.Validate(); err != nil {
+		if loaded.Candidate != nil {
+			loaded.Candidate.Close()
+		} else if loaded.Runtime != nil {
+			loaded.Runtime.Close()
+		}
+		if loaded.LegacyTransition != nil {
+			_ = loaded.LegacyTransition.Rollback()
+		}
 		log.Fatal(err)
 	}
-	if err := glfwgl.RunWithSource(cfg, rt, path); err != nil {
+	if err := glfwgl.RunWithVersioned(loaded, path); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -2,11 +2,8 @@ package script
 
 import (
 	"fmt"
-	"time"
 
 	"cervterm/internal/config"
-
-	lua "github.com/yuin/gopher-lua"
 )
 
 // CandidateOptions supplies pure composition and graph-building inputs.
@@ -31,55 +28,16 @@ type CandidateBundle struct {
 // BuildCandidateBundle builds and validates a composed v2 candidate without
 // mutating active application state or publishing staged Teal outputs.
 func BuildCandidateBundle(path string, base config.Config, options CandidateOptions) (*CandidateBundle, error) {
-	state := lua.NewState(lua.Options{SkipOpenLibs: false})
-	timers := &timerTable{}
-	statuses := &statusTable{}
-	overlays := &overlayStore{}
-	state.PreloadModule("cervterm", func(state *lua.LState) int {
-		state.Push(buildModule(state, timers, statuses, overlays))
-		return 1
-	})
-	graph, err := config.BuildSourceGraph(state, path, options.SourceGraph)
+	evaluation, err := evaluateCandidate(path, options.SourceGraph, false)
 	if err != nil {
-		state.Close()
 		return nil, err
 	}
-	fail := func(err error) (*CandidateBundle, error) {
-		_ = graph.Close()
-		state.Close()
+	defer evaluation.close()
+	bundle, err := buildCandidateBundleFromEvaluation(evaluation, base, options)
+	if err != nil {
 		return nil, err
 	}
-	// V1 partials retain legacy fail-fast scripting surfaces even when a later
-	// layer would replace them; validate every source before effective merge.
-	for _, source := range graph.Sources {
-		if _, err := loadBindings(source.Document.Root); err != nil {
-			return fail(fmt.Errorf("%s: %w", source.CanonicalPath, err))
-		}
-		if _, err := loadEvents(source.Document.Root); err != nil {
-			return fail(fmt.Errorf("%s: %w", source.CanonicalPath, err))
-		}
-	}
-	composition, err := config.ComposeSourceGraph(state, graph, options.Composition)
-	if err != nil {
-		return fail(err)
-	}
-	resolved := config.FromDocument(cloneCandidateConfig(base), composition.Document)
-	if err := resolved.Validate(); err != nil {
-		return fail(err)
-	}
-	bindings, err := loadBindings(composition.Document.Root)
-	if err != nil {
-		return fail(err)
-	}
-	events, err := loadEvents(composition.Document.Root)
-	if err != nil {
-		return fail(err)
-	}
-	runtime := &Runtime{
-		state: state, bindings: bindings, events: events, timers: timers, statuses: statuses,
-		overlays: overlays, dispatchTimeout: time.Second,
-	}
-	return &CandidateBundle{config: cloneCandidateConfig(resolved), runtime: runtime, graph: graph, composition: composition}, nil
+	return bundle, nil
 }
 
 // Config returns a detached copy of the validated candidate configuration.
@@ -88,6 +46,34 @@ func (b *CandidateBundle) Config() config.Config {
 		return config.Config{}
 	}
 	return cloneCandidateConfig(b.config)
+}
+
+// CandidateActivation is a prevalidated, allocation-complete handle whose Commit
+// method only borrows the runtime from the still-owning bundle.
+type CandidateActivation struct {
+	bundle    *CandidateBundle
+	runtime   *Runtime
+	committed bool
+}
+
+// PrepareActivation performs all activation checks before external publication.
+func (b *CandidateBundle) PrepareActivation() (*CandidateActivation, error) {
+	if b == nil || b.closed || b.runtime == nil {
+		return nil, fmt.Errorf("candidate bundle is closed")
+	}
+	return &CandidateActivation{bundle: b, runtime: b.runtime}, nil
+}
+
+// Commit is mechanically infallible. The frontend must retain and exclusively
+// own the associated CandidateBundle for at least as long as the returned runtime.
+func (a *CandidateActivation) Commit() *Runtime {
+	if a == nil || a.committed || a.bundle == nil || a.bundle.closed {
+		return nil
+	}
+	a.committed = true
+	runtime := a.runtime
+	a.runtime = nil
+	return runtime
 }
 
 // Provenance returns detached effective provenance records.

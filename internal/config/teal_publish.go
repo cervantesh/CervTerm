@@ -59,6 +59,80 @@ func TealOwnershipMarkerPath(publishedLua string) string {
 	return publishedLua + ".cervterm-generated.json"
 }
 
+// RemoveOwnedTealMarker removes only a valid marker belonging to source. It is
+// used best-effort after legacy `tl gen`; foreign or malformed files are ignored.
+func RemoveOwnedTealMarker(publishedLua, source string) (bool, error) {
+	path := TealOwnershipMarkerPath(publishedLua)
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var marker tealOwnershipMarker
+	if err := json.Unmarshal(data, &marker); err != nil || marker.Version != tealOwnershipVersion || canonicalIdentity(marker.Source) != canonicalIdentity(source) {
+		return false, nil
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+	return true, nil
+}
+
+// LegacyTealTransition journals v2-owned artifacts while an authored-v1
+// candidate is prepared. Commit disarms rollback after frontend activation.
+type LegacyTealTransition struct {
+	outputPath string
+	markerPath string
+	output     fileSnapshot
+	marker     fileSnapshot
+	committed  bool
+}
+
+// PrepareLegacyTealTransition returns nil when no valid marker owned by staged
+// source exists; foreign and malformed markers remain outside CervTerm ownership.
+func PrepareLegacyTealTransition(staged StagedTeal) (*LegacyTealTransition, error) {
+	markerPath := TealOwnershipMarkerPath(staged.PublishedLua)
+	marker, err := snapshotRegularFile(markerPath)
+	if err != nil {
+		return nil, err
+	}
+	if !marker.exists {
+		return nil, nil
+	}
+	var ownership tealOwnershipMarker
+	if err := json.Unmarshal(marker.data, &ownership); err != nil || ownership.Version != tealOwnershipVersion || canonicalIdentity(ownership.Source) != canonicalIdentity(staged.SourcePath) {
+		return nil, nil
+	}
+	output, err := snapshotRegularFile(staged.PublishedLua)
+	if err != nil {
+		return nil, err
+	}
+	return &LegacyTealTransition{outputPath: staged.PublishedLua, markerPath: markerPath, output: output, marker: marker}, nil
+}
+
+func (t *LegacyTealTransition) Commit() {
+	if t != nil {
+		t.committed = true
+	}
+}
+
+func (t *LegacyTealTransition) Rollback() error {
+	if t == nil || t.committed {
+		return nil
+	}
+	t.committed = true
+	var failures []error
+	if err := restoreTealSnapshot(t.outputPath, t.output); err != nil {
+		failures = append(failures, err)
+	}
+	if err := restoreTealSnapshot(t.markerPath, t.marker); err != nil {
+		failures = append(failures, err)
+	}
+	return errors.Join(failures...)
+}
+
 // PublishStagedTeal publishes all graph-owned staged Teal outputs as one
 // journaled transaction. Callers must complete composition and final validation
 // first. Any failure restores every already-touched output and marker.
