@@ -181,11 +181,13 @@ func (a *App) executeSplitAction(source termmux.PaneID, command termaction.Split
 	if command.Axis == termaction.SplitRows {
 		axis = termmux.SplitRows
 	}
+	a.ensureConfigState()
+	shell := a.desiredCfg.Shell
 	spawn := termmux.SpawnSpec{Options: pty.Options{
-		ShellProgram:     a.cfg.Shell.Program,
-		ShellArgs:        a.cfg.Shell.Args,
-		WorkingDirectory: a.cfg.Shell.WorkingDirectory,
-		Env:              a.cfg.Shell.Env,
+		ShellProgram:     shell.Program,
+		ShellArgs:        append([]string(nil), shell.Args...),
+		WorkingDirectory: shell.WorkingDirectory,
+		Env:              cloneStringMap(shell.Env),
 	}}
 	created, events, err := a.mux.Split(source, axis, spawn)
 	if created != 0 {
@@ -219,4 +221,15 @@ func actionExecutionError(command termaction.Action, class termaction.ErrorClass
 		id = command.ID()
 	}
 	return &termaction.ExecutionError{ActionID: id, Class: class, Err: err}
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	if source == nil {
+		return nil
+	}
+	clone := make(map[string]string, len(source))
+	for key, value := range source {
+		clone[key] = value
+	}
+	return clone
 }

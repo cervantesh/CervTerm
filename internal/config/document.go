@@ -28,12 +28,23 @@ const (
 	KindDocumentMap ValueKind = "document_map"
 )
 
+type ApplyScope string
+
+const (
+	ApplyLive           ApplyScope = "live"
+	ApplyNewPane        ApplyScope = "new_pane"
+	ApplyNewWindow      ApplyScope = "new_window"
+	ApplyWindowRecreate ApplyScope = "window_recreate"
+	ApplyRestart        ApplyScope = "restart"
+)
+
 type FieldMetadata struct {
 	Path        string
 	Kind        ValueKind
 	Available   bool
 	Sensitive   bool
 	CLIOverride bool
+	ApplyScope  ApplyScope
 }
 
 type MigrationStep struct {
@@ -65,25 +76,28 @@ type fieldSchema struct {
 	required  bool
 	children  []fieldSchema
 	sensitive bool
+	apply     ApplyScope
 }
 
 var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	{name: "window", kind: KindTable, children: []fieldSchema{
-		{name: "width", kind: KindInteger}, {name: "height", kind: KindInteger},
-		{name: "padding_x", kind: KindInteger}, {name: "padding_y", kind: KindInteger},
-		{name: "dynamic_title", kind: KindBoolean}, {name: "opacity", kind: KindNumber}, {name: "blur", kind: KindBoolean},
+		{name: "width", kind: KindInteger, apply: ApplyNewWindow}, {name: "height", kind: KindInteger, apply: ApplyNewWindow},
+		{name: "padding_x", kind: KindInteger, apply: ApplyRestart}, {name: "padding_y", kind: KindInteger, apply: ApplyRestart},
+		{name: "dynamic_title", kind: KindBoolean, apply: ApplyRestart},
+		{name: "opacity", kind: KindNumber, apply: ApplyLive},
+		{name: "blur", kind: KindBoolean, apply: ApplyLive},
 	}},
-	{name: "font", kind: KindTable, children: []fieldSchema{
+	{name: "font", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
 		{name: "family", kind: KindString}, {name: "size", kind: KindNumber}, {name: "ligatures", kind: KindBoolean},
 	}},
-	{name: "colors", kind: KindTable, children: []fieldSchema{
+	{name: "colors", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
 		{name: "foreground", kind: KindString}, {name: "background", kind: KindString},
 		{name: "cursor", kind: KindString}, {name: "selection_background", kind: KindString},
 	}},
-	{name: "scrolling", kind: KindTable, children: []fieldSchema{
+	{name: "scrolling", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
 		{name: "history", kind: KindInteger}, {name: "wheel_multiplier", kind: KindInteger}, {name: "hide_cursor_when_scrolled", kind: KindBoolean},
 	}},
-	{name: "scrollbar", kind: KindTable, children: []fieldSchema{
+	{name: "scrollbar", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
 		{name: "enabled", kind: KindBoolean}, {name: "reserved_width_px", kind: KindInteger},
 		{name: "width_px", kind: KindInteger}, {name: "margin_px", kind: KindInteger},
 		{name: "radius_px", kind: KindInteger}, {name: "min_thumb_px", kind: KindInteger},
@@ -92,24 +106,24 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "auto_hide_delay_ms", kind: KindInteger}, {name: "fade_ms", kind: KindInteger},
 		{name: "page_step", kind: KindNumber}, {name: "track_click", kind: KindString},
 	}},
-	{name: "cursor", kind: KindTable, children: []fieldSchema{
+	{name: "cursor", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
 		{name: "shape", kind: KindString}, {name: "blink", kind: KindBoolean},
 		{name: "blink_interval_ms", kind: KindInteger}, {name: "thickness", kind: KindNumber},
 	}},
-	{name: "clipboard", kind: KindTable, children: []fieldSchema{{name: "osc52", kind: KindString}}},
-	{name: "render", kind: KindTable, children: []fieldSchema{
+	{name: "clipboard", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "osc52", kind: KindString}}},
+	{name: "render", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
 		{name: "bidi", kind: KindBoolean}, {name: "text_gamma", kind: KindNumber}, {name: "text_darken", kind: KindNumber},
 		{name: "text_raster", kind: KindString}, {name: "stats_hotkey", kind: KindString},
 		{name: "zoom_in_hotkey", kind: KindString}, {name: "zoom_out_hotkey", kind: KindString},
 		{name: "zoom_reset_hotkey", kind: KindString}, {name: "vsync", kind: KindBoolean},
 		{name: "redraw", kind: KindString}, {name: "damage", kind: KindString},
 	}},
-	{name: "shell", kind: KindTable, children: []fieldSchema{
+	{name: "shell", kind: KindTable, apply: ApplyNewPane, children: []fieldSchema{
 		{name: "program", kind: KindString}, {name: "args", kind: KindStringList},
 		{name: "working_directory", kind: KindString}, {name: "env", kind: KindStringMap, sensitive: true},
 	}},
-	{name: "keys", kind: KindKeyList},
-	{name: "events", kind: KindEvents},
+	{name: "keys", kind: KindKeyList, apply: ApplyLive},
+	{name: "events", kind: KindEvents, apply: ApplyLive},
 }}
 
 var unavailableV2Fields = map[string]ValueKind{
@@ -122,20 +136,28 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 		return nil, fmt.Errorf("unsupported config schema version %d", version)
 	}
 	fields := []FieldMetadata{{Path: "config_version", Kind: KindInteger, Available: true}}
-	var walk func(prefix string, schema fieldSchema)
-	walk = func(prefix string, schema fieldSchema) {
+	var walk func(prefix string, schema fieldSchema, inheritedApply ApplyScope)
+	walk = func(prefix string, schema fieldSchema, inheritedApply ApplyScope) {
 		for _, child := range schema.children {
 			path := child.name
 			if prefix != "" {
 				path = prefix + "." + child.name
 			}
-			fields = append(fields, FieldMetadata{Path: path, Kind: child.kind, Available: true, Sensitive: child.sensitive, CLIOverride: cliOverrideKindAllowed(child.kind) && !child.sensitive})
+			apply := child.apply
+			if apply == "" {
+				apply = inheritedApply
+			}
+			metadata := FieldMetadata{Path: path, Kind: child.kind, Available: true, Sensitive: child.sensitive, CLIOverride: cliOverrideKindAllowed(child.kind) && !child.sensitive}
+			if child.kind != KindTable {
+				metadata.ApplyScope = apply
+			}
+			fields = append(fields, metadata)
 			if child.kind == KindTable {
-				walk(path, child)
+				walk(path, child, apply)
 			}
 		}
 	}
-	walk("", rootSchema)
+	walk("", rootSchema, "")
 	if version == 2 {
 		for _, name := range []string{"includes", "default_environment", "default_profile", "environments", "profiles"} {
 			fields = append(fields, FieldMetadata{Path: name, Kind: unavailableV2Fields[name], Available: false})

@@ -9,6 +9,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 
 	"cervterm/internal/config"
@@ -198,7 +199,15 @@ func (a *App) applyPendingConfigReload() {
 	}
 }
 
-func (a *App) reloadConfig() error {
+func (a *App) reloadConfig() (resultErr error) {
+	a.ensureConfigState()
+	defer func() {
+		if resultErr != nil {
+			a.lastConfigReloadError = resultErr.Error()
+		} else {
+			a.lastConfigReloadError = ""
+		}
+	}()
 	if a.configPath == "" {
 		return fmt.Errorf("no config source is active")
 	}
@@ -244,9 +253,10 @@ func (a *App) reloadConfig() error {
 	}
 	watchAfterEvaluation := a.configWatch.snapshot()
 	changedDuringEvaluation := configWatchSnapshotsDiffer(watchBefore, watchAfterEvaluation)
-	restartRequired := restartRequiredChanges(a.cfg, loaded.Config)
 	oldBundle, oldRT := a.scriptBundle, a.scriptRT
 	a.commitLiveConfig(prepared)
+	a.desiredCfg = loaded.Config.Clone()
+	a.pendingConfig = config.PendingConfigChanges(a.desiredCfg, a.cfg)
 	a.scriptBundle = candidate
 	a.scriptRT = candidateRT
 	candidate, candidateRT = nil, nil
@@ -269,23 +279,37 @@ func (a *App) reloadConfig() error {
 	} else if oldRT != nil {
 		oldRT.Close()
 	}
-	if restartRequired {
-		log.Printf("config reloaded; non-live fields changed and require restart")
-		a.Notify("config reloaded; some changes require restart")
+	if len(a.pendingConfig) > 0 {
+		detail := formatPendingConfigChanges(a.pendingConfig, 3)
+		log.Printf("config reloaded; pending scoped changes: %s", detail)
+		a.Notify("config reloaded; pending: " + detail)
 	} else {
 		a.Notify("config reloaded")
 	}
 	return nil
 }
 
-func restartRequiredChanges(current, candidate config.Config) bool {
-	live := current
-	live.Window.Opacity = candidate.Window.Opacity
-	live.Window.Blur = candidate.Window.Blur
-	live.Colors = candidate.Colors
-	live.Scrolling = candidate.Scrolling
-	live.Scrollbar = candidate.Scrollbar
-	return !reflect.DeepEqual(live, candidate)
+func (a *App) ensureConfigState() {
+	if a.configStateInitialized {
+		return
+	}
+	a.desiredCfg = a.cfg.Clone()
+	a.pendingConfig = config.PendingConfigChanges(a.desiredCfg, a.cfg)
+	a.configStateInitialized = true
+}
+
+func formatPendingConfigChanges(changes []config.ConfigChange, limit int) string {
+	if limit <= 0 || limit > len(changes) {
+		limit = len(changes)
+	}
+	parts := make([]string, 0, limit+1)
+	for _, change := range changes[:limit] {
+		parts = append(parts, fmt.Sprintf("%s (%s)", change.Path, change.Scope))
+	}
+	if remaining := len(changes) - limit; remaining > 0 {
+		parts = append(parts, fmt.Sprintf("+%d more", remaining))
+	}
+	return strings.Join(parts, ", ")
 }
 
 // preparedLiveConfig owns all resources created by the fallible preparation
@@ -339,6 +363,7 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	a.cfg.Colors = next.Colors
 	a.cfg.Scrolling = next.Scrolling
 	a.cfg.Scrollbar = next.Scrollbar
+	a.cfg.Cursor = next.Cursor
 	a.applyWindowAppearance()
 	if prepared.rasterChanged {
 		a.installPreparedRasterContexts(prepared.preparedContexts)
@@ -360,12 +385,15 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 // applyLiveConfig preserves the existing runtime-setter contract while sharing
 // the prepare/commit seam used by atomic configuration activation.
 func (a *App) applyLiveConfig(next config.Config) error {
+	a.ensureConfigState()
 	prepared, err := a.prepareLiveConfig(next)
 	if err != nil {
 		return err
 	}
 	defer prepared.Close()
 	a.commitLiveConfig(prepared)
+	a.desiredCfg = config.MergeLiveConfig(a.desiredCfg, next).Clone()
+	a.pendingConfig = config.PendingConfigChanges(a.desiredCfg, a.cfg)
 	return nil
 }
 
@@ -450,7 +478,21 @@ func (a *App) installPreparedRasterContexts(prepared map[atlasFontKey]*atlasFont
 	a.restoreFocusedFontProjection()
 }
 
-func (a *App) RuntimeConfig() config.Config { return a.cfg }
+func (a *App) RuntimeConfig() config.Config { return a.cfg.Clone() }
+
+func (a *App) DesiredConfig() config.Config {
+	a.ensureConfigState()
+	return a.desiredCfg.Clone()
+}
+
+func (a *App) EffectiveConfig() config.Config { return a.cfg.Clone() }
+
+func (a *App) PendingConfigChanges() []config.ConfigChange {
+	a.ensureConfigState()
+	return append([]config.ConfigChange(nil), a.pendingConfig...)
+}
+
+func (a *App) LastConfigReloadError() string { return a.lastConfigReloadError }
 
 func (a *App) ApplyRuntimeConfig(next config.Config) error { return a.applyLiveConfig(next) }
 

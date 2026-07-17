@@ -55,7 +55,9 @@ Frontend live application is split into fallible `prepareLiveConfig` and mechani
 
 Composition is active only for explicitly authored v2. Active reload watching now follows the complete evaluated graph: primary, declarative includes and aliases, plus evaluation-time local `require`/`dofile`/`loadfile` dependencies. Digests bind canonical identity to the exact bytes loaded, selected symlink aliases remain watched, missing files trigger reload, and whole-graph debounce coalesces editor writes. Reload snapshots the old graph and compares new candidate digests before and after commit so edits during evaluation cannot be acknowledged away. Modules loaded only later by runtime callbacks are outside this graph by design.
 
-Public legacy `script.Load` remains available and the executable exposes no CLI override flag yet. Desired/effective diff classification and runtime/window scopes remain later slices.
+Every public configuration leaf now has one schema-owned application scope: `live`, `new_pane`, `new_window`, `window_recreate`, or `restart`. The frontend owns detached desired and effective snapshots plus value-free pending path/scope records and the last reload error. Opacity/blur, colors, scrolling, scrollbar, and cursor policy merge into the active window live; shell changes remain desired and are used by future split panes; initial width/height are new-window; conservative resource/cached-policy fields remain restart-scoped. Reload failure preserves both snapshots and pending state, while scoped notices name bounded paths without values.
+
+Public legacy `script.Load` remains available and the executable exposes no CLI override flag yet. Durable `ConfigScopeID` runtime patches, runtime-patch provenance/survival across file reload, full doctor/explain output, and multi-window realization remain later slices; this slice does not claim those ADR-0002 contracts.
 
 ## Verifiable measurements
 

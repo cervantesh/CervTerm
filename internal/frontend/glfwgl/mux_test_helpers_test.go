@@ -78,6 +78,33 @@ func (idleTestFactory) Spawn(rows, cols uint16, options pty.Options) (pty.Sessio
 	return newIdleTestSession(), nil
 }
 
+type capturingTestFactory struct {
+	mu      sync.Mutex
+	options []pty.Options
+}
+
+func (f *capturingTestFactory) Spawn(rows, cols uint16, options pty.Options) (pty.Session, error) {
+	f.mu.Lock()
+	f.options = append(f.options, options)
+	f.mu.Unlock()
+	return newIdleTestSession(), nil
+}
+
+func (f *capturingTestFactory) reset() {
+	f.mu.Lock()
+	f.options = nil
+	f.mu.Unlock()
+}
+
+func (f *capturingTestFactory) last() (pty.Options, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.options) == 0 {
+		return pty.Options{}, false
+	}
+	return f.options[len(f.options)-1], true
+}
+
 func newRunningMuxTestApp(t *testing.T) *App {
 	t.Helper()
 	m := termmux.New(idleTestFactory{}, termmux.Options{})
