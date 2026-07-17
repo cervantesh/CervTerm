@@ -115,6 +115,7 @@ var graphDocumentFields = map[string]fieldSchema{
 	"default_profile":     {name: "default_profile", kind: KindString},
 	"environments":        {name: "environments", kind: KindDocumentMap},
 	"profiles":            {name: "profiles", kind: KindDocumentMap},
+	"color_schemes":       {name: "color_schemes", kind: KindColorSchemeMap},
 }
 
 // BuildSourceGraph consumes a fresh caller-owned Lua candidate state to evaluate

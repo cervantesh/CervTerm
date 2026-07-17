@@ -10,6 +10,16 @@ func DefaultLua() string {
 -- local cervterm = require("cervterm")
 return {
   config_version = 2,
+  -- Select a locally declared reusable palette before applying colors below.
+  -- color_scheme = "My Scheme",
+  -- color_schemes = {
+  --   ["My Scheme"] = {
+  --     foreground = "#E6E1D8",
+  --     background = "#080B12",
+  --     cursor = "#60E8F0",
+  --     selection_background = "#2A6377",
+  --   },
+  -- },
   window = {
     width = %d,
     height = %d,

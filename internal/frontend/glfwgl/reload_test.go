@@ -507,6 +507,52 @@ func TestReloadActivatesExplicitV2BundleAtomically(t *testing.T) {
 	}
 }
 
+func TestReloadSelectedIncludedColorSchemeChangesAtomicallyAndInvalidEditPreservesState(t *testing.T) {
+	dir := t.TempDir()
+	primary := filepath.Join(dir, "cervterm.lua")
+	include := filepath.Join(dir, "schemes.lua")
+	writeReloadConfig(t, include, `return {config_version=2,color_schemes={selected={foreground="#112233",background="#080B12",indexed_colors={[16]="#161616"}}}}`)
+	writeReloadConfig(t, primary, `return {config_version=2,includes={"schemes.lua"},color_scheme="selected"}`)
+	loaded, err := script.LoadVersioned(primary, config.Defaults(), script.CandidateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activation, err := loaded.Candidate.PrepareActivation()
+	if err != nil {
+		loaded.Candidate.Close()
+		t.Fatal(err)
+	}
+	app := &App{
+		cfg: loaded.Config, desiredCfg: loaded.Config, composedCfg: loaded.Config, configStateInitialized: true,
+		scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, candidateOptions: loaded.Options,
+		configPath: primary, configWatch: newConfigWatchState(loaded.WatchPaths...), mux: termmux.New(nil, termmux.Options{}), paneUI: make(map[termmux.PaneID]*paneUIState),
+	}
+	defer func() {
+		if app.scriptBundle != nil {
+			app.scriptBundle.Close()
+		}
+	}()
+	initialRT := app.scriptRT
+	writeReloadConfig(t, include, `return {config_version=2,color_schemes={selected={foreground="#AABBCC",background="#102030",indexed_colors={[16]="#262626"}}}}`)
+	if err := app.reloadConfig(); err != nil {
+		t.Fatalf("reload selected included scheme: %v", err)
+	}
+	if app.scriptRT == initialRT {
+		t.Fatal("successful scheme reload did not replace runtime atomically")
+	}
+	if app.cfg.ColorScheme != "selected" || app.cfg.Colors.Foreground != "#AABBCC" || app.cfg.Colors.Background != "#102030" || app.cfg.Colors.IndexedColors.Lookup(16) != "#262626" {
+		t.Fatalf("reloaded selected scheme = %#v", app.cfg)
+	}
+	beforeConfig, beforeDesired, beforeRT, beforeBundle := app.cfg, app.DesiredConfig(), app.scriptRT, app.scriptBundle
+	writeReloadConfig(t, include, `return {config_version=2,color_schemes={selected={foreground="#DDEEFF",background="invalid"}}}`)
+	if err := app.reloadConfig(); err == nil || !strings.Contains(err.Error(), "must be #RRGGBB or #RRGGBBAA") {
+		t.Fatalf("invalid scheme reload error = %v", err)
+	}
+	if app.scriptRT != beforeRT || app.scriptBundle != beforeBundle || !reflect.DeepEqual(app.cfg, beforeConfig) || !reflect.DeepEqual(app.DesiredConfig(), beforeDesired) {
+		t.Fatal("invalid scheme edit mutated prior config/runtime")
+	}
+}
+
 func TestReloadV2PublicationFailurePreservesActiveState(t *testing.T) {
 	if _, err := exec.LookPath("tl"); err != nil {
 		t.Skip("tl not installed")
