@@ -22,7 +22,7 @@ func (s DirectWriteShaper) Shape(cluster string, face loadedFace, ppem uint16) (
 	if face.sourcePath == "" {
 		return nil, false
 	}
-	shaped, ok := shapeWithDirectWrite(cluster, face.sourcePath, ppem)
+	shaped, ok := shapeWithDirectWrite(cluster, face.sourcePath, face.faceIndex, ppem)
 	if ok {
 		return shaped, true
 	}
@@ -40,13 +40,13 @@ func fallbackShape(fallback Shaper, cluster string, face loadedFace, ppem uint16
 	return fallback.Shape(cluster, face, ppem)
 }
 
-func shapeWithDirectWrite(cluster string, fontPath string, ppem uint16) ([]ShapedGlyph, bool) {
+func shapeWithDirectWrite(cluster string, fontPath string, faceIndex int, ppem uint16) ([]ShapedGlyph, bool) {
 	factory, err := newDirectWriteFactory()
 	if err != nil {
 		return nil, false
 	}
 	defer factory.release()
-	fontFace, err := factory.createFontFaceFromPath(fontPath)
+	fontFace, err := factory.createFontFaceFromPathIndex(fontPath, faceIndex)
 	if err != nil {
 		return nil, false
 	}

@@ -295,7 +295,10 @@ func (a *App) retainVisibleFontContexts(layout termmux.Layout) {
 		if state == nil {
 			continue
 		}
-		key := newAtlasFontKey(a.fontSpec(state.font.fontSize, a.contentScaleX, a.contentScaleY), a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+		key, err := a.atlas.fontKey(a.fontSpec(state.font.fontSize, a.contentScaleX, a.contentScaleY), a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+		if err != nil {
+			continue
+		}
 		keep[key] = struct{}{}
 	}
 	a.atlas.retainContexts(keep)

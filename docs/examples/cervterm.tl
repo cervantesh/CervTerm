@@ -28,6 +28,9 @@ local config: cervterm.Config = {
   },
   font = {
     family = "Go Mono",
+    descriptors = {
+      { family = "Go Mono", weight = 400, style = "normal", stretch = 100, attribute_mode = "augment" },
+    },
     size = 14.0,
     ligatures = false,
   },

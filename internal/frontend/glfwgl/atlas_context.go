@@ -27,6 +27,7 @@ type atlasFontKey struct {
 
 type atlasFontContext struct {
 	key          atlasFontKey
+	descriptors  []fontdesc.Descriptor
 	resolvedFace fontdesc.ResolvedFaceKey
 	backend      fontglyph.Backend
 	cellW        int
@@ -43,6 +44,13 @@ type atlasLigatureBackend interface {
 	RasterizeRun(run string, cellSpan int) (fontglyph.RasterizedGlyph, bool)
 }
 
+type atlasStyledBackend interface {
+	StyleResolution(request fontdesc.RequestedFaceStyle) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode, bool)
+	RasterizeStyle(request fontdesc.RequestedFaceStyle, r rune, cellSpan int) (fontglyph.RasterizedGlyph, bool)
+	RasterizeClusterStyle(request fontdesc.RequestedFaceStyle, cluster string, cellSpan int) (fontglyph.RasterizedGlyph, bool)
+	RasterizeRunStyle(request fontdesc.RequestedFaceStyle, run string, cellSpan int) (fontglyph.RasterizedGlyph, bool)
+}
+
 func newAtlasFontKey(spec fontglyph.Spec, textGamma, textDarken float64) atlasFontKey {
 	key, err := makeAtlasFontKey(spec, textGamma, textDarken)
 	if err != nil {
@@ -52,15 +60,15 @@ func newAtlasFontKey(spec fontglyph.Spec, textGamma, textDarken float64) atlasFo
 }
 
 func makeAtlasFontKey(spec fontglyph.Spec, textGamma, textDarken float64) (atlasFontKey, error) {
-	descriptor, err := (fontdesc.Descriptor{Family: spec.Family}).Normalize()
-	if err != nil {
-		return atlasFontKey{}, err
-	}
+	return makeAtlasFontKeyWithDescriptors(spec, textGamma, textDarken, []fontdesc.Descriptor{{Family: spec.Family}})
+}
+
+func makeAtlasFontKeyWithDescriptors(spec fontglyph.Spec, textGamma, textDarken float64, descriptors []fontdesc.Descriptor) (atlasFontKey, error) {
 	if spec.DPI <= 0 || spec.DPI > math.MaxUint32 {
 		return atlasFontKey{}, fmt.Errorf("font DPI %.2f is outside identity bounds", spec.DPI)
 	}
 	environment, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{
-		Descriptors:   []fontdesc.Descriptor{descriptor},
+		Descriptors:   descriptors,
 		BaseSizeBits:  stableFloatBits(spec.Size),
 		PaneZoomBits:  stableFloatBits(1),
 		DPI:           uint32(math.Round(spec.DPI)),
@@ -74,9 +82,13 @@ func makeAtlasFontKey(spec fontglyph.Spec, textGamma, textDarken float64) (atlas
 	if environment == (fontdesc.FontEnvironmentKey{}) {
 		return atlasFontKey{}, errors.New("font environment identity is zero")
 	}
+	keyFamily := spec.Family
+	if len(descriptors) != 0 {
+		keyFamily = descriptors[0].Normalized().Family
+	}
 	return atlasFontKey{
 		environment:    environment,
-		family:         spec.Family,
+		family:         keyFamily,
 		sizeBits:       stableFloatBits(spec.Size),
 		dpiBits:        stableFloatBits(spec.DPI),
 		textRaster:     spec.TextRaster,
@@ -132,6 +144,15 @@ func makeAtlasFontContext(
 	textGamma, textDarken float64,
 	factory atlasBackendFactory,
 ) (*atlasFontContext, error) {
+	return makeAtlasFontContextWithDescriptors(spec, textGamma, textDarken, []fontdesc.Descriptor{{Family: spec.Family}}, factory)
+}
+
+func makeAtlasFontContextWithDescriptors(
+	spec fontglyph.Spec,
+	textGamma, textDarken float64,
+	descriptors []fontdesc.Descriptor,
+	factory atlasBackendFactory,
+) (*atlasFontContext, error) {
 	if factory == nil {
 		return nil, errors.New("nil atlas backend factory")
 	}
@@ -143,7 +164,7 @@ func makeAtlasFontContext(
 		return nil, errors.New("atlas backend factory returned nil backend")
 	}
 	cellW, cellH, baseline := backend.CellMetrics()
-	ctx, err := makeAtlasFontContextFromBackend(spec, textGamma, textDarken, backend, fontInstallationMetrics{cellW: cellW, cellH: cellH, baseline: baseline})
+	ctx, err := makeAtlasFontContextFromBackendWithDescriptors(spec, textGamma, textDarken, descriptors, backend, fontInstallationMetrics{cellW: cellW, cellH: cellH, baseline: baseline})
 	if err != nil {
 		backend.Close()
 		return nil, err
@@ -152,32 +173,46 @@ func makeAtlasFontContext(
 }
 
 func makeAtlasFontContextFromBackend(spec fontglyph.Spec, textGamma, textDarken float64, backend fontglyph.Backend, metrics fontInstallationMetrics) (*atlasFontContext, error) {
+	return makeAtlasFontContextFromBackendWithDescriptors(spec, textGamma, textDarken, []fontdesc.Descriptor{{Family: spec.Family}}, backend, metrics)
+}
+
+func makeAtlasFontContextFromBackendWithDescriptors(spec fontglyph.Spec, textGamma, textDarken float64, descriptors []fontdesc.Descriptor, backend fontglyph.Backend, metrics fontInstallationMetrics) (*atlasFontContext, error) {
 	if backend == nil {
 		return nil, errors.New("nil atlas backend")
 	}
-	key, err := makeAtlasFontKey(spec, textGamma, textDarken)
+	key, err := makeAtlasFontKeyWithDescriptors(spec, textGamma, textDarken, descriptors)
 	if err != nil {
 		return nil, fmt.Errorf("font environment identity: %w", err)
 	}
-	face := fontdesc.CanonicalFaceIDFromBytes([]byte("legacy:" + strings.ToLower(strings.TrimSpace(spec.Family))))
-	resolvedFace, err := fontdesc.NewResolvedFaceKey(fontdesc.ResolvedFaceInput{
-		Environment: key.environment,
-		Face:        face,
-		Tier:        fontdesc.SourceTierPrimary,
-		Target: fontdesc.FaceTarget{
-			Weight:  fontdesc.DefaultWeight,
-			Style:   fontdesc.StyleNormal,
-			Stretch: fontdesc.DefaultStretch,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("resolved face identity: %w", err)
+	var resolvedFace fontdesc.ResolvedFaceKey
+	if styled, ok := backend.(atlasStyledBackend); ok {
+		face, _, resolved := styled.StyleResolution(fontdesc.RequestedFaceStyleNormal)
+		if !resolved || face == (fontdesc.ResolvedFaceKey{}) {
+			return nil, errors.New("styled backend has no normal resolved face identity")
+		}
+		resolvedFace = face
+	} else {
+		face := fontdesc.CanonicalFaceIDFromBytes([]byte("legacy:" + strings.ToLower(strings.TrimSpace(spec.Family))))
+		resolvedFace, err = fontdesc.NewResolvedFaceKey(fontdesc.ResolvedFaceInput{
+			Environment: key.environment,
+			Face:        face,
+			Tier:        fontdesc.SourceTierPrimary,
+			Target: fontdesc.FaceTarget{
+				Weight:  fontdesc.DefaultWeight,
+				Style:   fontdesc.StyleNormal,
+				Stretch: fontdesc.DefaultStretch,
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("resolved face identity: %w", err)
+		}
 	}
 	if resolvedFace == (fontdesc.ResolvedFaceKey{}) {
 		return nil, errors.New("resolved face identity is zero")
 	}
 	ctx := &atlasFontContext{
 		key:          key,
+		descriptors:  append([]fontdesc.Descriptor(nil), descriptors...),
 		resolvedFace: resolvedFace,
 		backend:      backend,
 		cellW:        metrics.cellW,
@@ -191,19 +226,70 @@ func makeAtlasFontContextFromBackend(spec fontglyph.Spec, textGamma, textDarken 
 	return ctx, nil
 }
 
+func (ctx *atlasFontContext) resolveStyle(request fontdesc.RequestedFaceStyle) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode) {
+	if ctx == nil {
+		return fontdesc.ResolvedFaceKey{}, fontdesc.SyntheticNone
+	}
+	if styled, ok := ctx.backend.(atlasStyledBackend); ok {
+		if face, synthetic, resolved := styled.StyleResolution(request); resolved && face != (fontdesc.ResolvedFaceKey{}) {
+			return face, synthetic
+		}
+	}
+	if request == fontdesc.RequestedFaceStyleNormal || request > fontdesc.RequestedFaceStyleBoldItalic {
+		return ctx.resolvedFace, fontdesc.SyntheticNone
+	}
+	synthetic := fontdesc.SyntheticNone
+	target := fontdesc.FaceTarget{Weight: fontdesc.DefaultWeight, Style: fontdesc.StyleNormal, Stretch: fontdesc.DefaultStretch}
+	if request.Bold() {
+		synthetic |= fontdesc.SyntheticBold
+		target.Weight = 700
+	}
+	if request.Italic() {
+		synthetic |= fontdesc.SyntheticItalic
+		target.Style = fontdesc.StyleItalic
+	}
+	face := fontdesc.CanonicalFaceIDFromBytes([]byte("legacy:" + strings.ToLower(strings.TrimSpace(ctx.key.family))))
+	resolved, err := fontdesc.NewResolvedFaceKey(fontdesc.ResolvedFaceInput{
+		Environment: ctx.key.environment,
+		Face:        face,
+		Tier:        fontdesc.SourceTierPrimary,
+		Target:      target,
+		Synthetic:   synthetic,
+	})
+	if err != nil || resolved == (fontdesc.ResolvedFaceKey{}) {
+		return ctx.resolvedFace, synthetic
+	}
+	return resolved, synthetic
+}
+
+func (a *glyphAtlas) descriptorsForSpec(spec fontglyph.Spec) []fontdesc.Descriptor {
+	if a != nil && a.activeContext != nil && len(a.activeContext.descriptors) > 0 {
+		return a.activeContext.descriptors
+	}
+	return []fontdesc.Descriptor{{Family: spec.Family}}
+}
+
+func (a *glyphAtlas) fontKey(spec fontglyph.Spec, textGamma, textDarken float64) (atlasFontKey, error) {
+	return makeAtlasFontKeyWithDescriptors(spec, textGamma, textDarken, a.descriptorsForSpec(spec))
+}
+
 // useSpec selects an existing raster context or creates one without touching the
 // shared GPU pages or atlas generation. It returns the selected cell metrics.
 func (a *glyphAtlas) useSpec(spec fontglyph.Spec, textGamma, textDarken float64) (int, int, int, bool) {
 	if a == nil || a.closed {
 		return 0, 0, 0, false
 	}
-	key := newAtlasFontKey(spec, textGamma, textDarken)
+	descriptors := a.descriptorsForSpec(spec)
+	key, err := a.fontKey(spec, textGamma, textDarken)
+	if err != nil {
+		return 0, 0, 0, false
+	}
 	if ctx, ok := a.contexts[key]; ok {
 		a.activateContext(ctx)
 		a.prewarmASCII()
 		return ctx.cellW, ctx.cellH, ctx.baseline, true
 	}
-	ctx, err := makeAtlasFontContext(spec, textGamma, textDarken, a.backendFactory)
+	ctx, err := makeAtlasFontContextWithDescriptors(spec, textGamma, textDarken, descriptors, a.backendFactory)
 	if err != nil {
 		return 0, 0, 0, false
 	}
@@ -288,6 +374,14 @@ func activeLigatureBackend(ctx *atlasFontContext) (atlasLigatureBackend, bool) {
 		return nil, false
 	}
 	backend, ok := ctx.backend.(atlasLigatureBackend)
+	return backend, ok
+}
+
+func activeStyledBackend(ctx *atlasFontContext) (atlasStyledBackend, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	backend, ok := ctx.backend.(atlasStyledBackend)
 	return backend, ok
 }
 

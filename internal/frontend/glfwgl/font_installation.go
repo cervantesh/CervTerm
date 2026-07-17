@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"cervterm/internal/config"
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/fontglyph"
 	"cervterm/internal/frontend/gpu"
 	termmux "cervterm/internal/mux"
@@ -26,6 +27,7 @@ func effectiveStartupConfig(authored config.Config, safe bool) config.Config {
 	active := authored.Clone()
 	if safe {
 		active.Font.Family = "Go Mono"
+		active.Font.Descriptors = nil
 	}
 	return active
 }
@@ -62,14 +64,17 @@ func (a *App) initMux() {
 	a.mux.SetPaletteBase(configuredPaletteBase(a.cfg.Colors))
 }
 
-// fontInstallationPlan is an immutable description of the legacy startup font
-// installation. It contains values only; resource ownership starts in prepare.
+// fontInstallationPlan is an immutable description of startup font resources.
+// It contains values only; resource ownership starts in prepare.
 type fontInstallationPlan struct {
 	spec        fontglyph.Spec
 	textGamma   float64
 	textDarken  float64
+	descriptors []fontdesc.Descriptor
 	fontFactory atlasBackendFactory
 }
+
+type descriptorBackendConstructor func(fontglyph.Spec, fontdesc.FontEnvironmentKey, []fontdesc.Descriptor) (fontglyph.Backend, error)
 
 func newFontInstallationPlan(cfg config.Config, dpi float64, textRaster string, factory atlasBackendFactory) (fontInstallationPlan, error) {
 	plan := fontInstallationPlan{
@@ -86,13 +91,64 @@ func newFontInstallationPlan(cfg config.Config, dpi float64, textRaster string, 
 	if strings.TrimSpace(plan.spec.Family) == "" {
 		return fontInstallationPlan{}, errors.New("font installation plan has empty family")
 	}
+	return validateFontInstallationPlan(plan)
+}
+
+func newDescriptorFontInstallationPlan(cfg config.Config, dpi float64, textRaster string, descriptors []fontdesc.Descriptor) (fontInstallationPlan, error) {
+	return newDescriptorFontInstallationPlanWithFactory(cfg, dpi, textRaster, descriptors, fontglyph.NewDescriptorBackend)
+}
+
+func newStartupFontInstallationPlan(cfg config.Config, dpi float64, textRaster string, safeFonts bool) (fontInstallationPlan, error) {
+	if !safeFonts && len(cfg.Font.Descriptors) != 0 {
+		return newDescriptorFontInstallationPlan(cfg, dpi, textRaster, cfg.Font.Descriptors)
+	}
+	return newFontInstallationPlan(cfg, dpi, textRaster, newAtlasBackend)
+}
+
+func newDescriptorFontInstallationPlanWithFactory(cfg config.Config, dpi float64, textRaster string, descriptors []fontdesc.Descriptor, construct descriptorBackendConstructor) (fontInstallationPlan, error) {
+	if len(descriptors) == 0 {
+		return fontInstallationPlan{}, errors.New("font installation plan has no primary descriptors")
+	}
+	if construct == nil {
+		return fontInstallationPlan{}, errors.New("nil descriptor backend constructor")
+	}
+	planDescriptors := append([]fontdesc.Descriptor(nil), descriptors...)
+	factoryDescriptors := append([]fontdesc.Descriptor(nil), descriptors...)
+	plan := fontInstallationPlan{
+		spec: fontglyph.Spec{
+			Family:     cfg.Font.Family,
+			Size:       cfg.Font.Size,
+			DPI:        dpi,
+			TextRaster: textRaster,
+		},
+		textGamma:   cfg.Render.TextGamma,
+		textDarken:  cfg.Render.TextDarken,
+		descriptors: planDescriptors,
+	}
+	plan.fontFactory = func(spec fontglyph.Spec) (fontglyph.Backend, error) {
+		key, err := makeAtlasFontKeyWithDescriptors(spec, plan.textGamma, plan.textDarken, factoryDescriptors)
+		if err != nil {
+			return nil, fmt.Errorf("descriptor font environment identity: %w", err)
+		}
+		return construct(spec, key.environment, factoryDescriptors)
+	}
+	return validateFontInstallationPlan(plan)
+}
+
+func validateFontInstallationPlan(plan fontInstallationPlan) (fontInstallationPlan, error) {
 	if plan.spec.Size <= 0 || plan.spec.DPI <= 0 {
 		return fontInstallationPlan{}, fmt.Errorf("font installation plan has invalid size/DPI %.2f/%.2f", plan.spec.Size, plan.spec.DPI)
 	}
-	if factory == nil {
+	if plan.fontFactory == nil {
 		return fontInstallationPlan{}, errors.New("nil atlas backend factory")
 	}
-	if _, err := makeAtlasFontKey(plan.spec, plan.textGamma, plan.textDarken); err != nil {
+	var err error
+	if len(plan.descriptors) == 0 {
+		_, err = makeAtlasFontKey(plan.spec, plan.textGamma, plan.textDarken)
+	} else {
+		_, err = makeAtlasFontKeyWithDescriptors(plan.spec, plan.textGamma, plan.textDarken, plan.descriptors)
+	}
+	if err != nil {
 		return fontInstallationPlan{}, fmt.Errorf("font installation identity: %w", err)
 	}
 	return plan, nil
@@ -132,6 +188,9 @@ func defaultFontInstallationStages() fontInstallationStageSeam {
 			return fontInstallationMetrics{cellW: cellW, cellH: cellH, baseline: baseline}, nil
 		},
 		context: func(plan fontInstallationPlan, backend fontglyph.Backend, metrics fontInstallationMetrics) (*atlasFontContext, error) {
+			if len(plan.descriptors) > 0 {
+				return makeAtlasFontContextFromBackendWithDescriptors(plan.spec, plan.textGamma, plan.textDarken, plan.descriptors, backend, metrics)
+			}
 			return makeAtlasFontContextFromBackend(plan.spec, plan.textGamma, plan.textDarken, backend, metrics)
 		},
 		adopt: func(*preparedFontInstallation) error { return nil },
