@@ -31,6 +31,7 @@ type FieldMetadata struct {
 	Path      string
 	Kind      ValueKind
 	Available bool
+	Sensitive bool
 }
 
 type MigrationStep struct {
@@ -57,10 +58,11 @@ func FromDocument(base Config, document Document) Config {
 }
 
 type fieldSchema struct {
-	name     string
-	kind     ValueKind
-	required bool
-	children []fieldSchema
+	name      string
+	kind      ValueKind
+	required  bool
+	children  []fieldSchema
+	sensitive bool
 }
 
 var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
@@ -102,7 +104,7 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	}},
 	{name: "shell", kind: KindTable, children: []fieldSchema{
 		{name: "program", kind: KindString}, {name: "args", kind: KindStringList},
-		{name: "working_directory", kind: KindString}, {name: "env", kind: KindStringMap},
+		{name: "working_directory", kind: KindString}, {name: "env", kind: KindStringMap, sensitive: true},
 	}},
 	{name: "keys", kind: KindKeyList},
 	{name: "events", kind: KindEvents},
@@ -125,7 +127,7 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 			if prefix != "" {
 				path = prefix + "." + child.name
 			}
-			fields = append(fields, FieldMetadata{Path: path, Kind: child.kind, Available: true})
+			fields = append(fields, FieldMetadata{Path: path, Kind: child.kind, Available: true, Sensitive: child.sensitive})
 			if child.kind == KindTable {
 				walk(path, child)
 			}
@@ -145,9 +147,25 @@ func DecodeDocument(source string, root *lua.LTable) (Document, error) {
 }
 
 func decodeDocument(source string, root *lua.LTable, available map[string]fieldSchema) (Document, error) {
+	return decodeDocumentOptions(source, root, available, false)
+}
+
+func decodeCompositionDocument(source string, root *lua.LTable, available map[string]fieldSchema) (Document, error) {
+	return decodeDocumentOptions(source, root, available, true)
+}
+
+func decodeDocumentOptions(source string, root *lua.LTable, available map[string]fieldSchema, allowUnset bool) (Document, error) {
 	version, err := documentVersion(source, root)
 	if err != nil {
 		return Document{}, err
+	}
+	if unsetPath := findUnsetPath(root, rootSchema, ""); unsetPath != "" {
+		if version == 1 {
+			return Document{}, documentError(source, unsetPath, "cervterm.config.unset requires config_version = 2")
+		}
+		if !allowUnset {
+			return Document{}, documentError(source, unsetPath, "cervterm.config.unset is not available in single-source loading")
+		}
 	}
 	document := Document{
 		Source: source, AuthoredVersion: version, Version: version,
@@ -166,7 +184,7 @@ func decodeDocument(source string, root *lua.LTable, available map[string]fieldS
 		return Document{}, err
 	}
 	if version == 2 {
-		if err := validateStrictTable(source, "", root, rootSchema, true, available); err != nil {
+		if err := validateStrictTable(source, "", root, rootSchema, true, available, allowUnset); err != nil {
 			return Document{}, err
 		}
 	}

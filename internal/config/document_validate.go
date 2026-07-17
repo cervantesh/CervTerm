@@ -12,7 +12,7 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-func validateStrictTable(source, path string, table *lua.LTable, schema fieldSchema, root bool, extras map[string]fieldSchema) error {
+func validateStrictTable(source, path string, table *lua.LTable, schema fieldSchema, root bool, extras map[string]fieldSchema, allowUnset bool) error {
 	allowed := make(map[string]fieldSchema, len(schema.children)+1)
 	for _, child := range schema.children {
 		allowed[child.name] = child
@@ -43,7 +43,7 @@ func validateStrictTable(source, path string, table *lua.LTable, schema fieldSch
 			}
 			continue
 		}
-		if err := validateStrictValue(source, joinPath(path, child.name), value, child); err != nil {
+		if err := validateStrictValue(source, joinPath(path, child.name), value, child, allowUnset); err != nil {
 			return err
 		}
 	}
@@ -56,7 +56,7 @@ func validateStrictTable(source, path string, table *lua.LTable, schema fieldSch
 		for _, name := range names {
 			value := table.RawGetString(name)
 			if value != lua.LNil {
-				if err := validateStrictValue(source, name, value, extras[name]); err != nil {
+				if err := validateStrictValue(source, name, value, extras[name], false); err != nil {
 					return err
 				}
 			}
@@ -65,14 +65,20 @@ func validateStrictTable(source, path string, table *lua.LTable, schema fieldSch
 	return nil
 }
 
-func validateStrictValue(source, path string, value lua.LValue, schema fieldSchema) error {
+func validateStrictValue(source, path string, value lua.LValue, schema fieldSchema, allowUnset bool) error {
+	if isUnsetValue(value) {
+		if allowUnset {
+			return nil
+		}
+		return documentError(source, path, "cervterm.config.unset is not available in single-source loading")
+	}
 	switch schema.kind {
 	case KindTable:
 		table, ok := value.(*lua.LTable)
 		if !ok {
 			return typeError(source, path, KindTable, value)
 		}
-		return validateStrictTable(source, path, table, schema, false, nil)
+		return validateStrictTable(source, path, table, schema, false, nil, allowUnset)
 	case KindString:
 		if _, ok := value.(lua.LString); !ok {
 			return typeError(source, path, KindString, value)
@@ -96,11 +102,11 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 	case KindStringList:
 		return validateStringList(source, path, value)
 	case KindStringMap:
-		return validateStringMap(source, path, value)
+		return validateStringMap(source, path, value, allowUnset)
 	case KindKeyList:
 		return validateKeyList(source, path, value)
 	case KindEvents:
-		return validateEvents(source, path, value)
+		return validateEvents(source, path, value, allowUnset)
 	default:
 		return documentError(source, path, "has unsupported schema kind %q", schema.kind)
 	}
@@ -136,7 +142,7 @@ func validateStringList(source, path string, value lua.LValue) error {
 	return nil
 }
 
-func validateStringMap(source, path string, value lua.LValue) error {
+func validateStringMap(source, path string, value lua.LValue, allowUnset bool) error {
 	table, ok := value.(*lua.LTable)
 	if !ok {
 		return typeError(source, path, KindStringMap, value)
@@ -144,11 +150,16 @@ func validateStringMap(source, path string, value lua.LValue) error {
 	var failures []string
 	table.ForEach(func(key, value lua.LValue) {
 		stringKey, keyOK := key.(lua.LString)
-		_, valueOK := value.(lua.LString)
+		_, stringValue := value.(lua.LString)
+		valueOK := stringValue || (allowUnset && isUnsetValue(value))
 		if !keyOK {
 			failures = append(failures, fmt.Sprintf("%s: map key must be string, got %s", path, key.Type().String()))
 		} else if !valueOK {
-			failures = append(failures, fmt.Sprintf("%s.%s: must be string, got %s", path, string(stringKey), value.Type().String()))
+			expected := "string"
+			if allowUnset {
+				expected = "string or cervterm.config.unset"
+			}
+			failures = append(failures, fmt.Sprintf("%s.%s: must be %s, got %s", path, string(stringKey), expected, value.Type().String()))
 		}
 	})
 	if len(failures) > 0 {
@@ -213,7 +224,7 @@ func validateKeyList(source, path string, value lua.LValue) error {
 	return nil
 }
 
-func validateEvents(source, path string, value lua.LValue) error {
+func validateEvents(source, path string, value lua.LValue, allowUnset bool) error {
 	table, ok := value.(*lua.LTable)
 	if !ok {
 		return typeError(source, path, KindEvents, value)
@@ -227,8 +238,12 @@ func validateEvents(source, path string, value lua.LValue) error {
 		if _, ok := allowed[key]; !ok {
 			return documentError(source, path+"."+key, "unknown field")
 		}
-		if value := table.RawGetString(key); value != lua.LNil && value.Type() != lua.LTFunction {
-			return documentError(source, path+"."+key, "must be a function")
+		if value := table.RawGetString(key); value != lua.LNil && value.Type() != lua.LTFunction && !(allowUnset && isUnsetValue(value)) {
+			expected := "a function"
+			if allowUnset {
+				expected = "a function or cervterm.config.unset"
+			}
+			return documentError(source, path+"."+key, "must be %s", expected)
 		}
 	}
 	return nil

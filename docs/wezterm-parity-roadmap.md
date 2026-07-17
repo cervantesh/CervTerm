@@ -75,7 +75,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 2 — Versioned Composed Configuration
 **Scope:** schema versions, includes/modules, profiles/environment/CLI/window overrides, provenance, migrations, dependency-aware reload.
 
-**Status:** In progress. Slice 1 provides versioned documents and strict v2 validation. Slice 2 provides the candidate-only canonical source graph, declarative include traversal/guards, local module dependency capture, limits/cycles, and staged Teal collision safety. Public include merge, provenance, overrides, graph watching, and desired/effective application remain later slices.
+**Status:** In progress. Slice 1 provides versioned documents and strict v2 validation. Slice 2 provides the candidate-only canonical source graph and staged Teal safety. Slice 3 provides candidate-only schema merge, `unset`, merged-node limits, and redaction-safe leaf/map/list/function provenance. Public activation remains gated on selection layers, transactional Teal publication, and atomic bundle ownership; overrides, graph watching, and desired/effective application remain later slices.
 
 **Work**
 - Apply accepted ADR-0002.

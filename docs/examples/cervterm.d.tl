@@ -1,4 +1,6 @@
 local record cervterm
+  type Unset = userdata
+
   record WindowConfig
     width: integer
     height: integer
@@ -130,6 +132,88 @@ local record cervterm
     WithTarget: function(Action, string): Action
   end
 
+  record ConfigModule
+    unset: Unset
+  end
+
+  record WindowDocument
+    width: integer | Unset
+    height: integer | Unset
+    padding_x: integer | Unset
+    padding_y: integer | Unset
+    dynamic_title: boolean | Unset
+    opacity: number | Unset
+    blur: boolean | Unset
+  end
+
+  record FontDocument
+    family: string | Unset
+    size: number | Unset
+    ligatures: boolean | Unset
+  end
+
+  record ColorsDocument
+    foreground: string | Unset
+    background: string | Unset
+    cursor: string | Unset
+    selection_background: string | Unset
+  end
+
+  record ScrollingDocument
+    history: integer | Unset
+    wheel_multiplier: integer | Unset
+    hide_cursor_when_scrolled: boolean | Unset
+  end
+
+  record ScrollbarDocument
+    enabled: boolean | Unset
+    reserved_width_px: integer | Unset
+    width_px: integer | Unset
+    margin_px: integer | Unset
+    radius_px: integer | Unset
+    min_thumb_px: integer | Unset
+    track_color: string | Unset
+    thumb_color: string | Unset
+    thumb_hover_color: string | Unset
+    thumb_press_color: string | Unset
+    auto_hide_delay_ms: integer | Unset
+    fade_ms: integer | Unset
+    page_step: number | Unset
+    track_click: string | Unset
+  end
+
+  record CursorDocument
+    shape: string | Unset
+    blink: boolean | Unset
+    blink_interval_ms: integer | Unset
+    thickness: number | Unset
+  end
+
+  record ClipboardDocument
+    osc52: string | Unset
+  end
+
+  record RenderDocument
+    bidi: boolean | Unset
+    text_gamma: number | Unset
+    text_darken: number | Unset
+    text_raster: string | Unset
+    stats_hotkey: string | Unset
+    zoom_in_hotkey: string | Unset
+    zoom_out_hotkey: string | Unset
+    zoom_reset_hotkey: string | Unset
+    vsync: boolean | Unset
+    redraw: string | Unset
+    damage: string | Unset
+  end
+
+  record ShellDocument
+    program: string | Unset
+    args: {string} | Unset
+    working_directory: string | Unset
+    env: {string:(string | Unset)} | Unset
+  end
+
   record KeyBinding
     key: string
     mods: string | nil
@@ -138,28 +222,29 @@ local record cervterm
   end
 
   record Events
-    output: function(Term, string) | nil
-    title: function(Term, string) | nil
-    cwd: function(Term, string) | nil
-    bell: function(Term) | nil
-    resize: function(Term, integer, integer) | nil
-    focus: function(Term, boolean) | nil
-    scroll: function(Term, integer) | nil
+    output: function(Term, string) | Unset | nil
+    title: function(Term, string) | Unset | nil
+    cwd: function(Term, string) | Unset | nil
+    bell: function(Term) | Unset | nil
+    resize: function(Term, integer, integer) | Unset | nil
+    focus: function(Term, boolean) | Unset | nil
+    scroll: function(Term, integer) | Unset | nil
   end
 
   record Config
     config_version: integer | nil
-    window: WindowConfig
-    font: FontConfig
-    colors: ColorsConfig
-    scrolling: ScrollingConfig
-    scrollbar: ScrollbarConfig
-    cursor: CursorConfig
-    clipboard: ClipboardConfig
-    render: RenderConfig
-    shell: ShellConfig
-    keys: {KeyBinding} | nil
-    events: Events | nil
+    includes: {string} | nil
+    window: WindowDocument | Unset
+    font: FontDocument | Unset
+    colors: ColorsDocument | Unset
+    scrolling: ScrollingDocument | Unset
+    scrollbar: ScrollbarDocument | Unset
+    cursor: CursorDocument | Unset
+    clipboard: ClipboardDocument | Unset
+    render: RenderDocument | Unset
+    shell: ShellDocument | Unset
+    keys: {KeyBinding} | Unset | nil
+    events: Events | Unset | nil
   end
 
   -- A retained, cell-addressed display list drawn on top of the terminal.
@@ -177,6 +262,7 @@ local record cervterm
     destroy: function(Overlay)
   end
 
+  config: ConfigModule
   action: ActionModule
   after: function(integer, function(Term)): integer
   every: function(integer, function(Term)): integer

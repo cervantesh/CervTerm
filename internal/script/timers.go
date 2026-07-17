@@ -118,6 +118,7 @@ func buildModule(state *lua.LState, tt *timerTable, statuses *statusTable, overl
 		l.Push(ov.handle)
 		return 1
 	}))
+	installConfigModule(state, mod)
 	installActionModule(state, mod)
 	return mod
 }

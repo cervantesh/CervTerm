@@ -10,6 +10,8 @@ Set `config_version = 2` on the returned root table for strict, source-and-field
 
 The loader evaluates each source once, records which known fields were supplied, and migrates older documents in memory without rewriting them. V2 rejects unknown fields, wrong value types, sparse lists, fractional integer fields, non-string shell arguments/environment values, and malformed key/event shapes before replacing an active runtime.
 
+`cervterm.config.unset` is an immutable tombstone value reserved for composed v2 candidates. The candidate merge engine uses it to restore a record/list/scalar to its built-in default or remove a lower `shell.env` key; higher layers may set the path again. It is exposed now so Lua/Teal contracts can be validated with the candidate graph, but the current public single-source loader rejects it, just as it rejects `includes`. This prevents a configuration from appearing to compose before transactional Teal publication and atomic bundle installation are available.
+
 ## Keybindings
 
 Add a `keys` array to the returned config table. Each entry has:
