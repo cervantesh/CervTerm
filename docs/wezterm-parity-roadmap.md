@@ -75,7 +75,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 2 — Versioned Composed Configuration
 **Scope:** schema versions, includes/modules, profiles/environment/CLI/window overrides, provenance, migrations, dependency-aware reload.
 
-**Status:** Architecture gate accepted in ADR-0002; implementation has not started.
+**Status:** In progress. Slice 1 provides versioned presence-aware documents, exact v1 compatibility goldens, strict v2 structural validation, schema metadata, and in-memory migration scaffolding. Composition, overrides, provenance, graph watching, and desired/effective application remain later slices.
 
 **Work**
 - Apply accepted ADR-0002.

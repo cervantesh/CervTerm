@@ -9,7 +9,7 @@ import (
 
 func TestDefaultLuaLoadsAndValidates(t *testing.T) {
 	template := DefaultLua()
-	if !strings.Contains(template, "return {") || !strings.Contains(template, "font =") {
+	if !strings.Contains(template, "return {") || !strings.Contains(template, "config_version = 2,") || !strings.Contains(template, "font =") {
 		t.Fatalf("default Lua template missing expected sections:\n%s", template)
 	}
 	path := filepath.Join(t.TempDir(), "cervterm.lua")

@@ -73,7 +73,12 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 		state.Close()
 		return base, nil, fmt.Errorf("config must return a table, got %s", value.Type().String())
 	}
-	cfg := config.FromTable(base, root)
+	document, err := config.DecodeDocument(path, root)
+	if err != nil {
+		state.Close()
+		return base, nil, err
+	}
+	cfg := config.FromDocument(base, document)
 	bindings, err := loadBindings(root)
 	if err != nil {
 		state.Close()

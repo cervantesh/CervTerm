@@ -1,0 +1,14 @@
+{
+  "window_width": 123,
+  "window_height": 720,
+  "padding_x": 9,
+  "scrollback_history": 42,
+  "wheel_multiplier": 3,
+  "shell_args": [
+    "pwsh",
+    "-NoLogo"
+  ],
+  "shell_env": {
+    "GOOD": "yes"
+  }
+}
