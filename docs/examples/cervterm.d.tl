@@ -231,9 +231,27 @@ local record cervterm
     scroll: function(Term, integer) | Unset | nil
   end
 
+  record PartialConfig
+    window: WindowDocument | Unset
+    font: FontDocument | Unset
+    colors: ColorsDocument | Unset
+    scrolling: ScrollingDocument | Unset
+    scrollbar: ScrollbarDocument | Unset
+    cursor: CursorDocument | Unset
+    clipboard: ClipboardDocument | Unset
+    render: RenderDocument | Unset
+    shell: ShellDocument | Unset
+    keys: {KeyBinding} | Unset | nil
+    events: Events | Unset | nil
+  end
+
   record Config
     config_version: integer | nil
     includes: {string} | nil
+    default_environment: string | nil
+    default_profile: string | nil
+    environments: {string:PartialConfig} | nil
+    profiles: {string:PartialConfig} | nil
     window: WindowDocument | Unset
     font: FontDocument | Unset
     colors: ColorsDocument | Unset

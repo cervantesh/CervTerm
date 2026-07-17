@@ -16,15 +16,16 @@ const (
 type ValueKind string
 
 const (
-	KindTable      ValueKind = "table"
-	KindString     ValueKind = "string"
-	KindNumber     ValueKind = "number"
-	KindInteger    ValueKind = "integer"
-	KindBoolean    ValueKind = "boolean"
-	KindStringList ValueKind = "string_list"
-	KindStringMap  ValueKind = "string_map"
-	KindKeyList    ValueKind = "key_list"
-	KindEvents     ValueKind = "events"
+	KindTable       ValueKind = "table"
+	KindString      ValueKind = "string"
+	KindNumber      ValueKind = "number"
+	KindInteger     ValueKind = "integer"
+	KindBoolean     ValueKind = "boolean"
+	KindStringList  ValueKind = "string_list"
+	KindStringMap   ValueKind = "string_map"
+	KindKeyList     ValueKind = "key_list"
+	KindEvents      ValueKind = "events"
+	KindDocumentMap ValueKind = "document_map"
 )
 
 type FieldMetadata struct {
@@ -112,7 +113,7 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 
 var unavailableV2Fields = map[string]ValueKind{
 	"includes": KindStringList, "default_environment": KindString, "default_profile": KindString,
-	"environments": KindTable, "profiles": KindTable,
+	"environments": KindDocumentMap, "profiles": KindDocumentMap,
 }
 
 func SchemaFields(version int) ([]FieldMetadata, error) {
