@@ -5,8 +5,8 @@ package glfwgl
 import (
 	"fmt"
 
+	termaction "cervterm/internal/action"
 	termmux "cervterm/internal/mux"
-	"cervterm/internal/pty"
 	termsel "cervterm/internal/selection"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -245,42 +245,26 @@ func (a *App) handleMuxKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	if a.focusedPane == 0 {
 		return false
 	}
-	spawn := termmux.SpawnSpec{Options: pty.Options{
-		ShellProgram: a.cfg.Shell.Program, ShellArgs: a.cfg.Shell.Args,
-		WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env,
-	}}
-	source := a.focusedPane
-	var created termmux.PaneID
-	var events []termmux.Event
-	var err error
+	var command termaction.Action
 	switch {
 	case mods&glfw.ModAlt != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyEqual:
-		created, events, err = a.mux.Split(source, termmux.SplitColumns, spawn)
+		command = termaction.SplitPane{Axis: termaction.SplitColumns}
 	case mods&glfw.ModAlt != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyMinus:
-		created, events, err = a.mux.Split(source, termmux.SplitRows, spawn)
+		command = termaction.SplitPane{Axis: termaction.SplitRows}
 	case mods&glfw.ModAlt != 0 && key == glfw.KeyLeft:
-		events, err = a.mux.FocusDirection(termmux.FocusLeft)
+		command = termaction.FocusPane{Direction: termaction.FocusLeft}
 	case mods&glfw.ModAlt != 0 && key == glfw.KeyRight:
-		events, err = a.mux.FocusDirection(termmux.FocusRight)
+		command = termaction.FocusPane{Direction: termaction.FocusRight}
 	case mods&glfw.ModAlt != 0 && key == glfw.KeyUp:
-		events, err = a.mux.FocusDirection(termmux.FocusUp)
+		command = termaction.FocusPane{Direction: termaction.FocusUp}
 	case mods&glfw.ModAlt != 0 && key == glfw.KeyDown:
-		events, err = a.mux.FocusDirection(termmux.FocusDown)
+		command = termaction.FocusPane{Direction: termaction.FocusDown}
 	case mods&glfw.ModControl != 0 && mods&glfw.ModShift != 0 && key == glfw.KeyW:
-		events, err = a.mux.ClosePane(a.focusedPane)
+		command = termaction.ClosePane{}
 	default:
 		return false
 	}
-	if created != 0 {
-		a.inheritPaneFontState(created, source)
-	}
-	if len(events) > 0 {
-		a.handleMuxEvents(events)
-	}
-	if err != nil {
-		a.Notify("mux: " + err.Error())
-	}
-	return true
+	return a.dispatchReservedAction(command, key, mods, false)
 }
 
 func (a *App) pointForPaneWindowPosition(id termmux.PaneID, x, y float64) (termsel.Point, bool) {
