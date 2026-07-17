@@ -27,6 +27,7 @@ const (
 	KindKeyList         ValueKind = "key_list"
 	KindEvents          ValueKind = "events"
 	KindDocumentMap     ValueKind = "document_map"
+	KindColorSchemeMap  ValueKind = "color_scheme_map"
 )
 
 type ApplyScope string
@@ -69,7 +70,11 @@ func (d Document) Has(path string) bool {
 }
 
 func FromDocument(base Config, document Document) Config {
-	return FromTable(base, document.Root)
+	cfg := FromTable(base, document.Root)
+	if document.AuthoredVersion >= 2 {
+		cfg.ColorScheme = stringField(document.Root, "color_scheme", cfg.ColorScheme)
+	}
+	return cfg
 }
 
 type fieldSchema struct {
@@ -93,6 +98,7 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	{name: "font", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
 		{name: "family", kind: KindString}, {name: "size", kind: KindNumber}, {name: "ligatures", kind: KindBoolean},
 	}},
+	{name: "color_scheme", kind: KindString, apply: ApplyLive},
 	{name: "colors", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
 		{name: "foreground", kind: KindString}, {name: "background", kind: KindString, runtimeOverride: true},
 		{name: "cursor", kind: KindString}, {name: "selection_background", kind: KindString},
@@ -132,7 +138,7 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 
 var unavailableV2Fields = map[string]ValueKind{
 	"includes": KindStringList, "default_environment": KindString, "default_profile": KindString,
-	"environments": KindDocumentMap, "profiles": KindDocumentMap,
+	"environments": KindDocumentMap, "profiles": KindDocumentMap, "color_schemes": KindColorSchemeMap,
 }
 
 func SchemaFields(version int) ([]FieldMetadata, error) {
@@ -143,6 +149,9 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 	var walk func(prefix string, schema fieldSchema, inheritedApply ApplyScope, inheritedRuntime bool)
 	walk = func(prefix string, schema fieldSchema, inheritedApply ApplyScope, inheritedRuntime bool) {
 		for _, child := range schema.children {
+			if version == 1 && prefix == "" && child.name == "color_scheme" {
+				continue
+			}
 			path := child.name
 			if prefix != "" {
 				path = prefix + "." + child.name
@@ -165,7 +174,7 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 	}
 	walk("", rootSchema, "", false)
 	if version == 2 {
-		for _, name := range []string{"includes", "default_environment", "default_profile", "environments", "profiles"} {
+		for _, name := range []string{"includes", "default_environment", "default_profile", "environments", "profiles", "color_schemes"} {
 			fields = append(fields, FieldMetadata{Path: name, Kind: unavailableV2Fields[name], Available: false})
 		}
 	}
@@ -202,6 +211,9 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 		Root: root, Present: make(map[string]struct{}),
 	}
 	collectPresence(root, rootSchema, "", document.Present)
+	if version == 1 {
+		delete(document.Present, "color_scheme")
+	}
 	if root.RawGetString("config_version") != lua.LNil {
 		document.Present["config_version"] = struct{}{}
 	}

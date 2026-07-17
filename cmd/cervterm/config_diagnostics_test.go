@@ -43,6 +43,38 @@ func TestExplainConfigComposesFiltersProvenanceAndRedaction(t *testing.T) {
 	}
 }
 
+func TestExplainConfigShowsSelectedSchemeProvenanceWithoutCatalogDump(t *testing.T) {
+	path := writeDiagnosticConfig(t, `return {
+config_version=2,
+color_scheme="selected",
+color_schemes={
+selected={background="#112233",indexed_colors={[16]="#161616"}},
+unselected={background="#ABCDEF"},
+},
+}`)
+	var stdout, stderr bytes.Buffer
+	exit := runExplainConfigTo(&stdout, &stderr, configDiagnosticOptions{ConfigPath: path, Fields: []string{"color_scheme", "colors.background", "colors.indexed_colors"}})
+	if exit != 0 || stderr.Len() != 0 {
+		t.Fatalf("exit=%d stderr=%q", exit, stderr.String())
+	}
+	output := stdout.String()
+	for _, want := range []string{
+		`color_scheme = "selected"`,
+		"colors.background = \"#112233\"",
+		`colors.indexed_colors = {"16":"#161616"}`,
+		"layer=primary",
+		`layer=color_scheme name="selected"`,
+		"colors.indexed_colors[16]",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "color_schemes") || strings.Contains(output, "#ABCDEF") {
+		t.Fatalf("diagnostic dumped the local scheme catalog:\n%s", output)
+	}
+}
+
 func TestExplainConfigRejectsUnknownAndV1Targets(t *testing.T) {
 	v2 := writeDiagnosticConfig(t, `return {config_version=2,colors={background="#080B12"}}`)
 	var stdout, stderr bytes.Buffer
