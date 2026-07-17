@@ -40,7 +40,7 @@ func TestComposeSourceGraphUsesDeterministicSchemaPrecedence(t *testing.T) {
 	assertProvenanceLayers(t, composition.Provenance, "window.height", []ProvenanceLayer{LayerDefaults, LayerInclude, LayerPrimary})
 	assertProvenanceLayers(t, composition.Provenance, "shell.args", []ProvenanceLayer{LayerDefaults, LayerInclude, LayerInclude, LayerInclude})
 	assertProvenanceLayers(t, composition.Provenance, `shell.env["A"]`, []ProvenanceLayer{LayerInclude, LayerInclude, LayerPrimary})
-	if record, ok := composition.Provenance.Lookup("events.output"); !ok || record.Winner.RequestedSource != "b.lua" || record.Winner.CanonicalSource != filepath.Join(dir, "b.lua") {
+	if record, ok := composition.Provenance.Lookup("events.output"); !ok || record.Winner.RequestedSource != "b.lua" || record.Winner.CanonicalSource != canonicalTestSource(t, filepath.Join(dir, "b.lua")) {
 		t.Fatalf("events.output provenance = %#v, ok=%v", record, ok)
 	}
 	assertProvenanceLayers(t, composition.Provenance, "events.output", []ProvenanceLayer{LayerInclude, LayerInclude})
@@ -78,7 +78,7 @@ func TestComposeSourceGraphUnsetRestoresDefaultsAndCanBeOverridden(t *testing.T)
 		t.Fatalf("unset event remains: %v", events)
 	}
 	family, _ := composition.Provenance.Lookup("font.family")
-	if !family.Tombstone || family.Winner.CanonicalSource != filepath.Join(dir, "reset.lua") {
+	if !family.Tombstone || family.Winner.CanonicalSource != canonicalTestSource(t, filepath.Join(dir, "reset.lua")) {
 		t.Fatalf("font.family tombstone = %#v", family)
 	}
 	if got := provenanceLayers(composition.Provenance, "font.size"); !equalLayers(got, []ProvenanceLayer{LayerDefaults, LayerInclude, LayerInclude, LayerInclude}) {
@@ -119,11 +119,11 @@ func TestComposeSourceGraphWholeMapAndEventsUnset(t *testing.T) {
 		t.Fatalf("whole-events unset/higher merge = %v", events)
 	}
 	removed, _ := composition.Provenance.Lookup(`shell.env["B"]`)
-	if !removed.Tombstone || removed.Winner.CanonicalSource != filepath.Join(dir, "reset.lua") {
+	if !removed.Tombstone || removed.Winner.CanonicalSource != canonicalTestSource(t, filepath.Join(dir, "reset.lua")) {
 		t.Fatalf("removed map provenance = %#v", removed)
 	}
 	output, _ := composition.Provenance.Lookup("events.output")
-	if !output.Tombstone || output.Winner.CanonicalSource != filepath.Join(dir, "reset.lua") {
+	if !output.Tombstone || output.Winner.CanonicalSource != canonicalTestSource(t, filepath.Join(dir, "reset.lua")) {
 		t.Fatalf("removed event provenance = %#v", output)
 	}
 }
@@ -220,6 +220,15 @@ func TestSingleSourceDecodeRejectsUnsetWhileGraphAcceptsIt(t *testing.T) {
 	if record, ok := composition.Provenance.Lookup("font.size"); !ok || !record.Tombstone {
 		t.Fatalf("candidate unset provenance = %#v, ok=%v", record, ok)
 	}
+}
+
+func canonicalTestSource(t *testing.T, path string) string {
+	t.Helper()
+	canonical, _, err := canonicalLocalFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return canonical
 }
 
 func buildComposition(t *testing.T, primary string, options CompositionOptions) (*lua.LState, *SourceGraph, Composition) {
