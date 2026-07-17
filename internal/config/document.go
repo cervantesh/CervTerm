@@ -141,6 +141,10 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 }
 
 func DecodeDocument(source string, root *lua.LTable) (Document, error) {
+	return decodeDocument(source, root, nil)
+}
+
+func decodeDocument(source string, root *lua.LTable, available map[string]fieldSchema) (Document, error) {
 	version, err := documentVersion(source, root)
 	if err != nil {
 		return Document{}, err
@@ -153,11 +157,16 @@ func DecodeDocument(source string, root *lua.LTable) (Document, error) {
 	if root.RawGetString("config_version") != lua.LNil {
 		document.Present["config_version"] = struct{}{}
 	}
-	if err := rejectUnavailableComposition(source, root, version); err != nil {
+	for name := range available {
+		if root.RawGetString(name) != lua.LNil {
+			document.Present[name] = struct{}{}
+		}
+	}
+	if err := rejectUnavailableComposition(source, root, version, available); err != nil {
 		return Document{}, err
 	}
 	if version == 2 {
-		if err := validateStrictTable(source, "", root, rootSchema, true); err != nil {
+		if err := validateStrictTable(source, "", root, rootSchema, true, available); err != nil {
 			return Document{}, err
 		}
 	}
@@ -205,10 +214,15 @@ func migrateDocument(document *Document, from int) error {
 	}
 }
 
-func rejectUnavailableComposition(source string, root *lua.LTable, version int) error {
+func rejectUnavailableComposition(source string, root *lua.LTable, version int, available map[string]fieldSchema) error {
 	names := make([]string, 0, len(unavailableV2Fields))
 	for name := range unavailableV2Fields {
 		if root.RawGetString(name) != lua.LNil {
+			if version == 2 {
+				if _, ok := available[name]; ok {
+					continue
+				}
+			}
 			names = append(names, name)
 		}
 	}
