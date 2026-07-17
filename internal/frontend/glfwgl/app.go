@@ -3,7 +3,6 @@
 package glfwgl
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"runtime"
@@ -28,6 +27,11 @@ type App struct {
 	snap                   render.Snapshot
 	cfg                    config.Config
 	desiredCfg             config.Config
+	composedCfg            config.Config
+	composedProvenance     []config.ProvenanceRecord
+	runtimeScopes          config.RuntimeScopes
+	configScope            config.ConfigScopeID
+	runtimeOverrideRecords []config.RuntimeOverrideRecord
 	configStateInitialized bool
 	pendingConfig          []config.ConfigChange
 	lastConfigReloadError  string
@@ -140,33 +144,18 @@ func RunWithSource(cfg config.Config, rt *script.Runtime, sourcePath string) err
 	return runWithSource(cfg, rt, nil, nil, nil, []string{sourcePath}, nil, sourcePath)
 }
 
-// RunWithCandidate consumes candidate ownership even when frontend startup fails.
-func RunWithCandidate(candidate *script.CandidateBundle, sourcePath string) error {
-	if candidate == nil {
-		return errors.New("candidate bundle is required")
-	}
-	activation, err := candidate.PrepareActivation()
-	if err != nil {
-		candidate.Close()
-		return err
-	}
-	return runWithSource(candidate.Config(), nil, candidate, activation, nil, candidate.WatchPaths(), candidate.WatchHashes(), sourcePath)
-}
-
-// RunWithVersioned consumes all ownership carried by a version-aware load.
-func RunWithVersioned(loaded script.VersionedSource, sourcePath string) error {
-	if loaded.Candidate != nil {
-		return RunWithCandidate(loaded.Candidate, sourcePath)
-	}
-	return runWithSource(loaded.Config, loaded.Runtime, nil, nil, loaded.LegacyTransition, loaded.WatchPaths, loaded.WatchHashes, sourcePath)
-}
-
 func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, watchPaths []string, watchHashes map[string][32]byte, sourcePath string) error {
 	runtime.LockOSThread()
+	var initialProvenance []config.ProvenanceRecord
+	if bundle != nil {
+		initialProvenance = bundle.Provenance()
+	}
 	app := &App{
 		cfg:                    cfg.Clone(),
 		desiredCfg:             cfg.Clone(),
+		composedCfg:            cfg.Clone(),
 		configStateInitialized: true,
+		composedProvenance:     initialProvenance,
 		configPath:             sourcePath,
 		scriptRT:               rt,
 		scriptBundle:           bundle,
@@ -181,6 +170,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 		pendingPaneScroll:      make(map[termmux.PaneID]int),
 		pendingPaneResize:      make(map[termmux.PaneID]termmux.PaneGeometry),
 	}
+	app.configScope = app.runtimeScopes.NewScope()
 	app.configWatch = newConfigWatchState(watchPaths...)
 	historyCapacity := cfg.Scrolling.History
 	hideCursorWhenScrolled := cfg.Scrolling.HideCursorWhenScrolled
@@ -201,6 +191,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 	if activation == nil {
 		app.initActionBindings()
 	}
+	defer app.runtimeScopes.CloseScope(app.configScope)
 	defer func() {
 		if app.legacyTransition != nil {
 			if err := app.legacyTransition.Rollback(); err != nil {

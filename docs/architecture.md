@@ -57,7 +57,9 @@ Composition is active only for explicitly authored v2. Active reload watching no
 
 Every public configuration leaf now has one schema-owned application scope: `live`, `new_pane`, `new_window`, `window_recreate`, or `restart`. The frontend owns detached desired and effective snapshots plus value-free pending path/scope records and the last reload error. Opacity/blur, colors, scrolling, scrollbar, and cursor policy merge into the active window live; shell changes remain desired and are used by future split panes; initial width/height are new-window; conservative resource/cached-policy fields remain restart-scoped. Reload failure preserves both snapshots and pending state, while scoped notices name bounded paths without values.
 
-Public legacy `script.Load` remains available and the executable exposes no CLI override flag yet. Durable `ConfigScopeID` runtime patches, runtime-patch provenance/survival across file reload, full doctor/explain output, and multi-window realization remain later slices; this slice does not claim those ADR-0002 contracts.
+The single-window frontend now owns one opaque process-local `ConfigScopeID` from startup through `App` teardown. Existing Lua setters adapt typed values into ordered runtime path/value patches decoded by the same schema coercion used for CLI overrides. A setter prepares and commits synchronously; last successful field transaction wins, closed scopes reject mutation, and explicit path/all clearing restores the composed value. Scoped patches do not mutate the composed base, survive successful file reload, and are revalidated against each candidate before publication/transfer; invalid reapplication rejects the whole reload. Value-free runtime records project `LayerRuntime` provenance with the scope ID over the composed winner/overwritten chain.
+
+Public legacy `script.Load` remains available and the executable exposes no CLI override flag yet. Executable environment/profile/CLI selection, doctor/explain rendering, and future native-window origin/focus mapping of scopes remain later slices.
 
 ## Verifiable measurements
 

@@ -14,6 +14,7 @@ const (
 	LayerEnvironment ProvenanceLayer = "environment"
 	LayerProfile     ProvenanceLayer = "profile"
 	LayerCLI         ProvenanceLayer = "cli"
+	LayerRuntime     ProvenanceLayer = "runtime"
 )
 
 type ProvenanceOrigin struct {
@@ -25,6 +26,8 @@ type ProvenanceOrigin struct {
 	Version             int
 	CLIArgumentIndex    int
 	HasCLIArgumentIndex bool
+	ConfigScopeID       ConfigScopeID
+	HasConfigScopeID    bool
 }
 
 type ProvenanceRecord struct {
