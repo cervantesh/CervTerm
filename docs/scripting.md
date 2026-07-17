@@ -147,6 +147,8 @@ All row and column numbers at the Lua boundary are 1-based.
 | `term:scrollbar()` / `term:set_scrollbar(table)` | Gets or atomically updates the complete scrollbar configuration table. |
 | `term:reload_config()` | Queues a safe reload of the selected source and returns whether a source is active. |
 
+The live configuration setters above commit typed patches to the current process-local configuration scope. Each call is synchronous, so a later getter in the same callback sees the new value. Successful patches survive file reload and are revalidated over the newly composed config; an incompatible patch rejects that reload and preserves the active bundle. Last successful setter wins per field. The scope and its value-free provenance are destroyed with the application; pane-local `set_font_size` remains action/zoom state rather than a composed config patch.
+
 ### Interactive search
 
 Press `ctrl+shift+f` to open the scrollback search bar (a bottom overlay). Type a

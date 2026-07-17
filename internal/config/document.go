@@ -39,12 +39,13 @@ const (
 )
 
 type FieldMetadata struct {
-	Path        string
-	Kind        ValueKind
-	Available   bool
-	Sensitive   bool
-	CLIOverride bool
-	ApplyScope  ApplyScope
+	Path            string
+	Kind            ValueKind
+	Available       bool
+	Sensitive       bool
+	CLIOverride     bool
+	ApplyScope      ApplyScope
+	RuntimeOverride bool
 }
 
 type MigrationStep struct {
@@ -71,12 +72,13 @@ func FromDocument(base Config, document Document) Config {
 }
 
 type fieldSchema struct {
-	name      string
-	kind      ValueKind
-	required  bool
-	children  []fieldSchema
-	sensitive bool
-	apply     ApplyScope
+	name            string
+	kind            ValueKind
+	required        bool
+	children        []fieldSchema
+	sensitive       bool
+	apply           ApplyScope
+	runtimeOverride bool
 }
 
 var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
@@ -84,20 +86,20 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "width", kind: KindInteger, apply: ApplyNewWindow}, {name: "height", kind: KindInteger, apply: ApplyNewWindow},
 		{name: "padding_x", kind: KindInteger, apply: ApplyRestart}, {name: "padding_y", kind: KindInteger, apply: ApplyRestart},
 		{name: "dynamic_title", kind: KindBoolean, apply: ApplyRestart},
-		{name: "opacity", kind: KindNumber, apply: ApplyLive},
-		{name: "blur", kind: KindBoolean, apply: ApplyLive},
+		{name: "opacity", kind: KindNumber, apply: ApplyLive, runtimeOverride: true},
+		{name: "blur", kind: KindBoolean, apply: ApplyLive, runtimeOverride: true},
 	}},
 	{name: "font", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
 		{name: "family", kind: KindString}, {name: "size", kind: KindNumber}, {name: "ligatures", kind: KindBoolean},
 	}},
 	{name: "colors", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
-		{name: "foreground", kind: KindString}, {name: "background", kind: KindString},
+		{name: "foreground", kind: KindString}, {name: "background", kind: KindString, runtimeOverride: true},
 		{name: "cursor", kind: KindString}, {name: "selection_background", kind: KindString},
 	}},
-	{name: "scrolling", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
+	{name: "scrolling", kind: KindTable, apply: ApplyLive, runtimeOverride: true, children: []fieldSchema{
 		{name: "history", kind: KindInteger}, {name: "wheel_multiplier", kind: KindInteger}, {name: "hide_cursor_when_scrolled", kind: KindBoolean},
 	}},
-	{name: "scrollbar", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
+	{name: "scrollbar", kind: KindTable, apply: ApplyLive, runtimeOverride: true, children: []fieldSchema{
 		{name: "enabled", kind: KindBoolean}, {name: "reserved_width_px", kind: KindInteger},
 		{name: "width_px", kind: KindInteger}, {name: "margin_px", kind: KindInteger},
 		{name: "radius_px", kind: KindInteger}, {name: "min_thumb_px", kind: KindInteger},
@@ -136,8 +138,8 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 		return nil, fmt.Errorf("unsupported config schema version %d", version)
 	}
 	fields := []FieldMetadata{{Path: "config_version", Kind: KindInteger, Available: true}}
-	var walk func(prefix string, schema fieldSchema, inheritedApply ApplyScope)
-	walk = func(prefix string, schema fieldSchema, inheritedApply ApplyScope) {
+	var walk func(prefix string, schema fieldSchema, inheritedApply ApplyScope, inheritedRuntime bool)
+	walk = func(prefix string, schema fieldSchema, inheritedApply ApplyScope, inheritedRuntime bool) {
 		for _, child := range schema.children {
 			path := child.name
 			if prefix != "" {
@@ -147,17 +149,19 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 			if apply == "" {
 				apply = inheritedApply
 			}
+			runtimeOverride := child.runtimeOverride || inheritedRuntime
 			metadata := FieldMetadata{Path: path, Kind: child.kind, Available: true, Sensitive: child.sensitive, CLIOverride: cliOverrideKindAllowed(child.kind) && !child.sensitive}
 			if child.kind != KindTable {
 				metadata.ApplyScope = apply
+				metadata.RuntimeOverride = runtimeOverride
 			}
 			fields = append(fields, metadata)
 			if child.kind == KindTable {
-				walk(path, child, apply)
+				walk(path, child, apply, runtimeOverride)
 			}
 		}
 	}
-	walk("", rootSchema, "")
+	walk("", rootSchema, "", false)
 	if version == 2 {
 		for _, name := range []string{"includes", "default_environment", "default_profile", "environments", "profiles"} {
 			fields = append(fields, FieldMetadata{Path: name, Kind: unavailableV2Fields[name], Available: false})
