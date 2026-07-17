@@ -1,6 +1,7 @@
 local cervterm = require("cervterm")
 
 local config: cervterm.Config = {
+  config_version = 2,
   window = {
     width = 1100,
     height = 720,

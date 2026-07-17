@@ -75,6 +75,8 @@ Generate a default config:
 .\cervterm.exe --print-default-config > cervterm.lua
 ```
 
+The generated template declares `config_version = 2`, which enables strict field and type diagnostics. Existing unversioned configurations remain v1-compatible. Phase 2 composition keys such as `includes`, `profiles`, and `environments` are reserved but are not available in this slice.
+
 Run with an explicit config:
 
 ```cmd

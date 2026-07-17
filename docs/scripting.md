@@ -4,6 +4,12 @@ CervTerm can load `cervterm.lua` or `cervterm.tl` as both configuration and a
 small extension runtime. Keybindings accept typed `cervterm.action` values or
 watchdog-protected Lua functions; terminal event handlers use Lua functions.
 
+## Configuration schema
+
+Set `config_version = 2` on the returned root table for strict, source-and-field diagnostics. Omission retains the historical v1 decoder for compatibility. The discriminator itself is always strict: only integral versions supported by the running CervTerm are accepted. Includes, profiles, and environments are reserved for later Phase 2 slices and currently reject the candidate rather than being ignored.
+
+The loader evaluates each source once, records which known fields were supplied, and migrates older documents in memory without rewriting them. V2 rejects unknown fields, wrong value types, sparse lists, fractional integer fields, non-string shell arguments/environment values, and malformed key/event shapes before replacing an active runtime.
+
 ## Keybindings
 
 Add a `keys` array to the returned config table. Each entry has:

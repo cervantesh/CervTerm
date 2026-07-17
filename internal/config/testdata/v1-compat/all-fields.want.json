@@ -1,0 +1,75 @@
+{
+  "Window": {
+    "Width": 1200,
+    "Height": 800,
+    "PaddingX": 8,
+    "PaddingY": 9,
+    "DynamicTitle": false,
+    "Opacity": 0.9,
+    "Blur": false
+  },
+  "Font": {
+    "Family": "JetBrains Mono",
+    "Size": 15.5,
+    "Ligatures": true
+  },
+  "Colors": {
+    "Foreground": "#010203",
+    "Background": "#040506FF",
+    "Cursor": "#070809",
+    "SelectionBackground": "#0A0B0C"
+  },
+  "Scrolling": {
+    "History": 3210,
+    "WheelMultiplier": 4,
+    "HideCursorWhenScrolled": false
+  },
+  "Scrollbar": {
+    "Enabled": true,
+    "ReservedWidthPX": 16,
+    "WidthPX": 10,
+    "MarginPX": 3,
+    "RadiusPX": 5,
+    "MinThumbPX": 30,
+    "TrackColor": "#10111266",
+    "ThumbColor": "#131415CC",
+    "ThumbHoverColor": "#161718E6",
+    "ThumbPressColor": "#191A1BFF",
+    "AutoHideDelayMS": 900,
+    "FadeMS": 175,
+    "PageStep": 0.75,
+    "TrackClick": "jump"
+  },
+  "Cursor": {
+    "Shape": "beam",
+    "Blink": false,
+    "BlinkIntervalMS": 700,
+    "Thickness": 0.2
+  },
+  "Clipboard": {
+    "OSC52": "write"
+  },
+  "Render": {
+    "Bidi": true,
+    "TextGamma": 1.2,
+    "TextDarken": 0.1,
+    "TextRaster": "auto",
+    "StatsHotkey": "ctrl+shift+s",
+    "ZoomInHotkey": "ctrl+equal",
+    "ZoomOutHotkey": "ctrl+minus",
+    "ZoomResetHotkey": "ctrl+0",
+    "VSync": false,
+    "Redraw": "continuous",
+    "Damage": "frame"
+  },
+  "Shell": {
+    "Program": "pwsh",
+    "Args": [
+      "-NoLogo"
+    ],
+    "WorkingDirectory": "C:/work",
+    "Env": {
+      "TERM_PROGRAM": "CervTerm"
+    }
+  }
+}

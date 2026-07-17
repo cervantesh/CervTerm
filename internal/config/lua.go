@@ -7,9 +7,13 @@ import (
 )
 
 func LoadLua(path string, base Config) (Config, error) {
+	return loadLua(path, path, base)
+}
+
+func loadLua(evalPath, sourcePath string, base Config) (Config, error) {
 	state := lua.NewState(lua.Options{SkipOpenLibs: false})
 	defer state.Close()
-	if err := state.DoFile(path); err != nil {
+	if err := state.DoFile(evalPath); err != nil {
 		return base, err
 	}
 	value := state.Get(-1)
@@ -17,7 +21,11 @@ func LoadLua(path string, base Config) (Config, error) {
 	if !ok {
 		return base, fmt.Errorf("config must return a table, got %s", value.Type().String())
 	}
-	return FromTable(base, table), nil
+	document, err := DecodeDocument(sourcePath, table)
+	if err != nil {
+		return base, err
+	}
+	return FromDocument(base, document), nil
 }
 
 func FromTable(cfg Config, root *lua.LTable) Config {
