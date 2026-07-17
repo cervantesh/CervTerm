@@ -5,26 +5,8 @@ package glfwgl
 import (
 	"errors"
 
-	termaction "cervterm/internal/action"
 	termmux "cervterm/internal/mux"
-
-	"github.com/go-gl/glfw/v3.3/glfw"
 )
-
-func (a *App) handleClipboardKey(key glfw.Key, mods glfw.ModifierKey) bool {
-	var command termaction.Action
-	switch {
-	case mods&glfw.ModControl != 0 && key == glfw.KeyV:
-		command = termaction.PasteClipboard{}
-	case mods&glfw.ModShift != 0 && key == glfw.KeyInsert:
-		command = termaction.PasteClipboard{}
-	case mods&glfw.ModControl != 0 && key == glfw.KeyInsert:
-		command = termaction.CopySelection{}
-	default:
-		return false
-	}
-	return a.dispatchReservedAction(command, key, mods, false)
-}
 
 func (a *App) writeInputBytes(data []byte) {
 	a.writePaneInputBytes(a.focusedPane, data)
