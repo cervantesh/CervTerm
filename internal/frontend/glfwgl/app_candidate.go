@@ -18,7 +18,7 @@ func RunWithCandidate(candidate *script.CandidateBundle, sourcePath string) erro
 		candidate.Close()
 		return err
 	}
-	return runWithSource(candidate.Config(), nil, candidate, activation, nil, candidate.WatchPaths(), candidate.WatchHashes(), sourcePath)
+	return runWithSource(candidate.Config(), nil, candidate, activation, nil, candidate.WatchPaths(), candidate.WatchHashes(), sourcePath, candidate.Options())
 }
 
 // RunWithVersioned consumes all ownership carried by a version-aware load.
@@ -26,5 +26,5 @@ func RunWithVersioned(loaded script.VersionedSource, sourcePath string) error {
 	if loaded.Candidate != nil {
 		return RunWithCandidate(loaded.Candidate, sourcePath)
 	}
-	return runWithSource(loaded.Config, loaded.Runtime, nil, nil, loaded.LegacyTransition, loaded.WatchPaths, loaded.WatchHashes, sourcePath)
+	return runWithSource(loaded.Config, loaded.Runtime, nil, nil, loaded.LegacyTransition, loaded.WatchPaths, loaded.WatchHashes, sourcePath, loaded.Options)
 }

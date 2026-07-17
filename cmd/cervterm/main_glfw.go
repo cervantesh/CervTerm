@@ -21,6 +21,7 @@ import (
 
 func main() {
 	configPath := flag.String("config", "", "path to cervterm.lua or cervterm.tl")
+	compositionFlags := registerCompositionFlags(flag.CommandLine)
 	showVersion := flag.Bool("version", false, "print CervTerm version")
 	showBuildInfo := flag.Bool("build-info", false, "print CervTerm build information")
 	printDefaultConfig := flag.Bool("print-default-config", false, "print default Lua configuration")
@@ -89,18 +90,29 @@ func main() {
 		os.Exit(0)
 	}
 
+	candidateOptions, err := compositionFlags.candidateOptions(os.Args[1:], os.LookupEnv)
+	if err != nil {
+		log.Fatal(err)
+	}
 	path := *configPath
 	if path == "" {
 		path = config.DiscoverPath()
 	}
+	if err := validateCompositionTarget(compositionFlags, path, 0); err != nil {
+		log.Fatal(err)
+	}
 	loaded := script.VersionedSource{Config: config.Defaults(), AuthoredVersion: 1}
 	if path != "" {
 		var loadErr error
-		loaded, loadErr = script.LoadVersioned(path, loaded.Config, script.CandidateOptions{})
+		loaded, loadErr = script.LoadVersioned(path, loaded.Config, candidateOptions)
 		if loadErr != nil {
 			log.Fatal(loadErr)
 		}
 		log.Printf("loaded config v%d: %s", loaded.AuthoredVersion, path)
+	}
+	if err := validateCompositionTarget(compositionFlags, path, loaded.AuthoredVersion); err != nil {
+		closeVersionedSource(&loaded)
+		log.Fatal(err)
 	}
 	if err := loaded.Config.Validate(); err != nil {
 		if loaded.Candidate != nil {

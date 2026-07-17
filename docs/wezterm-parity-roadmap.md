@@ -75,7 +75,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 2 — Versioned Composed Configuration
 **Scope:** schema versions, includes/modules, profiles/environment/CLI/window overrides, provenance, migrations, dependency-aware reload.
 
-**Status:** In progress. Slices 1–10 provide versioned composition, candidate provenance, transactional activation, complete graph watching, exhaustive application scopes, and desired/effective diagnostics. Slice 11 adds durable single-window `ConfigScopeID` runtime patches for the existing live Lua setters, shared typed decoding, synchronous transaction semantics, reload survival/revalidation, explicit clearing/lifecycle rejection, and runtime provenance overlay. Executable environment/profile/CLI wiring, doctor/explain integration, failed-attempt dependency recovery, and multi-window origin routing remain later slices.
+**Status:** In progress. Slices 1–11 provide versioned composition, provenance, atomic graph activation/watch, desired/effective scopes, and durable runtime patches. Slice 12 wires executable environment/profile selection and repeatable typed CLI overrides into startup and immutable reload options, including argument-index provenance, v1 compatibility boundaries, and value-safe errors. Doctor/explain integration, failed-attempt dependency recovery, and multi-window origin routing remain later slices.
 
 **Work**
 - Apply accepted ADR-0002.
