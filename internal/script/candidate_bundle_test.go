@@ -86,10 +86,21 @@ func TestCandidateBundleCloseIsIdempotent(t *testing.T) {
 		bundle.Close()
 		t.Fatalf("caller base mutation changed candidate: %#v", got.Shell)
 	}
+	activation, err := bundle.PrepareActivation()
+	if err != nil || activation.Commit() != bundle.runtime {
+		bundle.Close()
+		t.Fatalf("candidate activation runtime=%p err=%v", activation.Commit(), err)
+	}
 	bundle.Close()
 	bundle.Close()
 	if bundle.runtime != nil {
 		t.Fatal("closed bundle exposed runtime")
+	}
+	if activation.Commit() != nil {
+		t.Fatal("closed bundle left activation handle usable")
+	}
+	if _, err := bundle.PrepareActivation(); err == nil {
+		t.Fatal("closed bundle prepared activation")
 	}
 	if _, err := bundle.PublishTeal(config.TealPublicationOptions{}); err == nil || !strings.Contains(err.Error(), "closed") {
 		t.Fatalf("closed publication error = %v", err)

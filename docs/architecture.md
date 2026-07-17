@@ -49,7 +49,11 @@ Candidate `CLIOverride` values apply left-to-right after the selected profile. P
 
 `internal/script.BuildCandidateBundle` now creates the ownership unit needed for transfer: one validated composed `Config`, the single candidate Lua state and effective bindings/events plus primary timers/status/overlays, selection/provenance, dependency graph/staging, and deferred idempotent Teal publication. Every source's legacy fail-fast scripting surfaces validate before effective merge. Build failures close the Lua state and staging; bundle accessors detach mutable data; `Close` releases runtime then graph exactly once. Bundle lifecycle is serialized on the main thread.
 
-This remains a candidate-only seam. Public loaders reject `includes`, selection metadata, and `unset`, the executable exposes no override flag, and the frontend does not install candidate bundles or invoke Teal publication yet. The next slice must split fallible live-resource preparation from an infallible bundle transfer before activation.
+`script.LoadVersioned` is now the executable/reload dispatch seam. It evaluates the selected source exactly once and chooses from the authored version: omitted/v1 retains the single-source runtime and marker-free `tl gen` contract, while explicit v2 retains the whole candidate bundle. Dependency-capture wrappers are removed without undoing v1 user replacements, and v1 keeps last-return semantics. A v2-owned Teal-to-v1 transition journals generated output and marker bytes until frontend activation succeeds.
+
+Frontend live application is split into fallible `prepareLiveConfig` and mechanically infallible `commitLiveConfig`. Startup prepares GLFW/GL/font resources, publishes staged v2 Teal, commits the candidate runtime, then spawns the PTY. Reload prepares every raster resource without creating pane UI state, publishes Teal, swaps config/runtime/bundle on the main thread, and only then closes the old owner. Publication/resource faults preserve the last-known-good active state; v2-to-v1 journal rollback restores external artifacts as well.
+
+Composition is active only for explicitly authored v2. Public legacy `script.Load` remains available, the executable exposes no CLI override flag yet, and automatic watching still tracks only the primary source; dependency-graph watching and desired/effective diff classification remain later slices.
 
 ## Verifiable measurements
 

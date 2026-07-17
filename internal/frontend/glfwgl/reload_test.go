@@ -3,9 +3,12 @@
 package glfwgl
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +22,17 @@ func writeReloadConfig(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
+	}
+}
+
+func copyReloadFile(t *testing.T, source, destination string) {
+	t.Helper()
+	data, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(destination, data, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -86,6 +100,89 @@ func TestPrepareRasterContextsIncludesEveryPaneSize(t *testing.T) {
 		if _, ok := prepared[key]; !ok {
 			t.Fatalf("missing prepared context for size %.0f", size)
 		}
+	}
+}
+
+func TestLiveConfigPreparationDoesNotMutateAndAbortClosesResources(t *testing.T) {
+	a := newRunningMuxTestApp(t)
+	a.cfg = config.Defaults()
+	a.cfg.Colors.Background = "#080B12"
+	a.cfg.Render.TextRaster = "subpixel"
+	a.contentScaleX, a.contentScaleY = 1, 1
+	var created []*atlasTestBackend
+	atlas, err := newGlyphAtlasWithBackendFactory(&atlasTestRenderer{}, fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: 96, TextRaster: "subpixel"}, 1, 0, func(spec fontglyph.Spec) (fontglyph.Backend, error) {
+		backend := &atlasTestBackend{cellW: int(spec.Size), cellH: int(spec.Size * 2), baseline: int(spec.Size)}
+		created = append(created, backend)
+		return backend, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.atlas = atlas
+	t.Cleanup(atlas.close)
+	created = nil // initial active context is atlas-owned
+	a.paneUI = make(map[termmux.PaneID]*paneUIState)
+
+	next := a.cfg
+	next.Colors.Background = "#01020380"
+	prepared, err := a.prepareLiveConfig(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.cfg.Colors.Background == next.Colors.Background {
+		t.Fatal("preparation mutated active config")
+	}
+	if len(a.paneUI) != 0 {
+		t.Fatal("preparation created active pane UI state")
+	}
+	if len(created) != 1 || created[0].closeCalls != 0 {
+		t.Fatalf("prepared resources = %#v", created)
+	}
+	prepared.Close()
+	prepared.Close()
+	if created[0].closeCalls != 1 {
+		t.Fatalf("aborted backend close calls = %d", created[0].closeCalls)
+	}
+	if a.cfg.Colors.Background == next.Colors.Background {
+		t.Fatal("abort mutated active config")
+	}
+}
+
+func TestLiveConfigCommitTransfersPreparedResources(t *testing.T) {
+	a := newRunningMuxTestApp(t)
+	a.cfg = config.Defaults()
+	a.cfg.Colors.Background = "#080B12"
+	a.cfg.Render.TextRaster = "subpixel"
+	for _, id := range a.mux.PaneIDs() {
+		a.ensurePaneUI(id).font.fontSize = a.cfg.Font.Size
+	}
+	a.contentScaleX, a.contentScaleY = 1, 1
+	var created []*atlasTestBackend
+	atlas, err := newGlyphAtlasWithBackendFactory(&atlasTestRenderer{}, fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: 96, TextRaster: "subpixel"}, 1, 0, func(spec fontglyph.Spec) (fontglyph.Backend, error) {
+		backend := &atlasTestBackend{cellW: int(spec.Size), cellH: int(spec.Size * 2), baseline: int(spec.Size)}
+		created = append(created, backend)
+		return backend, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.atlas = atlas
+	t.Cleanup(atlas.close)
+	created = nil
+
+	next := a.cfg
+	next.Colors.Background = "#01020380"
+	prepared, err := a.prepareLiveConfig(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.commitLiveConfig(prepared)
+	prepared.Close()
+	if a.cfg.Colors.Background != next.Colors.Background {
+		t.Fatalf("committed background = %q", a.cfg.Colors.Background)
+	}
+	if len(created) != 1 || created[0].closeCalls != 0 {
+		t.Fatalf("committed resource closed or missing: %#v", created)
 	}
 }
 
@@ -164,6 +261,149 @@ func TestReloadCommitsLiveFieldsAndReportsRestartFields(t *testing.T) {
 	}
 	if app.notice == "" {
 		t.Fatal("reload did not produce visible notice")
+	}
+}
+
+func TestReloadActivatesExplicitV2BundleAtomically(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cervterm.lua")
+	writeReloadConfig(t, path, `return {}`)
+	loaded, err := script.LoadVersioned(path, config.Defaults(), script.CandidateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &App{cfg: loaded.Config, scriptRT: loaded.Runtime, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	app.configWatch = newConfigWatchState(path)
+	writeReloadConfig(t, filepath.Join(dir, "base.lua"), `return {colors={foreground="#AABBCC"}}`)
+	writeReloadConfig(t, path, `local c=require("cervterm"); return {config_version=2,includes={"base.lua"},window={opacity=0.8},colors={background="#080B12"},keys={{key="k",action=c.action.ScrollPage(1)}}}`)
+	oldRT := app.scriptRT
+	if err := app.reloadConfig(); err != nil {
+		t.Fatalf("reload explicit v2: %v", err)
+	}
+	if app.scriptBundle == nil || app.scriptRT == nil || app.scriptRT == oldRT {
+		t.Fatal("v2 reload did not atomically install bundle/runtime")
+	}
+	defer app.scriptBundle.Close()
+	if app.cfg.Window.Opacity != 0.8 || app.cfg.Colors.Foreground != "#AABBCC" {
+		t.Fatalf("v2 live config = %#v", app.cfg)
+	}
+	if len(app.scriptRT.Bindings()) != 1 {
+		t.Fatalf("v2 runtime bindings = %#v", app.scriptRT.Bindings())
+	}
+}
+
+func TestReloadV2PublicationFailurePreservesActiveState(t *testing.T) {
+	if _, err := exec.LookPath("tl"); err != nil {
+		t.Skip("tl not installed")
+	}
+	dir := t.TempDir()
+	copyReloadFile(t, filepath.Join("..", "..", "..", "docs", "examples", "cervterm.d.tl"), filepath.Join(dir, "cervterm.d.tl"))
+	path := filepath.Join(dir, "cervterm.tl")
+	writeReloadConfig(t, path, `local c=require("cervterm")
+	local cfg: c.Config = {}
+	return cfg`)
+	loaded, err := script.LoadVersioned(path, config.Defaults(), script.CandidateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer loaded.Runtime.Close()
+	published := filepath.Join(dir, "cervterm.lua")
+	if err := os.Remove(published); err != nil {
+		t.Fatal(err)
+	}
+	app := &App{cfg: loaded.Config, scriptRT: loaded.Runtime, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	app.configWatch = newConfigWatchState(path)
+	app.tealPublicationOptions.FaultInjector = func(_ int, step string) error {
+		if step == "marker" {
+			return errors.New("publication fault")
+		}
+		return nil
+	}
+	writeReloadConfig(t, path, `local c=require("cervterm")
+	local cfg: c.Config = {config_version=2,window={opacity=0.8},colors={background="#080B12"}}
+	return cfg`)
+	before, oldRT := app.cfg, app.scriptRT
+	if err := app.reloadConfig(); err == nil || !strings.Contains(err.Error(), "publication fault") {
+		t.Fatalf("publication reload error = %v", err)
+	}
+	if app.scriptRT != oldRT || app.scriptBundle != nil || !reflect.DeepEqual(app.cfg, before) {
+		t.Fatal("failed publication mutated active config ownership")
+	}
+	if _, err := os.Stat(published); !os.IsNotExist(err) {
+		t.Fatalf("failed publication left generated output: %v", err)
+	}
+	if _, err := os.Stat(config.TealOwnershipMarkerPath(published)); !os.IsNotExist(err) {
+		t.Fatalf("failed publication left ownership marker: %v", err)
+	}
+}
+
+func TestReloadV2ToV1PreparationFailureRestoresTealArtifacts(t *testing.T) {
+	if _, err := exec.LookPath("tl"); err != nil {
+		t.Skip("tl not installed")
+	}
+	dir := t.TempDir()
+	copyReloadFile(t, filepath.Join("..", "..", "..", "docs", "examples", "cervterm.d.tl"), filepath.Join(dir, "cervterm.d.tl"))
+	path := filepath.Join(dir, "cervterm.tl")
+	writeReloadConfig(t, path, `local c=require("cervterm")
+	local cfg: c.Config = {config_version=2,colors={background="#080B12"}}
+	return cfg`)
+	loaded, err := script.LoadVersioned(path, config.Defaults(), script.CandidateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loaded.Candidate.PublishTeal(config.TealPublicationOptions{}); err != nil {
+		loaded.Candidate.Close()
+		t.Fatal(err)
+	}
+	activation, err := loaded.Candidate.PrepareActivation()
+	if err != nil {
+		loaded.Candidate.Close()
+		t.Fatal(err)
+	}
+	app := &App{cfg: loaded.Config, scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, configPath: path, mux: termmux.New(nil, termmux.Options{}), paneUI: make(map[termmux.PaneID]*paneUIState)}
+	defer app.scriptBundle.Close()
+	app.cfg.Render.TextRaster = "subpixel"
+	app.contentScaleX, app.contentScaleY = 1, 1
+	app.configWatch = newConfigWatchState(path)
+	failFactory := false
+	atlas, err := newGlyphAtlasWithBackendFactory(&atlasTestRenderer{}, fontglyph.Spec{Family: app.cfg.Font.Family, Size: app.cfg.Font.Size, DPI: 96, TextRaster: "subpixel"}, app.cfg.Render.TextGamma, app.cfg.Render.TextDarken, func(spec fontglyph.Spec) (fontglyph.Backend, error) {
+		if failFactory {
+			return nil, errors.New("raster preparation fault")
+		}
+		return &atlasTestBackend{cellW: int(spec.Size), cellH: int(spec.Size * 2), baseline: int(spec.Size)}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.atlas = atlas
+	t.Cleanup(atlas.close)
+	failFactory = true
+
+	published := filepath.Join(dir, "cervterm.lua")
+	marker := config.TealOwnershipMarkerPath(published)
+	oldOutput, err := os.ReadFile(published)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldMarker, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeReloadConfig(t, path, `local c=require("cervterm")
+	local cfg: c.Config = {colors={background="#01020380"}}
+	return cfg`)
+	oldRT, oldBundle, oldConfig := app.scriptRT, app.scriptBundle, app.cfg
+	if err := app.reloadConfig(); err == nil || !strings.Contains(err.Error(), "raster preparation fault") {
+		t.Fatalf("v2-to-v1 preparation error = %v", err)
+	}
+	if app.scriptRT != oldRT || app.scriptBundle != oldBundle || !reflect.DeepEqual(app.cfg, oldConfig) {
+		t.Fatal("failed v2-to-v1 preparation changed active ownership")
+	}
+	if output, _ := os.ReadFile(published); !reflect.DeepEqual(output, oldOutput) {
+		t.Fatal("failed v2-to-v1 preparation did not restore generated Lua")
+	}
+	if ownership, _ := os.ReadFile(marker); !reflect.DeepEqual(ownership, oldMarker) {
+		t.Fatal("failed v2-to-v1 preparation did not restore ownership marker")
 	}
 }
 

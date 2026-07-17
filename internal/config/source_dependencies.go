@@ -109,6 +109,24 @@ func (c *dependencyCapture) restore() {
 	c.state.SetGlobal(dependencyRecorderGlobal, lua.LNil)
 }
 
+// restoreLegacy removes only capture wrappers that remain installed. User v1
+// replacements of globals, package, or package.loaders retain legacy lifetime.
+func (c *dependencyCapture) restoreLegacy() {
+	if c == nil || c.state == nil {
+		return
+	}
+	if c.state.GetGlobal("require") == c.wrappedRequire {
+		c.state.SetGlobal("require", c.originalRequire)
+	}
+	if c.state.GetGlobal("dofile") == c.wrappedDoFile {
+		c.state.SetGlobal("dofile", c.originalDoFile)
+	}
+	if c.state.GetGlobal("loadfile") == c.wrappedLoadFile {
+		c.state.SetGlobal("loadfile", c.originalLoadFile)
+	}
+	c.state.SetGlobal(dependencyRecorderGlobal, lua.LNil)
+}
+
 func (c *dependencyCapture) verifyStrict() error {
 	if c.state.GetGlobal("require") != c.wrappedRequire || c.state.GetGlobal("dofile") != c.wrappedDoFile || c.state.GetGlobal("loadfile") != c.wrappedLoadFile {
 		return fmt.Errorf("config v2 must not replace require, dofile, or loadfile while dependency capture is active")
