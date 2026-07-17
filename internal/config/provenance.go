@@ -13,15 +13,18 @@ const (
 	LayerPrimary     ProvenanceLayer = "primary"
 	LayerEnvironment ProvenanceLayer = "environment"
 	LayerProfile     ProvenanceLayer = "profile"
+	LayerCLI         ProvenanceLayer = "cli"
 )
 
 type ProvenanceOrigin struct {
-	Layer           ProvenanceLayer
-	Name            string
-	RequestedSource string
-	CanonicalSource string
-	AuthoredVersion int
-	Version         int
+	Layer               ProvenanceLayer
+	Name                string
+	RequestedSource     string
+	CanonicalSource     string
+	AuthoredVersion     int
+	Version             int
+	CLIArgumentIndex    int
+	HasCLIArgumentIndex bool
 }
 
 type ProvenanceRecord struct {

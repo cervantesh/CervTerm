@@ -14,6 +14,8 @@ The loader evaluates each source once, records which known fields were supplied,
 
 The candidate contract also recognizes strict partial `environments` and `profiles` maps plus `default_environment` and `default_profile`. Same-name declarations merge in include order, then the selected environment applies, then the selected profile. Candidate selection precedence is environment override → `CERVTERM_ENV` input → configured default → exact GOOS declaration, and profile override → `CERVTERM_PROFILE` input → configured default. Missing requested/configured names fail; an undeclared GOOS fallback is skipped. These fields remain rejected by the current public loader until the atomic activation slice.
 
+The candidate API accepts ordered typed CLI override inputs after the profile layer. Paths and capabilities come from schema metadata; scalar/list values use JSON except that schema-known strings may be unquoted. Sensitive environment maps, callbacks, bindings, records, and composition metadata cannot be supplied this way. Raw values are not retained in provenance or diagnostics. CervTerm does not expose a command-line override flag yet.
+
 ## Keybindings
 
 Add a `keys` array to the returned config table. Each entry has:

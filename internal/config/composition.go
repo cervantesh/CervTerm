@@ -16,6 +16,7 @@ var eventFieldNames = []string{"bell", "cwd", "focus", "output", "resize", "scro
 type CompositionOptions struct {
 	MaxMergedNodes int
 	Selection      SelectionOptions
+	CLIOverrides   []CLIOverride
 }
 
 type Composition struct {
@@ -73,6 +74,9 @@ func ComposeSourceGraph(state *lua.LState, graph *SourceGraph, options Compositi
 		if err := builder.applyNamedLayer(graph, "profiles", selection.Profile.Name, LayerProfile); err != nil {
 			return Composition{}, err
 		}
+	}
+	if err := builder.applyCLIOverrides(options.CLIOverrides); err != nil {
+		return Composition{}, err
 	}
 	present := make(map[string]struct{})
 	collectPresence(builder.root, rootSchema, "", present)
