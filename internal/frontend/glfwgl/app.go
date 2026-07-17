@@ -73,6 +73,7 @@ type App struct {
 	statsSpec        script.Spec
 	statsSpecOK      bool
 	zoom             zoomBindings
+	actionBindings   []keyActionBinding
 	link             linkState
 	hud              hudCache
 	fps              float64
@@ -155,6 +156,7 @@ func RunWithSource(cfg config.Config, rt *script.Runtime, sourcePath string) err
 		app.statsSpec, app.statsSpecOK = spec, true
 	}
 	app.initZoomHotkeys()
+	app.initActionBindings()
 	defer func() {
 		if app.scriptRT != nil {
 			app.scriptRT.Close()
@@ -274,71 +276,7 @@ func (a *App) installCallbacks() {
 		}
 	})
 	a.window.SetKeyCallback(func(_ *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		if action != glfw.Press && action != glfw.Repeat {
-			return
-		}
-		// Search owns the keyboard while open: the ctrl+shift+f chord toggles the
-		// bar (fixed v1) and, while searching, every key routes to search handling
-		// and nothing reaches the PTY (trap 1) — checked before script keys and
-		// the stats toggle so those chords cannot leak through the bar.
-		if a.search.handleKey(key, mods) {
-			return
-		}
-		if action == glfw.Press && key == glfw.KeyR && mods&glfw.ModControl != 0 && mods&glfw.ModShift != 0 && mods&(glfw.ModAlt|glfw.ModSuper) == 0 {
-			if !a.requestConfigReload() {
-				a.Notify("no config source to reload")
-			}
-			return
-		}
-		if a.dispatchScriptKey(key, mods, action == glfw.Press) {
-			return
-		}
-		if action == glfw.Press && a.statsSpecOK {
-			if spec, ok := specFromGLFW(key, mods); ok && spec == a.statsSpec {
-				a.showStats = !a.showStats
-				a.requestRedraw()
-				return
-			}
-		}
-		// Built-in zoom and Shift+scroll bindings. Checked after script keys so a
-		// user's Lua binding can still override, and before the PTY encode path so
-		// the chords are consumed rather than sent to the shell.
-		if a.handleZoomKey(key, mods) {
-			return
-		}
-		if a.handleScrollKey(key, mods) {
-			return
-		}
-
-		if a.handleMuxKey(key, mods) {
-			return
-		}
-		if a.handleClipboardKey(key, mods) {
-			return
-		}
-		event, hasEvent := inputEventFromGLFW(key, mods)
-		if hasEvent {
-			switch input.ClipboardShortcut(event) {
-			case input.ClipboardCopy:
-				_ = a.copySelectionToClipboard()
-				return
-			case input.ClipboardPaste:
-				text := a.window.GetClipboardString()
-				a.writeInputBytes(input.EncodePaste(text, a.bracketedPasteMode()))
-				return
-			}
-		}
-
-		if key == glfw.KeyC && mods&glfw.ModControl != 0 && a.copySelectionToClipboard() {
-			return
-		}
-
-		if !hasEvent {
-			return
-		}
-		if encoded, ok := input.EncodeWithMode(event, a.inputMode()); ok {
-			a.writeInputBytes(encoded)
-		}
+		a.handleKeyEvent(key, action, mods)
 	})
 
 	a.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {

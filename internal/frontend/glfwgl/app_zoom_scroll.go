@@ -3,7 +3,7 @@
 package glfwgl
 
 import (
-	"time"
+	termaction "cervterm/internal/action"
 
 	"cervterm/internal/script"
 
@@ -49,20 +49,18 @@ func (a *App) handleZoomKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	if !ok {
 		return false
 	}
+	var command termaction.Action
 	switch {
 	case a.zoom.resetOK && spec == a.zoom.reset:
-		a.applyFontSize(a.zoom.base)
+		command = termaction.Zoom{Mode: termaction.ZoomReset}
 	case a.zoom.inOK && spec == a.zoom.in:
-		a.applyFontSize(a.zoomTarget() + zoomFontStep)
+		command = termaction.Zoom{Mode: termaction.ZoomDelta, Amount: zoomFontStep}
 	case a.zoom.outOK && spec == a.zoom.out:
-		a.applyFontSize(a.zoomTarget() - zoomFontStep)
+		command = termaction.Zoom{Mode: termaction.ZoomDelta, Amount: -zoomFontStep}
 	default:
 		return false
 	}
-	// Zoom chords are all modified (ctrl), so no Char event follows; suppress
-	// defensively in case a binding is remapped to an unmodified key.
-	a.suppressNextChar = scriptKeyProducesChar(key, mods)
-	return true
+	return a.dispatchReservedAction(command, key, mods, false)
 }
 
 // handleZoomWheel zooms on Ctrl+wheel (up = in, down = out), the standard
@@ -76,10 +74,13 @@ func (a *App) handleZoomWheel(yoff float64) bool {
 	if a.window.GetKey(glfw.KeyLeftControl) != glfw.Press && a.window.GetKey(glfw.KeyRightControl) != glfw.Press {
 		return false
 	}
+	delta := -zoomFontStep
 	if yoff > 0 {
-		a.applyFontSize(a.zoomTarget() + zoomFontStep)
-	} else {
-		a.applyFontSize(a.zoomTarget() - zoomFontStep)
+		delta = zoomFontStep
+	}
+	envelope := actionEnvelope(termaction.Zoom{Mode: termaction.ZoomDelta, Amount: delta})
+	if err := a.executeAction(envelope, a.actionContext(termaction.SourceMouse)); err != nil {
+		a.notifyActionError(err)
 	}
 	return true
 }
@@ -92,35 +93,18 @@ func (a *App) handleScrollKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	if mods&glfw.ModShift == 0 || mods&(glfw.ModControl|glfw.ModAlt|glfw.ModSuper) != 0 {
 		return false
 	}
-	pane, view, ok := a.focusedView()
-	if !ok {
-		return true
-	}
-	page := view.Snapshot.Rows - 1
-	if page < 1 {
-		page = 1
-	}
-	history := view.ScrollbackLines
-	var lines int
+	var command termaction.Scroll
 	switch key {
 	case glfw.KeyPageUp:
-		lines = page
+		command = termaction.Scroll{Unit: termaction.ScrollPage, Amount: 1}
 	case glfw.KeyPageDown:
-		lines = -page
+		command = termaction.Scroll{Unit: termaction.ScrollPage, Amount: -1}
 	case glfw.KeyHome:
-		lines = history
+		command = termaction.Scroll{Unit: termaction.ScrollBuffer, Amount: 1}
 	case glfw.KeyEnd:
-		lines = -history
+		command = termaction.Scroll{Unit: termaction.ScrollBuffer, Amount: -1}
 	default:
 		return false
 	}
-	moved, _ := a.mux.ScrollViewport(pane, lines)
-	if moved {
-		a.recordPaneScroll(pane)
-		if pane == a.focusedPane && a.window != nil && a.cfg.Scrollbar.Enabled {
-			a.scrollbar.lastActivity = time.Now()
-		}
-		a.requestRedraw()
-	}
-	return true
+	return a.dispatchReservedAction(command, key, mods, false)
 }
