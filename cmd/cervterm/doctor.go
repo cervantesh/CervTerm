@@ -10,13 +10,15 @@ import (
 	"cervterm/internal/buildinfo"
 	"cervterm/internal/config"
 	"cervterm/internal/fontglyph"
+	"cervterm/internal/script"
 )
 
 type doctorOptions struct {
-	ConfigPath    string
-	LogPath       string
-	EmojiWarnings []string
-	ContentScale  string
+	ConfigPath       string
+	LogPath          string
+	EmojiWarnings    []string
+	ContentScale     string
+	CandidateOptions script.CandidateOptions
 }
 
 func runDoctor(opts doctorOptions) int {
@@ -33,7 +35,7 @@ func runDoctor(opts doctorOptions) int {
 		fmt.Printf("working-directory: %s\n", cwd)
 	}
 
-	printConfigDoctor(opts.ConfigPath)
+	configOK := printConfigDoctor(opts.ConfigPath, opts.CandidateOptions)
 	printLogDoctor(opts.LogPath)
 	printEnvironmentDoctor()
 	if opts.ContentScale == "" {
@@ -43,10 +45,13 @@ func runDoctor(opts doctorOptions) int {
 	}
 	printEmojiDoctor(opts.EmojiWarnings)
 	fmt.Println("support: attach this output, the diagnostics log, and screenshots/captures when filing an issue")
+	if !configOK {
+		return 1
+	}
 	return 0
 }
 
-func printConfigDoctor(configPath string) {
+func printConfigDoctor(configPath string, candidateOptions script.CandidateOptions) bool {
 	fmt.Println("config:")
 	if strings.TrimSpace(configPath) != "" {
 		fmt.Printf("  override: %s\n", configPath)
@@ -64,16 +69,28 @@ func printConfigDoctor(configPath string) {
 		fmt.Printf("    - %s [%s]\n", candidate, status)
 	}
 
-	cfg, loadedPath, err := config.Load(configPath)
+	report, cleanup, err := loadConfigDiagnostic(configDiagnosticOptions{ConfigPath: configPath, Candidate: candidateOptions}, false)
 	if err != nil {
 		fmt.Printf("  load: error: %v\n", err)
-		return
+		return false
 	}
-	if loadedPath == "" {
+	defer cleanup()
+	if report.SourcePath == "" {
 		fmt.Println("  load: defaults")
+		fmt.Println("  schema: none")
+		fmt.Println("  composition: unavailable (no source)")
 	} else {
-		fmt.Printf("  load: %s\n", loadedPath)
+		fmt.Printf("  load: %s\n", report.SourcePath)
+		fmt.Printf("  schema: authored=%d effective=2\n", report.AuthoredVersion)
+		if report.Composition {
+			renderConfigDiagnostic(os.Stdout, report, "  composed configuration:")
+		} else {
+			fmt.Println("  composition: unavailable (v1 compatibility path)")
+		}
 	}
+	fmt.Println("  pending: unavailable (no active frontend in diagnostic mode)")
+	fmt.Println("  last-reload-failure: unavailable (no active frontend in diagnostic mode)")
+	cfg := report.Config
 	if cfg.Shell.Program == "" {
 		fmt.Println("  shell: platform default")
 	} else {
@@ -92,6 +109,7 @@ func printConfigDoctor(configPath string) {
 		backend.Close()
 	}
 	printFontDoctor(cfg.Font.Family)
+	return true
 }
 
 func printFontDoctor(family string) {

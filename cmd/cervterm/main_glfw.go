@@ -22,6 +22,7 @@ import (
 func main() {
 	configPath := flag.String("config", "", "path to cervterm.lua or cervterm.tl")
 	compositionFlags := registerCompositionFlags(flag.CommandLine)
+	explainFlags := registerExplainConfigFlags(flag.CommandLine)
 	showVersion := flag.Bool("version", false, "print CervTerm version")
 	showBuildInfo := flag.Bool("build-info", false, "print CervTerm build information")
 	printDefaultConfig := flag.Bool("print-default-config", false, "print default Lua configuration")
@@ -47,13 +48,20 @@ func main() {
 		fmt.Print(config.DefaultLua())
 		return
 	}
+	candidateOptions, err := compositionFlags.candidateOptions(os.Args[1:], os.LookupEnv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	if explainFlags.requested() {
+		os.Exit(runExplainConfig(configDiagnosticOptions{ConfigPath: *configPath, Candidate: candidateOptions, Fields: append([]string(nil), explainFlags.fields...)}))
+	}
 	if *doctor {
 		var warnings []string
 		for _, warning := range fontglyph.DiagnoseEmojiFonts().Warnings {
 			warnings = append(warnings, warning)
 		}
-		scale := glfwgl.DetectContentScale()
-		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath, EmojiWarnings: warnings, ContentScale: scale}))
+		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath, EmojiWarnings: warnings, ContentScale: "not probed in diagnostic mode", CandidateOptions: candidateOptions}))
 	}
 	logFile, err := applog.Setup(applog.ResolvePath(*logPath))
 	if err != nil {
@@ -90,10 +98,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	candidateOptions, err := compositionFlags.candidateOptions(os.Args[1:], os.LookupEnv)
-	if err != nil {
-		log.Fatal(err)
-	}
 	path := *configPath
 	if path == "" {
 		path = config.DiscoverPath()
