@@ -1,6 +1,7 @@
 package script
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -169,4 +170,90 @@ return cfg
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("v2-to-v1 transition retained ownership marker: %v", err)
 	}
+}
+
+func TestLoadVersionedFailureEvidencePreservesGraphFailure(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing.lua")
+	path := writeSourceGraphScript(t, dir, "config.lua", `return {config_version=2, includes={"missing.lua"}}`)
+	_, err := LoadVersioned(path, config.Defaults(), CandidateOptions{})
+	if err == nil {
+		t.Fatal("expected missing include failure")
+	}
+	var loadFailure *VersionedLoadError
+	if !errors.As(err, &loadFailure) {
+		t.Fatalf("error type = %T, want *VersionedLoadError", err)
+	}
+	var graphFailure *config.SourceGraphFailureError
+	if !errors.As(err, &graphFailure) {
+		t.Fatalf("versioned error did not preserve graph error: %v", err)
+	}
+	if loadFailure.Unwrap() == nil || loadFailure.Error() != loadFailure.Unwrap().Error() {
+		t.Fatalf("failure did not preserve text/unwrap: %v", loadFailure)
+	}
+	assertFailedWatchPaths(t, err, path, missing)
+}
+
+func TestLoadVersionedFailureEvidenceIncludesSuccessfulGraphPaths(t *testing.T) {
+	tests := []struct {
+		name    string
+		primary string
+		options func() CandidateOptions
+		want    string
+	}{
+		{
+			name:    "validation",
+			primary: `return {config_version=2, includes={"base.lua"}, font={size=-1}}`,
+			options: func() CandidateOptions { return CandidateOptions{} },
+			want:    "font size",
+		},
+		{
+			name:    "composition",
+			primary: `return {config_version=2, includes={"base.lua"}}`,
+			options: func() CandidateOptions {
+				missing := "missing"
+				return CandidateOptions{Composition: config.CompositionOptions{Selection: config.SelectionOptions{EnvironmentOverride: &missing}}}
+			},
+			want: "is not declared",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			base := writeSourceGraphScript(t, dir, "base.lua", `return {font={family="Base"}}`)
+			primary := writeSourceGraphScript(t, dir, "config.lua", tt.primary)
+			_, err := LoadVersioned(primary, config.Defaults(), tt.options())
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want %q", err, tt.want)
+			}
+			assertFailedWatchPaths(t, err, primary, base)
+		})
+	}
+}
+
+func assertFailedWatchPaths(t *testing.T, err error, want ...string) {
+	t.Helper()
+	expectations := FailedWatchExpectations(err)
+	for _, path := range want {
+		if !failedWatchPathsContain(expectations, path) {
+			t.Errorf("missing failed watch path %q in %#v", path, expectations)
+		}
+	}
+}
+
+func failedWatchPathsContain(expectations []config.SourceWatchExpectation, want string) bool {
+	for _, expectation := range expectations {
+		if strings.EqualFold(filepath.Clean(expectation.Path), filepath.Clean(want)) {
+			return true
+		}
+		if filepath.Base(expectation.Path) != filepath.Base(want) {
+			continue
+		}
+		gotParent, gotErr := os.Stat(filepath.Dir(expectation.Path))
+		wantParent, wantErr := os.Stat(filepath.Dir(want))
+		if gotErr == nil && wantErr == nil && os.SameFile(gotParent, wantParent) {
+			return true
+		}
+	}
+	return false
 }
