@@ -3,6 +3,8 @@ package config
 import (
 	"reflect"
 	"testing"
+
+	"cervterm/internal/fontdesc"
 )
 
 func fullyDifferentConfig(base Config) Config {
@@ -15,6 +17,7 @@ func fullyDifferentConfig(base Config) Config {
 	value.Window.Opacity = 0.75
 	value.Window.Blur = !value.Window.Blur
 	value.Font.Family += " Different"
+	value.Font.Descriptors = []fontdesc.Descriptor{{Family: "Different Font", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100, AttributeMode: fontdesc.AttributeModeAugment}}
 	value.Font.Size++
 	value.Font.Ligatures = !value.Font.Ligatures
 	value.ColorScheme = "Different"
@@ -87,8 +90,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 60 {
-		t.Fatalf("config leaf count = %d, want 60", len(changes))
+	if len(changes) != 61 {
+		t.Fatalf("config leaf count = %d, want 61", len(changes))
 	}
 }
 
@@ -156,8 +159,9 @@ func TestConfigCloneAndLiveMergeDetachMutableShellValues(t *testing.T) {
 	clone := base.Clone()
 	clone.Shell.Args[0] = "mutated"
 	clone.Shell.Env["A"] = "mutated"
-	if base.Shell.Args[0] != "base" || base.Shell.Env["A"] != "base" {
-		t.Fatal("Config.Clone leaked mutable shell state")
+	clone.Font.Descriptors = []fontdesc.Descriptor{{Family: "clone"}}
+	if base.Shell.Args[0] != "base" || base.Shell.Env["A"] != "base" || len(base.Font.Descriptors) != 0 {
+		t.Fatal("Config.Clone leaked mutable state")
 	}
 	merged := MergeLiveConfig(base, fullyDifferentConfig(base))
 	merged.Shell.Args[0] = "merged-mutation"

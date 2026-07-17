@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"cervterm/internal/fontdesc"
+
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -185,6 +187,37 @@ func stringListField(tbl *lua.LTable, key string, fallback []string) []string {
 		if value, ok := list.RawGetInt(i).(lua.LString); ok {
 			out = append(out, string(value))
 		}
+	}
+	return out
+}
+
+func descriptorListField(tbl *lua.LTable, key string, fallback []fontdesc.Descriptor) []fontdesc.Descriptor {
+	list, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	out := make([]fontdesc.Descriptor, list.Len())
+	for index := range out {
+		entry, ok := list.RawGetInt(index + 1).(*lua.LTable)
+		if !ok {
+			return fallback
+		}
+		descriptor := fontdesc.Descriptor{
+			Family:         string(entry.RawGetString("family").(lua.LString)),
+			CollectionFace: stringField(entry, "collection_face", ""),
+			Weight:         intField(entry, "weight", fontdesc.DefaultWeight),
+			Style:          fontdesc.Style(stringField(entry, "style", string(fontdesc.StyleNormal))),
+			Stretch:        intField(entry, "stretch", fontdesc.DefaultStretch),
+			AttributeMode:  fontdesc.AttributeMode(stringField(entry, "attribute_mode", string(fontdesc.AttributeModeAugment))),
+		}
+		if raw := entry.RawGetString("collection_index"); raw != lua.LNil {
+			descriptor.CollectionIndex = fontdesc.SomeCollectionIndex(uint32(raw.(lua.LNumber)))
+		}
+		normalized, err := descriptor.Normalize()
+		if err != nil {
+			return fallback
+		}
+		out[index] = normalized
 	}
 	return out
 }

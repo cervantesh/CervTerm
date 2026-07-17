@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"testing"
 
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/fontglyph"
 	"cervterm/internal/frontend/gpu"
 )
@@ -83,6 +84,99 @@ func (b *atlasTestBackend) raster(cellSpan int) fontglyph.RasterizedGlyph {
 		img.Pix[i] = 0xff
 	}
 	return fontglyph.RasterizedGlyph{Image: img, CellSpan: cellSpan}
+}
+
+type atlasStyledTestBackend struct {
+	*atlasTestBackend
+	environment fontdesc.FontEnvironmentKey
+	faceSalt    string
+}
+
+func (b *atlasStyledTestBackend) StyleResolution(request fontdesc.RequestedFaceStyle) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode, bool) {
+	if request > fontdesc.RequestedFaceStyleBoldItalic {
+		return fontdesc.ResolvedFaceKey{}, fontdesc.SyntheticNone, false
+	}
+	key, err := fontdesc.NewResolvedFaceKey(fontdesc.ResolvedFaceInput{
+		Environment: b.environment,
+		Face:        fontdesc.CanonicalFaceIDFromBytes([]byte(b.faceSalt)),
+		Tier:        fontdesc.SourceTierPrimary,
+		SourceIndex: uint32(request),
+		Target:      fontdesc.FaceTarget{Weight: fontdesc.DefaultWeight, Style: fontdesc.StyleNormal, Stretch: fontdesc.DefaultStretch},
+	})
+	return key, fontdesc.SyntheticNone, err == nil
+}
+
+func (b *atlasStyledTestBackend) RasterizeStyle(_ fontdesc.RequestedFaceStyle, _ rune, cellSpan int) (fontglyph.RasterizedGlyph, bool) {
+	return b.raster(cellSpan), true
+}
+
+func (b *atlasStyledTestBackend) RasterizeClusterStyle(_ fontdesc.RequestedFaceStyle, _ string, cellSpan int) (fontglyph.RasterizedGlyph, bool) {
+	return b.raster(cellSpan), true
+}
+
+func (b *atlasStyledTestBackend) RasterizeRunStyle(_ fontdesc.RequestedFaceStyle, run string, cellSpan int) (fontglyph.RasterizedGlyph, bool) {
+	return b.RasterizeRun(run, cellSpan)
+}
+
+func TestAtlasDescriptorKeysPreserveOrderAndLegacyIdentity(t *testing.T) {
+	spec := fontglyph.Spec{Family: "Legacy Mono", Size: 14, DPI: 96, TextRaster: "gray"}
+	legacy, err := makeAtlasFontKey(spec, 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyDescriptor, err := makeAtlasFontKeyWithDescriptors(spec, 1, 0, []fontdesc.Descriptor{{Family: spec.Family}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy != legacyDescriptor {
+		t.Fatal("legacy atlas key no longer delegates to its one-family descriptor identity")
+	}
+
+	descriptors := []fontdesc.Descriptor{{Family: "First Mono"}, {Family: "Second Mono", Weight: 700}}
+	ordered, err := makeAtlasFontKeyWithDescriptors(spec, 1, 0, descriptors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shadowedSpec := spec
+	shadowedSpec.Family = "Different Legacy Shorthand"
+	shadowed, err := makeAtlasFontKeyWithDescriptors(shadowedSpec, 1, 0, descriptors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shadowed != ordered {
+		t.Fatal("shadowed font.family changed descriptor environment key")
+	}
+	reordered, err := makeAtlasFontKeyWithDescriptors(spec, 1, 0, []fontdesc.Descriptor{descriptors[1], descriptors[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated := append([]fontdesc.Descriptor(nil), descriptors...)
+	mutated[1].Weight = 600
+	changed, err := makeAtlasFontKeyWithDescriptors(spec, 1, 0, mutated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ordered.environment == reordered.environment || ordered.environment == changed.environment {
+		t.Fatal("ordered descriptor environment did not include order and descriptor payload")
+	}
+}
+
+func TestAtlasDescriptorContextUsesStyledResolvedFace(t *testing.T) {
+	spec := fontglyph.Spec{Family: "ignored", Size: 14, DPI: 96, TextRaster: "gray"}
+	descriptors := []fontdesc.Descriptor{{Family: "Styled Mono"}, {Family: "Fallback Mono"}}
+	key, err := makeAtlasFontKeyWithDescriptors(spec, 1, 0, descriptors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := &atlasStyledTestBackend{atlasTestBackend: &atlasTestBackend{cellW: 8, cellH: 16, baseline: 12}, environment: key.environment, faceSalt: "styled-normal"}
+	ctx, err := makeAtlasFontContextFromBackendWithDescriptors(spec, 1, 0, descriptors, backend, fontInstallationMetrics{cellW: 8, cellH: 16, baseline: 12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _, _ := backend.StyleResolution(fontdesc.RequestedFaceStyleNormal)
+	if ctx.resolvedFace != want || ctx.key.environment != key.environment {
+		t.Fatal("descriptor context did not retain styled backend identities")
+	}
 }
 
 func TestAtlasFontKeyAndFixedPoolConstants(t *testing.T) {

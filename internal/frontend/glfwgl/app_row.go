@@ -6,6 +6,7 @@ import (
 	"image/color"
 
 	"cervterm/internal/core"
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/render"
 	termsel "cervterm/internal/selection"
 )
@@ -80,18 +81,18 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 			a.drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)
 			continue
 		}
-		skew := float32(0)
-		if cell.Attr.Italic {
-			skew = 0.2 * a.cellH
-		}
+		request := fontdesc.RequestedFaceStyleFromAttributes(cell.Attr.Bold, cell.Attr.Italic)
+		_, synthetic := a.atlas.resolveStyle(request)
+		duplicateBold, skew := styleDrawEffects(synthetic, a.cellH)
 		// A ligature hit draws the whole span once (bold doubling + decorations
 		// over the span) and marks the covered cells; a miss falls through to the
 		// per-cell path. Per-cell backgrounds/selection already painted above.
 		if ligate {
-			if run, ok := detectLigatureRun(rowCells, logicalCol, cursorCol); ok {
-				if a.drawRunGlyph(run.Text, run.CellSpan, x, y, fg, 1, skew) {
-					if cell.Attr.Bold {
-						a.drawRunGlyph(run.Text, run.CellSpan, x+1, y, fg, 1, skew)
+			if run, ok := detectLigatureRun(rowCells, logicalCol, cursorCol); ok &&
+				renderSpanMatchesStyle(rowCells, logicalCol, run.CellSpan, request) {
+				if a.atlas.drawRunStyle(request, run.Text, run.CellSpan, x, y, fg, 1, skew) {
+					if duplicateBold {
+						a.atlas.drawRunStyle(request, run.Text, run.CellSpan, x+1, y, fg, 1, skew)
 					}
 					a.drawTextDecorations(x, y, a.cellW*float32(run.CellSpan), a.cellH, fg, cell.Attr)
 					for i := 1; i < run.CellSpan && logicalCol+i < a.snap.Cols; i++ {
@@ -101,10 +102,11 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 				}
 			}
 		}
-		if cluster, ok := collectRenderCluster(a.snap.Cells, a.snap.Cols, r, logicalCol); ok {
-			if a.drawCluster(cluster.Text, cluster.CellSpan, x, y, fg, 1, skew) {
-				if cell.Attr.Bold {
-					a.drawCluster(cluster.Text, cluster.CellSpan, x+1, y, fg, 1, skew)
+		if cluster, ok := collectRenderCluster(a.snap.Cells, a.snap.Cols, r, logicalCol); ok &&
+			renderSpanMatchesStyle(rowCells, logicalCol, cluster.CellSpan, request) {
+			if a.atlas.drawClusterStyle(request, cluster.Text, cluster.CellSpan, x, y, fg, 1, skew) {
+				if duplicateBold {
+					a.atlas.drawClusterStyle(request, cluster.Text, cluster.CellSpan, x+1, y, fg, 1, skew)
 				}
 				a.drawTextDecorations(x, y, a.cellW*float32(cluster.CellSpan), a.cellH, fg, cell.Attr)
 				for i := 1; i < cluster.CellSpan && logicalCol+i < a.snap.Cols; i++ {
@@ -113,17 +115,38 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 				continue
 			}
 		}
-		a.drawRune(cell.Rune, x, y, fg, 1, skew)
-		if cell.Attr.Bold {
-			a.drawRune(cell.Rune, x+1, y, fg, 1, skew)
+		a.atlas.drawRuneStyle(request, cell.Rune, x, y, fg, 1, skew)
+		if duplicateBold {
+			a.atlas.drawRuneStyle(request, cell.Rune, x+1, y, fg, 1, skew)
 		}
 		for _, combining := range cell.Combining() {
-			a.drawRune(combining, x, y, fg, 1, skew)
-			if cell.Attr.Bold {
-				a.drawRune(combining, x+1, y, fg, 1, skew)
+			a.atlas.drawRuneStyle(request, combining, x, y, fg, 1, skew)
+			if duplicateBold {
+				a.atlas.drawRuneStyle(request, combining, x+1, y, fg, 1, skew)
 			}
 		}
 		a.drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)
 	}
 	return order
+}
+
+func styleDrawEffects(synthetic fontdesc.SyntheticMode, cellH float32) (duplicateBold bool, skew float32) {
+	duplicateBold = synthetic&fontdesc.SyntheticBold != 0
+	if synthetic&fontdesc.SyntheticItalic != 0 {
+		skew = 0.2 * cellH
+	}
+	return duplicateBold, skew
+}
+
+func renderSpanMatchesStyle(cells []core.Cell, start, span int, request fontdesc.RequestedFaceStyle) bool {
+	if start < 0 || span < 1 || start+span > len(cells) {
+		return false
+	}
+	for i := start; i < start+span; i++ {
+		attr := cells[i].Attr
+		if fontdesc.RequestedFaceStyleFromAttributes(attr.Bold, attr.Italic) != request {
+			return false
+		}
+	}
+	return true
 }

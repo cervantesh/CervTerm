@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"strconv"
@@ -23,9 +24,19 @@ type resolvedOverridePath struct {
 	sensitive bool
 }
 
+type cliFontDescriptor struct {
+	Family          json.RawMessage `json:"family"`
+	CollectionFace  json.RawMessage `json:"collection_face"`
+	CollectionIndex json.RawMessage `json:"collection_index"`
+	Weight          json.RawMessage `json:"weight"`
+	Style           json.RawMessage `json:"style"`
+	Stretch         json.RawMessage `json:"stretch"`
+	AttributeMode   json.RawMessage `json:"attribute_mode"`
+}
+
 func cliOverrideKindAllowed(kind ValueKind) bool {
 	switch kind {
-	case KindString, KindNumber, KindInteger, KindBoolean, KindStringList:
+	case KindString, KindNumber, KindInteger, KindBoolean, KindStringList, KindDescriptorList:
 		return true
 	default:
 		return false
@@ -95,29 +106,9 @@ func decodeCLIOverrideValue(state *lua.LState, path resolvedOverridePath, raw st
 		}
 		return lua.LNumber(value), 1, nil
 	case KindInteger:
-		if !json.Valid([]byte(raw)) || raw == "null" {
-			return nil, 0, fmt.Errorf("must be a JSON integer")
-		}
-		var number json.Number
-		decoder := json.NewDecoder(strings.NewReader(raw))
-		decoder.UseNumber()
-		if err := decoder.Decode(&number); err != nil {
-			return nil, 0, fmt.Errorf("must be a JSON integer")
-		}
-		rational, ok := new(big.Rat).SetString(number.String())
-		if !ok || !rational.IsInt() {
-			return nil, 0, fmt.Errorf("must be a JSON integer")
-		}
-		upper := new(big.Int).Lsh(big.NewInt(1), uint(strconv.IntSize-1))
-		lower := new(big.Int).Neg(new(big.Int).Set(upper))
-		integer := rational.Num()
-		if integer.Cmp(lower) < 0 || integer.Cmp(upper) >= 0 {
-			return nil, 0, fmt.Errorf("must be an integer in [%s, %s)", lower.String(), upper.String())
-		}
-		value, _ := new(big.Float).SetInt(integer).Float64()
-		roundTrip := new(big.Rat).SetFloat64(value)
-		if roundTrip == nil || roundTrip.Cmp(rational) != 0 {
-			return nil, 0, fmt.Errorf("must be exactly representable as a terminal configuration integer")
+		value, err := exactCLIInteger(raw)
+		if err != nil {
+			return nil, 0, err
 		}
 		return lua.LNumber(value), 1, nil
 	case KindStringList:
@@ -130,9 +121,83 @@ func decodeCLIOverrideValue(state *lua.LState, path resolvedOverridePath, raw st
 			table.Append(lua.LString(value))
 		}
 		return table, len(values) + 1, nil
+	case KindDescriptorList:
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.UseNumber()
+		decoder.DisallowUnknownFields()
+		var values []cliFontDescriptor
+		if err := decoder.Decode(&values); err != nil || values == nil {
+			return nil, 0, fmt.Errorf("must be a JSON array of font descriptor objects")
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			return nil, 0, fmt.Errorf("must contain exactly one JSON array")
+		}
+		table := state.NewTable()
+		for _, value := range values {
+			entry := state.NewTable()
+			for _, field := range []struct {
+				name string
+				raw  json.RawMessage
+			}{
+				{name: "family", raw: value.Family},
+				{name: "collection_face", raw: value.CollectionFace},
+				{name: "style", raw: value.Style},
+				{name: "attribute_mode", raw: value.AttributeMode},
+			} {
+				if len(field.raw) == 0 {
+					continue
+				}
+				var text string
+				if string(field.raw) == "null" || json.Unmarshal(field.raw, &text) != nil {
+					return nil, 0, fmt.Errorf("descriptor %s must be a JSON string", field.name)
+				}
+				entry.RawSetString(field.name, lua.LString(text))
+			}
+			for _, field := range []struct {
+				name string
+				raw  json.RawMessage
+			}{
+				{name: "collection_index", raw: value.CollectionIndex},
+				{name: "weight", raw: value.Weight},
+				{name: "stretch", raw: value.Stretch},
+			} {
+				if len(field.raw) == 0 {
+					continue
+				}
+				parsed, err := exactCLIInteger(string(field.raw))
+				if err != nil {
+					return nil, 0, fmt.Errorf("descriptor %s: %w", field.name, err)
+				}
+				entry.RawSetString(field.name, lua.LNumber(parsed))
+			}
+			table.Append(entry)
+		}
+		return table, 1 + len(values)*8, nil
 	default:
 		return nil, 0, fmt.Errorf("field kind %s is not CLI-overridable", path.field.kind)
 	}
+}
+
+func exactCLIInteger(raw string) (float64, error) {
+	if !json.Valid([]byte(raw)) || raw == "null" {
+		return 0, fmt.Errorf("must be a JSON integer")
+	}
+	rational, ok := new(big.Rat).SetString(raw)
+	if !ok || !rational.IsInt() {
+		return 0, fmt.Errorf("must be a JSON integer")
+	}
+	upper := new(big.Int).Lsh(big.NewInt(1), uint(strconv.IntSize-1))
+	lower := new(big.Int).Neg(new(big.Int).Set(upper))
+	integer := rational.Num()
+	if integer.Cmp(lower) < 0 || integer.Cmp(upper) >= 0 {
+		return 0, fmt.Errorf("must be an integer in [%s, %s)", lower.String(), upper.String())
+	}
+	value, _ := new(big.Float).SetInt(integer).Float64()
+	roundTrip := new(big.Rat).SetFloat64(value)
+	if roundTrip == nil || roundTrip.Cmp(rational) != 0 {
+		return 0, fmt.Errorf("must be exactly representable as a terminal configuration integer")
+	}
+	return value, nil
 }
 
 func (b *compositionBuilder) applyCLIOverrides(overrides []CLIOverride) error {

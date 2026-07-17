@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"testing"
 
+	"cervterm/internal/fontdesc"
+
 	"golang.org/x/image/font/gofont/gomono"
 )
 
@@ -199,4 +201,138 @@ func makeTestTTC(t *testing.T, fonts ...[]byte) []byte {
 		offset = (offset + len(fontData) + 3) &^ 3
 	}
 	return out
+}
+
+func TestGoMonoFaceMetadataFromOS2(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "GoMono.ttf")
+	if err := os.WriteFile(path, gomono.TTF, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	faces := fontFaces(path)
+	if len(faces) != 1 {
+		t.Fatalf("fontFaces() returned %d faces", len(faces))
+	}
+	metadata := faces[0].metadata
+	if metadata.Family != "Go Mono" || metadata.Weight != 400 || metadata.Stretch != 100 || metadata.Style != fontdesc.StyleNormal || metadata.CollectionIndex != 0 {
+		t.Fatalf("Go Mono metadata = %+v", metadata)
+	}
+}
+
+func TestOS2NumericMetadataAndDefaults(t *testing.T) {
+	tests := []struct {
+		name                     string
+		weight, width, selection uint16
+		wantWeight, wantStretch  int
+		wantStyle                fontdesc.Style
+	}{
+		{name: "italic condensed", weight: 200, width: 3, selection: 1, wantWeight: 200, wantStretch: 75, wantStyle: fontdesc.StyleItalic},
+		{name: "oblique expanded", weight: 800, width: 8, selection: 1 << 9, wantWeight: 800, wantStretch: 150, wantStyle: fontdesc.StyleOblique},
+		{name: "invalid defaults", weight: 99, width: 10, selection: 0, wantWeight: 400, wantStretch: 100, wantStyle: fontdesc.StyleNormal},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "patched.ttf")
+			if err := os.WriteFile(path, patchTestOS2(t, gomono.TTF, tt.weight, tt.width, tt.selection), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			faces := fontFaces(path)
+			if len(faces) != 1 {
+				t.Fatalf("fontFaces() returned %d faces", len(faces))
+			}
+			got := faces[0].metadata
+			if got.Weight != tt.wantWeight || got.Stretch != tt.wantStretch || got.Style != tt.wantStyle {
+				t.Fatalf("metadata = %+v, want weight=%d stretch=%d style=%s", got, tt.wantWeight, tt.wantStretch, tt.wantStyle)
+			}
+		})
+	}
+}
+
+func TestOS2ReservedObliqueBitIgnoredBeforeVersion4(t *testing.T) {
+	data := patchTestOS2(t, gomono.TTF, 400, 5, 1<<9)
+	record := testTableRecord(t, data, "OS/2")
+	offset := int(binary.BigEndian.Uint32(data[record+8 : record+12]))
+	binary.BigEndian.PutUint16(data[offset:offset+2], 3)
+	path := filepath.Join(t.TempDir(), "old-os2.ttf")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	faces := fontFaces(path)
+	if len(faces) != 1 || faces[0].metadata.Style != fontdesc.StyleNormal {
+		t.Fatalf("old OS/2 reserved bit metadata = %+v", faces)
+	}
+}
+
+func TestTTCFacesHaveIndependentOS2Metadata(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "independent.ttc")
+	light := patchTestOS2(t, gomono.TTF, 200, 2, 0)
+	oblique := patchTestOS2(t, gomono.TTF, 800, 9, 1<<9)
+	if err := os.WriteFile(path, makeTestTTC(t, light, oblique), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	faces, examined, truncated, skipped := fontFacesBounded(path, 2)
+	if skipped || examined != 2 || truncated != 0 || len(faces) != 2 {
+		t.Fatalf("faces=%d examined=%d truncated=%d skipped=%v", len(faces), examined, truncated, skipped)
+	}
+	if faces[0].index != 0 || faces[0].metadata.CollectionIndex != 0 || faces[0].metadata.Weight != 200 || faces[0].metadata.Stretch != 62 || faces[0].metadata.Style != fontdesc.StyleNormal {
+		t.Fatalf("face 0 = %+v", faces[0])
+	}
+	if faces[1].index != 1 || faces[1].metadata.CollectionIndex != 1 || faces[1].metadata.Weight != 800 || faces[1].metadata.Stretch != 200 || faces[1].metadata.Style != fontdesc.StyleOblique {
+		t.Fatalf("face 1 = %+v", faces[1])
+	}
+}
+
+func TestCorruptOS2BoundsSkipOnlyFace(t *testing.T) {
+	data := append([]byte(nil), gomono.TTF...)
+	record := testTableRecord(t, data, "OS/2")
+	binary.BigEndian.PutUint32(data[record+8:record+12], uint32(len(data)+1))
+	path := filepath.Join(t.TempDir(), "corrupt.ttf")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	faces, examined, truncated, skipped := fontFacesBounded(path, 1)
+	if skipped || examined != 1 || truncated != 0 || len(faces) != 0 {
+		t.Fatalf("corrupt metadata policy: faces=%d examined=%d truncated=%d skipped=%v", len(faces), examined, truncated, skipped)
+	}
+	index := BuildFontIndex([]string{filepath.Dir(path)})
+	diagnostics := index.Diagnostics()
+	if diagnostics.FacesExamined != 1 || diagnostics.FacesIndexed != 0 || diagnostics.FilesSkipped != 0 {
+		t.Fatalf("corrupt metadata diagnostics = %+v", diagnostics)
+	}
+}
+
+func patchTestOS2(t *testing.T, source []byte, weight, width, selection uint16) []byte {
+	t.Helper()
+	data := append([]byte(nil), source...)
+	record := testTableRecord(t, data, "OS/2")
+	offset := int(binary.BigEndian.Uint32(data[record+8 : record+12]))
+	length := int(binary.BigEndian.Uint32(data[record+12 : record+16]))
+	if offset < 0 || length < 64 || offset > len(data)-length {
+		t.Fatal("invalid OS/2 fixture bounds")
+	}
+	if selection&(1<<9) != 0 {
+		binary.BigEndian.PutUint16(data[offset:offset+2], 4)
+	}
+	binary.BigEndian.PutUint16(data[offset+4:offset+6], weight)
+	binary.BigEndian.PutUint16(data[offset+6:offset+8], width)
+	binary.BigEndian.PutUint16(data[offset+62:offset+64], selection)
+	return data
+}
+
+func testTableRecord(t *testing.T, data []byte, tag string) int {
+	t.Helper()
+	if len(data) < 12 {
+		t.Fatal("invalid sfnt fixture")
+	}
+	numTables := int(binary.BigEndian.Uint16(data[4:6]))
+	if numTables > maxSFNTTableRecords || 12+numTables*16 > len(data) {
+		t.Fatal("invalid sfnt table directory")
+	}
+	for i := 0; i < numTables; i++ {
+		record := 12 + i*16
+		if string(data[record:record+4]) == tag {
+			return record
+		}
+	}
+	t.Fatalf("table %q not found", tag)
+	return 0
 }

@@ -262,7 +262,7 @@ func (a *App) runWindow() error {
 	sx, sy := w.GetContentScale()
 	a.applyScale(sx, sy)
 	stages := defaultFontInstallationStages()
-	plan, err := newFontInstallationPlan(a.cfg, effectiveDPI(sx, sy), a.effectiveTextRaster(), newAtlasBackend)
+	plan, err := newStartupFontInstallationPlan(a.cfg, effectiveDPI(sx, sy), a.effectiveTextRaster(), a.safeFonts)
 	if err != nil {
 		return err
 	}

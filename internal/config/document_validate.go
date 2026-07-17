@@ -104,6 +104,8 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 			return validateANSIList(source, path, value)
 		}
 		return validateStringList(source, path, value)
+	case KindDescriptorList:
+		return validateDescriptorList(source, path, value)
 	case KindStringMap:
 		return validateStringMap(source, path, value, allowUnset)
 	case KindIndexedColorMap:
