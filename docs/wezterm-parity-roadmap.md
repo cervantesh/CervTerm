@@ -75,7 +75,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 2 — Versioned Composed Configuration
 **Scope:** schema versions, includes/modules, profiles/environment/CLI/window overrides, provenance, migrations, dependency-aware reload.
 
-**Status:** In progress. Slices 1–12 provide versioned composition, provenance, atomic activation, complete successful-graph watching, desired/effective scopes, durable runtime patches, and executable selection/CLI inputs. Slice 13 adds structured failed-attempt dependency evidence, last-successful plus latest-failure watcher unions, missing include/module/Teal recovery, concurrent-attempt requeue, and bounded identical-failure notices without disabling polling. Doctor/explain integration and multi-window origin routing remain later slices.
+**Status:** In progress. Slices 1–13 provide versioned composition, provenance, atomic activation/recovery, desired/effective scopes, durable runtime patches, and executable selection/CLI inputs. Slice 14 adds diagnostic-only candidate loading, detached graph/config snapshots, deterministic redacted `--explain-config`/field filters, and composed doctor output without frontend or Teal side effects. Native multi-window origin routing and Phase 2 closeout remain later slices.
 
 **Work**
 - Apply accepted ADR-0002.

@@ -107,7 +107,7 @@ func buildCandidateBundleFromEvaluation(evaluation *candidateEvaluation, base co
 	}
 	bundle := &CandidateBundle{
 		config: cloneCandidateConfig(resolved), runtime: runtime,
-		graph: evaluation.graph, composition: composition,
+		graph: evaluation.graph, graphDiagnostic: evaluation.graph.Diagnostic(), composition: composition,
 		options: options.Clone(),
 	}
 	evaluation.state, evaluation.graph = nil, nil
@@ -153,7 +153,7 @@ func LoadVersioned(path string, base config.Config, options CandidateOptions) (V
 		return fail(err)
 	}
 	var legacyTransition *config.LegacyTealTransition
-	if strings.HasSuffix(strings.ToLower(path), ".tl") {
+	if strings.HasSuffix(strings.ToLower(path), ".tl") && !options.DiagnosticOnly {
 		if len(evaluation.graph.StagedTeal) == 1 {
 			legacyTransition, err = config.PrepareLegacyTealTransition(evaluation.graph.StagedTeal[0])
 			if err != nil {

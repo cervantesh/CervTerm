@@ -102,6 +102,15 @@ Apply typed v2 overrides after the selected profile. Repeat the flag to apply va
 
 Unknown, unsupported, invalid, and sensitive paths such as `shell.env` are rejected. Raw override values are not written to diagnostics or provenance. The startup selection and ordered overrides are snapshotted and reused unchanged by automatic reload.
 
+Inspect the fully resolved v2 configuration without opening GLFW, creating a window, publishing Teal output, or starting a PTY:
+
+```cmd
+.\cervterm.exe --config .\cervterm.lua --profile work --explain-config
+.\cervterm.exe --config .\cervterm.lua --explain-config-field window.opacity --explain-config-field shell.env
+```
+
+Explanation output has a versioned, deterministic text format with selection, source graph, dependencies, application scopes, and low-to-high provenance. Sensitive values are shown as `<redacted>`. Explanation requires an authored v2 source; unknown field filters exit with status 2. `--doctor` uses the same read-only composed loader for v2, reports explicit v1/no-source boundaries, and exits nonzero when configuration loading fails. Pending changes and the last reload failure are reported as unavailable because diagnostic mode is a separate one-shot process.
+
 ## Logs
 
 By default, CervTerm writes diagnostics to a user cache path such as:

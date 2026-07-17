@@ -104,3 +104,19 @@ func TestExplicitCompositionInputsRequireV2Source(t *testing.T) {
 		t.Fatalf("legacy v1 without explicit composition input = %v", err)
 	}
 }
+
+func TestExplainConfigFlagsRequestAndPreserveFieldOrder(t *testing.T) {
+	flags := flag.NewFlagSet("explain-test", flag.ContinueOnError)
+	values := registerExplainConfigFlags(flags)
+	if err := flags.Parse([]string{"--explain-config-field", "window.opacity", "--explain-config-field=shell.env"}); err != nil {
+		t.Fatal(err)
+	}
+	if !values.requested() || values.all || len(values.fields) != 2 || values.fields[0] != "window.opacity" || values.fields[1] != "shell.env" {
+		t.Fatalf("explain flags = %#v", values)
+	}
+	allFlags := flag.NewFlagSet("explain-all-test", flag.ContinueOnError)
+	all := registerExplainConfigFlags(allFlags)
+	if err := allFlags.Parse([]string{"--explain-config"}); err != nil || !all.requested() || !all.all {
+		t.Fatalf("explain all flags = %#v err=%v", all, err)
+	}
+}
