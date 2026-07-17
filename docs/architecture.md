@@ -31,6 +31,14 @@ Frontend -> Mux Window -> implicit Tab -> SplitTree -> Pane -> local PTY Session
 
 The mux is process-local and supports native column/row splits, stable split identities and ratios, draggable dividers, focused-pane input, independent scrollback/selection/search/mouse/zoom state, deterministic close/collapse and clipped rendering. GLFW projects pointer and font intent, while `internal/mux` validates ratios and owns pixel/grid geometry using renderer-neutral metrics per pane. Terminal grids update live and PTY resize settles once after divider or pane-zoom interaction. Mixed font sizes share one bounded two-page glyph atlas whose entries are namespaced by raster specification; selecting a pane never clears atlas pages. Visible tabs, multiple local windows, and layout-only workspaces are planned above these ownership boundaries. Domains, a daemon, live detach/reattach, remote sessions, and tmux integration are excluded.
 
+## Candidate configuration source graph
+
+`internal/config.BuildSourceGraph` is the candidate-only foundation for Phase 2 composition. It consumes one fresh caller-owned candidate Lua state, canonicalizes local Lua/Teal source identity (including filesystem aliases), evaluates one primary plus declarative includes exactly once in that state, and emits deterministic depth-first post-order nodes and dependency edges. A failed candidate state is discarded, and a state cannot be submitted for a second build. Depth, source-count, per-file byte, and aggregate-byte limits reject a candidate before it can affect active configuration.
+
+Primary evaluation occurs once before include traversal so it can declare edges. Includes and their nested `require`/`dofile`/`loadfile` calls run under a declarative guard: they may return values and typed actions but cannot register timers, status entries, or overlays. The instrumented standard loaders record canonical local module dependencies and v2 rejects replacement/custom loaders that would make reload completeness unknowable.
+
+Teal sources check and generate into a per-candidate owned staging directory (including beneath a caller-supplied staging parent); the graph reserves their eventual adjacent Lua paths and rejects source/derived-output collisions without publishing files. Candidate staging is removed when the graph closes. Public loaders still reject `includes` as unavailable in this slice: documents are not merged or installed until the next ADR-0002 slice adds deterministic merge and provenance.
+
 ## Verifiable measurements
 
 Run parser/core allocation checks:

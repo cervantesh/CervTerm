@@ -12,7 +12,7 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-func validateStrictTable(source, path string, table *lua.LTable, schema fieldSchema, root bool) error {
+func validateStrictTable(source, path string, table *lua.LTable, schema fieldSchema, root bool, extras map[string]fieldSchema) error {
 	allowed := make(map[string]fieldSchema, len(schema.children)+1)
 	for _, child := range schema.children {
 		allowed[child.name] = child
@@ -21,6 +21,9 @@ func validateStrictTable(source, path string, table *lua.LTable, schema fieldSch
 		allowed["config_version"] = fieldSchema{name: "config_version", kind: KindInteger}
 		for name := range unavailableV2Fields {
 			allowed[name] = fieldSchema{name: name, kind: KindTable}
+		}
+		for name, extra := range extras {
+			allowed[name] = extra
 		}
 	}
 	keys, err := strictStringKeys(source, path, table)
@@ -44,6 +47,21 @@ func validateStrictTable(source, path string, table *lua.LTable, schema fieldSch
 			return err
 		}
 	}
+	if root {
+		names := make([]string, 0, len(extras))
+		for name := range extras {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			value := table.RawGetString(name)
+			if value != lua.LNil {
+				if err := validateStrictValue(source, name, value, extras[name]); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -54,7 +72,7 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		if !ok {
 			return typeError(source, path, KindTable, value)
 		}
-		return validateStrictTable(source, path, table, schema, false)
+		return validateStrictTable(source, path, table, schema, false, nil)
 	case KindString:
 		if _, ok := value.(lua.LString); !ok {
 			return typeError(source, path, KindString, value)
