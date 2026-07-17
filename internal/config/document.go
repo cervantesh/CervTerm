@@ -29,10 +29,11 @@ const (
 )
 
 type FieldMetadata struct {
-	Path      string
-	Kind      ValueKind
-	Available bool
-	Sensitive bool
+	Path        string
+	Kind        ValueKind
+	Available   bool
+	Sensitive   bool
+	CLIOverride bool
 }
 
 type MigrationStep struct {
@@ -128,7 +129,7 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 			if prefix != "" {
 				path = prefix + "." + child.name
 			}
-			fields = append(fields, FieldMetadata{Path: path, Kind: child.kind, Available: true, Sensitive: child.sensitive})
+			fields = append(fields, FieldMetadata{Path: path, Kind: child.kind, Available: true, Sensitive: child.sensitive, CLIOverride: cliOverrideKindAllowed(child.kind) && !child.sensitive})
 			if child.kind == KindTable {
 				walk(path, child)
 			}

@@ -43,7 +43,9 @@ Teal sources check and generate into a per-candidate owned staging directory (in
 
 Named `environments` and `profiles` are strict partial documents. Same-name declarations remain source-local and apply in graph order after ordinary include/primary fields, so the chosen environment wins over the base and the chosen profile wins over the environment without losing per-source provenance. The pure candidate selector resolves environment override, `CERVTERM_ENV` input, configured default, then exact GOOS fallback; profile resolution uses override, `CERVTERM_PROFILE` input, then configured default. Missing explicit/configured selections fail, while an absent GOOS match selects nothing.
 
-This remains a candidate-only seam. Public loaders reject `includes`, selection metadata, and `unset` until Teal output publication and config/runtime/graph ownership can transfer as one atomic bundle; candidate composition does not mutate active configuration or publish generated files.
+Candidate `CLIOverride` values apply left-to-right after the selected profile. Paths resolve against schema metadata; booleans/numbers/integers/lists use JSON and schema-known strings may be unquoted. Records, callbacks, bindings, composition metadata, and sensitive `shell.env` paths are rejected before values are decoded. Provenance records only the argument index and path, never the raw argument value. The decoder is pure and has no command-line wiring in this slice; final cross-field validation remains the candidate bundle caller's responsibility.
+
+This remains a candidate-only seam. Public loaders reject `includes`, selection metadata, and `unset`, and the executable exposes no override flag, until Teal output publication and config/runtime/graph ownership can transfer as one atomic bundle; candidate composition does not mutate active configuration or publish generated files.
 
 ## Verifiable measurements
 
