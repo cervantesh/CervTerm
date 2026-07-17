@@ -19,6 +19,7 @@ type doctorOptions struct {
 	EmojiWarnings    []string
 	ContentScale     string
 	CandidateOptions script.CandidateOptions
+	SafeFonts        bool
 }
 
 func runDoctor(opts doctorOptions) int {
@@ -35,7 +36,7 @@ func runDoctor(opts doctorOptions) int {
 		fmt.Printf("working-directory: %s\n", cwd)
 	}
 
-	configOK := printConfigDoctor(opts.ConfigPath, opts.CandidateOptions)
+	configOK := printConfigDoctor(opts.ConfigPath, opts.CandidateOptions, opts.SafeFonts)
 	printLogDoctor(opts.LogPath)
 	printEnvironmentDoctor()
 	if opts.ContentScale == "" {
@@ -51,8 +52,13 @@ func runDoctor(opts doctorOptions) int {
 	return 0
 }
 
-func printConfigDoctor(configPath string, candidateOptions script.CandidateOptions) bool {
+func printConfigDoctor(configPath string, candidateOptions script.CandidateOptions, safeFonts bool) bool {
 	fmt.Println("config:")
+	if safeFonts {
+		fmt.Println("  safe-fonts: enabled")
+	} else {
+		fmt.Println("  safe-fonts: disabled")
+	}
 	if strings.TrimSpace(configPath) != "" {
 		fmt.Printf("  override: %s\n", configPath)
 	} else if discovered := config.DiscoverPath(); discovered != "" {
@@ -90,7 +96,10 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 	}
 	fmt.Println("  pending: unavailable (no active frontend in diagnostic mode)")
 	fmt.Println("  last-reload-failure: unavailable (no active frontend in diagnostic mode)")
-	cfg := report.Config
+	if safeFonts && report.Config.Font.Family != "Go Mono" {
+		fmt.Printf("  font-configured-family: %s\n", report.Config.Font.Family)
+	}
+	cfg := effectiveDoctorConfig(report.Config, safeFonts)
 	if cfg.Shell.Program == "" {
 		fmt.Println("  shell: platform default")
 	} else {
@@ -110,6 +119,14 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 	}
 	printFontDoctor(cfg.Font.Family)
 	return true
+}
+
+func effectiveDoctorConfig(authored config.Config, safeFonts bool) config.Config {
+	effective := authored.Clone()
+	if safeFonts {
+		effective.Font.Family = "Go Mono"
+	}
+	return effective
 }
 
 func printFontDoctor(family string) {

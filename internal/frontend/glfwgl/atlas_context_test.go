@@ -139,8 +139,10 @@ func TestAtlasSpecSwitchNamespacesAndReusesEntries(t *testing.T) {
 	if !ok {
 		t.Fatal("second spec failed to cache rune")
 	}
-	key1 := atlasKey{spec: newAtlasFontKey(spec1, 1, 0), kind: 'r', r: 'λ'}
-	key2 := atlasKey{spec: newAtlasFontKey(spec2, 1.1, 0.05), kind: 'r', r: 'λ'}
+	ctx1 := atlas.contexts[newAtlasFontKey(spec1, 1, 0)]
+	ctx2 := atlas.contexts[newAtlasFontKey(spec2, 1.1, 0.05)]
+	key1 := atlasKey{spec: ctx1.key, face: ctx1.resolvedFace, kind: 'r', r: 'λ'}
+	key2 := atlasKey{spec: ctx2.key, face: ctx2.resolvedFace, kind: 'r', r: 'λ'}
 	if key1 == key2 {
 		t.Fatal("distinct specs produced equal rune keys")
 	}

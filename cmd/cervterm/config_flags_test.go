@@ -120,3 +120,14 @@ func TestExplainConfigFlagsRequestAndPreserveFieldOrder(t *testing.T) {
 		t.Fatalf("explain all flags = %#v err=%v", all, err)
 	}
 }
+
+func TestFrontendStartupFlagsParseSafeFonts(t *testing.T) {
+	flags := flag.NewFlagSet("frontend-startup-test", flag.ContinueOnError)
+	values := registerFrontendStartupFlags(flags)
+	if err := flags.Parse([]string{"--safe-fonts"}); err != nil {
+		t.Fatal(err)
+	}
+	if !values.safeFonts {
+		t.Fatal("--safe-fonts was not recorded")
+	}
+}
