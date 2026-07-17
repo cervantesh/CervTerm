@@ -15,9 +15,19 @@ func configuredColorResolver(colors config.ColorsConfig) core.ColorResolver {
 		resolved := configColor(encoded, rgb(ansi[index]))
 		ansi[index] = core.RGB{R: resolved.R, G: resolved.G, B: resolved.B}
 	}
-	return core.NewColorResolver(
+	resolver := core.NewColorResolver(
 		core.RGB{R: foreground.R, G: foreground.G, B: foreground.B},
 		core.RGB{R: background.R, G: background.G, B: background.B},
 		ansi,
 	)
+	for slot, encoded := range colors.IndexedColors {
+		if encoded == "" {
+			continue
+		}
+		index := uint8(slot + 16)
+		fallback := resolver.IndexedRGB(index)
+		resolved := configColor(encoded, rgb(fallback))
+		resolver.SetIndexed(index, core.RGB{R: resolved.R, G: resolved.G, B: resolved.B})
+	}
+	return resolver
 }

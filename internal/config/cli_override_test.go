@@ -60,6 +60,7 @@ func TestCLIOverrideValidationAndRedaction(t *testing.T) {
 		{name: "record", override: CLIOverride{ArgumentIndex: 1, Path: "font", Value: `{}`}, want: "not CLI-overridable"},
 		{name: "keys", override: CLIOverride{ArgumentIndex: 1, Path: "keys", Value: `[]`}, want: "not CLI-overridable"},
 		{name: "events", override: CLIOverride{ArgumentIndex: 1, Path: "events", Value: `{}`}, want: "not CLI-overridable"},
+		{name: "indexed map", override: CLIOverride{ArgumentIndex: 1, Path: "colors.indexed_colors", Value: `{"196":"SUPER_SECRET"}`}, want: "not CLI-overridable"},
 		{name: "sensitive map", override: CLIOverride{ArgumentIndex: 1, Path: "shell.env", Value: "SUPER_SECRET"}, want: "sensitive fields"},
 		{name: "sensitive key", override: CLIOverride{ArgumentIndex: 1, Path: "shell.env.TOKEN", Value: "SUPER_SECRET"}, want: "sensitive fields"},
 		{name: "bad bool", override: CLIOverride{ArgumentIndex: 1, Path: "font.ligatures", Value: "yes"}, want: "JSON boolean"},
