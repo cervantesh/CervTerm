@@ -4,15 +4,19 @@ package glfwgl
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"reflect"
+	"strings"
 
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/fontglyph"
 	"cervterm/internal/frontend/gpu"
 	"cervterm/internal/render"
 )
 
 type atlasFontKey struct {
+	environment    fontdesc.FontEnvironmentKey
 	family         string
 	sizeBits       uint64
 	dpiBits        uint64
@@ -22,13 +26,14 @@ type atlasFontKey struct {
 }
 
 type atlasFontContext struct {
-	key         atlasFontKey
-	backend     fontglyph.Backend
-	cellW       int
-	cellH       int
-	baseline    int
-	coverageLUT *[256]uint8
-	prewarmed   bool
+	key          atlasFontKey
+	resolvedFace fontdesc.ResolvedFaceKey
+	backend      fontglyph.Backend
+	cellW        int
+	cellH        int
+	baseline     int
+	coverageLUT  *[256]uint8
+	prewarmed    bool
 }
 
 type atlasBackendFactory func(fontglyph.Spec) (fontglyph.Backend, error)
@@ -39,14 +44,45 @@ type atlasLigatureBackend interface {
 }
 
 func newAtlasFontKey(spec fontglyph.Spec, textGamma, textDarken float64) atlasFontKey {
+	key, err := makeAtlasFontKey(spec, textGamma, textDarken)
+	if err != nil {
+		panic(err)
+	}
+	return key
+}
+
+func makeAtlasFontKey(spec fontglyph.Spec, textGamma, textDarken float64) (atlasFontKey, error) {
+	descriptor, err := (fontdesc.Descriptor{Family: spec.Family}).Normalize()
+	if err != nil {
+		return atlasFontKey{}, err
+	}
+	if spec.DPI <= 0 || spec.DPI > math.MaxUint32 {
+		return atlasFontKey{}, fmt.Errorf("font DPI %.2f is outside identity bounds", spec.DPI)
+	}
+	environment, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{
+		Descriptors:   []fontdesc.Descriptor{descriptor},
+		BaseSizeBits:  stableFloatBits(spec.Size),
+		PaneZoomBits:  stableFloatBits(1),
+		DPI:           uint32(math.Round(spec.DPI)),
+		RasterMode:    spec.TextRaster,
+		GammaBits:     stableFloatBits(textGamma),
+		DarkeningBits: stableFloatBits(textDarken),
+	})
+	if err != nil {
+		return atlasFontKey{}, err
+	}
+	if environment == (fontdesc.FontEnvironmentKey{}) {
+		return atlasFontKey{}, errors.New("font environment identity is zero")
+	}
 	return atlasFontKey{
+		environment:    environment,
 		family:         spec.Family,
 		sizeBits:       stableFloatBits(spec.Size),
 		dpiBits:        stableFloatBits(spec.DPI),
 		textRaster:     spec.TextRaster,
 		textGammaBits:  stableFloatBits(textGamma),
 		textDarkenBits: stableFloatBits(textDarken),
-	}
+	}, nil
 }
 
 func stableFloatBits(value float64) uint64 {
@@ -70,6 +106,10 @@ func newGlyphAtlasWithBackendFactory(
 	if err != nil {
 		return nil, err
 	}
+	return newGlyphAtlasWithPreparedContext(r, ctx, factory), nil
+}
+
+func newGlyphAtlasWithPreparedContext(r gpu.Renderer, ctx *atlasFontContext, factory atlasBackendFactory) *glyphAtlas {
 	a := &glyphAtlas{
 		r:              r,
 		entries:        make(map[atlasKey]atlasEntry),
@@ -84,7 +124,7 @@ func newGlyphAtlasWithBackendFactory(
 	r.ConfigureAtlas(atlasPageCount, atlasPageSize)
 	a.activateContext(ctx)
 	a.prewarmASCII()
-	return a, nil
+	return a
 }
 
 func makeAtlasFontContext(
@@ -103,12 +143,46 @@ func makeAtlasFontContext(
 		return nil, errors.New("atlas backend factory returned nil backend")
 	}
 	cellW, cellH, baseline := backend.CellMetrics()
+	ctx, err := makeAtlasFontContextFromBackend(spec, textGamma, textDarken, backend, fontInstallationMetrics{cellW: cellW, cellH: cellH, baseline: baseline})
+	if err != nil {
+		backend.Close()
+		return nil, err
+	}
+	return ctx, nil
+}
+
+func makeAtlasFontContextFromBackend(spec fontglyph.Spec, textGamma, textDarken float64, backend fontglyph.Backend, metrics fontInstallationMetrics) (*atlasFontContext, error) {
+	if backend == nil {
+		return nil, errors.New("nil atlas backend")
+	}
+	key, err := makeAtlasFontKey(spec, textGamma, textDarken)
+	if err != nil {
+		return nil, fmt.Errorf("font environment identity: %w", err)
+	}
+	face := fontdesc.CanonicalFaceIDFromBytes([]byte("legacy:" + strings.ToLower(strings.TrimSpace(spec.Family))))
+	resolvedFace, err := fontdesc.NewResolvedFaceKey(fontdesc.ResolvedFaceInput{
+		Environment: key.environment,
+		Face:        face,
+		Tier:        fontdesc.SourceTierPrimary,
+		Target: fontdesc.FaceTarget{
+			Weight:  fontdesc.DefaultWeight,
+			Style:   fontdesc.StyleNormal,
+			Stretch: fontdesc.DefaultStretch,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("resolved face identity: %w", err)
+	}
+	if resolvedFace == (fontdesc.ResolvedFaceKey{}) {
+		return nil, errors.New("resolved face identity is zero")
+	}
 	ctx := &atlasFontContext{
-		key:      newAtlasFontKey(spec, textGamma, textDarken),
-		backend:  backend,
-		cellW:    cellW,
-		cellH:    cellH,
-		baseline: baseline,
+		key:          key,
+		resolvedFace: resolvedFace,
+		backend:      backend,
+		cellW:        metrics.cellW,
+		cellH:        metrics.cellH,
+		baseline:     metrics.baseline,
 	}
 	if textGamma != 1 || textDarken != 0 {
 		lut := render.CoverageLUT(textGamma, textDarken)

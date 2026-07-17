@@ -9,6 +9,7 @@ import (
 
 	"cervterm/internal/config"
 	"cervterm/internal/core"
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/fontglyph"
 	"cervterm/internal/frontend/gpu"
 	"cervterm/internal/render"
@@ -21,6 +22,7 @@ const (
 
 type atlasKey struct {
 	spec atlasFontKey
+	face fontdesc.ResolvedFaceKey
 	kind byte
 	r    rune   // single-rune glyphs (kind 'r'); 0 for clusters/runs
 	span int32  // cell span for clusters/runs (kind 'c'/'l'); 0 for single runes
@@ -140,7 +142,7 @@ func (a *glyphAtlas) cachedRun(run string, cellSpan int) (atlasEntry, bool) {
 		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	key := atlasKey{spec: ctx.key, kind: 'l', text: run, span: int32(cellSpan)}
+	key := atlasKey{spec: ctx.key, face: ctx.resolvedFace, kind: 'l', text: run, span: int32(cellSpan)}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
@@ -169,7 +171,7 @@ func (a *glyphAtlas) cachedRune(r rune) (atlasEntry, bool) {
 	}
 	// Key on the rune directly; the old atlasKey{text: string(r)} allocated a
 	// string on every glyph lookup — i.e. per visible cell per frame.
-	key := atlasKey{spec: ctx.key, kind: 'r', r: r}
+	key := atlasKey{spec: ctx.key, face: ctx.resolvedFace, kind: 'r', r: r}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
@@ -187,7 +189,7 @@ func (a *glyphAtlas) cachedCluster(cluster string, cellSpan int) (atlasEntry, bo
 		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	key := atlasKey{spec: ctx.key, kind: 'c', text: cluster, span: int32(cellSpan)}
+	key := atlasKey{spec: ctx.key, face: ctx.resolvedFace, kind: 'c', text: cluster, span: int32(cellSpan)}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
