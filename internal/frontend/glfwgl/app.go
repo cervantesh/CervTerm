@@ -36,6 +36,7 @@ type App struct {
 	pendingConfig          []config.ConfigChange
 	lastConfigReloadError  string
 	configPath             string
+	candidateOptions       script.CandidateOptions
 	configWatch            configWatchState
 	configWatchHashes      map[string][32]byte
 	reloadPending          bool
@@ -141,14 +142,16 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 }
 
 func RunWithSource(cfg config.Config, rt *script.Runtime, sourcePath string) error {
-	return runWithSource(cfg, rt, nil, nil, nil, []string{sourcePath}, nil, sourcePath)
+	return runWithSource(cfg, rt, nil, nil, nil, []string{sourcePath}, nil, sourcePath, script.CandidateOptions{})
 }
 
-func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, watchPaths []string, watchHashes map[string][32]byte, sourcePath string) error {
+func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, watchPaths []string, watchHashes map[string][32]byte, sourcePath string, options script.CandidateOptions) error {
 	runtime.LockOSThread()
 	var initialProvenance []config.ProvenanceRecord
+	initialOptions := options.Clone()
 	if bundle != nil {
 		initialProvenance = bundle.Provenance()
+		initialOptions = bundle.Options()
 	}
 	app := &App{
 		cfg:                    cfg.Clone(),
@@ -157,6 +160,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 		configStateInitialized: true,
 		composedProvenance:     initialProvenance,
 		configPath:             sourcePath,
+		candidateOptions:       initialOptions,
 		scriptRT:               rt,
 		scriptBundle:           bundle,
 		scriptActivation:       activation,

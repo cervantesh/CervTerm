@@ -190,3 +190,24 @@ return cfg
 		t.Fatalf("published compatibility output missing: %v", err)
 	}
 }
+
+func TestCandidateOptionsCloneDetachesSelectionAndOverrides(t *testing.T) {
+	environment, profile := "windows", "work"
+	original := CandidateOptions{Composition: config.CompositionOptions{
+		Selection:    config.SelectionOptions{EnvironmentOverride: &environment, ProfileOverride: &profile},
+		CLIOverrides: []config.CLIOverride{{ArgumentIndex: 3, Path: "window.opacity", Value: "0.8"}},
+	}}
+	clone := original.Clone()
+	environment, profile = "mutated", "mutated"
+	original.Composition.CLIOverrides[0].Value = "0.1"
+	if clone.Composition.Selection.EnvironmentOverride == nil || *clone.Composition.Selection.EnvironmentOverride != "windows" || clone.Composition.Selection.ProfileOverride == nil || *clone.Composition.Selection.ProfileOverride != "work" || clone.Composition.CLIOverrides[0].Value != "0.8" {
+		t.Fatalf("candidate options clone = %#v", clone)
+	}
+	if !clone.RequiresVersion2() {
+		t.Fatal("explicit candidate options did not require v2")
+	}
+	variableOnly := CandidateOptions{Composition: config.CompositionOptions{Selection: config.SelectionOptions{EnvironmentVariableValue: clone.Composition.Selection.EnvironmentOverride}}}
+	if variableOnly.RequiresVersion2() {
+		t.Fatal("ambient selection should preserve v1 compatibility")
+	}
+}

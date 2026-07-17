@@ -21,6 +21,7 @@ type VersionedSource struct {
 	WatchPaths       []string
 	WatchHashes      map[string][32]byte
 	AuthoredVersion  int
+	Options          CandidateOptions
 }
 
 type candidateEvaluation struct {
@@ -107,6 +108,7 @@ func buildCandidateBundleFromEvaluation(evaluation *candidateEvaluation, base co
 	bundle := &CandidateBundle{
 		config: cloneCandidateConfig(resolved), runtime: runtime,
 		graph: evaluation.graph, composition: composition,
+		options: options.Clone(),
 	}
 	evaluation.state, evaluation.graph = nil, nil
 	return bundle, nil
@@ -130,7 +132,7 @@ func LoadVersioned(path string, base config.Config, options CandidateOptions) (V
 		if err != nil {
 			return VersionedSource{}, err
 		}
-		return VersionedSource{Config: bundle.Config(), Candidate: bundle, WatchPaths: bundle.WatchPaths(), WatchHashes: bundle.WatchHashes(), AuthoredVersion: 2}, nil
+		return VersionedSource{Config: bundle.Config(), Candidate: bundle, WatchPaths: bundle.WatchPaths(), WatchHashes: bundle.WatchHashes(), AuthoredVersion: 2, Options: options.Clone()}, nil
 	}
 	if err := validateEvaluatedScripting(evaluation.graph); err != nil {
 		return VersionedSource{}, err
@@ -180,5 +182,5 @@ func LoadVersioned(path string, base config.Config, options CandidateOptions) (V
 		statuses: evaluation.statuses, overlays: evaluation.overlays, dispatchTimeout: time.Second,
 	}
 	evaluation.state = nil
-	return VersionedSource{Config: cloneCandidateConfig(resolved), Runtime: runtime, LegacyTransition: legacyTransition, WatchPaths: watchPaths, WatchHashes: watchHashes, AuthoredVersion: 1}, nil
+	return VersionedSource{Config: cloneCandidateConfig(resolved), Runtime: runtime, LegacyTransition: legacyTransition, WatchPaths: watchPaths, WatchHashes: watchHashes, AuthoredVersion: 1, Options: options.Clone()}, nil
 }
