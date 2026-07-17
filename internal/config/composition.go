@@ -15,12 +15,14 @@ var eventFieldNames = []string{"bell", "cwd", "focus", "output", "resize", "scro
 
 type CompositionOptions struct {
 	MaxMergedNodes int
+	Selection      SelectionOptions
 }
 
 type Composition struct {
 	Document   Document
 	Provenance Provenance
 	NodeCount  int
+	Selection  SelectionResult
 }
 
 type compositionBuilder struct {
@@ -47,21 +49,28 @@ func ComposeSourceGraph(state *lua.LState, graph *SourceGraph, options Compositi
 	if maxNodes <= 0 {
 		maxNodes = DefaultMaxMergedNodes
 	}
+	catalog := buildSelectionCatalog(graph)
+	selection, err := resolveSelection(catalog, options.Selection)
+	if err != nil {
+		return Composition{}, err
+	}
 	builder := &compositionBuilder{state: state, root: state.NewTable(), provenance: newProvenance(), maxNodes: maxNodes}
 	builder.root.RawSetString("config_version", lua.LNumber(CurrentSchemaVersion))
 	builder.seedDefaults(rootSchema, "")
 	for _, source := range graph.Sources {
-		layer := LayerInclude
-		name := source.RequestedPath
-		if canonicalIdentity(source.CanonicalPath) == canonicalIdentity(graph.Primary) {
-			layer, name = LayerPrimary, "primary"
-		}
 		builder.document = source.Document
-		builder.origin = ProvenanceOrigin{
-			Layer: layer, Name: name, RequestedSource: source.RequestedPath, CanonicalSource: source.CanonicalPath,
-			AuthoredVersion: source.Document.AuthoredVersion, Version: source.Document.Version,
-		}
+		builder.origin = sourceLayerOrigin(graph, source, LayerInclude, source.RequestedPath)
 		if err := builder.mergeRecord(builder.root, source.Document.Root, rootSchema, ""); err != nil {
+			return Composition{}, err
+		}
+	}
+	if selection.Environment != nil {
+		if err := builder.applyNamedLayer(graph, "environments", selection.Environment.Name, LayerEnvironment); err != nil {
+			return Composition{}, err
+		}
+	}
+	if selection.Profile != nil {
+		if err := builder.applyNamedLayer(graph, "profiles", selection.Profile.Name, LayerProfile); err != nil {
 			return Composition{}, err
 		}
 	}
@@ -72,7 +81,26 @@ func ComposeSourceGraph(state *lua.LState, graph *SourceGraph, options Compositi
 		Source: graph.Primary, AuthoredVersion: CurrentSchemaVersion, Version: CurrentSchemaVersion,
 		Root: builder.root, Present: present,
 	}
-	return Composition{Document: document, Provenance: builder.provenance, NodeCount: builder.nodes}, nil
+	return Composition{Document: document, Provenance: builder.provenance, NodeCount: builder.nodes, Selection: selection}, nil
+}
+
+func (b *compositionBuilder) applyNamedLayer(graph *SourceGraph, field, name string, layer ProvenanceLayer) error {
+	for _, source := range graph.Sources {
+		declarations, ok := source.Document.Root.RawGetString(field).(*lua.LTable)
+		if !ok {
+			continue
+		}
+		partial, ok := declarations.RawGetString(name).(*lua.LTable)
+		if !ok {
+			continue
+		}
+		b.document = source.Document
+		b.origin = sourceLayerOrigin(graph, source, layer, name)
+		if err := b.mergeRecord(b.root, partial, rootSchema, ""); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchema, prefix string) error {

@@ -41,7 +41,9 @@ Teal sources check and generate into a per-candidate owned staging directory (in
 
 `internal/config.ComposeSourceGraph` consumes that graph in deterministic post-order and builds a new root table in the same Lua state. Records merge recursively, `shell.env` merges by key, lists replace, event function slots replace independently, and `cervterm.config.unset` suppresses lower layers while allowing a higher value to win later. A 100,000-node/list-entry ceiling bounds composition. Provenance is retained per fixed schema leaf, map key, list, and event function with source versions and a low-to-high overwrite chain; it stores no raw values and marks sensitive paths.
 
-This remains a candidate-only seam. Public loaders reject `includes` and `unset` until Teal output publication and config/runtime/graph ownership can transfer as one atomic bundle; candidate composition does not mutate active configuration or publish generated files.
+Named `environments` and `profiles` are strict partial documents. Same-name declarations remain source-local and apply in graph order after ordinary include/primary fields, so the chosen environment wins over the base and the chosen profile wins over the environment without losing per-source provenance. The pure candidate selector resolves environment override, `CERVTERM_ENV` input, configured default, then exact GOOS fallback; profile resolution uses override, `CERVTERM_PROFILE` input, then configured default. Missing explicit/configured selections fail, while an absent GOOS match selects nothing.
+
+This remains a candidate-only seam. Public loaders reject `includes`, selection metadata, and `unset` until Teal output publication and config/runtime/graph ownership can transfer as one atomic bundle; candidate composition does not mutate active configuration or publish generated files.
 
 ## Verifiable measurements
 

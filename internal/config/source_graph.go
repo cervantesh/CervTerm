@@ -90,7 +90,11 @@ type sourceGraphBuilder struct {
 var sourceGraphConsumedKey = &lua.LUserData{Value: "cervterm.config.source_graph_consumed"}
 
 var graphDocumentFields = map[string]fieldSchema{
-	"includes": {name: "includes", kind: KindStringList},
+	"includes":            {name: "includes", kind: KindStringList},
+	"default_environment": {name: "default_environment", kind: KindString},
+	"default_profile":     {name: "default_profile", kind: KindString},
+	"environments":        {name: "environments", kind: KindDocumentMap},
+	"profiles":            {name: "profiles", kind: KindDocumentMap},
 }
 
 // BuildSourceGraph consumes a fresh caller-owned Lua candidate state to evaluate

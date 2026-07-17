@@ -70,7 +70,7 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		if allowUnset {
 			return nil
 		}
-		return documentError(source, path, "cervterm.config.unset is not available in single-source loading")
+		return documentError(source, path, "cervterm.config.unset is not allowed at this field")
 	}
 	switch schema.kind {
 	case KindTable:
@@ -107,6 +107,8 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		return validateKeyList(source, path, value)
 	case KindEvents:
 		return validateEvents(source, path, value, allowUnset)
+	case KindDocumentMap:
+		return validateDocumentMap(source, path, value)
 	default:
 		return documentError(source, path, "has unsupported schema kind %q", schema.kind)
 	}
@@ -165,6 +167,30 @@ func validateStringMap(source, path string, value lua.LValue, allowUnset bool) e
 	if len(failures) > 0 {
 		sort.Strings(failures)
 		return fmt.Errorf("%s: %s", sourceLabel(source), failures[0])
+	}
+	return nil
+}
+
+func validateDocumentMap(source, path string, value lua.LValue) error {
+	table, ok := value.(*lua.LTable)
+	if !ok {
+		return typeError(source, path, KindDocumentMap, value)
+	}
+	names, err := strictStringKeys(source, path, table)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if name == "" {
+			return documentError(source, path, "name must not be empty")
+		}
+		partial, ok := table.RawGetString(name).(*lua.LTable)
+		if !ok {
+			return typeError(source, joinPath(path, name), KindTable, table.RawGetString(name))
+		}
+		if err := validateStrictTable(source, joinPath(path, name), partial, rootSchema, false, nil, true); err != nil {
+			return err
+		}
 	}
 	return nil
 }
