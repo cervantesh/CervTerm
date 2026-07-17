@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"cervterm/internal/config"
 	termmux "cervterm/internal/mux"
 	termsel "cervterm/internal/selection"
 )
@@ -17,6 +18,14 @@ type paneHost struct {
 	app  *App
 	pane termmux.PaneID
 }
+
+func (h paneHost) RuntimeConfig() config.Config { return h.app.RuntimeConfig() }
+
+func (h paneHost) ApplyRuntimeConfig(next config.Config) error {
+	return h.app.ApplyRuntimeConfig(next)
+}
+
+func (h paneHost) RequestConfigReload() bool { return h.app.RequestConfigReload() }
 
 func (a *App) hostForFocused() paneHost {
 	id, _ := a.mux.FocusedPane()
