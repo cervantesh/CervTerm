@@ -106,6 +106,10 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 	if err != nil {
 		return nil, err
 	}
+	return newOpenTypeBackendFromPrimary(spec, primary, metrics), nil
+}
+
+func newOpenTypeBackendFromPrimary(spec Spec, primary loadedFace, metrics font.Metrics) *OpenTypeBackend {
 	// Fallback faces (CJK, and the ~24 MB color-emoji font) are loaded lazily on
 	// the first glyph the primary font can't cover — most sessions never render
 	// one, so they never pay the memory. See ensureFallbacks.
@@ -121,7 +125,7 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 	if !backend.subpixelText {
 		backend.dwRaster = newPlatformTextRasterizer(spec, primary)
 	}
-	return backend, nil
+	return backend
 }
 
 func embeddedGoMono(spec Spec) (loadedFace, font.Metrics, error) {

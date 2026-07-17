@@ -4,11 +4,11 @@ package fontglyph
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"unicode/utf16"
 	"unsafe"
+
+	"cervterm/internal/fontdesc"
 )
 
 const (
@@ -260,54 +260,22 @@ func math32bits(f float32) uint32 {
 }
 
 func (f *iWriteFactory) createFontFaceFromPath(path string) (*iUnknown, error) {
+	return f.createFontFaceFromPathIndex(path, 0)
+}
+
+func (f *iWriteFactory) createFontFaceFromPathIndex(path string, faceIndex int) (*iUnknown, error) {
 	if f == nil || f.lpVtbl == nil || f.lpVtbl.createFontFileReference == 0 || f.lpVtbl.createFontFace == 0 {
 		return nil, fmt.Errorf("IDWriteFactory font-face APIs unavailable")
 	}
-	path16, err := syscall.UTF16PtrFromString(path)
+	if faceIndex < 0 || faceIndex >= fontdesc.MaxFacesPerFile {
+		return nil, fmt.Errorf("font face index %d is outside 0..%d", faceIndex, fontdesc.MaxFacesPerFile-1)
+	}
+	fontFile, faceType, err := f.openFontFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var fontFile *iUnknown
-	hr, _, callErr := syscall.SyscallN(
-		f.lpVtbl.createFontFileReference,
-		uintptr(unsafe.Pointer(f)),
-		uintptr(unsafe.Pointer(path16)),
-		0,
-		uintptr(unsafe.Pointer(&fontFile)),
-	)
-	if failedHRESULT(hr) {
-		return nil, fmt.Errorf("IDWriteFactory::CreateFontFileReference(%s): HRESULT 0x%08x (%v)", path, uint32(hr), callErr)
-	}
-	if fontFile == nil {
-		return nil, fmt.Errorf("IDWriteFactory::CreateFontFileReference(%s) returned nil font file", path)
-	}
-	// Keep fontFile alive with the returned fontFace. Some DirectWrite builds keep
-	// references to the file loader data while shaping; releasing it here caused
-	// GetGlyphs to reject otherwise valid arguments in the Go COM bridge.
-
-	fontFaceType := uintptr(dwriteFontFaceTypeTrueType)
-	if strings.EqualFold(filepath.Ext(path), ".ttc") {
-		fontFaceType = dwriteFontFaceTypeOpenTypeCollection
-	}
-	fontFiles := []*iUnknown{fontFile}
-	var fontFace *iUnknown
-	hr, _, callErr = syscall.SyscallN(
-		f.lpVtbl.createFontFace,
-		uintptr(unsafe.Pointer(f)),
-		fontFaceType,
-		1,
-		uintptr(unsafe.Pointer(&fontFiles[0])),
-		0,
-		0,
-		uintptr(unsafe.Pointer(&fontFace)),
-	)
-	if failedHRESULT(hr) {
-		return nil, fmt.Errorf("IDWriteFactory::CreateFontFace(%s): HRESULT 0x%08x (%v)", path, uint32(hr), callErr)
-	}
-	if fontFace == nil {
-		return nil, fmt.Errorf("IDWriteFactory::CreateFontFace(%s) returned nil font face", path)
-	}
-	return fontFace, nil
+	defer fontFile.release()
+	return f.createAnalyzedFontFace(fontFile, faceType, faceIndex)
 }
 
 func (u *iUnknown) release() {

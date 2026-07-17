@@ -272,15 +272,7 @@ func cloneSelectionResult(selection config.SelectionResult) config.SelectionResu
 }
 
 func cloneCandidateConfig(value config.Config) config.Config {
-	value.Shell.Args = append([]string(nil), value.Shell.Args...)
-	if value.Shell.Env != nil {
-		environment := make(map[string]string, len(value.Shell.Env))
-		for key, entry := range value.Shell.Env {
-			environment[key] = entry
-		}
-		value.Shell.Env = environment
-	}
-	return value
+	return value.Clone()
 }
 
 func cloneTealPublicationResult(result config.TealPublicationResult) config.TealPublicationResult {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"cervterm/internal/applog"
 	"cervterm/internal/buildinfo"
 	"cervterm/internal/config"
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/fontglyph"
 	"cervterm/internal/script"
 )
@@ -99,6 +101,9 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 	if safeFonts && report.Config.Font.Family != "Go Mono" {
 		fmt.Printf("  font-configured-family: %s\n", report.Config.Font.Family)
 	}
+	if safeFonts && len(report.Config.Font.Descriptors) != 0 {
+		fmt.Printf("  font-descriptors-suppressed-by-safe-mode: %d\n", len(report.Config.Font.Descriptors))
+	}
 	cfg := effectiveDoctorConfig(report.Config, safeFonts)
 	if cfg.Shell.Program == "" {
 		fmt.Println("  shell: platform default")
@@ -110,14 +115,40 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 	}
 	fmt.Printf("  text-gamma: %.2f\n", cfg.Render.TextGamma)
 	fmt.Printf("  text-darken: %.2f\n", cfg.Render.TextDarken)
-	backend, backendErr := fontglyph.NewOpenTypeBackend(fontglyph.Spec{Family: cfg.Font.Family, Size: cfg.Font.Size, DPI: 96, TextRaster: cfg.Render.TextRaster})
-	if backendErr != nil {
-		fmt.Printf("  text-raster: go (DirectWrite probe failed: %v)\n", backendErr)
+	spec := fontglyph.Spec{Family: cfg.Font.Family, Size: cfg.Font.Size, DPI: 96, TextRaster: cfg.Render.TextRaster}
+	var backend fontglyph.Backend
+	var backendErr error
+	if len(cfg.Font.Descriptors) != 0 {
+		environment, identityErr := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{
+			Descriptors: cfg.Font.Descriptors, BaseSizeBits: math.Float64bits(cfg.Font.Size), PaneZoomBits: math.Float64bits(1),
+			DPI: 96, RasterMode: cfg.Render.TextRaster, GammaBits: math.Float64bits(cfg.Render.TextGamma), DarkeningBits: math.Float64bits(cfg.Render.TextDarken),
+		})
+		if identityErr != nil {
+			backendErr = identityErr
+		} else {
+			backend, backendErr = fontglyph.NewDescriptorBackend(spec, environment, cfg.Font.Descriptors)
+		}
+		fmt.Printf("  font-descriptors: %d\n", len(cfg.Font.Descriptors))
+		for index, descriptor := range cfg.Font.Descriptors {
+			normalized := descriptor.Normalized()
+			fmt.Printf("  font-descriptor[%d]: %s weight=%d style=%s stretch=%d mode=%s\n", index+1, normalized.Family, normalized.Weight, normalized.Style, normalized.Stretch, normalized.AttributeMode)
+		}
 	} else {
-		fmt.Printf("  text-raster: %s\n", backend.TextRasterEngine())
+		backend, backendErr = fontglyph.NewOpenTypeBackend(spec)
+	}
+	if backendErr != nil {
+		fmt.Printf("  text-raster: go (font probe failed: %v)\n", backendErr)
+	} else {
+		engine := "go"
+		if reporter, ok := backend.(interface{ TextRasterEngine() string }); ok {
+			engine = reporter.TextRasterEngine()
+		}
+		fmt.Printf("  text-raster: %s\n", engine)
 		backend.Close()
 	}
-	printFontDoctor(cfg.Font.Family)
+	if len(cfg.Font.Descriptors) == 0 {
+		printFontDoctor(cfg.Font.Family)
+	}
 	return true
 }
 
@@ -125,6 +156,7 @@ func effectiveDoctorConfig(authored config.Config, safeFonts bool) config.Config
 	effective := authored.Clone()
 	if safeFonts {
 		effective.Font.Family = "Go Mono"
+		effective.Font.Descriptors = nil
 	}
 	return effective
 }

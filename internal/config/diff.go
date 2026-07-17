@@ -31,6 +31,7 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Window.Blur != effective.Window.Blur, "window.blur", ApplyLive)
 
 	changes = appendChange(changes, desired.Font.Family != effective.Font.Family, "font.family", ApplyRestart)
+	changes = appendChange(changes, !slices.Equal(desired.Font.Descriptors, effective.Font.Descriptors), "font.descriptors", ApplyRestart)
 	changes = appendChange(changes, desired.Font.Size != effective.Font.Size, "font.size", ApplyRestart)
 	changes = appendChange(changes, desired.Font.Ligatures != effective.Font.Ligatures, "font.ligatures", ApplyRestart)
 

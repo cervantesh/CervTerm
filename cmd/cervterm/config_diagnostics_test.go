@@ -108,3 +108,18 @@ func TestLoadConfigDiagnosticDoctorBoundaries(t *testing.T) {
 		t.Fatalf("v1 report = %#v", report)
 	}
 }
+
+func TestExplainConfigReportsDescriptorShadowing(t *testing.T) {
+	path := writeDiagnosticConfig(t, `return {config_version=2,font={family="Legacy",descriptors={{family="Go Mono"}}}}`)
+	var stdout, stderr bytes.Buffer
+	exit := runExplainConfigTo(&stdout, &stderr, configDiagnosticOptions{ConfigPath: path, Fields: []string{"font.family", "font.descriptors"}})
+	if exit != 0 || stderr.Len() != 0 {
+		t.Fatalf("exit=%d stderr=%q", exit, stderr.String())
+	}
+	output := stdout.String()
+	for _, want := range []string{`font.family = "Legacy" [scope=restart shadowed_by=font.descriptors]`, `font.descriptors = [{"family":"Go Mono"`, `"weight":400`} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}

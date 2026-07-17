@@ -11,8 +11,19 @@ local record cervterm
     blur: boolean
   end
 
+  record FontDescriptor
+    family: string
+    collection_face: string | nil
+    collection_index: integer | nil
+    weight: integer | nil
+    style: string | nil
+    stretch: integer | nil
+    attribute_mode: string | nil
+  end
+
   record FontConfig
     family: string
+    descriptors: {FontDescriptor} | nil
     size: number
     ligatures: boolean
   end
@@ -156,6 +167,7 @@ local record cervterm
 
   record FontDocument
     family: string | Unset
+    descriptors: {FontDescriptor} | Unset
     size: number | Unset
     ligatures: boolean | Unset
   end

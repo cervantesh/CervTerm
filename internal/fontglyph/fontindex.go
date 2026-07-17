@@ -2,6 +2,9 @@ package fontglyph
 
 import (
 	"container/heap"
+	"encoding/binary"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -21,6 +24,7 @@ type faceInfo struct {
 	index     int
 	family    string
 	subfamily string
+	metadata  fontdesc.FaceMetadata
 }
 
 // FontIndexDiagnostics summarizes bounded discovery without changing the
@@ -152,24 +156,6 @@ func (index *FontIndex) Lookup(family string) (regular, bold, italic, boldItalic
 		regular = &faces[0]
 	}
 	return regular, bold, italic, boldItalic
-}
-
-func normalizeFamily(value string) string {
-	return strings.Join(strings.Fields(strings.ToLower(value)), " ")
-}
-
-func classifySubfamily(value string) (bold, italic bool) {
-	normalized := normalizeFamily(value)
-	return strings.Contains(normalized, "bold"), strings.Contains(normalized, "italic") || strings.Contains(normalized, "oblique")
-}
-
-func isFontFile(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".ttf", ".otf", ".ttc":
-		return true
-	default:
-		return false
-	}
 }
 
 func canonicalDiscoveryRoots(dirs []string, diagnostics *FontIndexDiagnostics) []string {
@@ -327,19 +313,6 @@ func (selector *topKPathSelector) sorted() []string {
 	return paths
 }
 
-func selectTopKPaths(paths []string, limit int) []string {
-	selector := newTopKPathSelector(limit)
-	for _, path := range paths {
-		selector.add(path)
-	}
-	return selector.sorted()
-}
-
-func fontFaces(path string) []faceInfo {
-	faces, _, _, _ := fontFacesBounded(path, fontdesc.MaxFacesPerFile)
-	return faces
-}
-
 // fontFacesBounded examines at most limit collection faces. examined counts
 // every attempted face, including parse failures and faces without usable names.
 func fontFacesBounded(path string, limit int) (faces []faceInfo, examined, truncated int, skipped bool) {
@@ -348,6 +321,10 @@ func fontFacesBounded(path string, limit int) (faces []faceInfo, examined, trunc
 		return nil, 0, 0, true
 	}
 	defer file.Close()
+	stat, err := file.Stat()
+	if err != nil {
+		return nil, 0, 0, true
+	}
 	collection, err := sfnt.ParseCollectionReaderAt(file)
 	if err != nil {
 		return nil, 0, 0, true
@@ -364,23 +341,93 @@ func fontFacesBounded(path string, limit int) (faces []faceInfo, examined, trunc
 		if family == "" {
 			continue
 		}
+		subfamily := fontName(font, sfnt.NameIDTypographicSubfamily, sfnt.NameIDSubfamily)
+		metadata, err := readFaceMetadata(file, stat.Size(), i, family, subfamily)
+		if err != nil {
+			continue // malformed per-face metadata is diagnosed as examined but not indexed
+		}
 		faces = append(faces, faceInfo{
-			path: path, index: i, family: family,
-			subfamily: fontName(font, sfnt.NameIDTypographicSubfamily, sfnt.NameIDSubfamily),
+			path: path, index: i, family: family, subfamily: subfamily, metadata: metadata,
 		})
 	}
 	return faces, examined, max(0, collection.NumFonts()-count), false
 }
 
-func fontName(font *sfnt.Font, preferred, fallback sfnt.NameID) string {
-	var buffer sfnt.Buffer
-	if name, err := font.Name(&buffer, preferred); err == nil && strings.TrimSpace(name) != "" {
-		return strings.TrimSpace(name)
+const maxSFNTTableRecords = 256
+
+func readFaceMetadata(reader io.ReaderAt, size int64, faceIndex int, family, subfamily string) (fontdesc.FaceMetadata, error) {
+	metadata := fontdesc.FaceMetadata{Family: family, Subfamily: subfamily, Weight: 400, Stretch: 100, Style: fontdesc.StyleNormal, CollectionIndex: uint32(faceIndex)}.Normalized()
+	header, err := readFontRange(reader, size, 0, 12)
+	if err != nil {
+		return fontdesc.FaceMetadata{}, err
 	}
-	if name, err := font.Name(&buffer, fallback); err == nil {
-		return strings.TrimSpace(name)
+	faceOffset := int64(0)
+	if string(header[:4]) == "ttcf" {
+		count := binary.BigEndian.Uint32(header[8:12])
+		if faceIndex < 0 || uint32(faceIndex) >= count || count > fontdesc.MaxFacesPerFile {
+			return fontdesc.FaceMetadata{}, fmt.Errorf("collection face %d outside count %d", faceIndex, count)
+		}
+		offsetBytes, err := readFontRange(reader, size, 12+int64(faceIndex)*4, 4)
+		if err != nil {
+			return fontdesc.FaceMetadata{}, err
+		}
+		faceOffset = int64(binary.BigEndian.Uint32(offsetBytes))
+	} else if faceIndex != 0 {
+		return fontdesc.FaceMetadata{}, fmt.Errorf("standalone font has no face %d", faceIndex)
 	}
-	return ""
+	directoryHeader, err := readFontRange(reader, size, faceOffset, 12)
+	if err != nil {
+		return fontdesc.FaceMetadata{}, err
+	}
+	numTables := int(binary.BigEndian.Uint16(directoryHeader[4:6]))
+	if numTables > maxSFNTTableRecords {
+		return fontdesc.FaceMetadata{}, fmt.Errorf("sfnt table count %d exceeds %d", numTables, maxSFNTTableRecords)
+	}
+	directory, err := readFontRange(reader, size, faceOffset+12, int64(numTables)*16)
+	if err != nil {
+		return fontdesc.FaceMetadata{}, err
+	}
+	for i := 0; i < numTables; i++ {
+		record := directory[i*16 : (i+1)*16]
+		if string(record[:4]) != "OS/2" {
+			continue
+		}
+		offset, length := int64(binary.BigEndian.Uint32(record[8:12])), int64(binary.BigEndian.Uint32(record[12:16]))
+		if length < 64 {
+			return fontdesc.FaceMetadata{}, fmt.Errorf("OS/2 table length %d is below 64", length)
+		}
+		os2, err := readFontRange(reader, size, offset, length)
+		if err != nil {
+			return fontdesc.FaceMetadata{}, fmt.Errorf("OS/2 table: %w", err)
+		}
+		if weight := int(binary.BigEndian.Uint16(os2[4:6])); weight >= 100 && weight <= 900 {
+			metadata.Weight = weight
+		}
+		widths := [...]int{0, 50, 62, 75, 87, 100, 112, 125, 150, 200}
+		if width := int(binary.BigEndian.Uint16(os2[6:8])); width >= 1 && width <= 9 {
+			metadata.Stretch = widths[width]
+		}
+		version := binary.BigEndian.Uint16(os2[0:2])
+		selection := binary.BigEndian.Uint16(os2[62:64])
+		if version >= 4 && selection&(1<<9) != 0 {
+			metadata.Style = fontdesc.StyleOblique
+		} else if selection&1 != 0 {
+			metadata.Style = fontdesc.StyleItalic
+		}
+		return metadata, nil
+	}
+	return metadata, nil
+}
+
+func readFontRange(reader io.ReaderAt, size, offset, length int64) ([]byte, error) {
+	if offset < 0 || length < 0 || offset > size || length > size-offset || length > int64(maxSFNTTableRecords*16) {
+		return nil, fmt.Errorf("font range offset=%d length=%d outside size=%d", offset, length, size)
+	}
+	data := make([]byte, int(length))
+	if _, err := reader.ReadAt(data, offset); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 func systemFontDirs() []string {

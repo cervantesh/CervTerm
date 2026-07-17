@@ -6,6 +6,8 @@ import (
 	"math"
 	"regexp"
 	"strconv"
+
+	"cervterm/internal/fontdesc"
 )
 
 const MaxScrollbackHistory = 10_000
@@ -34,9 +36,10 @@ type WindowConfig struct {
 }
 
 type FontConfig struct {
-	Family    string
-	Size      float64
-	Ligatures bool
+	Family      string
+	Descriptors []fontdesc.Descriptor `json:"Descriptors,omitempty"`
+	Size        float64
+	Ligatures   bool
 }
 
 type ColorsConfig struct {
@@ -140,6 +143,7 @@ func Defaults() Config {
 
 // Clone returns a detached configuration copy, including mutable shell values.
 func (c Config) Clone() Config {
+	c.Font.Descriptors = append([]fontdesc.Descriptor(nil), c.Font.Descriptors...)
 	c.Shell.Args = append([]string(nil), c.Shell.Args...)
 	if c.Shell.Env != nil {
 		environment := make(map[string]string, len(c.Shell.Env))
@@ -164,6 +168,26 @@ func (c Config) Validate() error {
 	}
 	if c.Font.Size <= 0 {
 		errs = append(errs, errors.New("font size must be > 0"))
+	}
+	if len(c.Font.Descriptors) > fontdesc.MaxPrimaryDescriptors {
+		errs = append(errs, fmt.Errorf("font.descriptors must contain at most %d entries", fontdesc.MaxPrimaryDescriptors))
+	} else if len(c.Font.Descriptors) != 0 {
+		normalized := make([]fontdesc.Descriptor, len(c.Font.Descriptors))
+		valid := true
+		for index, descriptor := range c.Font.Descriptors {
+			value, err := descriptor.Normalize()
+			if err != nil {
+				errs = append(errs, fmt.Errorf("font.descriptors[%d]: %w", index+1, err))
+				valid = false
+				continue
+			}
+			normalized[index] = value
+		}
+		if valid {
+			if _, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{Descriptors: normalized}); err != nil {
+				errs = append(errs, fmt.Errorf("font.descriptors canonical payload: %w", err))
+			}
+		}
 	}
 	if c.Scrolling.History < 0 || c.Scrolling.History > MaxScrollbackHistory || c.Scrolling.WheelMultiplier <= 0 {
 		errs = append(errs, fmt.Errorf("scrolling history must be between 0 and %d and wheel_multiplier > 0", MaxScrollbackHistory))

@@ -119,6 +119,9 @@ func renderConfigDiagnostic(out io.Writer, report configDiagnosticReport, headin
 		if field.Metadata.Sensitive {
 			fmt.Fprint(out, " sensitive=true")
 		}
+		if field.ShadowedBy != "" {
+			fmt.Fprintf(out, " shadowed_by=%s", field.ShadowedBy)
+		}
 		fmt.Fprintln(out, "]")
 		for _, record := range field.Provenance {
 			fmt.Fprintf(out, "    provenance-path: %s\n", record.Path)
