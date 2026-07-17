@@ -545,3 +545,42 @@ func TestMuxResizePaneGridValidationIsAtomic(t *testing.T) {
 		t.Fatalf("rejected resize mutated pane: before=%#v after=%#v metrics=%#v", before, after, m.paneMetrics[1])
 	}
 }
+
+func TestMuxPaletteBaseQueriesAndPaneLocalOverrides(t *testing.T) {
+	m, session, wakes := newTestMux(t)
+	base := core.DefaultPaletteBase()
+	base.FG = core.RGB{R: 0x12, G: 0x34, B: 0x56}
+	base.Indexed[7] = core.RGB{R: 0x65, G: 0x43, B: 0x21}
+	m.SetPaletteBase(base)
+	if got := m.panes[1].terminal.PaletteBase(); got != base {
+		t.Fatalf("existing pane base = %#v, want %#v", got, base)
+	}
+	if err := session.feed([]byte("\x1b]4;7;?\a\x1b]10;?\x1b\\")); err != nil {
+		t.Fatal(err)
+	}
+	awaitWake(t, wakes)
+	m.Drain(16)
+	if got, want := string(session.written()), "\x1b]4;7;rgb:6565/4343/2121\x1b\\\x1b]10;rgb:1212/3434/5656\x1b\\"; got != want {
+		t.Fatalf("palette replies = %q, want %q", got, want)
+	}
+	second, _, err := m.Split(1, SplitColumns, SpawnSpec{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.panes[second].terminal.PaletteBase(); got != base {
+		t.Fatalf("new pane base = %#v, want %#v", got, base)
+	}
+	m.panes[1].terminal.SetPaletteIndex(7, core.RGB{R: 1, G: 2, B: 3})
+	if m.panes[second].terminal.PaletteOverrides().HasIndexed(7) {
+		t.Fatal("OSC indexed override leaked to sibling pane")
+	}
+	newBase := base
+	newBase.Indexed[7] = core.RGB{R: 9, G: 8, B: 7}
+	m.SetPaletteBase(newBase)
+	if got := m.panes[1].terminal.EffectivePaletteIndex(7); got != (core.RGB{R: 1, G: 2, B: 3}) {
+		t.Fatalf("base reload replaced pane override: %#v", got)
+	}
+	if got := m.panes[second].terminal.EffectivePaletteIndex(7); got != newBase.Indexed[7] {
+		t.Fatalf("sibling did not receive reloaded base: %#v", got)
+	}
+}

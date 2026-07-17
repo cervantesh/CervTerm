@@ -3,6 +3,7 @@
 package glfwgl
 
 import (
+	"image/color"
 	"testing"
 
 	"cervterm/internal/config"
@@ -62,5 +63,58 @@ func TestConfiguredSparseIndexedOverridesPreserveFallbacks(t *testing.T) {
 	}
 	if got := configuredColorResolver(first).ResolveFG(core.IndexedColor(1)); got != core.ANSIColor(1) {
 		t.Fatalf("ANSI index changed = %#v", got)
+	}
+}
+
+func TestPaneOSCOverridesLayerAboveReloadedConfiguredPalette(t *testing.T) {
+	first := config.Defaults().Colors
+	first.Foreground = "#010203"
+	first.Background = "#040506"
+	first.ANSI[1] = "#112233"
+	second := first
+	second.Foreground = "#A1A2A3"
+	second.Background = "#B1B2B3"
+	second.ANSI[1] = "#C1C2C3"
+	overrides := core.PaletteOverrides{
+		FG: core.RGB{R: 9, G: 8, B: 7}, FGSet: true,
+		BG: core.RGB{R: 6, G: 5, B: 4}, BGSet: true,
+	}
+	overrides.Indexed[1] = core.RGB{R: 3, G: 2, B: 1}
+	overrides.IndexedSet[0] = 1 << 1
+	for _, colors := range []config.ColorsConfig{first, second} {
+		base := configuredPaletteBase(colors)
+		resolver := overrides.ColorResolver(base)
+		if got := resolver.ResolveFG(core.DefaultColor()); got != overrides.FG {
+			t.Fatalf("OSC foreground = %#v", got)
+		}
+		if got := resolver.ResolveBG(core.DefaultColor()); got != overrides.BG {
+			t.Fatalf("OSC background = %#v", got)
+		}
+		if got := resolver.ResolveFG(core.IndexedColor(1)); got != overrides.Indexed[1] {
+			t.Fatalf("OSC indexed = %#v", got)
+		}
+		truecolor := core.RGB{R: 0xDE, G: 0xAD, B: 0xBE}
+		if got := resolver.ResolveFG(core.RGBColor(truecolor)); got != truecolor {
+			t.Fatalf("truecolor changed = %#v", got)
+		}
+	}
+	reset := core.PaletteOverrides{}
+	if got := reset.ColorResolver(configuredPaletteBase(second)).ResolveFG(core.DefaultColor()); got != (core.RGB{R: 0xA1, G: 0xA2, B: 0xA3}) {
+		t.Fatalf("reset did not reveal reloaded base = %#v", got)
+	}
+}
+
+func TestPaneOSCBackgroundPreservesConfiguredAlpha(t *testing.T) {
+	configured := color.RGBA{R: 1, G: 2, B: 3, A: 0x80}
+	base := core.DefaultPaletteBase()
+	overrides := core.PaletteOverrides{}
+	if got := panePaletteBackground(configured, base, overrides); got != configured {
+		t.Fatalf("background without override = %#v", got)
+	}
+	overrides.BGSet = true
+	overrides.BG = core.RGB{R: 0xAA, G: 0xBB, B: 0xCC}
+	palette := overrides.Apply(base)
+	if got, want := panePaletteBackground(configured, palette, overrides), (color.RGBA{R: 0xAA, G: 0xBB, B: 0xCC, A: 0x80}); got != want {
+		t.Fatalf("OSC background = %#v, want %#v", got, want)
 	}
 }

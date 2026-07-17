@@ -17,6 +17,7 @@ type Snapshot struct {
 	Title                string
 	Cwd                  string
 	BellCount            int
+	PaletteOverrides     core.PaletteOverrides
 	Cells                []core.Cell
 }
 
@@ -52,5 +53,6 @@ func CaptureWithOptions(dst *Snapshot, term *core.Terminal, opts CaptureOptions)
 	dst.Title = term.Title()
 	dst.Cwd = term.Cwd()
 	dst.BellCount = term.BellCount()
+	dst.PaletteOverrides = term.PaletteOverrides()
 	term.CopyView(dst.Cells)
 }
