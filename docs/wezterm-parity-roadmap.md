@@ -75,7 +75,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 2 — Versioned Composed Configuration
 **Scope:** schema versions, includes/modules, profiles/environment/CLI/window overrides, provenance, migrations, dependency-aware reload.
 
-**Status:** In progress. Slices 1–5 provide versioned documents, canonical candidate graphs, schema merge/`unset`/provenance, environment/profile selection, and typed CLI override decoding. Slice 6 provides candidate-only transactional Teal publication with staged ownership/adoption rules, dependency/identity collision checks, durable atomic replacement, stale-temp recovery, and reverse fault rollback. Public activation remains gated on atomic bundle ownership; runtime scopes, graph watching, and desired/effective application remain later slices.
+**Status:** In progress. Slices 1–6 provide versioned/composed candidate configuration, selection/CLI layers, provenance, and transactional Teal publication. Slice 7 provides the candidate bundle ownership unit for validated Config, Lua runtime surfaces, selection/provenance, dependency graph/staging, and deferred publication with deterministic cleanup. Public activation remains gated on splitting frontend live-resource preparation from infallible bundle transfer; runtime scopes, graph watching, and desired/effective application remain later slices.
 
 **Work**
 - Apply accepted ADR-0002.
