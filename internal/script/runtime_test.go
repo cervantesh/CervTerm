@@ -97,7 +97,7 @@ return {
 		t.Fatalf("config overrides missing: %#v", cfg)
 	}
 	bindings := rt.Bindings()
-	if len(bindings) != 1 || bindings[0].String() != "ctrl+shift+p" {
+	if len(bindings) != 1 || bindings[0].Spec.String() != "ctrl+shift+p" {
 		t.Fatalf("bindings = %#v", bindings)
 	}
 	host := &fakeHost{}

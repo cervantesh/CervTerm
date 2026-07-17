@@ -218,3 +218,69 @@ func TestKeyPipelinePreservesReservedAndScriptPrecedence(t *testing.T) {
 		t.Fatalf("search activation did not remain reserved: active=%v notice=%q", a.search.active, a.notice)
 	}
 }
+
+func TestKeyPipelineExecutesTypedLuaActions(t *testing.T) {
+	path := t.TempDir() + "/cervterm.lua"
+	source := `local cervterm = require("cervterm")
+	return { keys = {
+		{ key = "z", mods = "ctrl", action = cervterm.action.Zoom(2) },
+		{ key = "s", mods = "ctrl", action = cervterm.action.Multiple({ cervterm.action.ToggleStats, cervterm.action.Zoom(-1) }) },
+	} }`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, scriptRuntime, err := script.Load(path, config.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(scriptRuntime.Close)
+	a := newMuxTestApp(t, 20, 10)
+	a.cfg, a.scriptRT = cfg, scriptRuntime
+	a.initZoomHotkeys()
+	a.initActionBindings()
+	state := a.ensurePaneUI(a.focusedPane)
+	state.font.fontSize = cfg.Font.Size
+
+	a.handleKeyEvent(glfw.KeyZ, glfw.Press, glfw.ModControl)
+	if !state.font.pending || state.font.pendingTarget != cfg.Font.Size+2 {
+		t.Fatalf("typed zoom state = %#v", state.font)
+	}
+	state.font.pending = false
+	a.handleKeyEvent(glfw.KeyS, glfw.Press, glfw.ModControl)
+	if !a.showStats || !state.font.pending || state.font.pendingTarget != cfg.Font.Size-1 {
+		t.Fatalf("typed multiple: stats=%v font=%#v", a.showStats, state.font)
+	}
+}
+
+func TestLegacyCallbackRepeatAndCharacterSuppressionRemainExact(t *testing.T) {
+	path := t.TempDir() + "/cervterm.lua"
+	source := `return { keys = { { key = "a", action = function(term) term:notify("pressed") end } } }`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, scriptRuntime, err := script.Load(path, config.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(scriptRuntime.Close)
+	a, factory := newRecordingActionApp(t)
+	a.cfg, a.scriptRT = cfg, scriptRuntime
+
+	a.notice = "unchanged"
+	a.handleKeyEvent(glfw.KeyA, glfw.Repeat, 0)
+	if a.notice != "unchanged" {
+		t.Fatalf("callback executed on repeat: notice=%q", a.notice)
+	}
+	if got := factory.sessions[0].text(); got != "" {
+		t.Fatalf("callback repeat leaked to PTY: %q", got)
+	}
+	if !a.suppressNextChar {
+		t.Fatal("printable callback repeat did not preserve character suppression")
+	}
+
+	a.suppressNextChar = false
+	a.handleKeyEvent(glfw.KeyA, glfw.Press, 0)
+	if a.notice != "pressed" || !a.suppressNextChar {
+		t.Fatalf("callback press: notice=%q suppress=%v", a.notice, a.suppressNextChar)
+	}
+}

@@ -95,7 +95,12 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 			return actionExecutionError(command, termaction.ErrorMux, err)
 		}
 	case termaction.Callback:
-		return actionExecutionError(command, termaction.ErrorScript, errors.New("callback execution is not wired yet"))
+		if a.scriptRT == nil {
+			return actionExecutionError(command, termaction.ErrorScript, errors.New("script runtime is unavailable"))
+		}
+		if err := a.scriptRT.Dispatch(command.BindingIndex, paneHost{app: a, pane: pane}); err != nil {
+			return actionExecutionError(command, termaction.ErrorScript, err)
+		}
 	default:
 		return actionExecutionError(command, termaction.ErrorAction, fmt.Errorf("unsupported concrete action %T", command))
 	}

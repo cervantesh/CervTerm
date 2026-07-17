@@ -109,10 +109,32 @@ local record cervterm
     reload_config: function(Term): boolean
   end
 
+  record Action
+  end
+
+  record ActionModule
+    CopySelection: Action
+    PasteClipboard: Action
+    ToggleSearch: Action
+    ToggleStats: Action
+    ReloadConfig: Action
+    ClosePane: Action
+    ResetFontSize: Action
+    ScrollLines: function(integer): Action
+    ScrollPage: function(integer): Action
+    ScrollBuffer: function(integer): Action
+    Zoom: function(number): Action
+    SplitPane: function(string): Action
+    FocusPane: function(string): Action
+    Multiple: function({Action}): Action
+    WithTarget: function(Action, string): Action
+  end
+
   record KeyBinding
     key: string
-    mods: string
-    action: function(Term)
+    mods: string | nil
+    label: string | nil
+    action: Action | function(Term)
   end
 
   record Events
@@ -154,6 +176,7 @@ local record cervterm
     destroy: function(Overlay)
   end
 
+  action: ActionModule
   after: function(integer, function(Term)): integer
   every: function(integer, function(Term)): integer
   cancel: function(integer)
