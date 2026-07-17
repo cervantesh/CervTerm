@@ -370,6 +370,7 @@ func TestRuntimeLiveSetterPreservesUnrelatedDesiredPendingChanges(t *testing.T) 
 	app.desiredCfg = app.cfg.Clone()
 	app.desiredCfg.Shell.Program = "future-shell"
 	app.desiredCfg.Font.Family = "Future Font"
+	app.composedCfg = app.desiredCfg.Clone()
 	app.configStateInitialized = true
 	app.pendingConfig = config.PendingConfigChanges(app.desiredCfg, app.cfg)
 
@@ -387,6 +388,61 @@ func TestRuntimeLiveSetterPreservesUnrelatedDesiredPendingChanges(t *testing.T) 
 	want := []config.ConfigChange{{Path: "font.family", Scope: config.ApplyRestart}, {Path: "shell.program", Scope: config.ApplyNewPane}}
 	if got := app.PendingConfigChanges(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("pending after runtime setter = %#v", got)
+	}
+}
+
+func TestRuntimeScopeSurvivesReloadRejectsInvalidCandidateAndClears(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cervterm.lua")
+	writeReloadConfig(t, path, `return {colors={background="#080B12"}}`)
+	cfg, rt, err := script.Load(path, config.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	defer func() {
+		if app.scriptRT != nil {
+			app.scriptRT.Close()
+		}
+	}()
+	app.configWatch = newConfigWatchState(path)
+	app.ensureConfigState()
+	scope := app.ConfigScopeID()
+
+	next := app.RuntimeConfig()
+	next.Window.Opacity = 0.8
+	if err := app.ApplyRuntimeConfig(next); err != nil {
+		t.Fatal(err)
+	}
+	wantRecord := []config.RuntimeOverrideRecord{{Path: "window.opacity", Scope: scope}}
+	if got := app.RuntimeConfigOverrides(); !reflect.DeepEqual(got, wantRecord) {
+		t.Fatalf("runtime records = %#v", got)
+	}
+	provenance := app.RuntimeConfigProvenance()
+	if len(provenance) != 1 || provenance[0].Path != "window.opacity" || provenance[0].Winner.ConfigScopeID != scope || provenance[0].Winner.Layer != config.LayerRuntime {
+		t.Fatalf("runtime app provenance = %#v", provenance)
+	}
+
+	writeReloadConfig(t, path, `return {window={opacity=0.95},colors={foreground="#112233",background="#080B12"}}`)
+	if err := app.reloadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if app.EffectiveConfig().Window.Opacity != 0.8 || app.DesiredConfig().Window.Opacity != 0.8 || app.EffectiveConfig().Colors.Foreground != "#112233" {
+		t.Fatalf("runtime scope did not survive reload: effective=%#v desired=%#v", app.EffectiveConfig(), app.DesiredConfig())
+	}
+	beforeEffective, beforeDesired, beforeRT := app.EffectiveConfig(), app.DesiredConfig(), app.scriptRT
+	writeReloadConfig(t, path, `return {colors={background="#01020380"}}`)
+	if err := app.reloadConfig(); err == nil || !strings.Contains(err.Error(), "cannot be enabled together") {
+		t.Fatalf("invalid scoped reload error = %v", err)
+	}
+	if app.scriptRT != beforeRT || !reflect.DeepEqual(app.EffectiveConfig(), beforeEffective) || !reflect.DeepEqual(app.DesiredConfig(), beforeDesired) || !reflect.DeepEqual(app.RuntimeConfigOverrides(), wantRecord) {
+		t.Fatal("invalid scoped reload mutated active state")
+	}
+
+	if err := app.ClearRuntimeConfigOverrides("window.opacity"); err != nil {
+		t.Fatal(err)
+	}
+	if app.EffectiveConfig().Window.Opacity != 0.95 || len(app.RuntimeConfigOverrides()) != 0 {
+		t.Fatalf("cleared scope effective=%#v records=%#v", app.EffectiveConfig(), app.RuntimeConfigOverrides())
 	}
 }
 
