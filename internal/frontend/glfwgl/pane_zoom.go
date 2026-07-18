@@ -149,23 +149,33 @@ func (a *App) applyPaneFontVisual(id termmux.PaneID, size float64, scaleX, scale
 	if a.atlas == nil || a.mux == nil {
 		return false, false
 	}
-	cellW, cellH, baseline, ok := a.atlas.useSpec(a.fontSpec(size, scaleX, scaleY), a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+	state := a.ensurePaneUI(id)
+	layout, layoutErr := a.mux.Layout()
+	if layoutErr != nil {
+		a.Notify(fmt.Sprintf("pane %d: unable to resolve visible font contexts", id))
+		return false, false
+	}
+	pins := a.visibleFontContextKeys(layout, id, size)
+	admission, ok := a.atlas.prepareSpecWithPins(a.fontSpec(size, scaleX, scaleY), a.cfg.Render.TextGamma, a.cfg.Render.TextDarken, pins)
 	if !ok {
 		a.Notify(fmt.Sprintf("pane %d: unable to load font size %.1f", id, size))
 		return false, false
 	}
+	cellW, cellH, baseline := admission.context.cellW, admission.context.cellH, admission.context.baseline
 	before, exists := a.mux.PaneView(id)
 	if !exists {
+		a.atlas.abortContextAdmission(admission)
 		return false, false
 	}
 	events, err := a.mux.ResizePaneGrid(id, a.metricsForCells(float32(cellW), float32(cellH)))
 	if err != nil {
+		a.atlas.abortContextAdmission(admission)
 		a.Notify(fmt.Sprintf("pane %d resize: %v", id, err))
 		return false, false
 	}
+	a.atlas.commitContextAdmission(admission)
 	a.handleMuxEvents(events)
 	after, _ := a.mux.PaneView(id)
-	state := a.ensurePaneUI(id)
 	state.font.fontSize = size
 	state.font.cellW = float32(cellW)
 	state.font.cellH = float32(cellH)
@@ -285,21 +295,36 @@ func (a *App) restoreFocusedFontProjection() {
 	}
 }
 
-func (a *App) retainVisibleFontContexts(layout termmux.Layout) {
-	if a.atlas == nil {
-		return
-	}
+func (a *App) visibleFontContextKeys(layout termmux.Layout, overridePane termmux.PaneID, overrideSize float64) map[atlasFontKey]struct{} {
+	return a.visibleFontContextKeysForRaster(layout, overridePane, overrideSize, "")
+}
+
+func (a *App) visibleFontContextKeysForRaster(layout termmux.Layout, overridePane termmux.PaneID, overrideSize float64, textRaster string) map[atlasFontKey]struct{} {
 	keep := make(map[atlasFontKey]struct{}, len(layout.Panes))
 	for _, geometry := range layout.Panes {
 		state := a.paneUI[geometry.Pane]
 		if state == nil {
 			continue
 		}
-		key, err := a.atlas.fontKey(a.fontSpec(state.font.fontSize, a.contentScaleX, a.contentScaleY), a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
-		if err != nil {
-			continue
+		size := state.font.fontSize
+		if overrideSize > 0 && geometry.Pane == overridePane {
+			size = overrideSize
 		}
-		keep[key] = struct{}{}
+		spec := a.fontSpec(size, a.contentScaleX, a.contentScaleY)
+		if textRaster != "" {
+			spec.TextRaster = textRaster
+		}
+		key, err := a.atlas.fontKey(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+		if err == nil {
+			keep[key] = struct{}{}
+		}
 	}
-	a.atlas.retainContexts(keep)
+	return keep
+}
+
+func (a *App) retainVisibleFontContexts(layout termmux.Layout) bool {
+	if a.atlas == nil {
+		return false
+	}
+	return a.atlas.retainContexts(a.visibleFontContextKeys(layout, 0, 0))
 }

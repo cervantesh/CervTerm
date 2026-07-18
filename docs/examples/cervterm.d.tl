@@ -72,6 +72,11 @@ local record cervterm
     size: number
     ligatures: boolean
     features: {string: integer} | nil
+    line_height: number
+    cell_width: number
+    baseline_offset: number
+    glyph_offset_x: number
+    glyph_offset_y: number
   end
 
   record ColorsConfig
@@ -219,6 +224,11 @@ local record cervterm
     size: number | Unset
     ligatures: boolean | Unset
     features: {string: integer | Unset} | Unset
+    line_height: number | Unset
+    cell_width: number | Unset
+    baseline_offset: number | Unset
+    glyph_offset_x: number | Unset
+    glyph_offset_y: number | Unset
   end
 
   record ColorsDocument

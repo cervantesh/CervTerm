@@ -93,8 +93,12 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		if !ok {
 			return typeError(source, path, KindNumber, value)
 		}
-		if parsed := float64(number); math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+		parsed := float64(number)
+		if math.IsNaN(parsed) || math.IsInf(parsed, 0) {
 			return documentError(source, path, "must be finite")
+		}
+		if err := validateFontMetricNumber(source, path, parsed); err != nil {
+			return err
 		}
 	case KindInteger:
 		if err := validateInteger(source, path, value); err != nil {
