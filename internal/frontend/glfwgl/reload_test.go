@@ -196,6 +196,11 @@ func TestLiveConfigPreparationDoesNotMutateAndAbortClosesResources(t *testing.T)
 	t.Cleanup(atlas.close)
 	created = nil // initial active context is atlas-owned
 	a.paneUI = make(map[termmux.PaneID]*paneUIState)
+	backgroundRenderer := &replaceRecordingRenderer{}
+	a.r = backgroundRenderer
+	activeBackground := &recordingBackgroundSurface{}
+	a.backgroundSurface = activeBackground
+	t.Cleanup(func() { _ = activeBackground.Close() })
 
 	next := a.cfg
 	next.Colors.Background = "#01020380"
@@ -216,6 +221,12 @@ func TestLiveConfigPreparationDoesNotMutateAndAbortClosesResources(t *testing.T)
 	prepared.Close()
 	if created[0].closeCalls != 1 {
 		t.Fatalf("aborted backend close calls = %d", created[0].closeCalls)
+	}
+	if backgroundRenderer.preparedSurface == nil || backgroundRenderer.preparedSurface.closed != 1 {
+		t.Fatalf("aborted background surface = %#v", backgroundRenderer.preparedSurface)
+	}
+	if a.backgroundSurface != activeBackground || activeBackground.closed != 0 {
+		t.Fatalf("abort changed active background: active=%#v close=%d", a.backgroundSurface, activeBackground.closed)
 	}
 	if a.cfg.Colors.Background == next.Colors.Background {
 		t.Fatal("abort mutated active config")
@@ -243,6 +254,15 @@ func TestLiveConfigCommitTransfersPreparedResources(t *testing.T) {
 	a.atlas = atlas
 	t.Cleanup(atlas.close)
 	created = nil
+	backgroundRenderer := &replaceRecordingRenderer{}
+	oldBackground := &recordingBackgroundSurface{}
+	a.r = backgroundRenderer
+	a.backgroundSurface = oldBackground
+	t.Cleanup(func() {
+		if a.backgroundSurface != nil {
+			_ = a.backgroundSurface.Close()
+		}
+	})
 
 	next := a.cfg
 	next.Colors.Background = "#01020380"
@@ -257,6 +277,12 @@ func TestLiveConfigCommitTransfersPreparedResources(t *testing.T) {
 	}
 	if len(created) != 1 || created[0].closeCalls != 0 {
 		t.Fatalf("committed resource closed or missing: %#v", created)
+	}
+	if oldBackground.closed != 1 {
+		t.Fatalf("old background close calls = %d", oldBackground.closed)
+	}
+	if a.backgroundSurface != backgroundRenderer.preparedSurface || backgroundRenderer.preparedSurface.closed != 0 {
+		t.Fatalf("background ownership was not transferred: active=%#v prepared=%#v", a.backgroundSurface, backgroundRenderer.preparedSurface)
 	}
 }
 

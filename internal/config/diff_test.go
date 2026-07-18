@@ -19,6 +19,8 @@ func fullyDifferentConfig(base Config) Config {
 	value.Window.PaddingBottom++
 	value.Window.DynamicTitle = !value.Window.DynamicTitle
 	value.Window.Opacity = 0.75
+	value.Window.TextOpacity = 0.7
+	value.Window.BackgroundOpacity = 0.8
 	value.Window.Blur = !value.Window.Blur
 	value.Font.Family += " Different"
 	value.Font.Descriptors = []fontdesc.Descriptor{{Family: "Different Font", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100, AttributeMode: fontdesc.AttributeModeAugment}}
@@ -102,8 +104,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 73 {
-		t.Fatalf("config leaf count = %d, want 73", len(changes))
+	if len(changes) != 75 {
+		t.Fatalf("config leaf count = %d, want 75", len(changes))
 	}
 }
 
@@ -124,6 +126,7 @@ func TestSchemaApplyCapabilitiesAreCompleteAndTruthful(t *testing.T) {
 	}
 	checks := map[string]ApplyScope{
 		"window.opacity": ApplyLive, "colors.background": ApplyLive,
+		"window.text_opacity": ApplyLive, "window.background_opacity": ApplyLive,
 		"colors.foreground": ApplyLive, "cursor.shape": ApplyLive,
 		"shell.program": ApplyNewPane, "window.width": ApplyNewWindow,
 		"font.family": ApplyRestart, "render.vsync": ApplyRestart,

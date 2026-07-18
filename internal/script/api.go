@@ -159,6 +159,32 @@ func termTable(state *lua.LState, host Host) *lua.LTable {
 		applyRuntimeConfig(state, cfgHost, cfg)
 		return 0
 	}))
+	tbl.RawSetString("text_opacity", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		state.Push(lua.LNumber(checkRuntimeConfigHost(state, host).RuntimeConfig().Window.TextOpacity))
+		return 1
+	}))
+	tbl.RawSetString("set_text_opacity", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		cfgHost := checkRuntimeConfigHost(state, host)
+		cfg := cfgHost.RuntimeConfig()
+		cfg.Window.TextOpacity = float64(state.CheckNumber(2))
+		applyRuntimeConfig(state, cfgHost, cfg)
+		return 0
+	}))
+	tbl.RawSetString("background_opacity", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		state.Push(lua.LNumber(checkRuntimeConfigHost(state, host).RuntimeConfig().Window.BackgroundOpacity))
+		return 1
+	}))
+	tbl.RawSetString("set_background_opacity", state.NewFunction(func(state *lua.LState) int {
+		state.CheckTypes(1, lua.LTTable)
+		cfgHost := checkRuntimeConfigHost(state, host)
+		cfg := cfgHost.RuntimeConfig()
+		cfg.Window.BackgroundOpacity = float64(state.CheckNumber(2))
+		applyRuntimeConfig(state, cfgHost, cfg)
+		return 0
+	}))
 	tbl.RawSetString("background", state.NewFunction(func(state *lua.LState) int {
 		state.CheckTypes(1, lua.LTTable)
 		state.Push(lua.LString(checkRuntimeConfigHost(state, host).RuntimeConfig().Colors.Background))

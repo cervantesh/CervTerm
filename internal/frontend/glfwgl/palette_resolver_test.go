@@ -117,4 +117,7 @@ func TestPaneOSCBackgroundPreservesConfiguredAlpha(t *testing.T) {
 	if got, want := panePaletteBackground(configured, palette, overrides), (color.RGBA{R: 0xAA, G: 0xBB, B: 0xCC, A: 0x80}); got != want {
 		t.Fatalf("OSC background = %#v, want %#v", got, want)
 	}
+	if got, want := applyOpacity(panePaletteBackground(configured, palette, overrides), 0.5), (color.RGBA{R: 0xAA, G: 0xBB, B: 0xCC, A: 0x40}); got != want {
+		t.Fatalf("OSC background opacity = %#v, want %#v", got, want)
+	}
 }

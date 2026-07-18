@@ -3,6 +3,8 @@
 package glfwgl
 
 import (
+	"fmt"
+	"image"
 	"image/color"
 	"log"
 	"strings"
@@ -32,6 +34,25 @@ import (
 // The GL call is only emitted on a transition, which matches the original
 // enable/disable pattern's net effect.
 var _ gpu.Renderer = (*glRenderer)(nil)
+var _ gpu.BackgroundSurfaceRenderer = (*glRenderer)(nil)
+
+type glBackgroundSurface struct {
+	renderer      *glRenderer
+	texture       uint32
+	width, height int
+}
+
+func (s *glBackgroundSurface) Close() error {
+	if s == nil || s.texture == 0 {
+		return nil
+	}
+	if s.renderer != nil && s.renderer.boundTexture == s.texture {
+		s.renderer.boundTexture = 0
+	}
+	gl.DeleteTextures(1, &s.texture)
+	s.texture = 0
+	return nil
+}
 
 type glRenderer struct {
 	win          *glfw.Window
@@ -68,6 +89,66 @@ func (r *glRenderer) setTexEnabled(on bool) {
 		gl.Disable(gl.TEXTURE_2D)
 	}
 	r.texEnabled = on
+}
+
+func (r *glRenderer) PrepareBackgroundSurface(surface *image.RGBA) (gpu.BackgroundSurface, error) {
+	if surface == nil || surface.Rect.Dx() <= 0 || surface.Rect.Dy() <= 0 {
+		return nil, fmt.Errorf("gpu: background surface must be non-empty RGBA")
+	}
+	width, height := surface.Rect.Dx(), surface.Rect.Dy()
+	pixels := make([]byte, width*height*4)
+	for y := 0; y < height; y++ {
+		source := surface.PixOffset(surface.Rect.Min.X, surface.Rect.Min.Y+y)
+		copy(pixels[y*width*4:(y+1)*width*4], surface.Pix[source:source+width*4])
+	}
+	var texture uint32
+	gl.GenTextures(1, &texture)
+	gl.BindTexture(gl.TEXTURE_2D, texture)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(width), int32(height), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(pixels))
+	r.boundTexture = texture
+	return &glBackgroundSurface{renderer: r, texture: texture, width: width, height: height}, nil
+}
+
+func (r *glRenderer) ReplaceBackgroundRect(surface gpu.BackgroundSurface, rect gpu.ClipRect) error {
+	background, ok := surface.(*glBackgroundSurface)
+	if !ok || background == nil || background.texture == 0 {
+		return fmt.Errorf("gpu: invalid or closed background surface")
+	}
+	rect = rect.Clamp(r.widthPx, r.heightPx)
+	if rect.Width <= 0 || rect.Height <= 0 {
+		return nil
+	}
+	u0, v0, u1, v1 := float32(rect.X)/float32(background.width), float32(rect.Y)/float32(background.height), float32(rect.X+rect.Width)/float32(background.width), float32(rect.Y+rect.Height)/float32(background.height)
+	if background.width == 1 {
+		u0, u1 = 0, 1
+	}
+	if background.height == 1 {
+		v0, v1 = 0, 1
+	}
+	r.setTexEnabled(true)
+	if r.boundTexture != background.texture {
+		gl.BindTexture(gl.TEXTURE_2D, background.texture)
+		r.boundTexture = background.texture
+	}
+	gl.Disable(gl.BLEND)
+	gl.Color4ub(255, 255, 255, 255)
+	gl.Begin(gl.QUADS)
+	gl.TexCoord2f(u0, v0)
+	gl.Vertex2f(float32(rect.X), float32(rect.Y))
+	gl.TexCoord2f(u1, v0)
+	gl.Vertex2f(float32(rect.X+rect.Width), float32(rect.Y))
+	gl.TexCoord2f(u1, v1)
+	gl.Vertex2f(float32(rect.X+rect.Width), float32(rect.Y+rect.Height))
+	gl.TexCoord2f(u0, v1)
+	gl.Vertex2f(float32(rect.X), float32(rect.Y+rect.Height))
+	gl.End()
+	gl.Enable(gl.BLEND)
+	gl.BlendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+	return nil
 }
 
 func (r *glRenderer) Resize(widthPx, heightPx int) {
@@ -215,18 +296,18 @@ func (r *glRenderer) DrawGlyph(page int, mode gpu.GlyphMode, x, y, w, h, skew fl
 	}
 	switch mode {
 	case gpu.GlyphColor:
-		// Pre-colored glyph (emoji): draw untinted (color forced white).
-		gl.Color4ub(255, 255, 255, 255)
+		// Pre-colored glyphs keep their RGB and consume the caller's text alpha.
+		gl.Color4ub(255, 255, 255, c.A)
 		r.drawQuad(x, y, w, h, skew, u0, v0, u1, v1)
 	case gpu.GlyphSubpixel:
-		// LCD subpixel two-pass (bit-identical to atlas.drawEntry): a coverage pass
-		// with ZERO, ONE_MINUS_SRC_COLOR, then a tinted additive pass, then restore
-		// the resting blend.
+		// Scale both the coverage removal and additive tint by caller alpha so
+		// subpixel text opacity is applied exactly once.
+		alpha := float32(c.A) / 255
 		gl.BlendFuncSeparate(gl.ZERO, gl.ONE_MINUS_SRC_COLOR, gl.ZERO, gl.ONE)
-		gl.Color4ub(255, 255, 255, 255)
+		gl.Color4f(alpha, alpha, alpha, alpha)
 		r.drawQuad(x, y, w, h, skew, u0, v0, u1, v1)
 		gl.BlendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE)
-		gl.Color4f(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, float32(c.A)/255)
+		gl.Color4f(float32(c.R)/255*alpha, float32(c.G)/255*alpha, float32(c.B)/255*alpha, alpha)
 		r.drawQuad(x, y, w, h, skew, u0, v0, u1, v1)
 		gl.BlendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 	default: // gpu.GlyphMask
