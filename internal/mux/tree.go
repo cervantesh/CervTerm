@@ -19,25 +19,29 @@ func (m *Model) SetSplitRatioWithMetrics(split SplitID, ratio SplitRatio, bounds
 	if err := m.CheckInvariants(); err != nil {
 		return err
 	}
-	candidate, found := replaceSplitRatio(m.root, split, ratio)
+	tab := m.tabForSplit(split)
+	if tab == nil || tab.id != m.active {
+		return ErrSplitNotFound
+	}
+	candidate, found := replaceSplitRatio(tab.root, split, ratio)
 	if !found {
 		return ErrSplitNotFound
 	}
-	previous := m.root
-	m.root = candidate
+	previous := tab.root
+	tab.root = candidate
 	layout, err := m.LayoutWithMetrics(bounds, resolve)
 	if err != nil {
-		m.root = previous
+		tab.root = previous
 		return err
 	}
 	for _, geometry := range layout.Panes {
 		if geometry.Cols < MinPaneCols || geometry.Rows < MinPaneRows {
-			m.root = previous
+			tab.root = previous
 			return ErrSplitTooSmall
 		}
 	}
 	if err := m.CheckInvariants(); err != nil {
-		m.root = previous
+		tab.root = previous
 		return err
 	}
 	return nil

@@ -45,41 +45,83 @@ func branchNode(split SplitID, axis SplitAxis, ratio SplitRatio, first, second *
 
 func (n *node) isLeaf() bool { return n != nil && n.pane != 0 }
 
-// Model owns the pure identity, topology, and focus state of the implicit tab.
-// It has no terminal, PTY, renderer, or frontend dependencies.
-type Model struct {
-	tabID       TabID
-	nextTabID   TabID
-	nextPaneID  PaneID
-	nextSplitID SplitID
-	root        *node
-	focused     PaneID
-	allocated   map[PaneID]struct{}
+const MaxTabs = 256
+
+type tabState struct {
+	id      TabID
+	root    *node
+	focused PaneID
 }
 
-// NewModel creates one implicit tab containing one focused root leaf.
+// Model owns pure identity, ordered tab topology, and focus state.
+type Model struct {
+	tabs            []tabState
+	active          TabID
+	nextTabID       TabID
+	nextPaneID      PaneID
+	nextSplitID     SplitID
+	allocated       map[PaneID]struct{}
+	allocatedSplits map[SplitID]struct{}
+	allocatedTabs   map[TabID]struct{}
+}
+
+// NewModel creates one active tab containing one focused root leaf.
 func NewModel() *Model {
-	const initialID = 1
-	pane := PaneID(initialID)
+	pane, tab := PaneID(1), TabID(1)
 	return &Model{
-		tabID:       TabID(initialID),
-		nextTabID:   TabID(initialID + 1),
-		nextPaneID:  PaneID(initialID + 1),
-		nextSplitID: SplitID(initialID),
-		root:        leafNode(pane),
-		focused:     pane,
-		allocated:   map[PaneID]struct{}{pane: {}},
+		tabs: []tabState{{id: tab, root: leafNode(pane), focused: pane}}, active: tab,
+		nextTabID: 2, nextPaneID: 2, nextSplitID: 1,
+		allocated:       map[PaneID]struct{}{pane: {}},
+		allocatedSplits: map[SplitID]struct{}{}, allocatedTabs: map[TabID]struct{}{tab: {}},
 	}
 }
 
-func (m *Model) TabID() TabID              { return m.tabID }
-func (m *Model) FocusedPane() PaneID       { return m.focused }
-func (m *Model) Empty() bool               { return m.root == nil }
-func (m *Model) PaneIDs() []PaneID         { return paneIDs(m.root) }
-func validAxis(axis SplitAxis) bool        { return axis == SplitColumns || axis == SplitRows }
-func validRatio(ratio SplitRatio) bool     { return ratio > 0 && ratio < RatioScale }
-func validDirection(d Direction) bool      { return d >= FocusLeft && d <= FocusDown }
-func (m *Model) paneExists(id PaneID) bool { return findLeaf(m.root, id) != nil }
+func (m *Model) activeTab() *tabState { return m.tabByID(m.active) }
+func (m *Model) tabByID(id TabID) *tabState {
+	for i := range m.tabs {
+		if m.tabs[i].id == id {
+			return &m.tabs[i]
+		}
+	}
+	return nil
+}
+func (m *Model) tabForPane(id PaneID) *tabState {
+	for i := range m.tabs {
+		if findLeaf(m.tabs[i].root, id) != nil {
+			return &m.tabs[i]
+		}
+	}
+	return nil
+}
+func (m *Model) tabForSplit(id SplitID) *tabState {
+	for i := range m.tabs {
+		if findSplit(m.tabs[i].root, id) != nil {
+			return &m.tabs[i]
+		}
+	}
+	return nil
+}
+func (m *Model) TabID() TabID { return m.active }
+func (m *Model) FocusedPane() PaneID {
+	if t := m.activeTab(); t != nil {
+		return t.focused
+	}
+	return 0
+}
+func (m *Model) Empty() bool { return len(m.tabs) == 0 }
+func (m *Model) PaneIDs() []PaneID {
+	if t := m.activeTab(); t != nil {
+		return paneIDs(t.root)
+	}
+	return nil
+}
+func validAxis(axis SplitAxis) bool    { return axis == SplitColumns || axis == SplitRows }
+func validRatio(ratio SplitRatio) bool { return ratio > 0 && ratio < RatioScale }
+func validDirection(d Direction) bool  { return d >= FocusLeft && d <= FocusDown }
+func (m *Model) paneExists(id PaneID) bool {
+	t := m.activeTab()
+	return t != nil && findLeaf(t.root, id) != nil
+}
 
 // Split adds a new second child at the default 50/50 ratio and focuses it.
 func (m *Model) Split(pane PaneID, axis SplitAxis, bounds PixelRect, metrics CellMetrics) (PaneID, error) {
@@ -112,7 +154,8 @@ func (m *Model) SplitWithRatioAndMetrics(pane PaneID, axis SplitAxis, ratio Spli
 	if err := m.CheckInvariants(); err != nil {
 		return 0, err
 	}
-	if m.root == nil {
+	tab := m.activeTab()
+	if tab == nil {
 		return 0, ErrEmptyModel
 	}
 	if m.nextPaneID == 0 {
@@ -163,14 +206,14 @@ func (m *Model) SplitWithRatioAndMetrics(pane PaneID, axis SplitAxis, ratio Spli
 	newPane := m.nextPaneID
 	newSplit := m.nextSplitID
 	replacement := branchNode(newSplit, axis, ratio, leafNode(pane), leafNode(newPane))
-	newRoot, replaced := replaceLeaf(m.root, pane, replacement)
+	newRoot, replaced := replaceLeaf(tab.root, pane, replacement)
 	if !replaced {
 		return 0, invariantError("split target %d disappeared", pane)
 	}
-
-	m.root = newRoot
-	m.focused = newPane
+	tab.root = newRoot
+	tab.focused = newPane
 	m.allocated[newPane] = struct{}{}
+	m.allocatedSplits[newSplit] = struct{}{}
 	m.nextPaneID++
 	m.nextSplitID++
 	return newPane, nil
@@ -181,7 +224,7 @@ func (m *Model) Focus(pane PaneID) error {
 	if !m.paneExists(pane) {
 		return ErrPaneNotFound
 	}
-	m.focused = pane
+	m.activeTab().focused = pane
 	return nil
 }
 
@@ -191,13 +234,14 @@ func (m *Model) FocusNext() (PaneID, error) {
 	if len(ids) == 0 {
 		return 0, ErrEmptyModel
 	}
+	tab := m.activeTab()
 	for i, id := range ids {
-		if id == m.focused {
-			m.focused = ids[(i+1)%len(ids)]
-			return m.focused, nil
+		if id == tab.focused {
+			tab.focused = ids[(i+1)%len(ids)]
+			return tab.focused, nil
 		}
 	}
-	return 0, invariantError("focused pane %d is not active", m.focused)
+	return 0, invariantError("focused pane %d is not active", tab.focused)
 }
 
 type focusScore struct {
@@ -220,25 +264,24 @@ func (m *Model) FocusDirectionWithMetrics(direction Direction, bounds PixelRect,
 	if !validDirection(direction) {
 		return 0, ErrInvalidDirection
 	}
-	if m.root == nil {
+	tab := m.activeTab()
+	if tab == nil {
 		return 0, ErrEmptyModel
 	}
 	layout, err := m.LayoutWithMetrics(bounds, resolve)
 	if err != nil {
 		return 0, err
 	}
-
 	var source PaneGeometry
 	found := false
 	for _, geometry := range layout.Panes {
-		if geometry.Pane == m.focused {
-			source = geometry
-			found = true
+		if geometry.Pane == tab.focused {
+			source, found = geometry, true
 			break
 		}
 	}
 	if !found {
-		return 0, invariantError("focused pane %d has no geometry", m.focused)
+		return 0, invariantError("focused pane %d has no geometry", tab.focused)
 	}
 
 	bestIndex := -1
@@ -262,8 +305,8 @@ func (m *Model) FocusDirectionWithMetrics(direction Direction, bounds PixelRect,
 	if bestIndex < 0 {
 		return 0, ErrNoPaneInDirection
 	}
-	m.focused = layout.Panes[bestIndex].Pane
-	return m.focused, nil
+	tab.focused = layout.Panes[bestIndex].Pane
+	return tab.focused, nil
 }
 
 func directionalScore(direction Direction, source, candidate PixelRect) (focusScore, bool) {
@@ -335,10 +378,11 @@ func (m *Model) Close(pane PaneID) (CloseResult, error) {
 	if _, known := m.allocated[pane]; !known {
 		return CloseResult{}, ErrPaneNotFound
 	}
-	if !m.paneExists(pane) {
-		return CloseResult{Pane: pane, Focused: m.focused, Empty: m.root == nil}, nil
+	tab := m.tabForPane(pane)
+	if tab == nil {
+		return CloseResult{Pane: pane, Focused: m.FocusedPane(), Empty: len(m.tabs) == 0}, nil
 	}
-	visualOrder := m.PaneIDs()
+	visualOrder := paneIDs(tab.root)
 	closedIndex := 0
 	for i, id := range visualOrder {
 		if id == pane {
@@ -346,112 +390,36 @@ func (m *Model) Close(pane PaneID) (CloseResult, error) {
 			break
 		}
 	}
-	newRoot, removed := removeLeaf(m.root, pane)
+	newRoot, removed := removeLeaf(tab.root, pane)
 	if !removed {
 		return CloseResult{}, invariantError("active pane %d could not be removed", pane)
 	}
-	m.root = newRoot
+	tab.root = newRoot
 	if newRoot == nil {
-		m.focused = 0
-	} else if m.focused == pane {
-		remaining := m.PaneIDs()
+		closedTab := tab.id
+		for i := range m.tabs {
+			if m.tabs[i].id == closedTab {
+				m.tabs = append(m.tabs[:i], m.tabs[i+1:]...)
+				break
+			}
+		}
+		if len(m.tabs) == 0 {
+			m.active = 0
+		} else if m.active == closedTab {
+			m.active = m.tabs[0].id
+		}
+	} else if tab.focused == pane {
+		remaining := paneIDs(tab.root)
 		if closedIndex >= len(remaining) {
 			closedIndex = len(remaining) - 1
 		}
-		m.focused = remaining[closedIndex]
+		tab.focused = remaining[closedIndex]
 	}
-	return CloseResult{Pane: pane, Focused: m.focused, Closed: true, Empty: m.root == nil}, nil
+	return CloseResult{Pane: pane, Focused: m.FocusedPane(), Closed: true, Empty: len(m.tabs) == 0}, nil
 }
 
-// CheckInvariants verifies tree shape, stable identity state, and the single
-// focused-leaf rule. It is intentionally public so randomized and later
-// integration tests can check the model after every transition.
-func (m *Model) CheckInvariants() error {
-	if m.tabID == 0 {
-		return invariantError("implicit tab ID is zero")
-	}
-	if m.nextTabID != 0 && m.nextTabID <= m.tabID {
-		return invariantError("next tab ID %d does not follow tab %d", m.nextTabID, m.tabID)
-	}
-	if m.allocated == nil {
-		return invariantError("allocated pane set is nil")
-	}
-	if m.root == nil {
-		if m.focused != 0 {
-			return invariantError("empty tree has focused pane %d", m.focused)
-		}
-		return nil
-	}
-	if m.focused == 0 {
-		return invariantError("non-empty tree has zero focus")
-	}
-
-	seenNodes := make(map[*node]struct{})
-	seenPanes := make(map[PaneID]struct{})
-	seenSplits := make(map[SplitID]struct{})
-	focusedLeaves := 0
-	var visit func(*node) error
-	visit = func(n *node) error {
-		if n == nil {
-			return invariantError("tree contains a nil child")
-		}
-		if _, duplicate := seenNodes[n]; duplicate {
-			return invariantError("tree contains a cycle or shared node")
-		}
-		seenNodes[n] = struct{}{}
-
-		if n.isLeaf() {
-			if n.first != nil || n.second != nil || n.split != 0 || n.axis != 0 || n.ratio != 0 {
-				return invariantError("pane %d leaf carries split state", n.pane)
-			}
-			if _, duplicate := seenPanes[n.pane]; duplicate {
-				return invariantError("pane %d appears more than once", n.pane)
-			}
-			if _, allocated := m.allocated[n.pane]; !allocated {
-				return invariantError("active pane %d was never allocated", n.pane)
-			}
-			if m.nextPaneID != 0 && n.pane >= m.nextPaneID {
-				return invariantError("active pane %d is not below next ID %d", n.pane, m.nextPaneID)
-			}
-			seenPanes[n.pane] = struct{}{}
-			if n.pane == m.focused {
-				focusedLeaves++
-			}
-			return nil
-		}
-
-		if n.pane != 0 {
-			return invariantError("split carries pane ID %d", n.pane)
-		}
-		if n.split == 0 {
-			return invariantError("branch has zero split ID")
-		}
-		if _, duplicate := seenSplits[n.split]; duplicate {
-			return invariantError("split %d appears more than once", n.split)
-		}
-		if m.nextSplitID != 0 && n.split >= m.nextSplitID {
-			return invariantError("active split %d is not below next ID %d", n.split, m.nextSplitID)
-		}
-		seenSplits[n.split] = struct{}{}
-		if !validAxis(n.axis) {
-			return invariantError("split has invalid axis %d", n.axis)
-		}
-		if !validRatio(n.ratio) {
-			return invariantError("split has invalid ratio %d", n.ratio)
-		}
-		if err := visit(n.first); err != nil {
-			return err
-		}
-		return visit(n.second)
-	}
-	if err := visit(m.root); err != nil {
-		return err
-	}
-	if focusedLeaves != 1 {
-		return invariantError("expected one focused leaf, found %d", focusedLeaves)
-	}
-	return nil
-}
+// CheckInvariants verifies ordered tab, ownership, tree, and monotonic ID state.
+func (m *Model) CheckInvariants() error { return checkModelInvariants(m) }
 
 func findLeaf(n *node, pane PaneID) *node {
 	if n == nil {
@@ -467,6 +435,19 @@ func findLeaf(n *node, pane PaneID) *node {
 		return found
 	}
 	return findLeaf(n.second, pane)
+
+}
+func findSplit(n *node, split SplitID) *node {
+	if n == nil || n.isLeaf() {
+		return nil
+	}
+	if n.split == split {
+		return n
+	}
+	if found := findSplit(n.first, split); found != nil {
+		return found
+	}
+	return findSplit(n.second, split)
 }
 
 func paneIDs(root *node) []PaneID {
