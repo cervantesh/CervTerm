@@ -301,3 +301,19 @@ func stringMapField(tbl *lua.LTable, key string, fallback map[string]string) map
 	})
 	return out
 }
+
+func integerMapField(tbl *lua.LTable, key string, fallback map[string]int) map[string]int {
+	mapTable, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	out := make(map[string]int)
+	mapTable.ForEach(func(k, v lua.LValue) {
+		name, keyOK := k.(lua.LString)
+		number, valueOK := v.(lua.LNumber)
+		if keyOK && valueOK {
+			out[string(name)] = int(number)
+		}
+	})
+	return out
+}

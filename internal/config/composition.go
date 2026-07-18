@@ -165,7 +165,7 @@ func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchem
 		if b.document.AuthoredVersion == 1 && path == "color_scheme" {
 			continue
 		}
-		if b.document.AuthoredVersion == 1 && (path == "font.descriptors" || path == "font.fallback" || path == "font.rules") {
+		if b.document.AuthoredVersion == 1 && (path == "font.descriptors" || path == "font.fallback" || path == "font.rules" || path == "font.features") {
 			continue
 		}
 		if b.deferColors && path == "colors" {
@@ -200,6 +200,10 @@ func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchem
 			}
 		case KindStringMap:
 			if err := b.mergeStringMap(dst, child, path, value); err != nil {
+				return err
+			}
+		case KindFeatureMap:
+			if err := b.mergeFeatureMap(dst, child, path, value); err != nil {
 				return err
 			}
 		case KindIndexedColorMap:
@@ -397,7 +401,7 @@ func (b *compositionBuilder) seedDefaults(schema fieldSchema, prefix string) {
 			for _, child := range field.children {
 				seed(child, joinPath(path, child.name))
 			}
-		case KindStringMap, KindIndexedColorMap, KindKeyList, KindEvents, KindDescriptorList, KindFontRuleList:
+		case KindStringMap, KindFeatureMap, KindIndexedColorMap, KindKeyList, KindEvents, KindDescriptorList, KindFontRuleList:
 			// These surfaces have no fixed built-in winner: map provenance begins
 			// at concrete keys, while bindings and callbacks are absent by default.
 		default:
@@ -438,7 +442,7 @@ func fixedLeafPaths(schema fieldSchema, path string) []schemaLeaf {
 
 func legacyValueCompatible(value lua.LValue, kind ValueKind) bool {
 	switch kind {
-	case KindTable, KindStringList, KindStringMap, KindIndexedColorMap, KindKeyList, KindEvents, KindColorSchemeMap, KindDescriptorList, KindFontRuleList:
+	case KindTable, KindStringList, KindStringMap, KindFeatureMap, KindIndexedColorMap, KindKeyList, KindEvents, KindColorSchemeMap, KindDescriptorList, KindFontRuleList:
 		_, ok := value.(*lua.LTable)
 		return ok
 	case KindString:

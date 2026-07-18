@@ -30,9 +30,10 @@ func TestEffectiveStartupConfigSafeFontsIsIsolated(t *testing.T) {
 	authored.Font.Descriptors = []fontdesc.Descriptor{{Family: "Configured Family"}}
 	authored.Font.Fallback = []fontdesc.Descriptor{{Family: "Fallback"}}
 	authored.Font.Rules = []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Rule"}}}
+	authored.Font.Features = map[string]int{"ss01": 1}
 	normal := effectiveStartupConfig(authored, false)
 	safe := effectiveStartupConfig(authored, true)
-	if normal.Font.Family != "Configured Family" || len(normal.Font.Descriptors) != 1 || len(normal.Font.Fallback) != 1 || len(normal.Font.Rules) != 1 || safe.Font.Family != "Go Mono" || len(safe.Font.Descriptors) != 0 || len(safe.Font.Fallback) != 0 || len(safe.Font.Rules) != 0 {
+	if normal.Font.Family != "Configured Family" || len(normal.Font.Descriptors) != 1 || len(normal.Font.Fallback) != 1 || len(normal.Font.Rules) != 1 || normal.Font.Features["ss01"] != 1 || safe.Font.Family != "Go Mono" || len(safe.Font.Descriptors) != 0 || len(safe.Font.Fallback) != 0 || len(safe.Font.Rules) != 0 || len(safe.Font.Features) != 0 {
 		t.Fatalf("normal/safe font configs = %#v/%#v", normal.Font, safe.Font)
 	}
 	if authored.Font.Family != "Configured Family" || len(authored.Font.Descriptors) != 1 {
@@ -43,6 +44,7 @@ func TestEffectiveStartupConfigSafeFontsIsIsolated(t *testing.T) {
 func TestStartupFontInstallationPlanRoutesDescriptorsAndSafeMode(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.Font.Descriptors = []fontdesc.Descriptor{{Family: "Go Mono"}}
+	cfg.Font.Features = map[string]int{"ss01": 1}
 	descriptorPlan, err := newStartupFontInstallationPlan(cfg, 96, "go", false)
 	if err != nil {
 		t.Fatal(err)
@@ -50,11 +52,15 @@ func TestStartupFontInstallationPlanRoutesDescriptorsAndSafeMode(t *testing.T) {
 	if len(descriptorPlan.descriptors) != 1 {
 		t.Fatal("descriptor startup selected legacy plan")
 	}
+	if value, ok := descriptorPlan.features.Value("ss01"); !ok || value != 1 {
+		t.Fatal("descriptor startup plan lost feature projection")
+	}
 	safePlan, err := newStartupFontInstallationPlan(effectiveStartupConfig(cfg, true), 96, "go", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(safePlan.descriptors) != 0 || safePlan.spec.Family != "Go Mono" {
+	_, safeHasSS01 := safePlan.features.Value("ss01")
+	if len(safePlan.descriptors) != 0 || safePlan.spec.Family != "Go Mono" || safeHasSS01 {
 		t.Fatalf("safe plan = %#v", safePlan)
 	}
 }
@@ -177,7 +183,7 @@ func TestDescriptorFontInstallationRetainsEnvironmentAcrossAdoptionAndZoom(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantInitial, err := makeAtlasFontKeyWithDescriptors(plan.spec, plan.textGamma, plan.textDarken, plan.descriptors)
+	wantInitial, err := makeAtlasFontKeyWithModel(plan.spec, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: plan.descriptors, features: plan.features})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +207,7 @@ func TestDescriptorFontInstallationRetainsEnvironmentAcrossAdoptionAndZoom(t *te
 	if _, _, _, ok := atlas.useSpec(zoomed, plan.textGamma, plan.textDarken); !ok {
 		t.Fatal("descriptor atlas failed to create zoomed context")
 	}
-	wantZoomed, err := makeAtlasFontKeyWithDescriptors(zoomed, plan.textGamma, plan.textDarken, plan.descriptors)
+	wantZoomed, err := makeAtlasFontKeyWithModel(zoomed, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: plan.descriptors, features: plan.features})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +317,7 @@ func TestFallbackFontInstallationPlanCarriesCompleteModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := makeAtlasFontKeyWithModel(plan.spec, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: descriptors, fallback: fallback, rules: rules})
+	want, err := makeAtlasFontKeyWithModel(plan.spec, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: descriptors, fallback: fallback, rules: rules, features: plan.features})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +336,7 @@ func TestFallbackFontInstallationPlanCarriesCompleteModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantZoom, err := makeAtlasFontKeyWithModel(zoomed, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: descriptors, fallback: fallback, rules: rules})
+	wantZoom, err := makeAtlasFontKeyWithModel(zoomed, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: descriptors, fallback: fallback, rules: rules, features: plan.features})
 	if err != nil || zoomKey != wantZoom {
 		t.Fatalf("zoomed fallback model key = %#v, %v; want %#v", zoomKey, err, wantZoom)
 	}

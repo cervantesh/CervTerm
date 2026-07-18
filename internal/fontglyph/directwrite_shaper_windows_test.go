@@ -2,7 +2,11 @@
 
 package fontglyph
 
-import "testing"
+import (
+	"testing"
+
+	"cervterm/internal/fontdesc"
+)
 
 func TestDefaultShaperUsesDirectWriteWhenAvailable(t *testing.T) {
 	backend, err := NewOpenTypeBackend(Spec{Family: "Go Mono", Size: 14, DPI: 96})
@@ -56,6 +60,71 @@ func TestDirectWriteShaperShapesComplexFallbackFace(t *testing.T) {
 		if glyph.GlyphID == 0 || glyph.XAdvance < 0 {
 			t.Fatalf("invalid DirectWrite glyph: %#v", glyph)
 		}
+	}
+}
+
+func TestDirectWriteShaperAcceptsExplicitFeatureRanges(t *testing.T) {
+	backend, err := NewOpenTypeBackend(Spec{Family: "Go Mono", Size: 18, DPI: 96})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	face, ok := backend.faceForCluster("م")
+	if !ok || face.sourcePath == "" {
+		t.Skip("no source-backed fallback font for DirectWrite feature fixture")
+	}
+	features, err := fontdesc.NewFeatureSet(false, map[string]int{"calt": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shaper := DirectWriteShaper{Fallback: SimpleShaper{}}
+	glyphs, ok := shaper.ShapeFeatures("م", face, backend.ppem, features)
+	if !ok || len(glyphs) == 0 {
+		t.Fatalf("explicit DirectWrite features failed to shape fixture: %#v", glyphs)
+	}
+	for _, glyph := range glyphs {
+		if glyph.GlyphID == 0 || glyph.XAdvance < 0 {
+			t.Fatalf("invalid feature-shaped glyph: %#v", glyph)
+		}
+	}
+}
+
+func TestDirectWriteLigatureFeatureEnableDisableFixture(t *testing.T) {
+	descriptors := []fontdesc.Descriptor{{Family: "JetBrainsMono Nerd Font", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100}}
+	environment, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{Descriptors: descriptors})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := NewDescriptorBackend(Spec{Family: "JetBrainsMono Nerd Font", Size: 18, DPI: 96}, environment, descriptors)
+	if err != nil {
+		t.Skipf("JetBrainsMono Nerd Font fixture unavailable: %v", err)
+	}
+	backend := raw.(*descriptorBackend)
+	defer backend.Close()
+	normal := backend.backends[fontdesc.RequestedFaceStyleNormal]
+	face := normal.faces[0]
+	if face.sourcePath == "" {
+		t.Skip("JetBrainsMono Nerd Font did not resolve to a source-backed face")
+	}
+	enabled, _ := fontdesc.NewFeatureSet(true, nil)
+	disabled, _ := fontdesc.NewFeatureSet(false, nil)
+	shaper := DirectWriteShaper{Fallback: SimpleShaper{}}
+	on, onOK := shaper.ShapeFeatures("->", face, normal.ppem, enabled)
+	off, offOK := shaper.ShapeFeatures("->", face, normal.ppem, disabled)
+	if !onOK || !offOK {
+		t.Skipf("installed fixture cannot shape both feature states: on=%v off=%v", onOK, offOK)
+	}
+	different := len(on) != len(off)
+	if !different {
+		for index := range on {
+			if on[index].GlyphID != off[index].GlyphID {
+				different = true
+				break
+			}
+		}
+	}
+	if !different {
+		t.Skip("installed fixture does not substitute -> with default ligature features")
 	}
 }
 

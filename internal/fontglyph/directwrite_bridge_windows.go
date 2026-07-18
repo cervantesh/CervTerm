@@ -4,6 +4,7 @@ package fontglyph
 
 import (
 	"fmt"
+	"runtime"
 	"syscall"
 	"unicode/utf16"
 	"unsafe"
@@ -151,7 +152,52 @@ type dwriteGlyphOffset struct {
 	AscenderOffset float32
 }
 
-func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uint16) ([]ShapedGlyph, bool, error) {
+type dwriteFontFeature struct {
+	Name      uint32
+	Parameter uint32
+}
+
+type dwriteTypographicFeatures struct {
+	Features     *dwriteFontFeature
+	FeatureCount uint32
+}
+
+type dwriteFeatureArguments struct {
+	entries      []dwriteFontFeature
+	typography   []dwriteTypographicFeatures
+	pointers     []*dwriteTypographicFeatures
+	rangeLengths []uint32
+}
+
+func newDirectWriteFeatureArguments(features fontdesc.FeatureSet, textLength uint32) dwriteFeatureArguments {
+	entries := features.Entries()
+	if len(entries) == 0 || textLength == 0 {
+		return dwriteFeatureArguments{}
+	}
+	arguments := dwriteFeatureArguments{entries: make([]dwriteFontFeature, len(entries)), typography: make([]dwriteTypographicFeatures, 1), pointers: make([]*dwriteTypographicFeatures, 1), rangeLengths: []uint32{textLength}}
+	for index, feature := range entries {
+		arguments.entries[index] = dwriteFontFeature{Name: directWriteFeatureTag(feature.Tag), Parameter: uint32(feature.Value)}
+	}
+	arguments.typography[0] = dwriteTypographicFeatures{Features: &arguments.entries[0], FeatureCount: uint32(len(arguments.entries))}
+	arguments.pointers[0] = &arguments.typography[0]
+	return arguments
+}
+
+func directWriteFeatureTag(tag string) uint32 {
+	if len(tag) != 4 {
+		return 0
+	}
+	return uint32(tag[0]) | uint32(tag[1])<<8 | uint32(tag[2])<<16 | uint32(tag[3])<<24
+}
+
+func (a *dwriteFeatureArguments) callPointers() (features, lengths uintptr, ranges uintptr) {
+	if len(a.pointers) == 0 {
+		return 0, 0, 0
+	}
+	return uintptr(unsafe.Pointer(&a.pointers[0])), uintptr(unsafe.Pointer(&a.rangeLengths[0])), uintptr(len(a.pointers))
+}
+
+func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uint16, features fontdesc.FeatureSet) ([]ShapedGlyph, bool, error) {
 	if !a.hasGlyphShapingMethods() {
 		return nil, false, fmt.Errorf("IDWriteTextAnalyzer shaping methods unavailable")
 	}
@@ -180,6 +226,8 @@ func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uin
 	if err != nil {
 		return nil, false, err
 	}
+	featureArguments := newDirectWriteFeatureArguments(features, textLength)
+	featurePointer, featureRangeLengths, featureRanges := featureArguments.callPointers()
 	hr, _, callErr := syscall.Syscall18(
 		a.lpVtbl.getGlyphs, 18,
 		uintptr(unsafe.Pointer(a)),
@@ -191,9 +239,9 @@ func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uin
 		uintptr(unsafe.Pointer(&script)),
 		uintptr(unsafe.Pointer(localeName)), // localeName
 		0,                                   // numberSubstitution
-		0,                                   // features
-		0,                                   // featureRangeLengths
-		0,                                   // featureRanges
+		featurePointer,
+		featureRangeLengths,
+		featureRanges,
 		uintptr(maxGlyphCount),
 		uintptr(unsafe.Pointer(&clusterMap[0])),
 		uintptr(unsafe.Pointer(&textProps[0])),
@@ -201,6 +249,7 @@ func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uin
 		uintptr(unsafe.Pointer(&glyphProps[0])),
 		uintptr(unsafe.Pointer(&actualGlyphCount)),
 	)
+	runtime.KeepAlive(featureArguments)
 	if failedHRESULT(hr) {
 		return nil, false, fmt.Errorf("IDWriteTextAnalyzer::GetGlyphs: HRESULT 0x%08x (%v)", uint32(hr), callErr)
 	}
@@ -226,12 +275,13 @@ func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uin
 		0, // isRightToLeft
 		uintptr(unsafe.Pointer(&script)),
 		uintptr(unsafe.Pointer(localeName)), // localeName
-		0,                                   // features
-		0,                                   // featureRangeLengths
-		0,                                   // featureRanges
+		featurePointer,
+		featureRangeLengths,
+		featureRanges,
 		uintptr(unsafe.Pointer(&glyphAdvances[0])),
 		uintptr(unsafe.Pointer(&glyphOffsets[0])),
 	)
+	runtime.KeepAlive(featureArguments)
 	if failedHRESULT(hr) {
 		return nil, false, fmt.Errorf("IDWriteTextAnalyzer::GetGlyphPlacements: HRESULT 0x%08x (%v)", uint32(hr), callErr)
 	}

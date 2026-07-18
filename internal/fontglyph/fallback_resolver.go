@@ -36,6 +36,7 @@ type fallbackBackend struct {
 	descriptors    []fontdesc.Descriptor
 	fallback       []fontdesc.Descriptor
 	rules          []fontdesc.Rule
+	features       fontdesc.FeatureSet
 	loaded         map[fontdesc.ResolvedFaceKey]*OpenTypeBackend
 	loadFailed     map[fontdesc.ResolvedFaceKey]struct{}
 	loadFailedRing []fontdesc.ResolvedFaceKey
@@ -266,6 +267,7 @@ func (b *fallbackBackend) loadFinalPlan(plan resolvedFacePlan) (fallbackSelectio
 		return fallbackSelection{}, false
 	}
 	backend := newOpenTypeBackendFromPrimary(b.spec, face, metrics)
+	backend.features = b.features
 	backend.fallbacksLoaded = true
 	normalW, normalH, normalBaseline := b.primary.CellMetrics()
 	backend.cellW, backend.cellH, backend.baseline = normalW, normalH, normalBaseline
@@ -298,6 +300,7 @@ func (b *fallbackBackend) tryPlans(content string, plans []resolvedFacePlan, ski
 			continue
 		}
 		backend := newOpenTypeBackendFromPrimary(b.spec, face, metrics)
+		backend.features = b.features
 		backend.fallbacksLoaded = true
 		_, normalH, normalBaseline := b.primary.CellMetrics()
 		normalW, _, _ := b.primary.CellMetrics()
@@ -328,7 +331,7 @@ func backendCoversCluster(backend *OpenTypeBackend, cluster string) bool {
 	if backend.shaper == nil {
 		return false
 	}
-	shaped, ok := backend.shaper.Shape(cluster, face, backend.ppem)
+	shaped, ok := shapeWithFeatures(backend.shaper, cluster, face, backend.ppem, backend.features)
 	if !ok || len(shaped) == 0 {
 		return false
 	}

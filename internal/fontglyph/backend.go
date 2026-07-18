@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/unicodecluster"
 
 	xdraw "golang.org/x/image/draw"
@@ -83,6 +84,7 @@ type OpenTypeBackend struct {
 	baseline        int
 	ppem            uint16
 	shaper          Shaper
+	features        fontdesc.FeatureSet
 	dwRaster        glyphRasterizer
 	subpixelText    bool
 	closeOnce       sync.Once
@@ -224,6 +226,16 @@ func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool
 	if glyph, ok := b.rasterizeSVGColorGlyph(lf, r, cellSpan, advance); ok {
 		return glyph, true
 	}
+	if b.features.EnablesSingleGlyphSubstitution() && b.shaper != nil && lf.sfnt != nil {
+		if shaped, ok := shapeWithFeatures(b.shaper, string(r), lf, b.ppem, b.features); ok {
+			shaped = centerShapedGlyphsInCells(shaped, b.cellW*cellSpan)
+			if glyph, ok := b.rasterizeShapedCluster(lf, shaped, cellSpan); ok {
+				glyph.CellSpan = cellSpan
+				glyph.AdvanceX = float64(b.cellW * cellSpan)
+				return glyph, true
+			}
+		}
+	}
 	var sfntBuf sfnt.Buffer
 	glyphID, glyphIndexErr := lf.sfnt.GlyphIndex(&sfntBuf, r)
 	if b.subpixelText && glyphIndexErr == nil && glyphID != 0 {
@@ -322,7 +334,7 @@ func (b *OpenTypeBackend) rasterizeCluster(cluster string, cellSpan int) (Raster
 
 func (b *OpenTypeBackend) rasterizeClusterWithFace(cluster string, cellSpan int, lf loadedFace) (RasterizedGlyph, bool) {
 	if b.shaper != nil && lf.sfnt != nil {
-		if shaped, ok := b.shaper.Shape(cluster, lf, b.ppem); ok {
+		if shaped, ok := shapeWithFeatures(b.shaper, cluster, lf, b.ppem, b.features); ok {
 			if glyph, ok := b.rasterizeShapedCluster(lf, shaped, max(1, cellSpan)); ok {
 				return glyph, true
 			}

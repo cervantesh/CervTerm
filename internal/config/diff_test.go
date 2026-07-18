@@ -22,6 +22,7 @@ func fullyDifferentConfig(base Config) Config {
 	value.Font.Rules = []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Different Rule"}}}
 	value.Font.Size++
 	value.Font.Ligatures = !value.Font.Ligatures
+	value.Font.Features = map[string]int{"ss01": 1}
 	value.ColorScheme = "Different"
 	value.Colors.Foreground = "#010101"
 	value.Colors.Background = "#020202"
@@ -92,8 +93,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 63 {
-		t.Fatalf("config leaf count = %d, want 63", len(changes))
+	if len(changes) != 64 {
+		t.Fatalf("config leaf count = %d, want 64", len(changes))
 	}
 }
 

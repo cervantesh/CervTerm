@@ -40,7 +40,7 @@ func findUnsetPath(table *lua.LTable, schema fieldSchema, prefix string) string 
 					return found
 				}
 			}
-		case KindStringMap:
+		case KindStringMap, KindFeatureMap:
 			if nested, ok := value.(*lua.LTable); ok {
 				var found []string
 				nested.ForEach(func(key, entry lua.LValue) {
