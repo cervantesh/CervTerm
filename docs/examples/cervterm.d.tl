@@ -364,6 +364,29 @@ local record cervterm
     key: string
     mods: string | nil
     label: string | nil
+    table: string | nil
+    action: Action | function(Term) | nil
+  end
+
+  record LeaderBinding
+    key: string
+    mods: string | nil
+    timeout_ms: integer | nil
+  end
+
+  record KeyTableBinding
+    name: string
+    one_shot: boolean | nil
+    timeout_ms: integer | nil
+    keys: {KeyBinding}
+  end
+
+  record MouseBinding
+    event: string
+    button: string
+    mods: string | nil
+    click_count: integer | nil
+    label: string | nil
     action: Action | function(Term)
   end
 
@@ -390,6 +413,9 @@ local record cervterm
     render: RenderDocument | Unset
     shell: ShellDocument | Unset
     keys: {KeyBinding} | Unset | nil
+    leader: LeaderBinding | Unset | nil
+    key_tables: {KeyTableBinding} | Unset | nil
+    mouse_bindings: {MouseBinding} | Unset | nil
     events: Events | Unset | nil
   end
 
@@ -413,6 +439,9 @@ local record cervterm
     render: RenderDocument | Unset
     shell: ShellDocument | Unset
     keys: {KeyBinding} | Unset | nil
+    leader: LeaderBinding | Unset | nil
+    key_tables: {KeyTableBinding} | Unset | nil
+    mouse_bindings: {MouseBinding} | Unset | nil
     events: Events | Unset | nil
   end
 

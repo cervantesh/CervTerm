@@ -71,7 +71,7 @@ func (e *candidateEvaluation) close() {
 
 func validateEvaluatedScripting(graph *config.SourceGraph) error {
 	for _, source := range graph.Sources {
-		if _, err := loadBindings(source.Document.Root); err != nil {
+		if _, _, err := loadBindingSet(source.Document.Root); err != nil {
 			return fmt.Errorf("%s: %w", source.CanonicalPath, err)
 		}
 		if _, err := loadEvents(source.Document.Root); err != nil {
@@ -93,7 +93,7 @@ func buildCandidateBundleFromEvaluation(evaluation *candidateEvaluation, base co
 	if err := resolved.Validate(); err != nil {
 		return nil, err
 	}
-	bindings, err := loadBindings(composition.Document.Root)
+	bindings, callbacks, err := loadBindingSet(composition.Document.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func buildCandidateBundleFromEvaluation(evaluation *candidateEvaluation, base co
 		return nil, err
 	}
 	runtime := &Runtime{
-		state: evaluation.state, bindings: bindings, events: events, timers: evaluation.timers,
+		state: evaluation.state, bindings: bindings, callbacks: callbacks, events: events, timers: evaluation.timers,
 		statuses: evaluation.statuses, overlays: evaluation.overlays, dispatchTimeout: time.Second,
 	}
 	bundle := &CandidateBundle{
@@ -144,7 +144,7 @@ func LoadVersioned(path string, base config.Config, options CandidateOptions) (V
 	if err := resolved.Validate(); err != nil {
 		return fail(err)
 	}
-	bindings, err := loadBindings(primary.Document.Root)
+	bindings, callbacks, err := loadBindingSet(primary.Document.Root)
 	if err != nil {
 		return fail(err)
 	}
@@ -181,7 +181,7 @@ func LoadVersioned(path string, base config.Config, options CandidateOptions) (V
 	_ = evaluation.graph.Close()
 	evaluation.graph = nil
 	runtime := &Runtime{
-		state: evaluation.state, bindings: bindings, events: events, timers: evaluation.timers,
+		state: evaluation.state, bindings: bindings, callbacks: callbacks, events: events, timers: evaluation.timers,
 		statuses: evaluation.statuses, overlays: evaluation.overlays, dispatchTimeout: time.Second,
 	}
 	evaluation.state = nil
