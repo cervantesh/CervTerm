@@ -84,6 +84,8 @@ type App struct {
 	tabBarPressed    tabHit
 	tabBarFirst      int
 	tabBarHeight     int
+	tabClose         tabCloseConfirmation
+	tabActivity      map[termmux.TabID]bool
 	contentScaleX    float32
 	contentScaleY    float32
 	status           statusState
@@ -280,7 +282,6 @@ func (a *App) runWindow() error {
 			a.atlas.close()
 		}
 	}()
-	// Probe ligature support once (not per frame): stays off with SimpleShaper.
 	a.ligaturesActive = atlas.supportsLigatures(a.cfg.Font.Ligatures)
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
