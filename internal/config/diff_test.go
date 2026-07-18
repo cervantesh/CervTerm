@@ -18,6 +18,8 @@ func fullyDifferentConfig(base Config) Config {
 	value.Window.Blur = !value.Window.Blur
 	value.Font.Family += " Different"
 	value.Font.Descriptors = []fontdesc.Descriptor{{Family: "Different Font", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100, AttributeMode: fontdesc.AttributeModeAugment}}
+	value.Font.Fallback = []fontdesc.Descriptor{{Family: "Different Fallback"}}
+	value.Font.Rules = []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Different Rule"}}}
 	value.Font.Size++
 	value.Font.Ligatures = !value.Font.Ligatures
 	value.ColorScheme = "Different"
@@ -90,8 +92,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 61 {
-		t.Fatalf("config leaf count = %d, want 61", len(changes))
+	if len(changes) != 63 {
+		t.Fatalf("config leaf count = %d, want 63", len(changes))
 	}
 }
 
@@ -132,16 +134,18 @@ func TestPendingAndLiveMergeDoNotLeakOrApplyScopedValues(t *testing.T) {
 	desired.Shell.Program = "future-shell"
 	desired.Shell.Env = map[string]string{"SECRET_TOKEN": "must-not-appear"}
 	desired.Font.Family = "Future Font"
+	desired.Font.Fallback = []fontdesc.Descriptor{{Family: "Future Fallback"}}
+	desired.Font.Rules = []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Future Rule"}}}
 
 	effective := MergeLiveConfig(base, desired)
 	if effective.Window.Opacity != 0.8 || effective.Cursor.Shape != "block" {
 		t.Fatalf("live values not merged: %#v", effective)
 	}
-	if effective.Shell.Program == desired.Shell.Program || effective.Font.Family == desired.Font.Family {
+	if effective.Shell.Program == desired.Shell.Program || effective.Font.Family == desired.Font.Family || len(effective.Font.Fallback) != 0 || len(effective.Font.Rules) != 0 {
 		t.Fatal("non-live values were merged into effective config")
 	}
 	pending := PendingConfigChanges(desired, effective)
-	want := []ConfigChange{{Path: "font.family", Scope: ApplyRestart}, {Path: "shell.program", Scope: ApplyNewPane}, {Path: "shell.env", Scope: ApplyNewPane}}
+	want := []ConfigChange{{Path: "font.family", Scope: ApplyRestart}, {Path: "font.fallback", Scope: ApplyRestart}, {Path: "font.rules", Scope: ApplyRestart}, {Path: "shell.program", Scope: ApplyNewPane}, {Path: "shell.env", Scope: ApplyNewPane}}
 	if !reflect.DeepEqual(pending, want) {
 		t.Fatalf("pending = %#v, want %#v", pending, want)
 	}

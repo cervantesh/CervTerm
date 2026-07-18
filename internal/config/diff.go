@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cervterm/internal/fontdesc"
 	"maps"
 	"slices"
 )
@@ -9,6 +10,20 @@ import (
 type ConfigChange struct {
 	Path  string
 	Scope ApplyScope
+}
+
+func fontRulesEqual(left, right []fontdesc.Rule) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		leftID, leftErr := left[index].ID()
+		rightID, rightErr := right[index].ID()
+		if leftErr != nil || rightErr != nil || leftID != rightID {
+			return false
+		}
+	}
+	return true
 }
 
 func appendChange(changes []ConfigChange, changed bool, path string, scope ApplyScope) []ConfigChange {
@@ -32,6 +47,8 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 
 	changes = appendChange(changes, desired.Font.Family != effective.Font.Family, "font.family", ApplyRestart)
 	changes = appendChange(changes, !slices.Equal(desired.Font.Descriptors, effective.Font.Descriptors), "font.descriptors", ApplyRestart)
+	changes = appendChange(changes, !slices.Equal(desired.Font.Fallback, effective.Font.Fallback), "font.fallback", ApplyRestart)
+	changes = appendChange(changes, !fontRulesEqual(desired.Font.Rules, effective.Font.Rules), "font.rules", ApplyRestart)
 	changes = appendChange(changes, desired.Font.Size != effective.Font.Size, "font.size", ApplyRestart)
 	changes = appendChange(changes, desired.Font.Ligatures != effective.Font.Ligatures, "font.ligatures", ApplyRestart)
 

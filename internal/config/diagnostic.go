@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"unicode"
+
+	"cervterm/internal/fontdesc"
 )
 
 const (
@@ -38,6 +40,29 @@ type diagnosticDescriptor struct {
 	Style           string  `json:"style"`
 	Stretch         int     `json:"stretch"`
 	AttributeMode   string  `json:"attribute_mode"`
+}
+
+type diagnosticIntRange struct {
+	Min int `json:"min"`
+	Max int `json:"max"`
+}
+
+type diagnosticRuneRange struct {
+	First int32 `json:"first"`
+	Last  int32 `json:"last"`
+}
+
+type diagnosticRuleMatch struct {
+	Weight  *diagnosticIntRange   `json:"weight,omitempty"`
+	Styles  []string              `json:"styles,omitempty"`
+	Stretch *diagnosticIntRange   `json:"stretch,omitempty"`
+	Ranges  []diagnosticRuneRange `json:"ranges,omitempty"`
+	Class   string                `json:"class,omitempty"`
+}
+
+type diagnosticRule struct {
+	Match diagnosticRuleMatch  `json:"match"`
+	Use   diagnosticDescriptor `json:"use"`
 }
 
 // ConfigDiagnosticPathError reports an invalid exact field filter. Its text is
@@ -117,23 +142,46 @@ func diagnosticFieldValue(cfg Config, metadata FieldMetadata, provenance Provena
 		return DiagnosticUnset, nil
 	}
 
-	if metadata.Path == "font.descriptors" {
-		values := make([]diagnosticDescriptor, len(cfg.Font.Descriptors))
-		for index, descriptor := range cfg.Font.Descriptors {
-			normalized, err := descriptor.Normalize()
+	if metadata.Path == "font.descriptors" || metadata.Path == "font.fallback" {
+		descriptors := cfg.Font.Descriptors
+		if metadata.Path == "font.fallback" {
+			descriptors = cfg.Font.Fallback
+		}
+		values, err := diagnosticDescriptors(descriptors)
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", metadata.Path, err)
+		}
+		encoded, err := json.Marshal(values)
+		if err != nil {
+			return "", err
+		}
+		return string(encoded), nil
+	}
+	if metadata.Path == "font.rules" {
+		values := make([]diagnosticRule, len(cfg.Font.Rules))
+		for index, rule := range cfg.Font.Rules {
+			normalized, err := rule.Normalize()
 			if err != nil {
-				return "", fmt.Errorf("font.descriptors[%d]: %w", index+1, err)
+				return "", fmt.Errorf("font.rules[%d]: %w", index+1, err)
 			}
-			descriptor = normalized
-			values[index] = diagnosticDescriptor{
-				Family: descriptor.Family, CollectionFace: descriptor.CollectionFace,
-				Weight: descriptor.Weight, Style: string(descriptor.Style), Stretch: descriptor.Stretch,
-				AttributeMode: string(descriptor.AttributeMode),
+			use, err := diagnosticDescriptors([]fontdesc.Descriptor{normalized.Use})
+			if err != nil {
+				return "", err
 			}
-			if descriptor.CollectionIndex.Present {
-				collectionIndex := descriptor.CollectionIndex.Value
-				values[index].CollectionIndex = &collectionIndex
+			match := diagnosticRuleMatch{Class: string(normalized.Match.Class)}
+			if normalized.Match.Weight.Present {
+				match.Weight = &diagnosticIntRange{Min: normalized.Match.Weight.Min, Max: normalized.Match.Weight.Max}
 			}
+			if normalized.Match.Stretch.Present {
+				match.Stretch = &diagnosticIntRange{Min: normalized.Match.Stretch.Min, Max: normalized.Match.Stretch.Max}
+			}
+			for _, style := range normalized.Match.Styles {
+				match.Styles = append(match.Styles, string(style))
+			}
+			for _, item := range normalized.Match.Ranges {
+				match.Ranges = append(match.Ranges, diagnosticRuneRange{First: int32(item.First), Last: int32(item.Last)})
+			}
+			values[index] = diagnosticRule{Match: match, Use: use[0]}
 		}
 		encoded, err := json.Marshal(values)
 		if err != nil {
@@ -151,6 +199,26 @@ func diagnosticFieldValue(cfg Config, metadata FieldMetadata, provenance Provena
 		return "", err
 	}
 	return string(encoded), nil
+}
+
+func diagnosticDescriptors(descriptors []fontdesc.Descriptor) ([]diagnosticDescriptor, error) {
+	values := make([]diagnosticDescriptor, len(descriptors))
+	for index, descriptor := range descriptors {
+		normalized, err := descriptor.Normalize()
+		if err != nil {
+			return nil, fmt.Errorf("descriptor[%d]: %w", index+1, err)
+		}
+		values[index] = diagnosticDescriptor{
+			Family: normalized.Family, CollectionFace: normalized.CollectionFace,
+			Weight: normalized.Weight, Style: string(normalized.Style), Stretch: normalized.Stretch,
+			AttributeMode: string(normalized.AttributeMode),
+		}
+		if normalized.CollectionIndex.Present {
+			collectionIndex := normalized.CollectionIndex.Value
+			values[index].CollectionIndex = &collectionIndex
+		}
+	}
+	return values, nil
 }
 
 func configFieldBySchemaPath(value reflect.Value, parts []string) (reflect.Value, bool) {

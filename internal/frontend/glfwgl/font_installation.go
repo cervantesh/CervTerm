@@ -28,6 +28,8 @@ func effectiveStartupConfig(authored config.Config, safe bool) config.Config {
 	if safe {
 		active.Font.Family = "Go Mono"
 		active.Font.Descriptors = nil
+		active.Font.Fallback = nil
+		active.Font.Rules = nil
 	}
 	return active
 }
@@ -71,10 +73,13 @@ type fontInstallationPlan struct {
 	textGamma   float64
 	textDarken  float64
 	descriptors []fontdesc.Descriptor
+	fallback    []fontdesc.Descriptor
+	rules       []fontdesc.Rule
 	fontFactory atlasBackendFactory
 }
 
 type descriptorBackendConstructor func(fontglyph.Spec, fontdesc.FontEnvironmentKey, []fontdesc.Descriptor) (fontglyph.Backend, error)
+type fallbackBackendConstructor func(fontglyph.Spec, fontdesc.FontEnvironmentKey, []fontdesc.Descriptor, []fontdesc.Descriptor, []fontdesc.Rule) (fontglyph.Backend, error)
 
 func newFontInstallationPlan(cfg config.Config, dpi float64, textRaster string, factory atlasBackendFactory) (fontInstallationPlan, error) {
 	plan := fontInstallationPlan{
@@ -99,8 +104,15 @@ func newDescriptorFontInstallationPlan(cfg config.Config, dpi float64, textRaste
 }
 
 func newStartupFontInstallationPlan(cfg config.Config, dpi float64, textRaster string, safeFonts bool) (fontInstallationPlan, error) {
-	if !safeFonts && len(cfg.Font.Descriptors) != 0 {
-		return newDescriptorFontInstallationPlan(cfg, dpi, textRaster, cfg.Font.Descriptors)
+	if !safeFonts && (len(cfg.Font.Descriptors) != 0 || len(cfg.Font.Fallback) != 0 || len(cfg.Font.Rules) != 0) {
+		primary := cfg.Font.Descriptors
+		if len(primary) == 0 {
+			primary = []fontdesc.Descriptor{{Family: cfg.Font.Family}}
+		}
+		if len(cfg.Font.Fallback) != 0 || len(cfg.Font.Rules) != 0 {
+			return newFallbackFontInstallationPlanWithFactory(cfg, dpi, textRaster, primary, cfg.Font.Fallback, cfg.Font.Rules, fontglyph.NewFallbackBackend)
+		}
+		return newDescriptorFontInstallationPlan(cfg, dpi, textRaster, primary)
 	}
 	return newFontInstallationPlan(cfg, dpi, textRaster, newAtlasBackend)
 }
@@ -135,6 +147,29 @@ func newDescriptorFontInstallationPlanWithFactory(cfg config.Config, dpi float64
 	return validateFontInstallationPlan(plan)
 }
 
+func newFallbackFontInstallationPlanWithFactory(cfg config.Config, dpi float64, textRaster string, descriptors, fallback []fontdesc.Descriptor, rules []fontdesc.Rule, construct fallbackBackendConstructor) (fontInstallationPlan, error) {
+	if construct == nil {
+		return fontInstallationPlan{}, errors.New("nil fallback backend constructor")
+	}
+	plan, err := newDescriptorFontInstallationPlanWithFactory(cfg, dpi, textRaster, descriptors, func(fontglyph.Spec, fontdesc.FontEnvironmentKey, []fontdesc.Descriptor) (fontglyph.Backend, error) {
+		return nil, errors.New("fallback factory placeholder must not execute")
+	})
+	if err != nil {
+		return fontInstallationPlan{}, err
+	}
+	plan.fallback = append([]fontdesc.Descriptor(nil), fallback...)
+	plan.rules = cloneAtlasRules(rules)
+	model := atlasFontModel{descriptors: plan.descriptors, fallback: plan.fallback, rules: plan.rules}
+	plan.fontFactory = func(spec fontglyph.Spec) (fontglyph.Backend, error) {
+		key, err := makeAtlasFontKeyWithModel(spec, plan.textGamma, plan.textDarken, model)
+		if err != nil {
+			return nil, fmt.Errorf("fallback font environment identity: %w", err)
+		}
+		return construct(spec, key.environment, model.descriptors, model.fallback, model.rules)
+	}
+	return validateFontInstallationPlan(plan)
+}
+
 func validateFontInstallationPlan(plan fontInstallationPlan) (fontInstallationPlan, error) {
 	if plan.spec.Size <= 0 || plan.spec.DPI <= 0 {
 		return fontInstallationPlan{}, fmt.Errorf("font installation plan has invalid size/DPI %.2f/%.2f", plan.spec.Size, plan.spec.DPI)
@@ -146,7 +181,7 @@ func validateFontInstallationPlan(plan fontInstallationPlan) (fontInstallationPl
 	if len(plan.descriptors) == 0 {
 		_, err = makeAtlasFontKey(plan.spec, plan.textGamma, plan.textDarken)
 	} else {
-		_, err = makeAtlasFontKeyWithDescriptors(plan.spec, plan.textGamma, plan.textDarken, plan.descriptors)
+		_, err = makeAtlasFontKeyWithModel(plan.spec, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: plan.descriptors, fallback: plan.fallback, rules: plan.rules})
 	}
 	if err != nil {
 		return fontInstallationPlan{}, fmt.Errorf("font installation identity: %w", err)
@@ -189,7 +224,7 @@ func defaultFontInstallationStages() fontInstallationStageSeam {
 		},
 		context: func(plan fontInstallationPlan, backend fontglyph.Backend, metrics fontInstallationMetrics) (*atlasFontContext, error) {
 			if len(plan.descriptors) > 0 {
-				return makeAtlasFontContextFromBackendWithDescriptors(plan.spec, plan.textGamma, plan.textDarken, plan.descriptors, backend, metrics)
+				return makeAtlasFontContextFromBackendWithModel(plan.spec, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: plan.descriptors, fallback: plan.fallback, rules: plan.rules}, backend, metrics)
 			}
 			return makeAtlasFontContextFromBackend(plan.spec, plan.textGamma, plan.textDarken, backend, metrics)
 		},

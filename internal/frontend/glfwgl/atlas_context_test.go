@@ -161,6 +161,35 @@ func TestAtlasDescriptorKeysPreserveOrderAndLegacyIdentity(t *testing.T) {
 	}
 }
 
+func TestAtlasFontModelIdentityIncludesFallbackRules(t *testing.T) {
+	spec := fontglyph.Spec{Family: "ignored", Size: 14, DPI: 96, TextRaster: "gray"}
+	model := atlasFontModel{
+		descriptors: []fontdesc.Descriptor{{Family: "Primary"}},
+		fallback:    []fontdesc.Descriptor{{Family: "Fallback One"}, {Family: "Fallback Two"}},
+		rules:       []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Emoji"}}},
+	}
+	base, err := makeAtlasFontKeyWithModel(spec, 1, 0, model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reordered := model
+	reordered.fallback = []fontdesc.Descriptor{model.fallback[1], model.fallback[0]}
+	reorderedKey, err := makeAtlasFontKeyWithModel(spec, 1, 0, reordered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated := model
+	mutated.rules = cloneAtlasRules(model.rules)
+	mutated.rules[0].Match.Class = fontdesc.SymbolClassSymbols
+	mutatedKey, err := makeAtlasFontKeyWithModel(spec, 1, 0, mutated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.environment == reorderedKey.environment || base.environment == mutatedKey.environment {
+		t.Fatal("fallback/rule mutation did not change atlas environment")
+	}
+}
+
 func TestAtlasDescriptorContextUsesStyledResolvedFace(t *testing.T) {
 	spec := fontglyph.Spec{Family: "ignored", Size: 14, DPI: 96, TextRaster: "gray"}
 	descriptors := []fontdesc.Descriptor{{Family: "Styled Mono"}, {Family: "Fallback Mono"}}

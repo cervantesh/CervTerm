@@ -46,16 +46,23 @@ type atlasPage struct {
 }
 
 type glyphAtlas struct {
-	cellW, cellH   int
-	baseline       int
-	backend        fontglyph.Backend
-	coverageLUT    *[256]uint8
-	r              gpu.Renderer
-	pages          [atlasPageCount]atlasPage
-	entries        map[atlasKey]atlasEntry
-	runNegative    map[atlasKey]uint64 // run key -> generation of a proven no-ligature result
-	insertNegative map[atlasKey]uint64 // key -> generation where a capacity retry already failed
-	generation     uint64
+	cellW, cellH       int
+	baseline           int
+	backend            fontglyph.Backend
+	coverageLUT        *[256]uint8
+	r                  gpu.Renderer
+	pages              [atlasPageCount]atlasPage
+	entries            map[atlasKey]atlasEntry
+	runNegative        map[atlasKey]uint64 // run key -> generation of a proven no-ligature result
+	runNegativeRing    []atlasKey
+	runNegativeNext    int
+	rasterNegative     map[atlasKey]uint64 // rune/cluster key -> generation of a proven raster miss
+	rasterNegativeRing []atlasKey
+	rasterNegativeNext int
+	insertNegative     map[atlasKey]uint64 // key -> generation where a capacity retry already failed
+	insertNegativeRing []atlasKey
+	insertNegativeNext int
+	generation         uint64
 
 	contexts       map[atlasFontKey]*atlasFontContext
 	activeContext  *atlasFontContext
@@ -91,6 +98,13 @@ func (a *glyphAtlas) Reset() {
 	clear(a.entries)
 	clear(a.runNegative)
 	clear(a.insertNegative)
+	a.runNegativeRing = nil
+	a.runNegativeNext = 0
+	clear(a.rasterNegative)
+	a.rasterNegativeRing = nil
+	a.rasterNegativeNext = 0
+	a.insertNegativeRing = nil
+	a.insertNegativeNext = 0
 	for _, ctx := range a.contexts {
 		ctx.prewarmed = false
 	}
@@ -103,6 +117,20 @@ func (a *glyphAtlas) resolveStyle(request fontdesc.RequestedFaceStyle) (fontdesc
 		return fontdesc.ResolvedFaceKey{}, fontdesc.SyntheticNone
 	}
 	return a.activeContext.resolveStyle(request)
+}
+
+func (a *glyphAtlas) resolveRuneStyle(request fontdesc.RequestedFaceStyle, value rune) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode) {
+	if a == nil {
+		return fontdesc.ResolvedFaceKey{}, fontdesc.SyntheticNone
+	}
+	return a.activeContext.resolveRuneStyle(request, value)
+}
+
+func (a *glyphAtlas) resolveClusterStyle(request fontdesc.RequestedFaceStyle, cluster string) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode) {
+	if a == nil {
+		return fontdesc.ResolvedFaceKey{}, fontdesc.SyntheticNone
+	}
+	return a.activeContext.resolveClusterStyle(request, cluster)
 }
 
 func (a *glyphAtlas) drawRune(r rune, x, y float32, fg color.RGBA, scale, skew float32) {
@@ -165,7 +193,7 @@ func (a *glyphAtlas) cachedRunStyle(request fontdesc.RequestedFaceStyle, run str
 		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	face, _ := ctx.resolveStyle(request)
+	face, _ := ctx.resolveClusterStyle(request, run)
 	key := atlasKey{spec: ctx.key, face: face, kind: 'l', text: run, span: int32(cellSpan)}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
@@ -183,10 +211,7 @@ func (a *glyphAtlas) cachedRunStyle(request fontdesc.RequestedFaceStyle, run str
 		return atlasEntry{}, false
 	}
 	if !ligated {
-		if a.runNegative == nil {
-			a.runNegative = make(map[atlasKey]uint64)
-		}
-		a.runNegative[key] = a.generation
+		a.recordRunNegative(key)
 		return atlasEntry{}, false
 	}
 	return a.insertRaster(key, rasterized, ctx)
@@ -201,12 +226,15 @@ func (a *glyphAtlas) cachedRuneStyle(request fontdesc.RequestedFaceStyle, r rune
 	if ctx == nil {
 		return atlasEntry{}, false
 	}
-	face, _ := ctx.resolveStyle(request)
+	face, _ := ctx.resolveRuneStyle(request, r)
 	// Key on the rune directly; the old atlasKey{text: string(r)} allocated a
 	// string on every glyph lookup — i.e. per visible cell per frame.
 	key := atlasKey{spec: ctx.key, face: face, kind: 'r', r: r}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
+	}
+	if a.rasterFailedThisGeneration(key) {
+		return atlasEntry{}, false
 	}
 	span := max(1, core.RuneWidth(r))
 	var rasterized fontglyph.RasterizedGlyph
@@ -217,6 +245,7 @@ func (a *glyphAtlas) cachedRuneStyle(request fontdesc.RequestedFaceStyle, r rune
 		rasterized, ok = ctx.backend.Rasterize(r, span)
 	}
 	if !ok {
+		a.recordRasterFailure(key)
 		return atlasEntry{}, false
 	}
 	return a.insertRaster(key, rasterized, ctx)
@@ -232,10 +261,13 @@ func (a *glyphAtlas) cachedClusterStyle(request fontdesc.RequestedFaceStyle, clu
 		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	face, _ := ctx.resolveStyle(request)
+	face, _ := ctx.resolveClusterStyle(request, cluster)
 	key := atlasKey{spec: ctx.key, face: face, kind: 'c', text: cluster, span: int32(cellSpan)}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
+	}
+	if a.rasterFailedThisGeneration(key) {
+		return atlasEntry{}, false
 	}
 	var rasterized fontglyph.RasterizedGlyph
 	var ok bool
@@ -245,6 +277,7 @@ func (a *glyphAtlas) cachedClusterStyle(request fontdesc.RequestedFaceStyle, clu
 		rasterized, ok = ctx.backend.RasterizeCluster(cluster, cellSpan)
 	}
 	if !ok {
+		a.recordRasterFailure(key)
 		return atlasEntry{}, false
 	}
 	return a.insertRaster(key, rasterized, ctx)
@@ -261,10 +294,39 @@ func (a *glyphAtlas) insertionFailedThisGeneration(key atlasKey) bool {
 }
 
 func (a *glyphAtlas) recordInsertionFailure(key atlasKey) {
-	if a.insertNegative == nil {
-		a.insertNegative = make(map[atlasKey]uint64)
+	recordBoundedAtlasNegative(&a.insertNegative, &a.insertNegativeRing, &a.insertNegativeNext, key, a.generation)
+}
+
+func (a *glyphAtlas) rasterFailedThisGeneration(key atlasKey) bool {
+	gen, ok := a.rasterNegative[key]
+	return ok && entryGenerationValid(gen, a.generation)
+}
+
+func (a *glyphAtlas) recordRasterFailure(key atlasKey) {
+	recordBoundedAtlasNegative(&a.rasterNegative, &a.rasterNegativeRing, &a.rasterNegativeNext, key, a.generation)
+}
+
+func (a *glyphAtlas) recordRunNegative(key atlasKey) {
+	recordBoundedAtlasNegative(&a.runNegative, &a.runNegativeRing, &a.runNegativeNext, key, a.generation)
+}
+
+func recordBoundedAtlasNegative(entries *map[atlasKey]uint64, ring *[]atlasKey, next *int, key atlasKey, generation uint64) {
+	if *entries == nil {
+		*entries = make(map[atlasKey]uint64)
 	}
-	a.insertNegative[key] = a.generation
+	if _, exists := (*entries)[key]; exists {
+		(*entries)[key] = generation
+		return
+	}
+	if len(*ring) < fontdesc.MaxNegativeEntries {
+		*ring = append(*ring, key)
+	} else {
+		victim := (*ring)[*next]
+		delete(*entries, victim)
+		(*ring)[*next] = key
+		*next = (*next + 1) % len(*ring)
+	}
+	(*entries)[key] = generation
 }
 
 func (a *glyphAtlas) insertRaster(key atlasKey, glyph fontglyph.RasterizedGlyph, ctx *atlasFontContext) (atlasEntry, bool) {
