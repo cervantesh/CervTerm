@@ -28,6 +28,14 @@ const (
 	IDResizePane             ID = "resize_pane"
 	IDSwapPane               ID = "swap_pane"
 	IDMovePane               ID = "move_pane"
+	IDNewTab                 ID = "new_tab"
+	IDActivateTab            ID = "activate_tab"
+	IDActivateTabRelative    ID = "activate_tab_relative"
+	IDMoveTab                ID = "move_tab"
+	IDRenameTab              ID = "rename_tab"
+	IDCloseTab               ID = "close_tab"
+	IDMovePaneToTab          ID = "move_pane_to_tab"
+	IDActivateTabSwitcher    ID = "activate_tab_switcher"
 )
 
 var (
@@ -326,6 +334,22 @@ func actionIdentity(action Action) (ID, error) {
 		return IDSwapPane, nil
 	case MovePane:
 		return IDMovePane, nil
+	case NewTab:
+		return IDNewTab, nil
+	case ActivateTab:
+		return IDActivateTab, nil
+	case ActivateTabRelative:
+		return IDActivateTabRelative, nil
+	case MoveTab:
+		return IDMoveTab, nil
+	case RenameTab:
+		return IDRenameTab, nil
+	case CloseTab:
+		return IDCloseTab, nil
+	case MovePaneToTab:
+		return IDMovePaneToTab, nil
+	case ActivateTabSwitcher:
+		return IDActivateTabSwitcher, nil
 	case ClosePane:
 		return IDClosePane, nil
 	case Multiple:

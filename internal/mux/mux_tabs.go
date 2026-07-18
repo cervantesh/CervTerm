@@ -9,6 +9,13 @@ import (
 
 func (m *Mux) Tabs() []TabView  { return m.model.Tabs() }
 func (m *Mux) ActiveTab() TabID { return m.model.TabID() }
+func (m *Mux) TabForPane(pane PaneID) (TabID, bool) {
+	tab := m.model.tabForPane(pane)
+	if tab == nil {
+		return 0, false
+	}
+	return tab.id, true
+}
 
 // SpawnTab prepares and spawns the initial pane before committing any identity.
 func (m *Mux) SpawnTab(spec SpawnSpec, metrics CellMetrics, title string) (TabID, PaneID, []Event, error) {

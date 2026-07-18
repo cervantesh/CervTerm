@@ -18,6 +18,7 @@ const (
 	CategoryPane      Category = "pane"
 	CategorySequence  Category = "sequence"
 	CategoryScript    Category = "script"
+	CategoryTab       Category = "tab"
 )
 
 type TargetRequirement string
@@ -188,6 +189,14 @@ func DefaultRegistry() *Registry {
 			registration{descriptor: metadata(IDResizePane, "Resize pane", CategoryPane, TargetPane, true, true, pressAndRepeat), codec: resizePaneCodec},
 			registration{descriptor: metadata(IDSwapPane, "Swap pane", CategoryPane, TargetPane, true, true, callbackPolicy), codec: swapPaneCodec},
 			registration{descriptor: metadata(IDMovePane, "Move pane", CategoryPane, TargetPane, true, true, callbackPolicy), codec: movePaneCodec},
+			registration{descriptor: metadata(IDNewTab, "New tab", CategoryTab, TargetOptional, true, true, pressOnly), codec: simpleCodec(NewTab{})},
+			registration{descriptor: metadata(IDActivateTab, "Activate tab", CategoryTab, TargetOptional, true, true, pressOnly), codec: activateTabCodec},
+			registration{descriptor: metadata(IDActivateTabRelative, "Activate relative tab", CategoryTab, TargetOptional, true, true, pressAndRepeat), codec: activateTabRelativeCodec},
+			registration{descriptor: metadata(IDMoveTab, "Move tab", CategoryTab, TargetOptional, true, true, pressOnly), codec: moveTabCodec},
+			registration{descriptor: metadata(IDRenameTab, "Rename tab", CategoryTab, TargetOptional, true, true, pressOnly), codec: renameTabCodec},
+			registration{descriptor: metadata(IDCloseTab, "Close tab", CategoryTab, TargetOptional, true, true, pressOnly), codec: closeTabCodec},
+			registration{descriptor: metadata(IDMovePaneToTab, "Move pane to tab", CategoryTab, TargetPane, true, true, pressOnly), codec: movePaneToTabCodec},
+			registration{descriptor: metadata(IDActivateTabSwitcher, "Activate tab switcher", CategoryTab, TargetOptional, true, true, pressOnly), codec: simpleCodec(ActivateTabSwitcher{})},
 			registration{descriptor: metadata(IDMultiple, "Run multiple actions", CategorySequence, TargetOptional, true, true, callbackPolicy), codec: multipleCodec},
 			registration{descriptor: metadata(IDCallback, "Lua callback", CategoryScript, TargetPane, false, false, callbackPolicy)},
 		)
