@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 
 	termaction "cervterm/internal/action"
@@ -104,6 +103,12 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		if err := validateInteger(source, path, value); err != nil {
 			return err
 		}
+		if isWindowSidePaddingPath(path) {
+			parsed := int(value.(lua.LNumber))
+			if parsed < 0 || parsed > MaxWindowPadding {
+				return documentError(source, path, "must be between 0 and %d", MaxWindowPadding)
+			}
+		}
 	case KindStringList:
 		if schema.name == "ansi" {
 			return validateANSIList(source, path, value)
@@ -129,19 +134,6 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		return validateColorSchemeMap(source, path, value, allowUnset)
 	default:
 		return documentError(source, path, "has unsupported schema kind %q", schema.kind)
-	}
-	return nil
-}
-
-func validateInteger(source, path string, value lua.LValue) error {
-	number, ok := value.(lua.LNumber)
-	if !ok {
-		return typeError(source, path, KindInteger, value)
-	}
-	parsed := float64(number)
-	upper := math.Ldexp(1, strconv.IntSize-1)
-	if math.IsNaN(parsed) || math.IsInf(parsed, 0) || math.Trunc(parsed) != parsed || parsed < -upper || parsed >= upper {
-		return documentError(source, path, "must be an integer in [%g, %g)", -upper, upper)
 	}
 	return nil
 }

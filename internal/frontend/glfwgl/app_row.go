@@ -37,8 +37,8 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 			logicalCol = order[visualCol]
 		}
 		cell := rowCells[logicalCol]
-		x := a.paddingX + float32(visualCol)*a.cellW
-		y := a.paddingY + float32(r)*a.cellH
+		x := a.drawOriginX + float32(visualCol)*a.cellW
+		y := a.drawOriginY + float32(r)*a.cellH
 		if cell.Attr.HasExplicitBG() {
 			a.fillRect(x, y, a.cellW, a.cellH, rgb(resolver.ResolveBG(cell.Attr.BG)))
 		}

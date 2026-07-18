@@ -72,8 +72,9 @@ type App struct {
 	cols, rows       int
 	cellW            float32
 	cellH            float32
-	paddingX         float32
-	paddingY         float32
+	insets           FramebufferInsets
+	drawOriginX      float32
+	drawOriginY      float32
 	uiScale          float32
 	contentScaleX    float32
 	contentScaleY    float32

@@ -13,6 +13,10 @@ func fullyDifferentConfig(base Config) Config {
 	value.Window.Height++
 	value.Window.PaddingX++
 	value.Window.PaddingY++
+	value.Window.PaddingLeft++
+	value.Window.PaddingRight++
+	value.Window.PaddingTop++
+	value.Window.PaddingBottom++
 	value.Window.DynamicTitle = !value.Window.DynamicTitle
 	value.Window.Opacity = 0.75
 	value.Window.Blur = !value.Window.Blur
@@ -98,8 +102,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 69 {
-		t.Fatalf("config leaf count = %d, want 69", len(changes))
+	if len(changes) != 73 {
+		t.Fatalf("config leaf count = %d, want 73", len(changes))
 	}
 }
 
@@ -123,6 +127,7 @@ func TestSchemaApplyCapabilitiesAreCompleteAndTruthful(t *testing.T) {
 		"colors.foreground": ApplyLive, "cursor.shape": ApplyLive,
 		"shell.program": ApplyNewPane, "window.width": ApplyNewWindow,
 		"font.family": ApplyRestart, "render.vsync": ApplyRestart,
+		"window.padding_left": ApplyRestart, "window.padding_bottom": ApplyRestart,
 		"keys": ApplyLive, "events": ApplyLive,
 	}
 	for path, want := range checks {

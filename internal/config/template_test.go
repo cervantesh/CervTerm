@@ -27,7 +27,7 @@ func TestDefaultLuaLoadsAndValidates(t *testing.T) {
 
 func TestDefaultLuaContainsAppearanceSchema(t *testing.T) {
 	template := DefaultLua()
-	for _, field := range []string{"opacity =", "blur =", "scrollbar =", "reserved_width_px =", "thumb_hover_color =", "track_click ="} {
+	for _, field := range []string{"padding_left =", "padding_right =", "padding_top =", "padding_bottom =", "opacity =", "blur =", "scrollbar =", "reserved_width_px =", "thumb_hover_color =", "track_click ="} {
 		if !strings.Contains(template, field) {
 			t.Fatalf("default Lua template missing %q", field)
 		}

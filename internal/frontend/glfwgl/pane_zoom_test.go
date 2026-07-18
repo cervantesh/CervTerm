@@ -103,7 +103,7 @@ func TestPendingZoomRemainsAttachedAfterFocusChange(t *testing.T) {
 func TestPaneGridMetricsAndFramebufferPointUseTargetPaneCells(t *testing.T) {
 	const pane termmux.PaneID = 7
 	a := &App{
-		cellW: 8, cellH: 16, paddingX: 2, paddingY: 3,
+		cellW: 8, cellH: 16,
 		paneUI: map[termmux.PaneID]*paneUIState{
 			pane: {font: paneFontState{fontSize: 18, cellW: 10, cellH: 20}},
 		},
@@ -119,7 +119,7 @@ func TestPaneGridMetricsAndFramebufferPointUseTargetPaneCells(t *testing.T) {
 	if metrics.cellW != 10 || metrics.cellH != 20 || metrics.cols != 10 || metrics.rows != 5 {
 		t.Fatalf("pane metrics = %#v, want target pane 10x20 cells over 10x5 grid", metrics)
 	}
-	point := a.pointForPaneFramebufferPosition(pane, geometry, 121, 92)
+	point := a.pointForPaneFramebufferPosition(pane, geometry, 111, 72)
 	if point.Row != 1 || point.Col != 1 {
 		t.Fatalf("framebuffer point = %#v, want row 1 col 1 using target pane metrics", point)
 	}

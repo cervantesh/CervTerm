@@ -63,7 +63,7 @@ func (a *App) prepareStatusBand(windowWidth int) {
 	if width > float32(windowWidth) {
 		width = float32(windowWidth)
 	}
-	first, last := coveredTerminalRows(a.paddingY, a.cellH, a.paddingY, a.cellH, a.snap.Rows)
+	first, last := coveredTerminalRows(a.drawOriginY, a.cellH, a.drawOriginY, a.cellH, a.snap.Rows)
 	a.status.geometry = statusGeometry{visible: true, width: width, firstRow: first, lastRow: last}
 }
 
@@ -76,5 +76,5 @@ func coveredTerminalRows(y, height, paddingY, cellH float32, rows int) (int, int
 }
 
 func (a *App) drawStatusBand(windowWidth int, chrome chromeColors) {
-	a.paint(statusBandLayout(a.status.display, a.status.geometry.width, windowWidth, a.paddingY, a.cellH, a.uiScale, chrome.background, chrome.accent))
+	a.paint(statusBandLayout(a.status.display, a.status.geometry.width, windowWidth, a.drawOriginY, a.cellH, a.uiScale, chrome.background, chrome.accent))
 }

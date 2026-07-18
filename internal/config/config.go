@@ -10,7 +10,10 @@ import (
 	"cervterm/internal/fontdesc"
 )
 
-const MaxScrollbackHistory = 10_000
+const (
+	MaxScrollbackHistory = 10_000
+	MaxWindowPadding     = 256
+)
 
 type Config struct {
 	Window      WindowConfig
@@ -26,13 +29,17 @@ type Config struct {
 }
 
 type WindowConfig struct {
-	Width        int
-	Height       int
-	PaddingX     int
-	PaddingY     int
-	DynamicTitle bool
-	Opacity      float64
-	Blur         bool
+	Width         int
+	Height        int
+	PaddingX      int
+	PaddingY      int
+	PaddingLeft   int
+	PaddingRight  int
+	PaddingTop    int
+	PaddingBottom int
+	DynamicTitle  bool
+	Opacity       float64
+	Blur          bool
 }
 
 type FontConfig struct {
@@ -123,8 +130,9 @@ type ShellConfig struct {
 func Defaults() Config {
 	return Config{
 		Window: WindowConfig{
-			Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6, DynamicTitle: true,
-			Opacity: 1.0, Blur: true,
+			Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6,
+			PaddingLeft: 6, PaddingRight: 6, PaddingTop: 6, PaddingBottom: 6,
+			DynamicTitle: true, Opacity: 1.0, Blur: true,
 		},
 		Font: FontConfig{Family: "Go Mono", Size: 14, Ligatures: false, Features: map[string]int{}, LineHeight: 1, CellWidth: 1},
 		Colors: ColorsConfig{
@@ -230,7 +238,20 @@ func (c Config) Validate() error {
 		errs = append(errs, errors.New("window width and height must be >= 100"))
 	}
 	if c.Window.PaddingX < 0 || c.Window.PaddingY < 0 {
-		errs = append(errs, errors.New("window padding must be >= 0"))
+		errs = append(errs, errors.New("window padding aliases must be >= 0"))
+	}
+	for _, padding := range []struct {
+		path  string
+		value int
+	}{
+		{"padding_left", c.Window.PaddingLeft},
+		{"padding_right", c.Window.PaddingRight},
+		{"padding_top", c.Window.PaddingTop},
+		{"padding_bottom", c.Window.PaddingBottom},
+	} {
+		if padding.value < 0 || padding.value > MaxWindowPadding {
+			errs = append(errs, fmt.Errorf("window.%s must be between 0 and %d", padding.path, MaxWindowPadding))
+		}
 	}
 	if math.IsNaN(c.Window.Opacity) || math.IsInf(c.Window.Opacity, 0) || c.Window.Opacity < 0 || c.Window.Opacity > 1 {
 		errs = append(errs, errors.New("window.opacity must be a finite number between 0.0 and 1.0"))

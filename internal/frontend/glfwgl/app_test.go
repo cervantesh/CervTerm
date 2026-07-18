@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"cervterm/internal/config"
+	termmux "cervterm/internal/mux"
 )
 
 func TestScrollRowsFromWheelDelta(t *testing.T) {
@@ -39,7 +40,8 @@ func TestScrollRowsUsesConfiguredMultiplier(t *testing.T) {
 
 func TestGridSizeReservesScrollbarSlot(t *testing.T) {
 	cfg := config.Defaults()
-	a := &App{cfg: cfg, cellW: 10, cellH: 20, paddingX: 5, paddingY: 5, uiScale: 1}
+	a := &App{cfg: cfg, cellW: 10, cellH: 20, uiScale: 1}
+	a.insets = projectOuterInsets(a.outerInsets(), a.uiScale)
 	cols, _ := a.gridSize(1000, 500)
 	cfg.Scrollbar.Enabled = false
 	a.cfg = cfg
@@ -52,9 +54,26 @@ func TestGridSizeReservesScrollbarSlot(t *testing.T) {
 func TestMuxContentBoundsReserveScrollbarGutter(t *testing.T) {
 	cfg := config.Defaults()
 	a := &App{cfg: cfg, uiScale: 1}
+	a.insets = projectOuterInsets(a.outerInsets(), a.uiScale)
 	bounds := a.muxContentBounds(1000, 500)
-	wantWidth := 1000 - cfg.Scrollbar.ReservedWidthPX
-	if bounds.Width != wantWidth || bounds.Height != 500 {
-		t.Fatalf("mux bounds = %#v, want width=%d height=500", bounds, wantWidth)
+	want := termmux.PixelRect{X: 6, Y: 6, Width: 1000 - 2*6 - cfg.Scrollbar.ReservedWidthPX, Height: 500 - 2*6}
+	if bounds != want {
+		t.Fatalf("mux bounds = %#v, want %#v", bounds, want)
+	}
+}
+
+func TestGridSizeUsesAsymmetricOuterInsets(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Window.PaddingLeft, cfg.Window.PaddingRight = 1, 2
+	cfg.Window.PaddingTop, cfg.Window.PaddingBottom = 3, 4
+	cfg.Scrollbar.Enabled = false
+	a := &App{cfg: cfg, cellW: 10, cellH: 10, uiScale: 1}
+	a.insets = projectOuterInsets(a.outerInsets(), a.uiScale)
+	if got := a.muxContentBounds(100, 100); got != (termmux.PixelRect{X: 1, Y: 3, Width: 97, Height: 93}) {
+		t.Fatalf("content bounds = %#v", got)
+	}
+	cols, rows := a.gridSize(100, 100)
+	if cols != 9 || rows != 9 {
+		t.Fatalf("grid = %dx%d, want 9x9", cols, rows)
 	}
 }

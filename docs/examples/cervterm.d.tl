@@ -26,6 +26,10 @@ local record cervterm
     height: integer
     padding_x: integer
     padding_y: integer
+    padding_left: integer
+    padding_right: integer
+    padding_top: integer
+    padding_bottom: integer
     dynamic_title: boolean
     opacity: number
     blur: boolean
@@ -211,6 +215,10 @@ local record cervterm
     height: integer | Unset
     padding_x: integer | Unset
     padding_y: integer | Unset
+    padding_left: integer | Unset
+    padding_right: integer | Unset
+    padding_top: integer | Unset
+    padding_bottom: integer | Unset
     dynamic_title: boolean | Unset
     opacity: number | Unset
     blur: boolean | Unset

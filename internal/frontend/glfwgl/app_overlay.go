@@ -83,20 +83,20 @@ func (a *App) drawOverlayPrim(p script.OverlayPrim, cols, rows int) {
 	switch p.Kind {
 	case script.OverlayRect:
 		if x0, y0, x1, y1, ok := script.ClipCellRect(p.Col, p.Row, p.W, p.H, cols, rows); ok {
-			x := a.paddingX + float32(x0)*a.cellW
-			y := a.paddingY + float32(y0)*a.cellH
+			x := a.drawOriginX + float32(x0)*a.cellW
+			y := a.drawOriginY + float32(y0)*a.cellH
 			a.fillRect(x, y, float32(x1-x0+1)*a.cellW, float32(y1-y0+1)*a.cellH, c)
 		}
 	case script.OverlayHLine:
 		if x0, y0, x1, _, ok := script.ClipCellRect(p.Col, p.Row, p.W, 1, cols, rows); ok {
-			x := a.paddingX + float32(x0)*a.cellW
-			y := a.paddingY + float32(y0)*a.cellH
+			x := a.drawOriginX + float32(x0)*a.cellW
+			y := a.drawOriginY + float32(y0)*a.cellH
 			a.fillRect(x, y, float32(x1-x0+1)*a.cellW, max(1, a.uiScale), c)
 		}
 	case script.OverlayVLine:
 		if x0, y0, _, y1, ok := script.ClipCellRect(p.Col, p.Row, 1, p.H, cols, rows); ok {
-			x := a.paddingX + float32(x0)*a.cellW
-			y := a.paddingY + float32(y0)*a.cellH
+			x := a.drawOriginX + float32(x0)*a.cellW
+			y := a.drawOriginY + float32(y0)*a.cellH
 			a.fillRect(x, y, max(1, a.uiScale), float32(y1-y0+1)*a.cellH, c)
 		}
 	case script.OverlayText:
@@ -112,12 +112,12 @@ func (a *App) drawOverlayText(p script.OverlayPrim, cols, rows int, c color.RGBA
 	if p.Row < 1 || p.Row > rows {
 		return
 	}
-	y := a.paddingY + float32(p.Row-1)*a.cellH
+	y := a.drawOriginY + float32(p.Row-1)*a.cellH
 	cell := p.Col - 1
 	for _, r := range p.Text {
 		w := core.RuneWidth(r)
 		if w > 0 && cell >= 0 && cell < cols {
-			x := a.paddingX + float32(cell)*a.cellW
+			x := a.drawOriginX + float32(cell)*a.cellW
 			a.drawRune(r, x, y, c, 1, 0)
 		}
 		if w > 0 {
