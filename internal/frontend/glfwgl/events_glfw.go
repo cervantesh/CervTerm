@@ -20,6 +20,30 @@ func (a *App) fireScriptEvent(fire func() error) {
 	}
 }
 
+func (a *App) dispatchScriptTableKey(key glfw.Key, mods glfw.ModifierKey, repeat bool) bool {
+	if a.scriptRT == nil {
+		a.keyTable.cancel()
+		return false
+	}
+	spec, ok := specFromGLFW(key, mods)
+	if !ok {
+		if a.keyTable.mode != keyTableInactive {
+			a.keyTable.cancel()
+			return true
+		}
+		return false
+	}
+	set := a.scriptRT.BindingSet()
+	result := a.keyTable.step(set, spec, repeat, time.Now(), uint64(a.focusedPane))
+	if result.binding != nil {
+		a.dispatchScriptBinding(*result.binding, key, mods, repeat, result.origin)
+	}
+	if result.consume {
+		a.suppressNextChar = scriptKeyProducesChar(key, mods)
+	}
+	return result.consume
+}
+
 func (a *App) dispatchScriptKey(key glfw.Key, mods glfw.ModifierKey, repeat bool) bool {
 	if a.scriptRT == nil {
 		return false
@@ -28,10 +52,20 @@ func (a *App) dispatchScriptKey(key glfw.Key, mods glfw.ModifierKey, repeat bool
 	if !ok {
 		return false
 	}
-	for _, binding := range a.scriptRT.Bindings() {
-		if binding.Spec == spec {
-			return a.dispatchKeyAction(binding.Action, key, mods, repeat)
+	for _, binding := range a.scriptRT.BindingSet().Root {
+		if binding.Spec != spec {
+			continue
 		}
+		if binding.ToTable != "" {
+			table, exists := a.scriptRT.BindingSet().Table(binding.ToTable)
+			if !exists {
+				return true
+			}
+			a.keyTable = keyTableState{mode: keyTableNamed, table: table.Name, deadline: time.Now().Add(time.Duration(table.TimeoutMS) * time.Millisecond), origin: uint64(a.focusedPane)}
+			a.suppressNextChar = scriptKeyProducesChar(key, mods)
+			return true
+		}
+		return a.dispatchScriptBinding(binding, key, mods, repeat, uint64(a.focusedPane))
 	}
 	return false
 }
