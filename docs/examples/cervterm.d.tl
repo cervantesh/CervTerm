@@ -124,6 +124,9 @@ local record cervterm
 
   record ScrollbarConfig
     enabled: boolean
+    mode: string
+    stable_gutter: boolean
+    animation_fps: integer
     reserved_width_px: integer
     width_px: integer
     margin_px: integer
@@ -301,6 +304,9 @@ local record cervterm
 
   record ScrollbarDocument
     enabled: boolean | Unset
+    mode: string | Unset
+    stable_gutter: boolean | Unset
+    animation_fps: integer | Unset
     reserved_width_px: integer | Unset
     width_px: integer | Unset
     margin_px: integer | Unset

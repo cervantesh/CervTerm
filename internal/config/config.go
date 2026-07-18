@@ -82,7 +82,11 @@ type ScrollingConfig struct {
 }
 
 type ScrollbarConfig struct {
+	// Enabled is the legacy v1 switch. Mode is authoritative for v2 documents.
 	Enabled         bool
+	Mode            string
+	StableGutter    bool
+	AnimationFPS    int
 	ReservedWidthPX int
 	WidthPX         int
 	MarginPX        int
@@ -149,7 +153,8 @@ func Defaults() Config {
 		},
 		Scrolling: ScrollingConfig{History: 2000, WheelMultiplier: 3, HideCursorWhenScrolled: true},
 		Scrollbar: ScrollbarConfig{
-			Enabled: true, ReservedWidthPX: 12, WidthPX: 8, MarginPX: 2, RadiusPX: 4, MinThumbPX: 24,
+			Enabled: true, Mode: "scrolling", StableGutter: true, AnimationFPS: 60,
+			ReservedWidthPX: 12, WidthPX: 8, MarginPX: 2, RadiusPX: 4, MinThumbPX: 24,
 			TrackColor: "#10172266", ThumbColor: "#60E8F0CC", ThumbHoverColor: "#7CF4F9E6", ThumbPressColor: "#B6FAFFFF",
 			AutoHideDelayMS: 1000, FadeMS: 150, PageStep: 0.9, TrackClick: "page",
 		},
@@ -297,8 +302,14 @@ func (c Config) Validate() error {
 	if c.Scrollbar.ReservedWidthPX < 0 || c.Scrollbar.WidthPX < 0 || c.Scrollbar.MarginPX < 0 || c.Scrollbar.RadiusPX < 0 {
 		errs = append(errs, errors.New("scrollbar dimensions must be >= 0"))
 	}
-	if c.Scrollbar.Enabled && (c.Scrollbar.WidthPX <= 0 || c.Scrollbar.ReservedWidthPX <= 0) {
-		errs = append(errs, errors.New("enabled scrollbar width_px and reserved_width_px must be > 0"))
+	if c.Scrollbar.Mode != "always" && c.Scrollbar.Mode != "hover" && c.Scrollbar.Mode != "scrolling" && c.Scrollbar.Mode != "never" {
+		errs = append(errs, fmt.Errorf("scrollbar.mode %q must be always, hover, scrolling, or never", c.Scrollbar.Mode))
+	}
+	if c.Scrollbar.AnimationFPS < 1 || c.Scrollbar.AnimationFPS > 240 {
+		errs = append(errs, errors.New("scrollbar.animation_fps must be between 1 and 240"))
+	}
+	if c.Scrollbar.Mode != "never" && (c.Scrollbar.WidthPX <= 0 || c.Scrollbar.ReservedWidthPX <= 0) {
+		errs = append(errs, errors.New("non-never scrollbar width_px and reserved_width_px must be > 0"))
 	}
 	if c.Scrollbar.WidthPX+2*c.Scrollbar.MarginPX > c.Scrollbar.ReservedWidthPX {
 		errs = append(errs, errors.New("scrollbar width_px plus margins must fit reserved_width_px"))

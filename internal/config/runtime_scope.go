@@ -270,6 +270,12 @@ func runtimeOverrideRawValue(source Config, path string) (string, error) {
 		value = source.Scrolling.HideCursorWhenScrolled
 	case "scrollbar.enabled":
 		value = source.Scrollbar.Enabled
+	case "scrollbar.mode":
+		value = source.Scrollbar.Mode
+	case "scrollbar.stable_gutter":
+		value = source.Scrollbar.StableGutter
+	case "scrollbar.animation_fps":
+		value = source.Scrollbar.AnimationFPS
 	case "scrollbar.reserved_width_px":
 		value = source.Scrollbar.ReservedWidthPX
 	case "scrollbar.width_px":
@@ -392,6 +398,12 @@ func applyRuntimePath(target *Config, source Config, path string) {
 		target.Scrolling.HideCursorWhenScrolled = source.Scrolling.HideCursorWhenScrolled
 	case "scrollbar.enabled":
 		target.Scrollbar.Enabled = source.Scrollbar.Enabled
+	case "scrollbar.mode":
+		target.Scrollbar.Mode = source.Scrollbar.Mode
+	case "scrollbar.stable_gutter":
+		target.Scrollbar.StableGutter = source.Scrollbar.StableGutter
+	case "scrollbar.animation_fps":
+		target.Scrollbar.AnimationFPS = source.Scrollbar.AnimationFPS
 	case "scrollbar.reserved_width_px":
 		target.Scrollbar.ReservedWidthPX = source.Scrollbar.ReservedWidthPX
 	case "scrollbar.width_px":

@@ -93,6 +93,30 @@ func FromDocument(base Config, document Document) Config {
 			cfg.Window.BackgroundOpacity = numberField(window, "background_opacity", cfg.Window.BackgroundOpacity)
 		}
 	}
+	if scrollbar := tableField(document.Root, "scrollbar"); scrollbar != nil {
+		if document.AuthoredVersion >= 2 {
+			if document.Has("scrollbar.mode") {
+				cfg.Scrollbar.Mode = stringField(scrollbar, "mode", cfg.Scrollbar.Mode)
+				cfg.Scrollbar.Enabled = cfg.Scrollbar.Mode != "never"
+			} else if document.Has("scrollbar.enabled") {
+				if cfg.Scrollbar.Enabled {
+					cfg.Scrollbar.Mode = "scrolling"
+				} else {
+					cfg.Scrollbar.Mode = "never"
+				}
+			}
+			cfg.Scrollbar.StableGutter = boolField(scrollbar, "stable_gutter", cfg.Scrollbar.StableGutter)
+			cfg.Scrollbar.AnimationFPS = intField(scrollbar, "animation_fps", cfg.Scrollbar.AnimationFPS)
+		} else {
+			if cfg.Scrollbar.Enabled {
+				cfg.Scrollbar.Mode = "scrolling"
+			} else {
+				cfg.Scrollbar.Mode = "never"
+			}
+			cfg.Scrollbar.StableGutter = true
+			cfg.Scrollbar.AnimationFPS = base.Scrollbar.AnimationFPS
+		}
+	}
 	if document.AuthoredVersion < 2 {
 		cfg.Window.TextOpacity = base.Window.TextOpacity
 		cfg.Window.BackgroundOpacity = base.Window.BackgroundOpacity
@@ -161,8 +185,8 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "history", kind: KindInteger}, {name: "wheel_multiplier", kind: KindInteger}, {name: "hide_cursor_when_scrolled", kind: KindBoolean},
 	}},
 	{name: "scrollbar", kind: KindTable, apply: ApplyLive, runtimeOverride: true, children: []fieldSchema{
-		{name: "enabled", kind: KindBoolean}, {name: "reserved_width_px", kind: KindInteger},
-		{name: "width_px", kind: KindInteger}, {name: "margin_px", kind: KindInteger},
+		{name: "enabled", kind: KindBoolean}, {name: "mode", kind: KindString}, {name: "stable_gutter", kind: KindBoolean}, {name: "animation_fps", kind: KindInteger},
+		{name: "reserved_width_px", kind: KindInteger}, {name: "width_px", kind: KindInteger}, {name: "margin_px", kind: KindInteger},
 		{name: "radius_px", kind: KindInteger}, {name: "min_thumb_px", kind: KindInteger},
 		{name: "track_color", kind: KindString}, {name: "thumb_color", kind: KindString},
 		{name: "thumb_hover_color", kind: KindString}, {name: "thumb_press_color", kind: KindString},
@@ -199,6 +223,7 @@ func isV2OnlyPath(path string) bool {
 	case "window.padding_left", "window.padding_right", "window.padding_top", "window.padding_bottom",
 		"window.text_opacity", "window.background_opacity",
 		"background.layers",
+		"scrollbar.mode", "scrollbar.stable_gutter", "scrollbar.animation_fps",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true
 	default:
@@ -288,6 +313,9 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 		delete(document.Present, "window.text_opacity")
 		delete(document.Present, "window.background_opacity")
 		delete(document.Present, "background.layers")
+		delete(document.Present, "scrollbar.mode")
+		delete(document.Present, "scrollbar.stable_gutter")
+		delete(document.Present, "scrollbar.animation_fps")
 		delete(document.Present, "font.descriptors")
 		delete(document.Present, "font.fallback")
 		delete(document.Present, "font.rules")
