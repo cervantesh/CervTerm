@@ -103,7 +103,12 @@ func (m *Mux) applyLayout(layout Layout) ([]Event, error) {
 			continue
 		}
 		p.geometry = geometry
+		oldOffset := p.terminal.DisplayOffset()
 		p.terminal.Resize(geometry.Cols, geometry.Rows)
+		p.reflowGen++
+		if p.terminal.DisplayOffset() != oldOffset {
+			p.viewportGen++
+		}
 		p.capture()
 		rows, cols := terminalSize(geometry)
 		p.desiredSize = pty.Size{Rows: rows, Cols: cols}

@@ -8,6 +8,7 @@ func (m *Mux) ScrollViewport(id PaneID, lines int) (bool, error) {
 	}
 	moved := p.terminal.ScrollViewport(lines)
 	if moved {
+		p.viewportGen++
 		p.capture()
 	}
 	return moved, nil
@@ -23,7 +24,12 @@ func (m *Mux) SetScrollbackCapacity(capacity int) {
 		if !ok {
 			continue
 		}
+		oldOffset := p.terminal.DisplayOffset()
 		p.terminal.SetScrollbackCapacity(capacity)
+		p.contentGen++
+		if p.terminal.DisplayOffset() != oldOffset {
+			p.viewportGen++
+		}
 		p.capture()
 	}
 }

@@ -32,6 +32,9 @@ type pane struct {
 	snapshot       render.Snapshot
 	captureOptions render.CaptureOptions
 	geometry       PaneGeometry
+	contentGen     uint64
+	reflowGen      uint64
+	viewportGen    uint64
 
 	pendingReplies [][]byte
 	desiredSize    pty.Size
