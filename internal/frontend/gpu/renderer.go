@@ -2,6 +2,7 @@ package gpu
 
 import (
 	"errors"
+	"image"
 	"image/color"
 )
 
@@ -44,6 +45,19 @@ func (r ClipRect) Clamp(width, height int) ClipRect {
 // Scissor converts a top-left clip to OpenGL's bottom-left scissor coordinates.
 func (r ClipRect) Scissor(framebufferHeight int) (x, y, width, height int32) {
 	return int32(r.X), int32(framebufferHeight - (r.Y + r.Height)), int32(r.Width), int32(r.Height)
+}
+
+// BackgroundSurface is an immutable renderer-owned RGBA resource. Its caller
+// retains ownership until an activation commit transfers it.
+type BackgroundSurface interface {
+	Close() error
+}
+
+// BackgroundSurfaceRenderer is an optional capability adjacent to Renderer.
+// Compile-only backend stubs intentionally do not implement it.
+type BackgroundSurfaceRenderer interface {
+	PrepareBackgroundSurface(*image.RGBA) (BackgroundSurface, error)
+	ReplaceBackgroundRect(BackgroundSurface, ClipRect) error
 }
 
 // Renderer is the backend-neutral GPU contract for one terminal frame. The

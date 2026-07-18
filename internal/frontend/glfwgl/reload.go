@@ -11,6 +11,7 @@ import (
 
 	"cervterm/internal/config"
 	"cervterm/internal/fontglyph"
+	"cervterm/internal/frontend/gpu"
 	"cervterm/internal/script"
 )
 
@@ -211,11 +212,13 @@ func formatPendingConfigChanges(changes []config.ConfigChange, limit int) string
 // preparedLiveConfig owns all resources created by the fallible preparation
 // phase until commit transfers them to the App or Close aborts them.
 type preparedLiveConfig struct {
-	next             config.Config
-	preparedContexts map[atlasFontKey]*atlasFontContext
-	contextInstall   *atlasPreparedContextInstall
-	rasterChanged    bool
-	committed        bool
+	next              config.Config
+	preparedContexts  map[atlasFontKey]*atlasFontContext
+	contextInstall    *atlasPreparedContextInstall
+	backgroundSurface gpu.BackgroundSurface
+	rasterChanged     bool
+	backgroundChanged bool
+	committed         bool
 }
 
 func (p *preparedLiveConfig) Close() {
@@ -224,6 +227,10 @@ func (p *preparedLiveConfig) Close() {
 	}
 	closePreparedRasterContexts(p.preparedContexts)
 	p.preparedContexts = nil
+	if p.backgroundSurface != nil {
+		_ = p.backgroundSurface.Close()
+		p.backgroundSurface = nil
+	}
 }
 
 // prepareLiveConfig validates and constructs every fallible frontend resource
@@ -235,8 +242,11 @@ func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error)
 	oldRaster := a.effectiveTextRaster()
 	liveNext := a.cfg
 	liveNext.Colors = next.Colors
+	liveNext.Window.TextOpacity = next.Window.TextOpacity
+	liveNext.Window.BackgroundOpacity = next.Window.BackgroundOpacity
 	newRaster := effectiveTextRasterFor(liveNext)
-	prepared := &preparedLiveConfig{next: next, rasterChanged: a.atlas != nil && oldRaster != newRaster}
+	backgroundChanged := a.cfg.Colors.Background != next.Colors.Background || a.cfg.Window.BackgroundOpacity != next.Window.BackgroundOpacity
+	prepared := &preparedLiveConfig{next: next, rasterChanged: a.atlas != nil && oldRaster != newRaster, backgroundChanged: backgroundChanged}
 	if prepared.rasterChanged {
 		contexts, err := a.prepareRasterContexts(newRaster)
 		if err != nil {
@@ -265,6 +275,15 @@ func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error)
 		}
 		prepared.contextInstall = install
 	}
+	if prepared.backgroundChanged {
+		surface, err := prepareSolidBackgroundSurface(a.r, liveNext)
+		if err != nil {
+			closePreparedRasterContexts(prepared.preparedContexts)
+			prepared.preparedContexts = nil
+			return nil, err
+		}
+		prepared.backgroundSurface = surface
+	}
 	return prepared, nil
 }
 
@@ -276,12 +295,22 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 		prepared.preparedContexts = nil
 		prepared.contextInstall = nil
 	}
+	if prepared.backgroundChanged {
+		oldSurface := a.backgroundSurface
+		a.backgroundSurface = prepared.backgroundSurface
+		prepared.backgroundSurface = nil
+		if oldSurface != nil {
+			_ = oldSurface.Close()
+		}
+	}
 	next := prepared.next
 	oldScrollbar := a.cfg.Scrollbar
 	a.mux.SetScrollbackCapacity(next.Scrolling.History)
 	a.mux.SetHideCursorWhenScrolled(next.Scrolling.HideCursorWhenScrolled)
 	a.syncFocusedProjection()
 	a.cfg.Window.Opacity = next.Window.Opacity
+	a.cfg.Window.TextOpacity = next.Window.TextOpacity
+	a.cfg.Window.BackgroundOpacity = next.Window.BackgroundOpacity
 	a.cfg.Window.Blur = next.Window.Blur
 	a.cfg.Colors = next.Colors
 	a.mux.SetPaletteBase(configuredPaletteBase(a.cfg.Colors))
@@ -293,6 +322,7 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 		a.activateInstalledRasterContexts()
 	}
 	prepared.preparedContexts = nil
+	prepared.backgroundSurface = nil
 	prepared.committed = true
 	if !a.cfg.Scrollbar.Enabled {
 		a.scrollbar = scrollbarState{}

@@ -47,6 +47,8 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Window.PaddingBottom != effective.Window.PaddingBottom, "window.padding_bottom", ApplyRestart)
 	changes = appendChange(changes, desired.Window.DynamicTitle != effective.Window.DynamicTitle, "window.dynamic_title", ApplyRestart)
 	changes = appendChange(changes, desired.Window.Opacity != effective.Window.Opacity, "window.opacity", ApplyLive)
+	changes = appendChange(changes, desired.Window.TextOpacity != effective.Window.TextOpacity, "window.text_opacity", ApplyLive)
+	changes = appendChange(changes, desired.Window.BackgroundOpacity != effective.Window.BackgroundOpacity, "window.background_opacity", ApplyLive)
 	changes = appendChange(changes, desired.Window.Blur != effective.Window.Blur, "window.blur", ApplyLive)
 
 	changes = appendChange(changes, desired.Font.Family != effective.Font.Family, "font.family", ApplyRestart)
@@ -138,6 +140,8 @@ func PendingConfigChanges(desired, effective Config) []ConfigChange {
 func MergeLiveConfig(base, source Config) Config {
 	base = base.Clone()
 	base.Window.Opacity = source.Window.Opacity
+	base.Window.TextOpacity = source.Window.TextOpacity
+	base.Window.BackgroundOpacity = source.Window.BackgroundOpacity
 	base.Window.Blur = source.Window.Blur
 	base.ColorScheme = source.ColorScheme
 	base.Colors = source.Colors

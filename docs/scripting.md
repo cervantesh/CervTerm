@@ -147,6 +147,8 @@ All row and column numbers at the Lua boundary are 1-based.
 | `term:set_font_size(pts)` | Sets the font size (clamped to 6..72), rebuilding the glyph atlas and reflowing the grid. |
 | `term:search(query)` | Jumps to the first (bottom-most) case-insensitive match for `query` across scrollback and the live screen, scrolls it into view and highlights it; returns whether a match was found. Non-interactive counterpart to the search bar. An empty query is a no-op and returns `false`. |
 | `term:window_opacity()` / `term:set_window_opacity(n)` | Gets or sets compositor opacity in `[0,1]`; a translucent background and opacity below 1 are mutually exclusive. |
+| `term:text_opacity()` / `term:set_text_opacity(n)` | Gets or sets terminal glyph opacity in `[0,1]`; cursor, selection, links, scrollbar and chrome retain their own alpha. |
+| `term:background_opacity()` / `term:set_background_opacity(n)` | Gets or sets the terminal background multiplier in `[0,1]`, applied once after configured/OSC background selection. |
 | `term:background()` / `term:set_background(color)` | Gets or sets `#RRGGBB`/`#RRGGBBAA` terminal background. |
 | `term:blur()` / `term:set_blur(enabled)` | Gets or requests optional platform blur. Windows preserves transparency when its native material is incompatible. The macOS AppKit, KDE X11, and KDE Wayland providers are experimental and compile-validated but await real-compositor community smoke testing; unsupported platforms preserve transparency without terminating. |
 | `term:scrolling()` / `term:set_scrolling(table)` | Gets or atomically updates history capacity (0..10000 rows per pane), wheel multiplier, and scrolled-cursor policy. |

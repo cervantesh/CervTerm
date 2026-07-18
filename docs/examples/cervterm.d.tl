@@ -32,6 +32,8 @@ local record cervterm
     padding_bottom: integer
     dynamic_title: boolean
     opacity: number
+    text_opacity: number
+    background_opacity: number
     blur: boolean
   end
 
@@ -174,6 +176,10 @@ local record cervterm
     search: function(Term, string): boolean
     window_opacity: function(Term): number
     set_window_opacity: function(Term, number)
+    text_opacity: function(Term): number
+    set_text_opacity: function(Term, number)
+    background_opacity: function(Term): number
+    set_background_opacity: function(Term, number)
     background: function(Term): string
     set_background: function(Term, string)
     blur: function(Term): boolean
@@ -221,6 +227,8 @@ local record cervterm
     padding_bottom: integer | Unset
     dynamic_title: boolean | Unset
     opacity: number | Unset
+    text_opacity: number | Unset
+    background_opacity: number | Unset
     blur: boolean | Unset
   end
 

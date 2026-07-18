@@ -36,6 +36,9 @@ return {
     -- Whole-window opacity requires an opaque background (#RRGGBB or alpha FF).
     -- Blur is best-effort; unsupported platforms keep transparency without blur.
     opacity = %.2f,
+    -- These affect terminal glyph/background content, not cursor or chrome.
+    text_opacity = %.2f,
+    background_opacity = %.2f,
     blur = %t,
   },
   font = {
@@ -207,7 +210,7 @@ return {
 }
 `, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY,
 		cfg.Window.PaddingLeft, cfg.Window.PaddingRight, cfg.Window.PaddingTop, cfg.Window.PaddingBottom,
-		cfg.Window.DynamicTitle, cfg.Window.Opacity, cfg.Window.Blur,
+		cfg.Window.DynamicTitle, cfg.Window.Opacity, cfg.Window.TextOpacity, cfg.Window.BackgroundOpacity, cfg.Window.Blur,
 		cfg.Font.Family, cfg.Font.Size, cfg.Font.Ligatures, cfg.Font.LineHeight, cfg.Font.CellWidth, cfg.Font.BaselineOffset, cfg.Font.GlyphOffsetX, cfg.Font.GlyphOffsetY,
 		cfg.Colors.Foreground, cfg.Colors.Background, cfg.Colors.Cursor, cfg.Colors.SelectionBackground,
 		cfg.Colors.ChromeBackground, cfg.Colors.ChromeMuted, cfg.Colors.Accent, cfg.Colors.Split, cfg.Colors.SearchMatch, cfg.Colors.Error,

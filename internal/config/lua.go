@@ -68,6 +68,8 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Window.PaddingY = intField(tbl, "padding_y", cfg.Window.PaddingY)
 		cfg.Window.DynamicTitle = boolField(tbl, "dynamic_title", cfg.Window.DynamicTitle)
 		cfg.Window.Opacity = numberField(tbl, "opacity", cfg.Window.Opacity)
+		cfg.Window.TextOpacity = numberField(tbl, "text_opacity", cfg.Window.TextOpacity)
+		cfg.Window.BackgroundOpacity = numberField(tbl, "background_opacity", cfg.Window.BackgroundOpacity)
 		cfg.Window.Blur = boolField(tbl, "blur", cfg.Window.Blur)
 	}
 	if tbl := tableField(root, "font"); tbl != nil {
