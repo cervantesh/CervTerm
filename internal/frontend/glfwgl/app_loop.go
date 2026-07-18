@@ -227,7 +227,7 @@ func (a *App) outerInsets() OuterInsets {
 }
 
 func (a *App) windowGeometry(width, height int) WindowGeometry {
-	return resolveWindowGeometry(width, height, a.insets, a.scrollbarReservedWidth())
+	return resolveWindowGeometryWithTabBar(width, height, a.insets, a.scrollbarReservedWidth(), a.effectiveTabBarHeight(), a.cfg.TabBar.Position)
 }
 
 func (a *App) muxContentBounds(width, height int) termmux.PixelRect {

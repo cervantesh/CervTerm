@@ -31,6 +31,7 @@ type WindowGeometry struct {
 	ScrollbarGutter int
 	Content         gpu.ClipRect
 	ScrollbarTrack  gpu.ClipRect
+	TabBar          gpu.ClipRect
 }
 
 func projectOuterInsets(insets OuterInsets, scale float32) FramebufferInsets {
@@ -47,25 +48,28 @@ func projectOuterInsets(insets OuterInsets, scale float32) FramebufferInsets {
 }
 
 func resolveWindowGeometry(frameWidth, frameHeight int, insets FramebufferInsets, reservedScrollbarGutter float32) WindowGeometry {
+	return resolveWindowGeometryWithTabBar(frameWidth, frameHeight, insets, reservedScrollbarGutter, 0, "top")
+}
+
+func resolveWindowGeometryWithTabBar(frameWidth, frameHeight int, insets FramebufferInsets, reservedScrollbarGutter float32, tabBarHeight int, position string) WindowGeometry {
 	frameWidth, frameHeight = max(0, frameWidth), max(0, frameHeight)
 	gutter := min(frameWidth, max(0, int(math.Ceil(float64(reservedScrollbarGutter)))))
-	contentX, contentY := min(insets.Left, frameWidth), min(insets.Top, frameHeight)
-	contentHeight := max(0, frameHeight-insets.Top-insets.Bottom)
+	contentX, outerY := min(insets.Left, frameWidth), min(insets.Top, frameHeight)
+	outerHeight := max(0, frameHeight-insets.Top-insets.Bottom)
+	barHeight := min(outerHeight, max(0, tabBarHeight))
+	contentY := outerY
+	barY := outerY
+	if position == "top" {
+		contentY += barHeight
+	} else {
+		barY += outerHeight - barHeight
+	}
+	contentHeight := outerHeight - barHeight
+	contentWidth := max(0, frameWidth-insets.Left-insets.Right-gutter)
 	return WindowGeometry{
-		Framebuffer:     gpu.ClipRect{Width: frameWidth, Height: frameHeight},
-		Insets:          insets,
-		ScrollbarGutter: gutter,
-		Content: gpu.ClipRect{
-			X:      contentX,
-			Y:      contentY,
-			Width:  max(0, frameWidth-insets.Left-insets.Right-gutter),
-			Height: contentHeight,
-		},
-		ScrollbarTrack: gpu.ClipRect{
-			X:      frameWidth - gutter,
-			Y:      contentY,
-			Width:  gutter,
-			Height: contentHeight,
-		},
+		Framebuffer: gpu.ClipRect{Width: frameWidth, Height: frameHeight}, Insets: insets, ScrollbarGutter: gutter,
+		Content:        gpu.ClipRect{X: contentX, Y: contentY, Width: contentWidth, Height: contentHeight},
+		ScrollbarTrack: gpu.ClipRect{X: frameWidth - gutter, Y: contentY, Width: gutter, Height: contentHeight},
+		TabBar:         gpu.ClipRect{X: contentX, Y: barY, Width: contentWidth, Height: barHeight},
 	}
 }

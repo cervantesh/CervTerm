@@ -11,6 +11,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Native in-process panes with horizontal and vertical splits, focused input, directional navigation, independent terminal sessions, and deterministic close/collapse behavior.
 - Resize adjacent panes live by dragging their divider with the mouse while preserving minimum terminal dimensions.
 - Zoom the focused pane independently while sharing one bounded multi-size glyph atlas across all panes.
+- Retained top/bottom tab bar with bounded live configuration, active-visible overflow, Unicode-safe labels, add/close controls, and authoritative window/scrollbar geometry reservation.
 - Configurable RGBA backgrounds, live appearance reload, a reserved scrollbar, and experimental native blur providers for macOS AppKit and KDE X11/Wayland with transparent fallback.
 - A phased WezTerm-inspired parity roadmap, machine-readable support matrix, reproducible performance baseline tool, configuration compatibility policy, and proposed architecture decision gates.
 - A toolkit-neutral typed action model and frontend executor with deterministic registry metadata, semantic targets, strict bounded JSON serialization, sequences, callback metadata, trigger policies, and typed built-in key dispatch.

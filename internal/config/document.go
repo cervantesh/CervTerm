@@ -124,6 +124,9 @@ func FromDocument(base Config, document Document) Config {
 		}
 	}
 	if document.AuthoredVersion < 2 {
+		cfg.TabBar = base.TabBar
+	}
+	if document.AuthoredVersion < 2 {
 		cfg.Window.TextOpacity = base.Window.TextOpacity
 		cfg.Window.BackgroundOpacity = base.Window.BackgroundOpacity
 		cfg.Render.MaxFPS = base.Render.MaxFPS
@@ -214,6 +217,11 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "auto_hide_delay_ms", kind: KindInteger}, {name: "fade_ms", kind: KindInteger},
 		{name: "page_step", kind: KindNumber}, {name: "track_click", kind: KindString},
 	}},
+	{name: "tab_bar", kind: KindTable, apply: ApplyLive, runtimeOverride: true, children: []fieldSchema{
+		{name: "mode", kind: KindString}, {name: "position", kind: KindString}, {name: "height_px", kind: KindInteger},
+		{name: "min_width_px", kind: KindInteger}, {name: "max_width_px", kind: KindInteger}, {name: "padding_x", kind: KindInteger},
+		{name: "show_new_button", kind: KindBoolean}, {name: "show_close_button", kind: KindBoolean},
+	}},
 	{name: "cursor", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
 		{name: "shape", kind: KindString}, {name: "blink", kind: KindBoolean},
 		{name: "blink_interval_ms", kind: KindInteger}, {name: "thickness", kind: KindNumber},
@@ -251,6 +259,7 @@ func isV2OnlyPath(path string) bool {
 		"window.initial_rows", "window.initial_cols", "window.decorations", "window.titlebar",
 		"background.layers", "quick_select.rules", "launch_menu",
 		"scrollbar.mode", "scrollbar.stable_gutter", "scrollbar.animation_fps", "render.max_fps",
+		"tab_bar.mode", "tab_bar.position", "tab_bar.height_px", "tab_bar.min_width_px", "tab_bar.max_width_px", "tab_bar.padding_x", "tab_bar.show_new_button", "tab_bar.show_close_button",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true
 	default:

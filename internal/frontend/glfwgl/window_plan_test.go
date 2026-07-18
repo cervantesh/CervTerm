@@ -34,3 +34,13 @@ func TestCheckedStartupWindowPlanRejectsInvalidAndOverflow(t *testing.T) {
 		t.Fatal("expected oversized-window rejection")
 	}
 }
+
+func TestCheckedStartupWindowPlanIncludesTabBarHeight(t *testing.T) {
+	plan, err := checkedStartupWindowPlan(startupWindowPlanInput{Rows: 24, Cols: 80, CellWidth: 9, CellHeight: 16, TabBarHeight: 28, ScaleX: 1, ScaleY: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.FramebufferHeight != 412 {
+		t.Fatalf("height=%d", plan.FramebufferHeight)
+	}
+}

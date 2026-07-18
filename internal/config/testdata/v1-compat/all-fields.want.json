@@ -122,5 +122,15 @@
   "QuickSelect": {
     "Rules": null
   },
+  "TabBar": {
+    "Mode": "multiple",
+    "Position": "top",
+    "HeightPX": 28,
+    "MinWidthPX": 96,
+    "MaxWidthPX": 220,
+    "PaddingX": 8,
+    "ShowNewButton": true,
+    "ShowCloseButton": true
+  },
   "LaunchMenu": null
 }
