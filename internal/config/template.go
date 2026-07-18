@@ -166,9 +166,10 @@ return {
     zoom_in_hotkey = %q,
     zoom_out_hotkey = %q,
     zoom_reset_hotkey = %q,
-    -- Cap the frame rate to the monitor refresh. Set false to uncap (higher
-    -- FPS number, more CPU/GPU; useful only for benchmarking).
+    -- Vsync still applies independently. max_fps = 0 disables CervTerm's explicit
+    -- presentation cap; a positive value limits completed frames and is live reloadable.
     vsync = %t,
+    max_fps = %d,
     -- "on_demand" (default) redraws only when something visible changed, so an
     -- idle terminal draws ~0 fps. "continuous" redraws every loop iteration
     -- (the old always-draw behavior; useful for benchmarking or as an escape hatch).
@@ -238,6 +239,6 @@ return {
 		cfg.Scrollbar.AutoHideDelayMS, cfg.Scrollbar.FadeMS, cfg.Scrollbar.PageStep, cfg.Scrollbar.TrackClick,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
 		cfg.Clipboard.OSC52,
-		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.ZoomInHotkey, cfg.Render.ZoomOutHotkey, cfg.Render.ZoomResetHotkey, cfg.Render.VSync, cfg.Render.Redraw, cfg.Render.Damage, cfg.Render.Bidi,
+		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.ZoomInHotkey, cfg.Render.ZoomOutHotkey, cfg.Render.ZoomResetHotkey, cfg.Render.VSync, cfg.Render.MaxFPS, cfg.Render.Redraw, cfg.Render.Damage, cfg.Render.Bidi,
 		cfg.Shell.Program, cfg.Shell.WorkingDirectory)
 }

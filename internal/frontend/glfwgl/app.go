@@ -121,6 +121,7 @@ type App struct {
 	// On-demand render state. Main-thread only; the PTY reader must not touch
 	// needsRedraw (it wakes the loop with glfw.PostEmptyEvent instead).
 	needsRedraw    bool
+	presentation   presentationGate
 	lastBlinkPhase bool
 	lastStatsDraw  time.Time
 
@@ -225,8 +226,7 @@ func (a *App) runWindow() error {
 	glfw.WindowHint(glfw.ContextVersionMajor, 2)
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	glfw.WindowHint(glfw.Resizable, glfw.True)
-	// Request transparency at creation so live background alpha changes do not
-	// require recreating the terminal window.
+	// Request transparency up front so live alpha changes need no window recreation.
 	glfw.WindowHint(glfw.TransparentFramebuffer, glfw.True)
 	w, err := glfw.CreateWindow(a.cfg.Window.Width, a.cfg.Window.Height, "CervTerm", nil, nil)
 	if err != nil {
