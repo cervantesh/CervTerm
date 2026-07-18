@@ -152,3 +152,45 @@ func TestActionExecutorSequenceStopsOnFirstError(t *testing.T) {
 		t.Fatal("sequence continued after first error")
 	}
 }
+
+func TestActionExecutorTopologyActionsTargetOriginAndPreserveFailure(t *testing.T) {
+	a := newRunningMuxTestApp(t)
+	first := a.focusedPane
+	if err := executeFocusedAction(a, termaction.SplitPane{Axis: termaction.SplitColumns}); err != nil {
+		t.Fatal(err)
+	}
+	second := a.focusedPane
+	context := termaction.Context{
+		Source:  termaction.SourceScript,
+		Origin:  termaction.Ref{Kind: termaction.RefPane, ID: uint64(first)},
+		Focused: termaction.Ref{Kind: termaction.RefPane, ID: uint64(second)},
+	}
+	resize := termaction.Envelope{Action: termaction.ResizePane{Direction: termaction.FocusRight, Delta: 1}, Target: termaction.TargetOrigin}
+	if err := a.executeAction(resize, context); err != nil {
+		t.Fatal(err)
+	}
+	if focused, _ := a.mux.FocusedPane(); focused != first {
+		t.Fatalf("resize focused pane = %d, want origin %d", focused, first)
+	}
+	if err := a.executeAction(termaction.Envelope{Action: termaction.SwapPane{Direction: termaction.FocusRight}, Target: termaction.TargetOrigin}, context); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.executeAction(termaction.Envelope{Action: termaction.MovePane{Direction: termaction.FocusRight}, Target: termaction.TargetFocused}, a.actionContext(termaction.SourceKeyboard)); err != nil {
+		t.Fatal(err)
+	}
+	before := a.mux.PaneIDs()
+	err := executeFocusedAction(a, termaction.SwapPane{Direction: termaction.FocusUp})
+	var execution *termaction.ExecutionError
+	if !errors.As(err, &execution) || execution.Class != termaction.ErrorMux {
+		t.Fatalf("topology failure = %v", err)
+	}
+	after := a.mux.PaneIDs()
+	if len(before) != len(after) {
+		t.Fatalf("topology changed after failure: before=%v after=%v", before, after)
+	}
+	for i := range before {
+		if before[i] != after[i] {
+			t.Fatalf("topology identities changed after failure: before=%v after=%v", before, after)
+		}
+	}
+}

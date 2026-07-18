@@ -70,13 +70,16 @@ return { keys = {
   { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
   { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
   { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },
+  { key = "r", mods = "alt+shift", action = cervterm.action.ResizePane("right", 3) },
+  { key = "s", mods = "alt+shift", action = cervterm.action.SwapPane("left") },
+  { key = "m", mods = "alt+shift", action = cervterm.action.MovePane("down") }
   { key = "m", mods = "ctrl+shift", action = cervterm.action.Multiple({
     cervterm.action.FocusPane("left"), cervterm.action.ClosePane,
   }) },
 } }
 ```
 
-Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ReloadConfig`, `ClosePane`, and `ResetFontSize`. Constructors: `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, `SplitPane("columns"|"rows")`, `FocusPane("left"|"right"|"up"|"down")`, and `Multiple({...})`. `WithTarget(action, "origin")` is also available.
+Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ReloadConfig`, `ClosePane`, and `ResetFontSize`. Constructors: `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, `SplitPane("columns"|"rows")`, `FocusPane(direction)`, `ResizePane(direction, delta_cells)`, `SwapPane(direction)`, `MovePane(direction)`, and `Multiple({...})`, where direction is `"left"|"right"|"up"|"down"` and resize deltas are 1–1024 cells. `WithTarget(action, "origin")` is also available.
 
 Arguments are validated during config loading. Typed actions use registry press/repeat policy. Function callbacks preserve legacy behavior: they execute on press, consume repeat without executing, and run through the existing watchdog.
 

@@ -80,8 +80,8 @@ func TestRegistryRejectsInvalidDescriptors(t *testing.T) {
 
 func TestDefaultRegistryContract(t *testing.T) {
 	wantIDs := []ID{
-		IDCallback, IDClosePane, IDCopySelection, IDFocusPane, IDMultiple, IDPasteClipboard,
-		IDReloadConfig, IDScroll, IDSplitPane, IDToggleSearch, IDToggleStats, IDZoom,
+		IDCallback, IDClosePane, IDCopySelection, IDFocusPane, IDMovePane, IDMultiple, IDPasteClipboard,
+		IDReloadConfig, IDResizePane, IDScroll, IDSplitPane, IDSwapPane, IDToggleSearch, IDToggleStats, IDZoom,
 	}
 	descriptors := DefaultRegistry().Descriptors()
 	gotIDs := make([]ID, len(descriptors))
@@ -106,6 +106,16 @@ func TestDefaultRegistryContract(t *testing.T) {
 	zoom, _ := DefaultRegistry().Lookup(IDZoom)
 	if !zoom.TriggerPolicy.ConsumeRepeat || !zoom.TriggerPolicy.ExecuteRepeat {
 		t.Fatalf("zoom repeat policy = %#v", zoom.TriggerPolicy)
+	}
+	resize, _ := DefaultRegistry().Lookup(IDResizePane)
+	if !resize.TriggerPolicy.ConsumeRepeat || !resize.TriggerPolicy.ExecuteRepeat {
+		t.Fatalf("resize repeat policy = %#v", resize.TriggerPolicy)
+	}
+	for _, id := range []ID{IDSwapPane, IDMovePane} {
+		descriptor, _ := DefaultRegistry().Lookup(id)
+		if !descriptor.TriggerPolicy.ConsumeRepeat || descriptor.TriggerPolicy.ExecuteRepeat {
+			t.Fatalf("%s repeat policy = %#v", id, descriptor.TriggerPolicy)
+		}
 	}
 }
 

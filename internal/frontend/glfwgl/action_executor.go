@@ -88,6 +88,20 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		if err := a.executeFocusAction(pane, command); err != nil {
 			return actionExecutionError(command, termaction.ErrorMux, err)
 		}
+	case termaction.ResizePane:
+		if err := a.executeTopologyAction(pane, command.Direction, func(direction termmux.Direction) ([]termmux.Event, error) {
+			return a.mux.ResizeCurrentPane(direction, command.Delta)
+		}); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.SwapPane:
+		if err := a.executeTopologyAction(pane, command.Direction, a.mux.SwapCurrentPane); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.MovePane:
+		if err := a.executeTopologyAction(pane, command.Direction, a.mux.MoveCurrentPane); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
 	case termaction.ClosePane:
 		events, err := a.mux.ClosePane(pane)
 		a.handleMuxEvents(events)
@@ -211,6 +225,24 @@ func (a *App) executeFocusAction(source termmux.PaneID, command termaction.Focus
 		direction = termmux.FocusDown
 	}
 	events, err := a.mux.FocusDirection(direction)
+	a.handleMuxEvents(events)
+	return err
+}
+
+func (a *App) executeTopologyAction(source termmux.PaneID, direction termaction.Direction, execute func(termmux.Direction) ([]termmux.Event, error)) error {
+	if err := a.focusActionPane(source); err != nil {
+		return err
+	}
+	muxDirection := termmux.FocusLeft
+	switch direction {
+	case termaction.FocusRight:
+		muxDirection = termmux.FocusRight
+	case termaction.FocusUp:
+		muxDirection = termmux.FocusUp
+	case termaction.FocusDown:
+		muxDirection = termmux.FocusDown
+	}
+	events, err := execute(muxDirection)
 	a.handleMuxEvents(events)
 	return err
 }
