@@ -252,7 +252,7 @@ func TestMuxEOFRetainsPaneAndCloseIsIdempotent(t *testing.T) {
 	}
 	awaitWake(t, wakes)
 	events := m.Drain(8)
-	if len(events) != 1 || events[0].Kind != PaneExited || events[0].Err != nil {
+	if len(events) != 2 || events[0].Kind != PaneExited || events[0].Err != nil || events[1].Kind != TabRevisionChanged || events[1].Tab != 1 {
 		t.Fatalf("EOF events = %#v", events)
 	}
 	view, ok := m.PaneView(1)

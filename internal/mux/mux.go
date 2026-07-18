@@ -13,7 +13,6 @@ import (
 	"cervterm/internal/render"
 )
 
-// Options configures process-local mux orchestration.
 type Options struct {
 	IngressCapacity        int
 	Wake                   func()
@@ -22,7 +21,6 @@ type Options struct {
 	HideCursorWhenScrolled *bool
 }
 
-// PaneView is an immutable copy of the pane state exposed to frontends.
 type PaneView struct {
 	ID                PaneID
 	State             PaneState
@@ -40,7 +38,6 @@ type PaneView struct {
 	MouseMode         core.MouseMode
 }
 
-// Mux owns pane sessions on one main-thread owner; readers only touch ingress.
 type Mux struct {
 	factory      SessionFactory
 	options      Options
@@ -160,12 +157,6 @@ func (m *Mux) PaneView(id PaneID) (PaneView, bool) {
 	view.Snapshot.Cells = append(view.Snapshot.Cells[:0:0], p.snapshot.Cells...)
 	return view, true
 }
-
-func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
-	return m.SpawnSplit(target, axis, spec)
-}
-
-// SpawnSplit preserves tree, focus, IDs and processes when argv-only spawn fails.
 func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
 	target := origin
 	if !m.bootstrapped {
@@ -312,7 +303,6 @@ func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
 	return m.advancePane(p, data), nil
 }
 
-// Drain advances up to limit records; a non-positive limit drains current input.
 func (m *Mux) Drain(limit int) []Event {
 	var events []Event
 	for count := 0; limit <= 0 || count < limit; count++ {
@@ -327,11 +317,19 @@ func (m *Mux) Drain(limit int) []Event {
 			}
 			if record.err != nil && p.state == PaneStateRunning {
 				p.state = PaneStateExited
+				tab := m.model.tabForPane(p.id)
 				exit := Event{Kind: PaneExited, Pane: p.id}
+				if tab != nil {
+					exit.Tab = tab.id
+					tab.revision++
+				}
 				if !errors.Is(record.err, io.EOF) {
 					exit.Err = record.err
 				}
 				events = append(events, exit)
+				if tab != nil {
+					events = append(events, Event{Kind: TabRevisionChanged, Tab: tab.id, Revision: tab.revision})
+				}
 			}
 		default:
 			return events
@@ -361,7 +359,6 @@ func (m *Mux) advancePane(p *pane, data []byte) []Event {
 	return events
 }
 
-// SearchUpward atomically finds and reveals the next match in one pane.
 func (m *Mux) SearchUpward(id PaneID, query string, hasPrev bool, prevRow int) (row, col int, ok bool, err error) {
 	p, exists := m.panes[id]
 	if !exists || !m.model.paneExists(id) {
