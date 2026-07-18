@@ -48,9 +48,11 @@ func (n *node) isLeaf() bool { return n != nil && n.pane != 0 }
 const MaxTabs = 256
 
 type tabState struct {
-	id      TabID
-	root    *node
-	focused PaneID
+	id       TabID
+	title    string
+	root     *node
+	focused  PaneID
+	revision uint64
 }
 
 // Model owns pure identity, ordered tab topology, and focus state.
@@ -69,7 +71,7 @@ type Model struct {
 func NewModel() *Model {
 	pane, tab := PaneID(1), TabID(1)
 	return &Model{
-		tabs: []tabState{{id: tab, root: leafNode(pane), focused: pane}}, active: tab,
+		tabs: []tabState{{id: tab, root: leafNode(pane), focused: pane, revision: 1}}, active: tab,
 		nextTabID: 2, nextPaneID: 2, nextSplitID: 1,
 		allocated:       map[PaneID]struct{}{pane: {}},
 		allocatedSplits: map[SplitID]struct{}{}, allocatedTabs: map[TabID]struct{}{tab: {}},
@@ -212,6 +214,7 @@ func (m *Model) SplitWithRatioAndMetrics(pane PaneID, axis SplitAxis, ratio Spli
 	}
 	tab.root = newRoot
 	tab.focused = newPane
+	tab.revision++
 	m.allocated[newPane] = struct{}{}
 	m.allocatedSplits[newSplit] = struct{}{}
 	m.nextPaneID++
@@ -363,10 +366,12 @@ func absInt(value int) int {
 // CloseResult describes a topology close transition. Closed is false for an
 // idempotent repeated close of an ID that this model previously allocated.
 type CloseResult struct {
-	Pane    PaneID
-	Focused PaneID
-	Closed  bool
-	Empty   bool
+	Pane      PaneID
+	Focused   PaneID
+	Closed    bool
+	Empty     bool
+	Tab       TabID
+	TabClosed bool
 }
 
 // Close removes one leaf, collapses its parent split, and reports final-empty.
@@ -395,10 +400,13 @@ func (m *Model) Close(pane PaneID) (CloseResult, error) {
 		return CloseResult{}, invariantError("active pane %d could not be removed", pane)
 	}
 	tab.root = newRoot
-	if newRoot == nil {
-		closedTab := tab.id
+	closedTab := tab.id
+	tabClosed := newRoot == nil
+	if tabClosed {
+		index := 0
 		for i := range m.tabs {
 			if m.tabs[i].id == closedTab {
+				index = i
 				m.tabs = append(m.tabs[:i], m.tabs[i+1:]...)
 				break
 			}
@@ -406,7 +414,10 @@ func (m *Model) Close(pane PaneID) (CloseResult, error) {
 		if len(m.tabs) == 0 {
 			m.active = 0
 		} else if m.active == closedTab {
-			m.active = m.tabs[0].id
+			if index >= len(m.tabs) {
+				index = len(m.tabs) - 1
+			}
+			m.active = m.tabs[index].id
 		}
 	} else if tab.focused == pane {
 		remaining := paneIDs(tab.root)
@@ -415,7 +426,10 @@ func (m *Model) Close(pane PaneID) (CloseResult, error) {
 		}
 		tab.focused = remaining[closedIndex]
 	}
-	return CloseResult{Pane: pane, Focused: m.FocusedPane(), Closed: true, Empty: len(m.tabs) == 0}, nil
+	if !tabClosed {
+		tab.revision++
+	}
+	return CloseResult{Pane: pane, Tab: closedTab, TabClosed: tabClosed, Focused: m.FocusedPane(), Closed: true, Empty: len(m.tabs) == 0}, nil
 }
 
 // CheckInvariants verifies ordered tab, ownership, tree, and monotonic ID state.

@@ -20,7 +20,7 @@ func TestOrderedTabFoundationInitialCompatibility(t *testing.T) {
 
 func TestOrderedTabFoundationTracksIndependentRootsAndRememberedFocus(t *testing.T) {
 	m := NewModel()
-	m.tabs = append(m.tabs, tabState{id: 2, root: leafNode(2), focused: 2})
+	m.tabs = append(m.tabs, tabState{id: 2, root: leafNode(2), focused: 2, revision: 1})
 	m.allocatedTabs[2] = struct{}{}
 	m.allocated[2] = struct{}{}
 	m.nextTabID = 3
@@ -45,12 +45,12 @@ func TestOrderedTabFoundationRejectsDuplicateOwnership(t *testing.T) {
 		want   string
 	}{
 		{"duplicate tab", func(m *Model) {
-			m.tabs = append(m.tabs, tabState{id: 1, root: leafNode(2), focused: 2})
+			m.tabs = append(m.tabs, tabState{id: 1, root: leafNode(2), focused: 2, revision: 1})
 			m.allocated[2] = struct{}{}
 			m.nextPaneID = 3
 		}, "appears more than once"},
 		{"shared pane", func(m *Model) {
-			m.tabs = append(m.tabs, tabState{id: 2, root: leafNode(1), focused: 1})
+			m.tabs = append(m.tabs, tabState{id: 2, root: leafNode(1), focused: 1, revision: 1})
 			m.allocatedTabs[2] = struct{}{}
 			m.nextTabID = 3
 		}, "belongs to tabs"},
@@ -71,7 +71,7 @@ func TestOrderedTabFoundationEnforcesBound(t *testing.T) {
 	m := NewModel()
 	for id := TabID(2); id <= MaxTabs+1; id++ {
 		pane := PaneID(id)
-		m.tabs = append(m.tabs, tabState{id: id, root: leafNode(pane), focused: pane})
+		m.tabs = append(m.tabs, tabState{id: id, root: leafNode(pane), focused: pane, revision: 1})
 		m.allocatedTabs[id] = struct{}{}
 		m.allocated[pane] = struct{}{}
 	}
