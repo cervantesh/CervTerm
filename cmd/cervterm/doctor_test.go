@@ -33,6 +33,9 @@ func TestRunDoctorPrintsActionableSections(t *testing.T) {
 		"environment:",
 		"text-gamma: 1.15",
 		"text-darken: 0.00",
+		"background-formats: png,jpeg,gif-static",
+		"background-budget: cpu=134217728 gpu=134217728",
+		"background-surface-capability: runtime-probed",
 		"support:",
 	} {
 		if !strings.Contains(output, want) {

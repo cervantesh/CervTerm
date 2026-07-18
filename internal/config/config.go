@@ -20,6 +20,7 @@ type Config struct {
 	Font        FontConfig
 	ColorScheme string `json:",omitempty"`
 	Colors      ColorsConfig
+	Background  BackgroundConfig
 	Scrolling   ScrollingConfig
 	Scrollbar   ScrollbarConfig
 	Cursor      CursorConfig
@@ -171,6 +172,7 @@ func (c Config) Clone() Config {
 		}
 		c.Font.Features = features
 	}
+	c.Background.Layers = cloneBackgroundLayers(c.Background.Layers)
 	c.Shell.Args = append([]string(nil), c.Shell.Args...)
 	if c.Shell.Env != nil {
 		environment := make(map[string]string, len(c.Shell.Env))
@@ -263,6 +265,9 @@ func (c Config) Validate() error {
 	}
 	if math.IsNaN(c.Window.BackgroundOpacity) || math.IsInf(c.Window.BackgroundOpacity, 0) || c.Window.BackgroundOpacity < 0 || c.Window.BackgroundOpacity > 1 {
 		errs = append(errs, errors.New("window.background_opacity must be a finite number between 0.0 and 1.0"))
+	}
+	if err := validateBackgroundLayers(c.Background.Layers); err != nil {
+		errs = append(errs, err)
 	}
 	if c.Font.Size <= 0 {
 		errs = append(errs, errors.New("font size must be > 0"))
