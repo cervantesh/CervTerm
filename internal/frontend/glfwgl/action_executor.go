@@ -98,6 +98,48 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		if !a.requestConfigReload() {
 			return actionExecutionError(command, termaction.ErrorAction, errors.New("no config source to reload"))
 		}
+	case termaction.NewTab:
+		_, _, events, err := a.mux.SpawnTab(a.desiredShellSpawnSpec(), termmux.CellMetrics{CellWidth: max(1, int(a.cellW)), CellHeight: max(1, int(a.cellH))}, "")
+		a.handleMuxEvents(events)
+		if err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.ActivateTab:
+		events, err := a.mux.ActivateTab(termmux.TabID(command.TabID))
+		a.handleMuxEvents(events)
+		if err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.ActivateTabRelative:
+		if err := a.executeRelativeTabAction(envelope, context, command.Delta); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.MoveTab:
+		events, err := a.mux.MoveTab(termmux.TabID(command.TabID), command.Position)
+		a.handleMuxEvents(events)
+		if err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.RenameTab:
+		events, err := a.mux.RenameTab(termmux.TabID(command.TabID), command.Title)
+		a.handleMuxEvents(events)
+		if err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.CloseTab:
+		events, err := a.mux.CloseTab(termmux.TabID(command.TabID))
+		a.handleMuxEvents(events)
+		if err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.MovePaneToTab:
+		if err := a.executeMovePaneToTab(pane, command); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.ActivateTabSwitcher:
+		if err := a.openTabSwitcher(); err != nil {
+			return actionExecutionError(command, termaction.ErrorAction, err)
+		}
 	case termaction.SplitPane:
 		if err := a.executeSplitAction(pane, command); err != nil {
 			return actionExecutionError(command, termaction.ErrorMux, err)
@@ -213,20 +255,19 @@ func (a *App) executeSplitAction(source termmux.PaneID, command termaction.Split
 	if command.Axis == termaction.SplitRows {
 		axis = termmux.SplitRows
 	}
-	a.ensureConfigState()
-	shell := a.desiredCfg.Shell
-	spawn := termmux.SpawnSpec{Options: pty.Options{
-		ShellProgram:     shell.Program,
-		ShellArgs:        append([]string(nil), shell.Args...),
-		WorkingDirectory: shell.WorkingDirectory,
-		Env:              cloneStringMap(shell.Env),
-	}}
+	spawn := a.desiredShellSpawnSpec()
 	created, events, err := a.mux.Split(source, axis, spawn)
 	if created != 0 {
 		a.inheritPaneFontState(created, source)
 	}
 	a.handleMuxEvents(events)
 	return err
+}
+
+func (a *App) desiredShellSpawnSpec() termmux.SpawnSpec {
+	a.ensureConfigState()
+	shell := a.desiredCfg.Shell
+	return termmux.SpawnSpec{Options: pty.Options{ShellProgram: shell.Program, ShellArgs: append([]string(nil), shell.Args...), WorkingDirectory: shell.WorkingDirectory, Env: cloneStringMap(shell.Env)}}
 }
 
 func (a *App) executeFocusAction(source termmux.PaneID, command termaction.FocusPane) error {
@@ -282,4 +323,52 @@ func cloneStringMap(source map[string]string) map[string]string {
 		clone[key] = value
 	}
 	return clone
+}
+
+func (a *App) executeRelativeTabAction(envelope termaction.Envelope, context termaction.Context, delta int) error {
+	ref, err := context.Resolve(envelope.Target)
+	if err != nil || ref.Kind != termaction.RefPane {
+		return termaction.ErrTargetUnavailable
+	}
+	owner, ok := a.mux.TabForPane(termmux.PaneID(ref.ID))
+	if !ok {
+		return termaction.ErrTargetUnavailable
+	}
+	tabs := a.mux.Tabs()
+	index := -1
+	for i := range tabs {
+		if tabs[i].ID == owner {
+			index = i
+			break
+		}
+	}
+	if index < 0 || len(tabs) == 0 {
+		return termaction.ErrTargetUnavailable
+	}
+	next := ((index+delta)%len(tabs) + len(tabs)) % len(tabs)
+	events, err := a.mux.ActivateTab(tabs[next].ID)
+	a.handleMuxEvents(events)
+	return err
+}
+
+func (a *App) executeMovePaneToTab(pane termmux.PaneID, command termaction.MovePaneToTab) error {
+	var target termmux.TabView
+	found := false
+	for _, tab := range a.mux.Tabs() {
+		if tab.ID == termmux.TabID(command.TabID) {
+			target = tab
+			found = true
+			break
+		}
+	}
+	if !found {
+		return termmux.ErrTabNotFound
+	}
+	axis := termmux.SplitColumns
+	if command.Axis == termaction.SplitRows {
+		axis = termmux.SplitRows
+	}
+	events, err := a.mux.TransferPane(pane, target.ID, target.Focused, axis)
+	a.handleMuxEvents(events)
+	return err
 }

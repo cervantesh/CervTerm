@@ -240,6 +240,8 @@ local record cervterm
     ReloadConfig: Action
     ClosePane: Action
     ResetFontSize: Action
+    NewTab: Action
+    ActivateTabSwitcher: Action
     ScrollLines: function(integer): Action
     ScrollPage: function(integer): Action
     ScrollBuffer: function(integer): Action
@@ -249,6 +251,12 @@ local record cervterm
     ResizePane: function(string, integer): Action
     SwapPane: function(string): Action
     MovePane: function(string): Action
+    ActivateTab: function(integer): Action
+    ActivateTabRelative: function(integer): Action
+    MoveTab: function(integer, integer): Action
+    RenameTab: function(integer, string): Action
+    CloseTab: function(integer): Action
+    MovePaneToTab: function(integer, string): Action
     Multiple: function({Action}): Action
     WithTarget: function(Action, string): Action
   end

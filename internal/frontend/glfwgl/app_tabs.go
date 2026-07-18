@@ -4,7 +4,6 @@ package glfwgl
 
 import (
 	termux "cervterm/internal/mux"
-	ptyio "cervterm/internal/pty"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
@@ -72,7 +71,7 @@ func (a *App) handleTabBarButton(button glfw.MouseButton, action glfw.Action, x,
 	case tabHitClose:
 		events, err = a.mux.CloseTab(hit.Tab)
 	case tabHitAdd:
-		_, _, events, err = a.mux.SpawnTab(termux.SpawnSpec{Options: ptyio.Options{ShellProgram: a.cfg.Shell.Program, ShellArgs: a.cfg.Shell.Args, WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env}}, termux.CellMetrics{CellWidth: max(1, int(a.cellW)), CellHeight: max(1, int(a.cellH))}, "")
+		_, _, events, err = a.mux.SpawnTab(a.desiredShellSpawnSpec(), termux.CellMetrics{CellWidth: max(1, int(a.cellW)), CellHeight: max(1, int(a.cellH))}, "")
 	}
 	if err != nil {
 		a.Notify(err.Error())

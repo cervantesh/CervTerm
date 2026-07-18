@@ -73,6 +73,12 @@ func (a *App) commandPaletteSnapshot(hasPane bool) ([]modal.Entry, map[string]co
 			command = termaction.ActivateQuickSelect{}
 		case termaction.IDActivateLaunchMenu:
 			command = termaction.ActivateLaunchMenu{}
+		case termaction.IDNewTab:
+			command = termaction.NewTab{}
+		case termaction.IDActivateTabRelative:
+			command = termaction.ActivateTabRelative{Delta: 1}
+		case termaction.IDActivateTabSwitcher:
+			command = termaction.ActivateTabSwitcher{}
 		default:
 			continue
 		}

@@ -32,6 +32,8 @@ func installActionModule(state *lua.LState, module *lua.LTable) {
 	setActionConstant(state, actions, "ReloadConfig", termaction.ReloadConfig{})
 	setActionConstant(state, actions, "ClosePane", termaction.ClosePane{})
 	setActionConstant(state, actions, "ResetFontSize", termaction.Zoom{Mode: termaction.ZoomReset})
+	setActionConstant(state, actions, "NewTab", termaction.NewTab{})
+	setActionConstant(state, actions, "ActivateTabSwitcher", termaction.ActivateTabSwitcher{})
 
 	actions.RawSetString("ScrollLines", state.NewFunction(func(l *lua.LState) int {
 		pushLuaAction(l, termaction.Scroll{Unit: termaction.ScrollLine, Amount: checkLuaActionInt(l, 1)}, termaction.TargetFocused)
@@ -67,6 +69,30 @@ func installActionModule(state *lua.LState, module *lua.LTable) {
 	}))
 	actions.RawSetString("MovePane", state.NewFunction(func(l *lua.LState) int {
 		pushLuaAction(l, termaction.MovePane{Direction: termaction.Direction(l.CheckString(1))}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("ActivateTab", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.ActivateTab{TabID: checkLuaTabID(l, 1)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("ActivateTabRelative", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.ActivateTabRelative{Delta: checkLuaActionInt(l, 1)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("MoveTab", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.MoveTab{TabID: checkLuaTabID(l, 1), Position: checkLuaActionInt(l, 2)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("RenameTab", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.RenameTab{TabID: checkLuaTabID(l, 1), Title: l.CheckString(2)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("CloseTab", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.CloseTab{TabID: checkLuaTabID(l, 1)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("MovePaneToTab", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.MovePaneToTab{TabID: checkLuaTabID(l, 1), Axis: termaction.SplitAxis(l.CheckString(2))}, termaction.TargetFocused)
 		return 1
 	}))
 	actions.RawSetString("Multiple", state.NewFunction(func(l *lua.LState) int {
@@ -151,4 +177,13 @@ func checkLuaActionInt(state *lua.LState, index int) int {
 		state.ArgError(index, fmt.Sprintf("integer in [%g, %g) expected", -upperBound, upperBound))
 	}
 	return int(value)
+}
+
+func checkLuaTabID(state *lua.LState, index int) uint64 {
+	const maxSafeInteger = uint64(1<<53 - 1)
+	value := float64(state.CheckNumber(index))
+	if math.IsNaN(value) || math.IsInf(value, 0) || math.Trunc(value) != value || value < 1 || value > float64(maxSafeInteger) {
+		state.ArgError(index, fmt.Sprintf("positive safe integer in [1, %d] expected", maxSafeInteger))
+	}
+	return uint64(value)
 }
