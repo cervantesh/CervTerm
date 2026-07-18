@@ -15,6 +15,7 @@ const (
 	IDToggleSearch           ID = "toggle_search"
 	IDToggleStats            ID = "toggle_stats"
 	IDActivateCommandPalette ID = "activate_command_palette"
+	IDActivateQuickSelect    ID = "activate_quick_select"
 	IDScroll                 ID = "scroll"
 	IDZoom                   ID = "zoom"
 	IDReloadConfig           ID = "reload_config"
@@ -48,6 +49,7 @@ type ToggleStats struct{}
 type ReloadConfig struct{}
 type ClosePane struct{}
 type ActivateCommandPalette struct{}
+type ActivateQuickSelect struct{}
 
 func (CopySelection) ID() ID          { return IDCopySelection }
 func (PasteClipboard) ID() ID         { return IDPasteClipboard }
@@ -56,6 +58,7 @@ func (ToggleStats) ID() ID            { return IDToggleStats }
 func (ReloadConfig) ID() ID           { return IDReloadConfig }
 func (ClosePane) ID() ID              { return IDClosePane }
 func (ActivateCommandPalette) ID() ID { return IDActivateCommandPalette }
+func (ActivateQuickSelect) ID() ID    { return IDActivateQuickSelect }
 
 func (CopySelection) Validate() error          { return nil }
 func (PasteClipboard) Validate() error         { return nil }
@@ -64,6 +67,7 @@ func (ToggleStats) Validate() error            { return nil }
 func (ReloadConfig) Validate() error           { return nil }
 func (ClosePane) Validate() error              { return nil }
 func (ActivateCommandPalette) Validate() error { return nil }
+func (ActivateQuickSelect) Validate() error    { return nil }
 
 func (CopySelection) action()          {}
 func (PasteClipboard) action()         {}
@@ -72,6 +76,7 @@ func (ToggleStats) action()            {}
 func (ReloadConfig) action()           {}
 func (ClosePane) action()              {}
 func (ActivateCommandPalette) action() {}
+func (ActivateQuickSelect) action()    {}
 
 type ScrollUnit string
 
@@ -296,6 +301,8 @@ func actionIdentity(action Action) (ID, error) {
 		return IDToggleStats, nil
 	case ActivateCommandPalette:
 		return IDActivateCommandPalette, nil
+	case ActivateQuickSelect:
+		return IDActivateQuickSelect, nil
 	case Scroll:
 		return IDScroll, nil
 	case Zoom:

@@ -214,6 +214,10 @@ func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchem
 			if err := b.mergeEvents(dst, child, path, value); err != nil {
 				return err
 			}
+		case KindQuickSelectRuleList:
+			if err := b.mergeQuickSelectRules(dst, child, path, value); err != nil {
+				return err
+			}
 		default:
 			cost := 1
 			if table, ok := value.(*lua.LTable); ok {
@@ -224,6 +228,30 @@ func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchem
 			}
 			dst.RawSetString(child.name, value)
 			b.provenance.set(path, b.origin, false, child.sensitive)
+		}
+	}
+	return nil
+}
+func (b *compositionBuilder) mergeQuickSelectRules(dst *lua.LTable, schema fieldSchema, path string, value lua.LValue) error {
+	list, ok := value.(*lua.LTable)
+	if !ok {
+		return nil
+	}
+	if err := b.consume(1+list.Len()*5, path); err != nil {
+		return err
+	}
+	dst.RawSetString(schema.name, list)
+	b.provenance.tombstonePrefixExcept(path, b.origin, false, nil)
+	b.provenance.set(path, b.origin, false, false)
+	for i := 1; i <= list.Len(); i++ {
+		entry, ok := list.RawGetInt(i).(*lua.LTable)
+		if !ok {
+			continue
+		}
+		for _, field := range []string{"id", "pattern", "action", "priority"} {
+			if entry.RawGetString(field) != lua.LNil {
+				b.provenance.set(fmt.Sprintf("%s[%d].%s", path, i, field), b.origin, false, false)
+			}
 		}
 	}
 	return nil
@@ -401,7 +429,7 @@ func (b *compositionBuilder) seedDefaults(schema fieldSchema, prefix string) {
 			for _, child := range field.children {
 				seed(child, joinPath(path, child.name))
 			}
-		case KindStringMap, KindFeatureMap, KindIndexedColorMap, KindKeyList, KindEvents, KindDescriptorList, KindFontRuleList:
+		case KindStringMap, KindFeatureMap, KindIndexedColorMap, KindKeyList, KindEvents, KindDescriptorList, KindFontRuleList, KindQuickSelectRuleList:
 			// These surfaces have no fixed built-in winner: map provenance begins
 			// at concrete keys, while bindings and callbacks are absent by default.
 		default:
@@ -442,7 +470,7 @@ func fixedLeafPaths(schema fieldSchema, path string) []schemaLeaf {
 
 func legacyValueCompatible(value lua.LValue, kind ValueKind) bool {
 	switch kind {
-	case KindTable, KindStringList, KindStringMap, KindFeatureMap, KindIndexedColorMap, KindKeyList, KindEvents, KindColorSchemeMap, KindDescriptorList, KindFontRuleList:
+	case KindTable, KindStringList, KindStringMap, KindFeatureMap, KindIndexedColorMap, KindKeyList, KindEvents, KindColorSchemeMap, KindDescriptorList, KindFontRuleList, KindQuickSelectRuleList:
 		_, ok := value.(*lua.LTable)
 		return ok
 	case KindString:
