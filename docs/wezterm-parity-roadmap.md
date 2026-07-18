@@ -185,6 +185,8 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 8 — Visible Tabs and Tab Bar
 **Scope:** promote the implicit tab into a mux-owned tab collection.
 
+**Status:** complete on `main` through merge commit `c05e572`.
+
 **Work**
 - Accept the tab-ownership portion of ADR-0004.
 - Add stable TabID, ordered tabs, active tab, tab lifecycle, rename/reorder, pane move between tabs.
@@ -196,6 +198,8 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 **Success:** one-pane/one-tab behavior is unchanged; closing/moving panes never leaks PTYs; inactive tabs do not receive input or unnecessary rendering.
 
 **Tests:** pure mux invariants, tab lifecycle/focus fallback, pane transfer, hit-testing/overflow, close ordering, race/leak tests.
+
+**Evidence:** `internal/mux/model_tabs.go`, `internal/mux/model_transfer.go`, `internal/frontend/glfwgl/tab_bar.go`, `internal/frontend/glfwgl/tab_close.go`, `internal/action/tab.go`, and `docs/validation/phase-8-visible-tabs.md`.
 
 **Rollback:** hidden one-tab mode can remain the default for one release.
 

@@ -109,3 +109,17 @@ Automated qualification covers bounds, composition/provenance, reload rollback, 
 ## Remaining CI check
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` is only verified after pushing this repo to GitHub and observing a green workflow run.
+
+## Phase 8 visible tabs qualification
+
+Automated qualification is recorded at `docs/validation/phase-8-visible-tabs.md`. On Windows, additionally verify:
+
+- The default `multiple` policy leaves a one-tab window pixel/grid compatible; opening the second tab reserves exactly one top or bottom strip and resizes the PTY once.
+- Tab, close and add hits never select terminal text, activate links, drag dividers, scroll the terminal or emit terminal mouse reports; an active modal still captures first.
+- Narrow the window until tabs overflow and activate first/middle/last tabs; the active tab remains visible and Unicode/emoji titles do not split clusters.
+- Background output adds one activity badge without continuous frames; activating the tab clears it.
+- Close an inactive running tab, then rename/reorder/move a pane before accepting: the stale confirmation must reject. An unchanged confirmation closes exactly once.
+- Exit every pane in a tab and click close: it closes directly. Closing the final tab closes the native window only after `WindowTabsEmpty`.
+- Move panes between nested tabs repeatedly and verify shell processes, scrollback, parser state and input ownership remain continuous with no extra spawn/close.
+
+macOS and Linux GUI tab-bar behavior remains manually unqualified; Linux headless CI covers model/config/frontend compilation and tests.
