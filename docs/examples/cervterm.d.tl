@@ -225,6 +225,7 @@ local record cervterm
     ToggleStats: Action
     ActivateCommandPalette: Action
     ActivateQuickSelect: Action
+    ActivateLaunchMenu: Action
     ReloadConfig: Action
     ClosePane: Action
     ResetFontSize: Action
@@ -406,6 +407,15 @@ local record cervterm
     rules: {QuickSelectRule} | Unset | nil
   end
 
+  record LaunchTarget
+    id: string
+    label: string
+    program: string
+    args: {string} | nil
+    cwd: string | nil
+    env: {string:string} | nil
+  end
+
   record Events
     output: function(Term, string) | Unset | nil
     title: function(Term, string) | Unset | nil
@@ -428,6 +438,7 @@ local record cervterm
     clipboard: ClipboardDocument | Unset
     render: RenderDocument | Unset
     shell: ShellDocument | Unset
+    launch_menu: {LaunchTarget} | Unset | nil
     quick_select: QuickSelectDocument | Unset
     keys: {KeyBinding} | Unset | nil
     leader: LeaderBinding | Unset | nil
@@ -455,6 +466,7 @@ local record cervterm
     clipboard: ClipboardDocument | Unset
     render: RenderDocument | Unset
     shell: ShellDocument | Unset
+    launch_menu: {LaunchTarget} | Unset | nil
     quick_select: QuickSelectDocument | Unset
     keys: {KeyBinding} | Unset | nil
     leader: LeaderBinding | Unset | nil

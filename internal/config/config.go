@@ -29,6 +29,7 @@ type Config struct {
 	Render      RenderConfig
 	Shell       ShellConfig
 	QuickSelect QuickSelectConfig
+	LaunchMenu  []LaunchTarget
 }
 
 type WindowConfig struct {
@@ -207,6 +208,7 @@ func (c Config) Clone() Config {
 	}
 	c.QuickSelect.Rules = append([]QuickSelectRule(nil), c.QuickSelect.Rules...)
 	c.QuickSelect.Compiled = append([]quickselect.PreparedRule(nil), c.QuickSelect.Compiled...)
+	c.LaunchMenu = cloneLaunchTargets(c.LaunchMenu)
 	return c
 }
 
@@ -288,6 +290,9 @@ func (c Config) Validate() error {
 	_ = preparedQuickSelect
 	if quickSelectErr != nil {
 		errs = append(errs, quickSelectErr)
+	}
+	if err := validateLaunchMenu(c.LaunchMenu); err != nil {
+		errs = append(errs, err)
 	}
 	if c.Window.Width < 100 || c.Window.Height < 100 {
 		errs = append(errs, errors.New("window width and height must be >= 100"))

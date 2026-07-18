@@ -96,13 +96,16 @@ func (a *App) applyModalIntents(intents []modal.Intent) {
 	for _, intent := range intents {
 		switch intent.Kind {
 		case modal.IntentAccept:
-			if a.modal.Mode() != modal.ModeCommandPalette && a.modal.Mode() != modal.ModeQuickSelect {
+			if a.modal.Mode() != modal.ModeCommandPalette && a.modal.Mode() != modal.ModeQuickSelect && a.modal.Mode() != modal.ModeLaunchMenu {
 				continue
 			}
 			var err error
-			if a.modal.Mode() == modal.ModeQuickSelect {
+			switch a.modal.Mode() {
+			case modal.ModeQuickSelect:
 				err = a.acceptQuickSelect(intent.Entry, termmux.PaneID(intent.Pane))
-			} else {
+			case modal.ModeLaunchMenu:
+				err = a.acceptLaunchMenu(intent.Entry, termmux.PaneID(intent.Pane))
+			default:
 				err = a.acceptCommandPalette(intent.Entry, termmux.PaneID(intent.Pane))
 			}
 			if err != nil {

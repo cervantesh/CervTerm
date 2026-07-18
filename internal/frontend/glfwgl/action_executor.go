@@ -78,6 +78,13 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		if err := a.openQuickSelect(pane); err != nil {
 			return actionExecutionError(command, termaction.ErrorAction, err)
 		}
+	case termaction.ActivateLaunchMenu:
+		if err := a.focusActionPane(pane); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+		if err := a.openLaunchMenu(pane); err != nil {
+			return actionExecutionError(command, termaction.ErrorAction, err)
+		}
 	case termaction.ToggleStats:
 		a.showStats = !a.showStats
 		a.requestRedraw()
