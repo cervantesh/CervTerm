@@ -93,6 +93,19 @@ Use a temporary config containing one legacy flat callback, a leader that enters
 - Resize/swap/move use the geometric neighbor in each direction. Resize respects the 2-column/2-row floor, swap keeps focus in the visual slot, and move keeps focus on the moved pane.
 - Attempt each topology action at an outer edge and minimum bound; an error notice appears and pane order, focus, geometry, and PTY sizes remain unchanged.
 
+## Phase 7 retained UX qualification
+
+Use temporary bindings for `ActivateCommandPalette`, `ActivateQuickSelect`, and `ActivateLaunchMenu`, then verify:
+
+- Each mode captures printable keys, navigation, mouse buttons/drag, wheel, and terminal mouse-reporting input without PTY leakage; Escape restores the opening pane.
+- Command palette filtering is rune-safe, excludes unavailable/unlabeled actions, preserves state on error, and closes after successful execution.
+- Quick select labels visible HTTP(S) links and custom copy rules; output, resize, viewport movement, or focus change cancels stale labels before side effects.
+- Launch menu passes arguments containing spaces/quotes/metacharacters as separate argv entries, honors cwd on Windows/Unix, and applies configured environment overrides without duplicate keys.
+- A launch failure leaves query, selection, focus and pane count unchanged; success creates exactly one pane and closes the mode.
+- Leave each mode unchanged while the terminal is idle and confirm no continuous frame presentation or CPU wake loop.
+
+Automated qualification covers bounds, composition/provenance, reload rollback, Unicode coordinates, stale generations, URL validation, clipboard content, environment normalization, Windows cwd plumbing, spawn atomicity, modal input capture, and zero-frame retained damage. Real Windows GUI interaction remains a manual recheck; macOS/Linux GUI checks are skipped without support claims.
+
 ## Remaining CI check
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` is only verified after pushing this repo to GitHub and observing a green workflow run.
