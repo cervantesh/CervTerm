@@ -37,6 +37,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Deterministic v2 font descriptors with real normal/bold/italic/bold-italic selection, bounded parsed resources, and safe legacy shorthand fallback.
 - Lazy whole-cluster fallback and symbol rules with ordered primary/fallback/embedded resolution and bounded font discovery.
 - OpenType feature projection and fixed-grid line-height, cell-width, baseline, and glyph offsets with pane-safe cache identities and redacted diagnostics.
+- Phase 5 appearance and window controls: per-side padding; independent text/background opacity; bounded solid, gradient, and image layers; scrollbar visibility/stable-gutter/fade-FPS policy; `render.max_fps`; and initial rows/columns plus native decoration/titlebar requests. Renderer selection remains explicitly excluded.
 
 ### Fixed
 

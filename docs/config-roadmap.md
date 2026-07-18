@@ -408,14 +408,18 @@ return config
 - Phase 2 of the parity roadmap adds dependency watching, provenance, migrations, and deterministic composition.
 - Live-safe and restart-required diffs must be explicit; renderer/backend selection is not a configuration goal.
 
-### Phase 5: Advanced configuration (partially implemented; superseded by parity roadmap)
+### Phase 5: Advanced configuration (appearance/window subset implemented; superseded by parity roadmap)
 
-- Keybindings.
-- Mouse bindings.
-- Cursor shapes.
-- Font fallback and rule-based whole-cluster selection are implemented in explicit v2.
-- Scrollbar.
-- Themes and imports.
+Implemented Phase 5.1-5.6 fields include:
+
+- `padding.left/right/top/bottom`;
+- independent text/background opacity with whole-window opacity/blur compatibility checks;
+- bounded solid, linear-gradient, and image background layers with fit/alignment;
+- scrollbar `always`/`hover`/`scrolling`/`never`, stable gutter, and bounded animation FPS;
+- `render.max_fps` presentation limiting without changing on-demand idle policy;
+- initial terminal rows/columns and capability-aware native decorations/titlebar requests.
+
+Renderer/backend selection is deliberately not part of the schema. Key tables and advanced mouse bindings remain Phase 6; theme catalogs/imports are tracked by their own parity phases.
 
 ## Original v1 non-goals and current disposition
 

@@ -67,6 +67,20 @@ Windows 11 `windows/amd64` qualification at merge commit `03efcc5` used the pack
 
 Manual recheck recipe: use an installed JetBrainsMono Nerd Font primary, `Microsoft YaHei UI` CJK rule, and `Segoe UI Emoji` emoji rule; print the strings above, then verify real style selection with `--doctor`, glyph alignment, cursor splits inside ligatures, pane-local zoom, and no sibling flash.
 
+## Phase 5 appearance and window qualification
+
+Automated qualification covers default geometry/pixels, per-side insets, independent text/background alpha, layered background budgets and reload rollback, OSC 11 precedence, scrollbar modes and idle cadence, `render.max_fps`, and checked initial-grid planning.
+
+| Platform check | Result | Evidence |
+|---|---|---|
+| Windows layered backgrounds, alpha and OSC 11 reset | Pass (automated); GUI recheck required | background/GLFW golden and transaction tests |
+| Windows scrollbar modes, overlay/stable gutter and idle | Pass (automated); GUI recheck required | scrollbar policy/fake-clock tests |
+| Windows system/none decorations and dark/system titlebar | Pass (automated creation plan); GUI recheck required | window-plan and platform titlebar tests |
+| Windows initial rows/cols first PTY grid | Pass (automated planning); installed GUI recheck required | checked startup plan tests |
+| Linux headless | Pass | default/headless CI-compatible tests |
+| Linux/macOS GUI native appearance | Skip | no GUI runner available; no support claim implied |
+| Renderer selection | Excluded | Phase 5 does not expose or change renderer selection |
+
 ## Remaining CI check
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` is only verified after pushing this repo to GitHub and observing a green workflow run.
