@@ -29,6 +29,7 @@ type Config struct {
 	Render      RenderConfig
 	Shell       ShellConfig
 	QuickSelect QuickSelectConfig
+	TabBar      TabBarConfig
 	LaunchMenu  []LaunchTarget
 }
 
@@ -177,6 +178,10 @@ func Defaults() Config {
 			ReservedWidthPX: 12, WidthPX: 8, MarginPX: 2, RadiusPX: 4, MinThumbPX: 24,
 			TrackColor: "#10172266", ThumbColor: "#60E8F0CC", ThumbHoverColor: "#7CF4F9E6", ThumbPressColor: "#B6FAFFFF",
 			AutoHideDelayMS: 1000, FadeMS: 150, PageStep: 0.9, TrackClick: "page",
+		},
+		TabBar: TabBarConfig{
+			Mode: "multiple", Position: "top", HeightPX: 28, MinWidthPX: 96, MaxWidthPX: 220, PaddingX: 8,
+			ShowNewButton: true, ShowCloseButton: true,
 		},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
 		Clipboard: ClipboardConfig{OSC52: "off"},
@@ -388,6 +393,7 @@ func (c Config) Validate() error {
 	if c.Scrollbar.TrackClick != "page" && c.Scrollbar.TrackClick != "jump" {
 		errs = append(errs, fmt.Errorf("scrollbar.track_click %q must be page or jump", c.Scrollbar.TrackClick))
 	}
+	errs = append(errs, validateTabBar(c.TabBar)...)
 	if c.Cursor.Shape != "block" && c.Cursor.Shape != "underline" && c.Cursor.Shape != "beam" {
 		errs = append(errs, fmt.Errorf("cursor shape %q must be block, underline, or beam", c.Cursor.Shape))
 	}

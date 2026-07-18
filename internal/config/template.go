@@ -147,6 +147,17 @@ return {
     page_step = %.2f,
     track_click = %q,
   },
+  tab_bar = {
+    -- Visibility: multiple (only with 2+ tabs), always, or hidden.
+    mode = %q,
+    position = %q,
+    height_px = %d,
+    min_width_px = %d,
+    max_width_px = %d,
+    padding_x = %d,
+    show_new_button = %t,
+    show_close_button = %t,
+  },
   cursor = {
     shape = %q,
     blink = %t,
@@ -266,6 +277,7 @@ return {
 		cfg.Scrollbar.ReservedWidthPX, cfg.Scrollbar.WidthPX, cfg.Scrollbar.MarginPX, cfg.Scrollbar.RadiusPX, cfg.Scrollbar.MinThumbPX,
 		cfg.Scrollbar.TrackColor, cfg.Scrollbar.ThumbColor, cfg.Scrollbar.ThumbHoverColor, cfg.Scrollbar.ThumbPressColor,
 		cfg.Scrollbar.AutoHideDelayMS, cfg.Scrollbar.FadeMS, cfg.Scrollbar.PageStep, cfg.Scrollbar.TrackClick,
+		cfg.TabBar.Mode, cfg.TabBar.Position, cfg.TabBar.HeightPX, cfg.TabBar.MinWidthPX, cfg.TabBar.MaxWidthPX, cfg.TabBar.PaddingX, cfg.TabBar.ShowNewButton, cfg.TabBar.ShowCloseButton,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
 		cfg.Clipboard.OSC52,
 		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.ZoomInHotkey, cfg.Render.ZoomOutHotkey, cfg.Render.ZoomResetHotkey, cfg.Render.VSync, cfg.Render.MaxFPS, cfg.Render.Redraw, cfg.Render.Damage, cfg.Render.Bidi,

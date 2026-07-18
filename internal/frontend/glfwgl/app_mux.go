@@ -188,6 +188,15 @@ func (a *App) handleMuxEvents(events []termmux.Event) bool {
 				a.mouseCapturePane = 0
 			}
 			consumed = true
+		case termmux.TabSpawned, termmux.TabActivated, termmux.TabRenamed, termmux.TabMoved, termmux.TabClosed, termmux.TabRevisionChanged, termmux.PaneTransferred:
+			newHeight := a.effectiveTabBarHeight()
+			if newHeight != a.tabBarHeight {
+				a.tabBarHeight = newHeight
+				if a.window != nil {
+					a.resizeToWindow()
+				}
+			}
+			consumed = true
 		case termmux.TabEmpty:
 			if a.window != nil {
 				a.window.SetShouldClose(true)

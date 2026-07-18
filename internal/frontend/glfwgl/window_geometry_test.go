@@ -25,6 +25,7 @@ func TestResolveWindowGeometryUsesEverySideAndStableGutter(t *testing.T) {
 		ScrollbarGutter: 8,
 		Content:         gpu.ClipRect{X: 2, Y: 5, Width: 87, Height: 69},
 		ScrollbarTrack:  gpu.ClipRect{X: 92, Y: 5, Width: 8, Height: 69},
+		TabBar:          gpu.ClipRect{X: 2, Y: 5, Width: 87},
 	}
 	if got != want {
 		t.Fatalf("geometry = %#v, want %#v", got, want)

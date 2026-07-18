@@ -71,8 +71,6 @@ type App struct {
 	backgroundResizeResults   chan backgroundResizeResult
 	atlas                     *glyphAtlas
 
-	// Last framebuffer size sent to r.Resize; seeded to -1 so the first frame
-	// initializes the backend and later frames resize only on real changes.
 	lastFBW, lastFBH int
 
 	cols, rows       int
@@ -82,6 +80,10 @@ type App struct {
 	drawOriginX      float32
 	drawOriginY      float32
 	uiScale          float32
+	tabBar           tabBarLayout
+	tabBarPressed    tabHit
+	tabBarFirst      int
+	tabBarHeight     int
 	contentScaleX    float32
 	contentScaleY    float32
 	status           statusState
@@ -113,20 +115,14 @@ type App struct {
 	ligaturesActive  bool   // font.ligatures enabled AND the active shaper can substitute
 
 	rowHashes, prevHashes, prevPrevHashes []uint64
-	// Cursor rows need buffer-age-2 damage because the cursor bypasses row hashes;
-	// repaint both prior rows so alternating back buffers cannot retain a ghost.
-	lastCursorRow, prevCursorRow int
-	damage                       damageState
+	lastCursorRow, prevCursorRow          int
+	damage                                damageState
 
-	// On-demand render state. Main-thread only; the PTY reader must not touch
-	// needsRedraw (it wakes the loop with glfw.PostEmptyEvent instead).
 	needsRedraw    bool
 	presentation   presentationGate
 	lastBlinkPhase bool
 	lastStatsDraw  time.Time
 
-	// wakeReady prevents PostEmptyEvent before GLFW init or after termination;
-	// a skipped transition wake self-heals within the bounded loop wait.
 	wakeReady atomic.Bool
 
 	lterm               searchTerminal
@@ -211,14 +207,11 @@ func (a *App) runWindow() error {
 		return err
 	}
 	defer glfw.Terminate()
-	// Stop reader goroutines while GLFW is still initialized. The mux is created
-	// only after the prepared atlas is adopted, so every early return is nil-safe.
 	defer func() {
 		if a.mux != nil {
 			_ = a.mux.Shutdown()
 		}
 	}()
-	// Stop reader wake posts before GLFW teardown (registered after Terminate for LIFO).
 	a.wakeReady.Store(true)
 	defer a.wakeReady.Store(false)
 	defer a.discardConfigReloadWorkers()
@@ -251,8 +244,6 @@ func (a *App) runWindow() error {
 	if err := gl.Init(); err != nil {
 		return err
 	}
-	// The GL context is current; build the renderer now so the atlas (which owns
-	// the page geometry) can configure its textures in its own constructor.
 	a.r = newGLRenderer(w)
 	rendererAdopted := false
 	defer func() {
@@ -264,8 +255,6 @@ func (a *App) runWindow() error {
 		return err
 	}
 	defer a.closeBackgroundSurface()
-	// -1 (not 0) so the first draw always drives Resize, even if the initial
-	// framebuffer is 0x0 (0 is a valid size, so it cannot double as the sentinel).
 	a.lastFBW, a.lastFBH = -1, -1
 	sx, sy := w.GetContentScale()
 	a.applyScale(sx, sy)
@@ -368,6 +357,9 @@ func (a *App) installCallbacks() {
 			return
 		}
 		x, y := a.window.GetCursorPos()
+		if a.handleTabBarButton(button, action, x, y) {
+			return
+		}
 		if a.handleConfiguredMouseButton(button, action, mods, x, y) {
 			return
 		}
@@ -413,6 +405,10 @@ func (a *App) installCallbacks() {
 		if a.handleModalCursorPos(x, y) {
 			return
 		}
+		if a.pointerOverTabBar(x, y) {
+			a.clearDividerCursor()
+			return
+		}
 		if a.mouseCapturePane != 0 {
 			a.clearDividerCursor()
 			a.sendMouseMove(x, y)
@@ -453,6 +449,9 @@ func (a *App) installCallbacks() {
 			return
 		}
 		x, y := a.window.GetCursorPos()
+		if a.pointerOverTabBar(x, y) {
+			return
+		}
 		if a.handleConfiguredMouseWheel(yoff, x, y) {
 			return
 		}
