@@ -41,12 +41,13 @@ func (a *App) draw() {
 	a.r.BeginFrame(w, h)
 
 	a.chrome = resolveChromeColors(a.cfg)
-	background := configColor(a.cfg.Colors.Background, color.RGBA{0x08, 0x0B, 0x12, 0xFF})
+	backgroundBase := configColor(a.cfg.Colors.Background, color.RGBA{0x08, 0x0B, 0x12, 0xFF})
+	background := applyOpacity(backgroundBase, a.cfg.Window.BackgroundOpacity)
 	cursorColor := configColor(a.cfg.Colors.Cursor, a.chrome.accent)
 	selectionColor := configColor(a.cfg.Colors.SelectionBackground, color.RGBA{0x2A, 0x63, 0x77, 0xFF})
 	paletteBase := configuredPaletteBase(a.cfg.Colors)
 	a.updateFPS()
-	a.r.Clear(background)
+	a.restoreBackgroundSurface(background, w, h)
 
 	layout, err := a.mux.Layout()
 	if err != nil {
@@ -68,7 +69,8 @@ func (a *App) draw() {
 		panePalette := a.snap.PaletteOverrides.Apply(paletteBase)
 		colorResolver := panePalette.ColorResolver()
 		defaultFG := rgb(panePalette.FG)
-		paneBackground := panePaletteBackground(background, panePalette, a.snap.PaletteOverrides)
+		paneBackgroundBase := panePaletteBackground(backgroundBase, panePalette, a.snap.PaletteOverrides)
+		paneBackground := effectivePaneBackground(backgroundBase, paneBackgroundBase, a.snap.PaletteOverrides.BGSet, a.cfg.Window.BackgroundOpacity)
 		a.selection, a.search, a.link, a.mouseReport = state.selection, state.search, state.link, state.mouseReport
 		a.search.init(muxSearchTerminal{mux: a.mux, pane: geometry.Pane}, a.requestRedraw)
 		a.search.viewRow = -1
@@ -81,11 +83,11 @@ func (a *App) draw() {
 		a.drawOriginY = float32(geometry.Pixels.Y)
 		a.refreshLinks()
 		a.r.PushClip(gpu.ClipRect{X: geometry.Pixels.X, Y: geometry.Pixels.Y, Width: geometry.Pixels.Width, Height: geometry.Pixels.Height})
-		a.fillRect(float32(geometry.Pixels.X), float32(geometry.Pixels.Y), float32(geometry.Pixels.Width), float32(geometry.Pixels.Height), paneBackground)
+		a.replaceRect(float32(geometry.Pixels.X), float32(geometry.Pixels.Y), float32(geometry.Pixels.Width), float32(geometry.Pixels.Height), paneBackground)
 		var cursorRowOrder []int
 		for row := 0; row < a.snap.Rows; row++ {
 			rowsDrawn++
-			order := a.drawRow(row, paneBackground, selectionColor, defaultFG, &colorResolver)
+			order := a.drawRow(row, paneBackgroundBase, selectionColor, defaultFG, &colorResolver)
 			if row == a.snap.CursorRow {
 				cursorRowOrder = order
 			}

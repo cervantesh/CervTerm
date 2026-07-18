@@ -9,7 +9,7 @@ import (
 )
 
 func effectiveTextRasterFor(cfg config.Config) string {
-	if cfg.BackgroundAlpha() < 0xff && cfg.Render.TextRaster == "subpixel" {
+	if cfg.EffectiveBackgroundAlpha() < 0xff && cfg.Render.TextRaster == "subpixel" {
 		return "go"
 	}
 	return cfg.Render.TextRaster
@@ -24,7 +24,7 @@ func (a *App) applyWindowAppearance() {
 	if a.window == nil {
 		return
 	}
-	translucentBackground := a.cfg.BackgroundAlpha() < 0xff
+	translucentBackground := a.cfg.EffectiveBackgroundAlpha() < 0xff
 	if translucentBackground {
 		a.window.SetOpacity(1)
 		if !a.transparentFramebuffer && !a.transparencyWarned {
