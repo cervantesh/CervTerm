@@ -24,6 +24,10 @@ local record cervterm
   record WindowConfig
     width: integer
     height: integer
+    initial_rows: integer
+    initial_cols: integer
+    decorations: string
+    titlebar: string
     padding_x: integer
     padding_y: integer
     padding_left: integer
