@@ -97,3 +97,27 @@ Every roadmap phase records:
 
 Completed phase evidence:
 - [Phase 1 — Typed Action Engine](validation/phase-1-typed-action-engine.md)
+- [Phase 4 — Font Descriptors, Fallback, Features, and Metrics](validation/phase-4-font-descriptors-metrics.md)
+
+## Phase 4 Candidate Comparison
+
+Phase 4 runtime commit `03efcc5` was compared on the reference Windows 11/AMD Ryzen 9 7940HX host with Go 1.25.8. Five-run benchmarks were repeated contemporaneously at baseline `7d64cc9` and candidate `03efcc5`; the committed `dist/` report remains intentionally untracked.
+
+| Metric | Baseline median | Phase 4 median | Result |
+|---|---:|---:|---|
+| VT parser | 40.311 us/op | 39.043 us/op | 3.1% faster; `0 B/op`, `0 allocs/op` preserved |
+| Core reuse | 41.478 us/op | 41.165 us/op | 0.8% faster; `0 B/op`, `0 allocs/op` preserved |
+| New terminal | 87.762 us/op | 89.249 us/op | 1.7% slower; 4 allocations preserved; bytes increased 156,208 → 157,872 |
+| Render snapshot | historical 2.057–2.062 us/op | 2.103 us/op (3-run median) | about 2% slower; `0 B/op`, `0 allocs/op` preserved |
+
+Five GUI samples with the same active configuration produced median window-ready time 572 ms → 525 ms, working set 112.5 MiB → 115.5 MiB, and private bytes 188.9 MiB → 190.8 MiB. These stay below the 15% investigation threshold. Median sampled CPU increased 0.766 s → 1.109 s because Phase 4 performs bounded deterministic system-font discovery and prepares real style/cache ownership; this one-time CPU cost is recorded as a residual optimization target, while readiness and memory did not materially regress. The fixed two-page atlas remains 32 MiB and idle/damage-loop behavior is unchanged.
+
+Additional GUI scenarios used the built-in stats overlay plus Windows process counters:
+
+| Scenario | Go heap shown | Working set | Private bytes | Observation |
+|---|---:|---:|---:|---|
+| Plain ASCII idle, primary font only | 27.6 MiB | 115.0 MiB | 189.7 MiB | baseline for lazy fallback |
+| First Powerline/Nerd/CJK/emoji content | 65.8 MiB | 222.3 MiB | 295.0 MiB | +38.2 MiB Go heap; large CJK/color system faces remain within the 256-MiB parsed-cache cap |
+| 40 rapid pane-font zoom steps, then reset | 56.2 MiB after GC | 244.5 MiB | 316.9 MiB | +21.9 MiB private bytes over first-fallback sample; no atlas growth beyond fixed 32 MiB |
+
+The rapid-zoom run exercised 40 distinct requested sizes before reset. `TestAtlasEvictsDeterministicInactiveLRUAtContextBudget` and `TestAtlasRejectsSixtyFifthPinnedContextTransactionally` provide exact retained-count evidence at the 64-context boundary; the diagnostic-only process intentionally exposes limits rather than live context identities/counts. These process samples are observations, not cross-host limits.

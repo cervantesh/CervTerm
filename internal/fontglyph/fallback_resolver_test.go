@@ -55,6 +55,10 @@ func TestFallbackBackendResolutionOrderAndLazyLoads(t *testing.T) {
 	if !ok || selected.plan.tier != fontdesc.SourceTierFallback || filepath.Base(selected.plan.selected.path) != "fallback-one.ttf" || loads != 2 {
 		t.Fatalf("fallback selection = %#v ok=%v loads=%d", selected.plan, ok, loads)
 	}
+	diagnostic, diagnosticOK := DiagnosticContentFace(backend, fontdesc.RequestedFaceStyleNormal, "漢")
+	if !diagnosticOK || diagnostic.Tier != fontdesc.SourceTierFallback || diagnostic.Metadata.Family != "Fallback One" {
+		t.Fatalf("fallback diagnostic = %#v, %v", diagnostic, diagnosticOK)
+	}
 	checksBeforeCachedLookup := coverageChecks
 	if _, _, ok := backend.ClusterResolution(fontdesc.RequestedFaceStyleNormal, "漢"); !ok || loads != 2 {
 		t.Fatalf("cached fallback resolution reloaded face: ok=%v loads=%d", ok, loads)

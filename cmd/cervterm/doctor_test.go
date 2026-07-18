@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"cervterm/internal/config"
+	"cervterm/internal/fontdesc"
+	"cervterm/internal/fontglyph"
 	"cervterm/internal/script"
 )
 
@@ -114,7 +116,7 @@ func TestRunDoctorReturnsFailureForInvalidComposedConfig(t *testing.T) {
 
 func TestRunDoctorReportsSafeFontsEffectiveFamily(t *testing.T) {
 	path := t.TempDir() + "/cervterm.lua"
-	if err := os.WriteFile(path, []byte(`return { config_version = 2, font = { family = "Configured Missing Family", descriptors = {{ family = "Configured Descriptor" }}, fallback = {{ family = "Configured Fallback" }}, rules = {{ match = { class = "emoji" }, use = { family = "Configured Rule" } }}, features = { ss01 = 1 } } }`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`return { config_version = 2, font = { family = "Configured Missing Family", descriptors = {{ family = "Configured Descriptor" }}, fallback = {{ family = "Configured Fallback" }}, rules = {{ match = { class = "emoji" }, use = { family = "Configured Rule" } }}, features = { ss01 = 1 }, line_height = 1.5, cell_width = 1.25, baseline_offset = 2, glyph_offset_x = 3, glyph_offset_y = -4 } }`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	output := captureStdout(t, func() {
@@ -122,7 +124,7 @@ func TestRunDoctorReportsSafeFontsEffectiveFamily(t *testing.T) {
 			t.Fatalf("runDoctor exit code = %d, want 0", code)
 		}
 	})
-	for _, want := range []string{"safe-fonts: enabled", "font-configured-family: Configured Missing Family", "font-descriptors-suppressed-by-safe-mode: 1", "font-fallback-suppressed-by-safe-mode: 1", "font-rules-suppressed-by-safe-mode: 1", "font-features-suppressed-by-safe-mode: 1", "font-features: calt=0,clig=0,liga=0", "font-family: Go Mono"} {
+	for _, want := range []string{"safe-fonts: enabled", "font-configured-family: Configured Missing Family", "font-descriptors-suppressed-by-safe-mode: 1", "font-fallback-suppressed-by-safe-mode: 1", "font-rules-suppressed-by-safe-mode: 1", "font-features-suppressed-by-safe-mode: 1", "font-metrics-suppressed-by-safe-mode: true", "font-features: calt=0,clig=0,liga=0", "font-metrics: line-height=1.00 cell-width=1.00 baseline-offset=0.00 glyph-offset-x=0.00 glyph-offset-y=0.00", "font-family: Go Mono"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("doctor safe-font output missing %q\n%s", want, output)
 		}
@@ -136,7 +138,7 @@ func TestRunDoctorProbesFontDescriptors(t *testing.T) {
 			t.Fatalf("runDoctor exit code = %d, want 0", code)
 		}
 	})
-	for _, want := range []string{"font-features: calt=0,clig=0,liga=0,ss01=1", "font-feature-capability:", "font-descriptors: 1", "font-descriptor[1]: Go Mono weight=400 style=normal stretch=100 mode=augment", "text-raster:"} {
+	for _, want := range []string{"font-features: calt=0,clig=0,liga=0,ss01=1", "font-feature-capability:", "font-descriptors: 1", "font-descriptor[1]: Go Mono weight=400 style=normal stretch=100 mode=augment", `font-style[normal]: family="Go Mono" subfamily="Regular"`, "tier=embedded", "synthetic=none", "font-cell-metrics:", "font-contexts: unavailable (no active frontend; limit=64)", "font-negative-cache: unavailable (no active frontend; limit=8192/context)", "font-parsed-cache: unavailable (diagnostic probe; limits=128 faces/268435456 bytes)", "text-raster:"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("doctor descriptor output missing %q\n%s", want, output)
 		}
@@ -150,9 +152,39 @@ func TestRunDoctorProbesFallbackRules(t *testing.T) {
 			t.Fatalf("runDoctor exit code = %d, want 0", code)
 		}
 	})
-	for _, want := range []string{"font-descriptors: 0", "font-fallback: 1", "font-rules: 1", "text-raster:"} {
+	for _, want := range []string{"font-descriptors: 0", "font-fallback: 1", "font-rules: 1", "font-content[box-drawing]:", "text-raster:"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("doctor fallback/rule output missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestFontDoctorRedactsResolvedPaths(t *testing.T) {
+	const windowsPath = `C:\\Users\\private\\SecretFont.ttf`
+	const unixPath = "/home/private/SecretFont-Bold.ttf"
+	output := captureStdout(t, func() {
+		printResolvedFontDoctor("Configured Family", fontglyph.FontResolution{Found: true, Regular: windowsPath, Bold: unixPath})
+	})
+	for _, leaked := range []string{windowsPath, unixPath, "SecretFont.ttf", "SecretFont-Bold.ttf"} {
+		if strings.Contains(output, leaked) {
+			t.Fatalf("font doctor leaked %q in %s", leaked, output)
+		}
+	}
+	if !strings.Contains(output, "font-resolution: system (paths redacted)") || !strings.Contains(output, "regular=true bold=true italic=false bold-italic=false") {
+		t.Fatalf("redacted resolution summary missing: %s", output)
+	}
+}
+
+func TestSyntheticModeFormatting(t *testing.T) {
+	cases := map[fontdesc.SyntheticMode]string{
+		fontdesc.SyntheticNone:                            "none",
+		fontdesc.SyntheticBold:                            "bold",
+		fontdesc.SyntheticItalic:                          "italic",
+		fontdesc.SyntheticBold | fontdesc.SyntheticItalic: "bold+italic",
+	}
+	for mode, want := range cases {
+		if got := formatSyntheticMode(mode); got != want {
+			t.Fatalf("formatSyntheticMode(%d)=%q, want %q", mode, got, want)
 		}
 	}
 }

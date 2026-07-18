@@ -48,6 +48,25 @@ Inside CervTerm, verify:
 - Trigger title, OSC 7 CWD and bell changes in a background pane; Lua callbacks target that pane while the window title remains focused-pane-derived.
 - Repeat split/close/resize loops and confirm no orphan process, ConPTY handle, reader goroutine or stale hover/selection state remains.
 
+## Phase 4 font qualification
+
+Windows 11 `windows/amd64` qualification at merge commit `03efcc5` used the packaged `0.0.0-phase4-local` build:
+
+- `--doctor` resolved JetBrainsMono Nerd Font `Regular`/`Bold`/`Italic`/`Bold Italic` (not ExtraLight) with `synthetic=none`, DirectWrite shaping capability, natural/projected metrics `11x28/21`, representative rule-tier family metadata, and no emitted font paths.
+- Windows package preflight reported 39 pass, 0 required failures, and the expected missing-vttest warning; installed-package and daily-driver smokes passed. The known ConPTY capture exit `0xc0000374` was accepted only after required artifacts/markers validated.
+- Linux is CI-qualified for headless build/tests only. macOS and Linux GUI font behavior remain unqualified; no GUI/platform support claim is implied.
+
+| Windows visual check | Result | Evidence |
+|---|---|---|
+| punctuation/ligature centering (`->`, `=>`, `!=`, `===`) | Pass | [font qualification frame](assets/phase4-font-qualification-windows.png) |
+| primary/CJK/emoji baseline alignment | Pass | [font qualification frame](assets/phase4-font-qualification-windows.png) |
+| Powerline and Nerd Font PUA | Pass | [font qualification frame](assets/phase4-font-qualification-windows.png) |
+| pane-local independent zoom and sibling stability | Pass | [mixed-size pane frame](assets/phase4-pane-zoom-windows.png) |
+| fixed-grid hit testing, cursor split, clipping | Pass (automated) | GLFW metric/atlas/pane tests |
+| cross-monitor DPI transition | Skip | no second monitor was available; automated DPI/context identity tests passed |
+
+Manual recheck recipe: use an installed JetBrainsMono Nerd Font primary, `Microsoft YaHei UI` CJK rule, and `Segoe UI Emoji` emoji rule; print the strings above, then verify real style selection with `--doctor`, glyph alignment, cursor splits inside ligatures, pane-local zoom, and no sibling flash.
+
 ## Remaining CI check
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` is only verified after pushing this repo to GitHub and observing a green workflow run.
