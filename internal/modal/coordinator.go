@@ -64,7 +64,9 @@ type Intent struct {
 
 type Coordinator struct{ state State }
 
-func (c *Coordinator) Active() bool { return c.state.Mode.Valid() }
+func (c *Coordinator) Active() bool     { return c.state.Mode.Valid() }
+func (c *Coordinator) Mode() Mode       { return c.state.Mode }
+func (c *Coordinator) Revision() uint64 { return c.state.Revision }
 
 func (c *Coordinator) Snapshot() State {
 	s := c.state

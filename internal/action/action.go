@@ -10,21 +10,22 @@ import (
 type ID string
 
 const (
-	IDCopySelection  ID = "copy_selection"
-	IDPasteClipboard ID = "paste_clipboard"
-	IDToggleSearch   ID = "toggle_search"
-	IDToggleStats    ID = "toggle_stats"
-	IDScroll         ID = "scroll"
-	IDZoom           ID = "zoom"
-	IDReloadConfig   ID = "reload_config"
-	IDSplitPane      ID = "split_pane"
-	IDFocusPane      ID = "focus_pane"
-	IDClosePane      ID = "close_pane"
-	IDMultiple       ID = "multiple"
-	IDCallback       ID = "callback"
-	IDResizePane     ID = "resize_pane"
-	IDSwapPane       ID = "swap_pane"
-	IDMovePane       ID = "move_pane"
+	IDCopySelection          ID = "copy_selection"
+	IDPasteClipboard         ID = "paste_clipboard"
+	IDToggleSearch           ID = "toggle_search"
+	IDToggleStats            ID = "toggle_stats"
+	IDActivateCommandPalette ID = "activate_command_palette"
+	IDScroll                 ID = "scroll"
+	IDZoom                   ID = "zoom"
+	IDReloadConfig           ID = "reload_config"
+	IDSplitPane              ID = "split_pane"
+	IDFocusPane              ID = "focus_pane"
+	IDClosePane              ID = "close_pane"
+	IDMultiple               ID = "multiple"
+	IDCallback               ID = "callback"
+	IDResizePane             ID = "resize_pane"
+	IDSwapPane               ID = "swap_pane"
+	IDMovePane               ID = "move_pane"
 )
 
 var (
@@ -46,27 +47,31 @@ type ToggleSearch struct{}
 type ToggleStats struct{}
 type ReloadConfig struct{}
 type ClosePane struct{}
+type ActivateCommandPalette struct{}
 
-func (CopySelection) ID() ID  { return IDCopySelection }
-func (PasteClipboard) ID() ID { return IDPasteClipboard }
-func (ToggleSearch) ID() ID   { return IDToggleSearch }
-func (ToggleStats) ID() ID    { return IDToggleStats }
-func (ReloadConfig) ID() ID   { return IDReloadConfig }
-func (ClosePane) ID() ID      { return IDClosePane }
+func (CopySelection) ID() ID          { return IDCopySelection }
+func (PasteClipboard) ID() ID         { return IDPasteClipboard }
+func (ToggleSearch) ID() ID           { return IDToggleSearch }
+func (ToggleStats) ID() ID            { return IDToggleStats }
+func (ReloadConfig) ID() ID           { return IDReloadConfig }
+func (ClosePane) ID() ID              { return IDClosePane }
+func (ActivateCommandPalette) ID() ID { return IDActivateCommandPalette }
 
-func (CopySelection) Validate() error  { return nil }
-func (PasteClipboard) Validate() error { return nil }
-func (ToggleSearch) Validate() error   { return nil }
-func (ToggleStats) Validate() error    { return nil }
-func (ReloadConfig) Validate() error   { return nil }
-func (ClosePane) Validate() error      { return nil }
+func (CopySelection) Validate() error          { return nil }
+func (PasteClipboard) Validate() error         { return nil }
+func (ToggleSearch) Validate() error           { return nil }
+func (ToggleStats) Validate() error            { return nil }
+func (ReloadConfig) Validate() error           { return nil }
+func (ClosePane) Validate() error              { return nil }
+func (ActivateCommandPalette) Validate() error { return nil }
 
-func (CopySelection) action()  {}
-func (PasteClipboard) action() {}
-func (ToggleSearch) action()   {}
-func (ToggleStats) action()    {}
-func (ReloadConfig) action()   {}
-func (ClosePane) action()      {}
+func (CopySelection) action()          {}
+func (PasteClipboard) action()         {}
+func (ToggleSearch) action()           {}
+func (ToggleStats) action()            {}
+func (ReloadConfig) action()           {}
+func (ClosePane) action()              {}
+func (ActivateCommandPalette) action() {}
 
 type ScrollUnit string
 
@@ -289,6 +294,8 @@ func actionIdentity(action Action) (ID, error) {
 		return IDToggleSearch, nil
 	case ToggleStats:
 		return IDToggleStats, nil
+	case ActivateCommandPalette:
+		return IDActivateCommandPalette, nil
 	case Scroll:
 		return IDScroll, nil
 	case Zoom:
