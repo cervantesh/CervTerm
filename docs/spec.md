@@ -148,3 +148,7 @@ go run -tags glfw ./cmd/cervterm
 - Measurements are not marketing claims; they must be reproducible with commands in this file.
 - `docs/parity-support-matrix.json` is the machine-readable feature-status contract; update it with every support-state change.
 - The phased post-MVP contract is `docs/wezterm-parity-roadmap.md`.
+
+### Tab bar
+
+`tab_bar.mode` is `multiple` (default), `always`, or `hidden`; `position` is `top` or `bottom`. Height, tab widths, and horizontal padding are bounded and reload live as one validated configuration. The retained bar reserves authoritative window geometry, keeps the active tab visible under overflow, and routes add/close/tab hits before terminal mouse input. The default one-tab window reserves no bar pixels.

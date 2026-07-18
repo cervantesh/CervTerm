@@ -302,6 +302,22 @@ func runtimeOverrideRawValue(source Config, path string) (string, error) {
 		value = source.Scrollbar.PageStep
 	case "scrollbar.track_click":
 		value = source.Scrollbar.TrackClick
+	case "tab_bar.mode":
+		value = source.TabBar.Mode
+	case "tab_bar.position":
+		value = source.TabBar.Position
+	case "tab_bar.height_px":
+		value = source.TabBar.HeightPX
+	case "tab_bar.min_width_px":
+		value = source.TabBar.MinWidthPX
+	case "tab_bar.max_width_px":
+		value = source.TabBar.MaxWidthPX
+	case "tab_bar.padding_x":
+		value = source.TabBar.PaddingX
+	case "tab_bar.show_new_button":
+		value = source.TabBar.ShowNewButton
+	case "tab_bar.show_close_button":
+		value = source.TabBar.ShowCloseButton
 	case "render.max_fps":
 		value = source.Render.MaxFPS
 	default:
@@ -432,6 +448,22 @@ func applyRuntimePath(target *Config, source Config, path string) {
 		target.Scrollbar.PageStep = source.Scrollbar.PageStep
 	case "scrollbar.track_click":
 		target.Scrollbar.TrackClick = source.Scrollbar.TrackClick
+	case "tab_bar.mode":
+		target.TabBar.Mode = source.TabBar.Mode
+	case "tab_bar.position":
+		target.TabBar.Position = source.TabBar.Position
+	case "tab_bar.height_px":
+		target.TabBar.HeightPX = source.TabBar.HeightPX
+	case "tab_bar.min_width_px":
+		target.TabBar.MinWidthPX = source.TabBar.MinWidthPX
+	case "tab_bar.max_width_px":
+		target.TabBar.MaxWidthPX = source.TabBar.MaxWidthPX
+	case "tab_bar.padding_x":
+		target.TabBar.PaddingX = source.TabBar.PaddingX
+	case "tab_bar.show_new_button":
+		target.TabBar.ShowNewButton = source.TabBar.ShowNewButton
+	case "tab_bar.show_close_button":
+		target.TabBar.ShowCloseButton = source.TabBar.ShowCloseButton
 	case "render.max_fps":
 		target.Render.MaxFPS = source.Render.MaxFPS
 	default:

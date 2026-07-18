@@ -21,6 +21,7 @@ type startupWindowPlanInput struct {
 	InsetLeft, InsetRight           int
 	InsetTop, InsetBottom           int
 	Gutter                          int
+	TabBarHeight                    int
 	ScaleX, ScaleY                  float64
 	MaxWindowWidth, MaxWindowHeight int
 }
@@ -32,7 +33,7 @@ func checkedStartupWindowPlan(in startupWindowPlanInput) (startupWindowPlan, err
 	if in.CellWidth <= 0 || in.CellHeight <= 0 || in.ScaleX <= 0 || in.ScaleY <= 0 || math.IsNaN(in.ScaleX) || math.IsNaN(in.ScaleY) || math.IsInf(in.ScaleX, 0) || math.IsInf(in.ScaleY, 0) {
 		return startupWindowPlan{}, fmt.Errorf("invalid startup cell metrics or scale")
 	}
-	values := []int{in.InsetLeft, in.InsetRight, in.InsetTop, in.InsetBottom, in.Gutter}
+	values := []int{in.InsetLeft, in.InsetRight, in.InsetTop, in.InsetBottom, in.Gutter, in.TabBarHeight}
 	for _, value := range values {
 		if value < 0 {
 			return startupWindowPlan{}, fmt.Errorf("startup insets and gutter must be non-negative")
@@ -42,7 +43,7 @@ func checkedStartupWindowPlan(in startupWindowPlanInput) (startupWindowPlan, err
 	if !ok {
 		return startupWindowPlan{}, fmt.Errorf("startup framebuffer width overflow")
 	}
-	fh, ok := checkedMulAdd(in.Rows, in.CellHeight, in.InsetTop, in.InsetBottom)
+	fh, ok := checkedMulAdd(in.Rows, in.CellHeight, in.InsetTop, in.InsetBottom, in.TabBarHeight)
 	if !ok {
 		return startupWindowPlan{}, fmt.Errorf("startup framebuffer height overflow")
 	}

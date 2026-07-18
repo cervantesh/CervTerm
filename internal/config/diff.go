@@ -107,6 +107,14 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Scrollbar.FadeMS != effective.Scrollbar.FadeMS, "scrollbar.fade_ms", ApplyLive)
 	changes = appendChange(changes, desired.Scrollbar.PageStep != effective.Scrollbar.PageStep, "scrollbar.page_step", ApplyLive)
 	changes = appendChange(changes, desired.Scrollbar.TrackClick != effective.Scrollbar.TrackClick, "scrollbar.track_click", ApplyLive)
+	changes = appendChange(changes, desired.TabBar.Mode != effective.TabBar.Mode, "tab_bar.mode", ApplyLive)
+	changes = appendChange(changes, desired.TabBar.Position != effective.TabBar.Position, "tab_bar.position", ApplyLive)
+	changes = appendChange(changes, desired.TabBar.HeightPX != effective.TabBar.HeightPX, "tab_bar.height_px", ApplyLive)
+	changes = appendChange(changes, desired.TabBar.MinWidthPX != effective.TabBar.MinWidthPX, "tab_bar.min_width_px", ApplyLive)
+	changes = appendChange(changes, desired.TabBar.MaxWidthPX != effective.TabBar.MaxWidthPX, "tab_bar.max_width_px", ApplyLive)
+	changes = appendChange(changes, desired.TabBar.PaddingX != effective.TabBar.PaddingX, "tab_bar.padding_x", ApplyLive)
+	changes = appendChange(changes, desired.TabBar.ShowNewButton != effective.TabBar.ShowNewButton, "tab_bar.show_new_button", ApplyLive)
+	changes = appendChange(changes, desired.TabBar.ShowCloseButton != effective.TabBar.ShowCloseButton, "tab_bar.show_close_button", ApplyLive)
 
 	changes = appendChange(changes, desired.Cursor.Shape != effective.Cursor.Shape, "cursor.shape", ApplyLive)
 	changes = appendChange(changes, desired.Cursor.Blink != effective.Cursor.Blink, "cursor.blink", ApplyLive)
@@ -162,6 +170,7 @@ func MergeLiveConfig(base, source Config) Config {
 	base.Background.Layers = cloneBackgroundLayers(source.Background.Layers)
 	base.Scrolling = source.Scrolling
 	base.Scrollbar = source.Scrollbar
+	base.TabBar = source.TabBar
 	base.Cursor = source.Cursor
 	base.Render.MaxFPS = source.Render.MaxFPS
 	base.LaunchMenu = cloneLaunchTargets(source.LaunchMenu)

@@ -169,6 +169,8 @@ func TestRuntimeOverrideSchemaCapabilitiesMatchSetterSurface(t *testing.T) {
 		"scrollbar.radius_px", "scrollbar.min_thumb_px", "scrollbar.track_color", "scrollbar.thumb_color",
 		"scrollbar.thumb_hover_color", "scrollbar.thumb_press_color", "scrollbar.auto_hide_delay_ms",
 		"scrollbar.fade_ms", "scrollbar.page_step", "scrollbar.track_click",
+		"tab_bar.mode", "tab_bar.position", "tab_bar.height_px", "tab_bar.min_width_px",
+		"tab_bar.max_width_px", "tab_bar.padding_x", "tab_bar.show_new_button", "tab_bar.show_close_button",
 	}
 	fields, err := SchemaFields(CurrentSchemaVersion)
 	if err != nil {

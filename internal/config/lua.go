@@ -120,6 +120,16 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Scrollbar.PageStep = numberField(tbl, "page_step", cfg.Scrollbar.PageStep)
 		cfg.Scrollbar.TrackClick = stringField(tbl, "track_click", cfg.Scrollbar.TrackClick)
 	}
+	if tbl := tableField(root, "tab_bar"); tbl != nil {
+		cfg.TabBar.Mode = stringField(tbl, "mode", cfg.TabBar.Mode)
+		cfg.TabBar.Position = stringField(tbl, "position", cfg.TabBar.Position)
+		cfg.TabBar.HeightPX = intField(tbl, "height_px", cfg.TabBar.HeightPX)
+		cfg.TabBar.MinWidthPX = intField(tbl, "min_width_px", cfg.TabBar.MinWidthPX)
+		cfg.TabBar.MaxWidthPX = intField(tbl, "max_width_px", cfg.TabBar.MaxWidthPX)
+		cfg.TabBar.PaddingX = intField(tbl, "padding_x", cfg.TabBar.PaddingX)
+		cfg.TabBar.ShowNewButton = boolField(tbl, "show_new_button", cfg.TabBar.ShowNewButton)
+		cfg.TabBar.ShowCloseButton = boolField(tbl, "show_close_button", cfg.TabBar.ShowCloseButton)
+	}
 	if tbl := tableField(root, "cursor"); tbl != nil {
 		cfg.Cursor.Shape = stringField(tbl, "shape", cfg.Cursor.Shape)
 		cfg.Cursor.Blink = boolField(tbl, "blink", cfg.Cursor.Blink)
