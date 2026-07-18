@@ -59,21 +59,24 @@ return {
 }
 ```
 
-### Typed actions
+### Typed actions and flat-key compatibility
 
-Typed actions and legacy callbacks can coexist in `keys`:
+The original flat `keys` array remains supported unchanged; no migration is required. New leader, table, and mouse fields are optional, so a config containing only legacy callback entries keeps its prior behavior. Typed actions and legacy callbacks can coexist:
 
 ```lua
 local cervterm = require("cervterm")
 return { keys = {
+  { key = "p", mods = "ctrl+shift", action = function(term)
+      term:notify("legacy callback still supported")
+    end },
   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
   { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
   { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
   { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },
   { key = "r", mods = "alt+shift", action = cervterm.action.ResizePane("right", 3) },
   { key = "s", mods = "alt+shift", action = cervterm.action.SwapPane("left") },
-  { key = "m", mods = "alt+shift", action = cervterm.action.MovePane("down") }
-  { key = "m", mods = "ctrl+shift", action = cervterm.action.Multiple({
+  { key = "m", mods = "alt+shift", action = cervterm.action.MovePane("down") },
+  { key = "x", mods = "ctrl+shift", action = cervterm.action.Multiple({
     cervterm.action.FocusPane("left"), cervterm.action.ClosePane,
   }) },
 } }
@@ -82,6 +85,49 @@ return { keys = {
 Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ReloadConfig`, `ClosePane`, and `ResetFontSize`. Constructors: `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, `SplitPane("columns"|"rows")`, `FocusPane(direction)`, `ResizePane(direction, delta_cells)`, `SwapPane(direction)`, `MovePane(direction)`, and `Multiple({...})`, where direction is `"left"|"right"|"up"|"down"` and resize deltas are 1–1024 cells. `WithTarget(action, "origin")` is also available.
 
 Arguments are validated during config loading. Typed actions use registry press/repeat policy. Function callbacks preserve legacy behavior: they execute on press, consume repeat without executing, and run through the existing watchdog.
+
+### Leader and named key tables
+
+`leader` starts a window-local chord. A root binding with `table = "name"` enters a named table instead of executing an action. Table names must be unique; `action` and `table` are mutually exclusive. `one_shot` defaults to `true`; persistent tables refresh their timeout after each matched action.
+
+```lua
+local cervterm = require("cervterm")
+return {
+  leader = { key = "a", mods = "ctrl", timeout_ms = 1000 },
+  keys = {
+    { key = "p", table = "pane" }, -- Ctrl+A, then P enters "pane"
+  },
+  key_tables = {
+    { name = "pane", one_shot = false, timeout_ms = 1500, keys = {
+      { key = "h", action = cervterm.action.FocusPane("left") },
+      { key = "l", action = cervterm.action.FocusPane("right") },
+      { key = "r", action = cervterm.action.ResizePane("right", 2) },
+    } },
+  },
+}
+```
+
+Leader/table input is consumed while awaiting a match. `Escape`, an unknown key, timeout, successful reload, or window focus loss cancels the sequence; cancellation does not send the cancelling key to the PTY. Leader repeats are consumed without restarting the timeout. The pane focused when the sequence starts remains the action origin even if focus changes. Timeouts must be 100–10000 ms; configuration is bounded to 32 tables, 128 bindings per table, 512 keys total, and chord depth 4.
+
+### Mouse bindings
+
+Mouse specs match exactly on `event`, `button`, modifiers, and `click_count` (default 1). Events are `press`, `release`, `drag`, or `wheel`; buttons are `left`, `middle`, `right`, and, for wheel only, `up`/`down`. Modifiers do not act as wildcards.
+
+```lua
+local cervterm = require("cervterm")
+return { mouse_bindings = {
+  { event = "press", button = "right", mods = "shift",
+    action = cervterm.action.PasteClipboard },
+  { event = "press", button = "left", mods = "ctrl", click_count = 2,
+    action = function(term) term:notify("captured double-click") end },
+} }
+```
+
+Routing is exclusive: terminal mouse reporting has priority; holding Shift keeps its reporting override and permits configured/UI handling. Within pane handling, an exact configured binding runs before legacy selection, links, divider, scrollbar, or scroll behavior; chrome hit regions retain their own route. A matched press captures its pane, press modifiers, button, and click count through drag/release, so the gesture cannot be duplicated or retargeted midway. Up to 128 mouse bindings are accepted; click counts are 1–3.
+
+### Pane topology actions
+
+`ResizePane(direction, delta_cells)` grows the target pane toward its deterministic directional neighbor. `SwapPane(direction)` exchanges pane identities and keeps focus in the same visual slot; `MovePane(direction)` exchanges the panes while focus follows the moved pane identity. All three are transactional: no neighbor, incompatible split direction, or a result below the hard 2-column/2-row topology floor reports an action error and leaves topology/focus unchanged. Resize accepts 1–1024 cells and may stop at bounds; swap/move execute once per physical press while resize permits key repeat.
 
 ## Events
 
