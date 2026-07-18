@@ -113,6 +113,7 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 		}
 		p.state = PaneStateFailed
 		p.parser.Advance(p.terminal, []byte("Local PTY unavailable: "+spawnErr.Error()+"\r\n"))
+		p.contentGen++
 		p.capture()
 		return m.model.TabID(), p.id, []Event{
 			{Kind: PaneStarted, Pane: p.id},
@@ -343,7 +344,7 @@ func (m *Mux) Drain(limit int) []Event {
 
 func (m *Mux) advancePane(p *pane, data []byte) []Event {
 	oldTitle, oldCWD, oldBell := p.title, p.cwd, p.bellCount
-	p.parser.Advance(p.terminal, data)
+	p.advanceTerminal(data)
 	events := p.flushReplies()
 	p.capture()
 	events = append(events,
@@ -374,7 +375,11 @@ func (m *Mux) SearchUpward(id PaneID, query string, hasPrev bool, prevRow int) (
 	}
 	row, col, ok = p.terminal.SearchBackward(query, from)
 	if ok {
+		oldOffset := p.terminal.DisplayOffset()
 		scrollGlobalRowIntoView(p.terminal, row)
+		if p.terminal.DisplayOffset() != oldOffset {
+			p.viewportGen++
+		}
 		p.capture()
 	}
 	return row, col, ok, nil
