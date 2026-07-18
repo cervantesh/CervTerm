@@ -86,6 +86,9 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Scrolling.HideCursorWhenScrolled != effective.Scrolling.HideCursorWhenScrolled, "scrolling.hide_cursor_when_scrolled", ApplyLive)
 
 	changes = appendChange(changes, desired.Scrollbar.Enabled != effective.Scrollbar.Enabled, "scrollbar.enabled", ApplyLive)
+	changes = appendChange(changes, desired.Scrollbar.Mode != effective.Scrollbar.Mode, "scrollbar.mode", ApplyLive)
+	changes = appendChange(changes, desired.Scrollbar.StableGutter != effective.Scrollbar.StableGutter, "scrollbar.stable_gutter", ApplyLive)
+	changes = appendChange(changes, desired.Scrollbar.AnimationFPS != effective.Scrollbar.AnimationFPS, "scrollbar.animation_fps", ApplyLive)
 	changes = appendChange(changes, desired.Scrollbar.ReservedWidthPX != effective.Scrollbar.ReservedWidthPX, "scrollbar.reserved_width_px", ApplyLive)
 	changes = appendChange(changes, desired.Scrollbar.WidthPX != effective.Scrollbar.WidthPX, "scrollbar.width_px", ApplyLive)
 	changes = appendChange(changes, desired.Scrollbar.MarginPX != effective.Scrollbar.MarginPX, "scrollbar.margin_px", ApplyLive)

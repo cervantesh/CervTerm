@@ -118,6 +118,9 @@ func DiagnoseConfig(cfg Config, provenance Provenance, filters []string) (Config
 		if field.Path == "font.family" && len(cfg.Font.Descriptors) != 0 {
 			diagnostic.ShadowedBy = "font.descriptors"
 		}
+		if field.Path == "scrollbar.enabled" {
+			diagnostic.ShadowedBy = "scrollbar.mode"
+		}
 		result.Fields = append(result.Fields, diagnostic)
 	}
 	return result, nil

@@ -87,11 +87,33 @@ type scrollbarState struct {
 	lastPaintedOpacity float32
 }
 
-func (a *App) scrollbarReservedWidth() float32 {
-	if !a.cfg.Scrollbar.Enabled {
+func scrollbarMode(cfg config.ScrollbarConfig) string {
+	if cfg.Mode != "" {
+		return cfg.Mode
+	}
+	if cfg.Enabled {
+		return "scrolling"
+	}
+	return "never"
+}
+
+func scrollbarEnabled(cfg config.ScrollbarConfig) bool {
+	return cfg.Enabled && scrollbarMode(cfg) != "never"
+}
+
+func scrollbarGutterWidth(cfg config.ScrollbarConfig, scale float32) float32 {
+	stable := cfg.StableGutter
+	if cfg.Mode == "" {
+		stable = true
+	}
+	if !scrollbarEnabled(cfg) || !stable {
 		return 0
 	}
-	return float32(a.cfg.Scrollbar.ReservedWidthPX) * max(float32(1), a.uiScale)
+	return float32(cfg.ReservedWidthPX) * max(float32(1), scale)
+}
+
+func (a *App) scrollbarReservedWidth() float32 {
+	return scrollbarGutterWidth(a.cfg.Scrollbar, a.uiScale)
 }
 
 func paneScrollbarGeometry(frameWidth int, paneY, paneHeight int, paddingY, cellHeight, scale float32, cfg config.ScrollbarConfig, visibleRows, history, offset int) scrollbarGeometry {
@@ -104,7 +126,7 @@ func paneScrollbarGeometry(frameWidth int, paneY, paneHeight int, paddingY, cell
 }
 
 func (a *App) currentScrollbarGeometry() scrollbarGeometry {
-	if a.window == nil || !a.cfg.Scrollbar.Enabled {
+	if a.window == nil || !scrollbarEnabled(a.cfg.Scrollbar) {
 		return scrollbarGeometry{}
 	}
 	_, view, ok := a.focusedView()
@@ -118,7 +140,7 @@ func (a *App) currentScrollbarGeometry() scrollbarGeometry {
 }
 
 func (a *App) scrollbarGeometryForSnapshot(w, h int) scrollbarGeometry {
-	if !a.cfg.Scrollbar.Enabled {
+	if !scrollbarEnabled(a.cfg.Scrollbar) {
 		return scrollbarGeometry{}
 	}
 	_, view, ok := a.focusedView()
@@ -152,7 +174,7 @@ func (a *App) setViewportOffset(target int) bool {
 }
 
 func (a *App) handleScrollbarButton(button glfw.MouseButton, action glfw.Action, x, y float32) bool {
-	if !a.cfg.Scrollbar.Enabled {
+	if !scrollbarEnabled(a.cfg.Scrollbar) {
 		return false
 	}
 	g := a.currentScrollbarGeometry()
@@ -203,7 +225,7 @@ func (a *App) handleScrollbarButton(button glfw.MouseButton, action glfw.Action,
 }
 
 func (a *App) handleScrollbarMove(x, y float32) bool {
-	if !a.cfg.Scrollbar.Enabled {
+	if !scrollbarEnabled(a.cfg.Scrollbar) {
 		return false
 	}
 	g := a.currentScrollbarGeometry()
@@ -226,7 +248,7 @@ func (a *App) handleScrollbarMove(x, y float32) bool {
 }
 
 func (a *App) handleScrollbarWheel(yoff float64, x, y float32) bool {
-	if !a.cfg.Scrollbar.Enabled || a.scrollbar.owner == pointerOwnerTerminal {
+	if !scrollbarEnabled(a.cfg.Scrollbar) || a.scrollbar.owner == pointerOwnerTerminal {
 		return false
 	}
 	g := a.currentScrollbarGeometry()
@@ -242,11 +264,17 @@ func (a *App) handleScrollbarWheel(yoff float64, x, y float32) bool {
 }
 
 func (a *App) scrollbarOpacity(now time.Time, history int) float32 {
-	if !a.cfg.Scrollbar.Enabled || history <= 0 {
+	if !scrollbarEnabled(a.cfg.Scrollbar) || history <= 0 {
 		return 0
 	}
 	if a.scrollbar.hovered || a.scrollbar.dragging || a.scrollbar.pressed {
 		return 1
+	}
+	switch scrollbarMode(a.cfg.Scrollbar) {
+	case "always":
+		return 1
+	case "hover":
+		return 0
 	}
 	if a.scrollbar.lastActivity.IsZero() {
 		return 0
@@ -259,11 +287,14 @@ func (a *App) scrollbarOpacity(now time.Time, history int) float32 {
 	if fade <= 0 || !now.Before(fadeStart.Add(fade)) {
 		return 0
 	}
-	return float32(1 - now.Sub(fadeStart).Seconds()/fade.Seconds())
+	frame := time.Second / time.Duration(max(1, a.cfg.Scrollbar.AnimationFPS))
+	elapsed := now.Sub(fadeStart)
+	sample := (elapsed / frame) * frame
+	return float32(1 - sample.Seconds()/fade.Seconds())
 }
 
 func (a *App) scrollbarWake(now time.Time) (time.Duration, bool) {
-	if !a.cfg.Scrollbar.Enabled || a.scrollbar.hovered || a.scrollbar.dragging || a.scrollbar.lastActivity.IsZero() {
+	if !scrollbarEnabled(a.cfg.Scrollbar) || scrollbarMode(a.cfg.Scrollbar) != "scrolling" || a.scrollbar.hovered || a.scrollbar.dragging || a.scrollbar.lastActivity.IsZero() {
 		return 0, false
 	}
 	fadeStart := a.scrollbar.lastActivity.Add(time.Duration(a.cfg.Scrollbar.AutoHideDelayMS) * time.Millisecond)
@@ -272,7 +303,13 @@ func (a *App) scrollbarWake(now time.Time) (time.Duration, bool) {
 	}
 	fadeEnd := fadeStart.Add(time.Duration(a.cfg.Scrollbar.FadeMS) * time.Millisecond)
 	if now.Before(fadeEnd) {
-		return minWake, true
+		frame := time.Second / time.Duration(max(1, a.cfg.Scrollbar.AnimationFPS))
+		elapsed := now.Sub(fadeStart)
+		next := fadeStart.Add((elapsed/frame + 1) * frame)
+		if next.After(fadeEnd) {
+			next = fadeEnd
+		}
+		return next.Sub(now), true
 	}
 	if a.scrollbar.lastPaintedOpacity > 0 {
 		return minWake, true
@@ -290,7 +327,7 @@ func withOpacity(c color.RGBA, opacity float32) color.RGBA {
 }
 
 func (a *App) drawScrollbar(now time.Time, background color.RGBA, w, h int) {
-	if !a.cfg.Scrollbar.Enabled {
+	if !scrollbarEnabled(a.cfg.Scrollbar) {
 		a.scrollbar.lastPaintedOpacity = 0
 		return
 	}

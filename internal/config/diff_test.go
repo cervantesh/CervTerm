@@ -52,6 +52,9 @@ func fullyDifferentConfig(base Config) Config {
 	value.Scrolling.WheelMultiplier++
 	value.Scrolling.HideCursorWhenScrolled = !value.Scrolling.HideCursorWhenScrolled
 	value.Scrollbar.Enabled = !value.Scrollbar.Enabled
+	value.Scrollbar.Mode = "always"
+	value.Scrollbar.StableGutter = !value.Scrollbar.StableGutter
+	value.Scrollbar.AnimationFPS++
 	value.Scrollbar.ReservedWidthPX++
 	value.Scrollbar.WidthPX++
 	value.Scrollbar.MarginPX++
@@ -105,8 +108,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 76 {
-		t.Fatalf("config leaf count = %d, want 76", len(changes))
+	if len(changes) != 79 {
+		t.Fatalf("config leaf count = %d, want 79", len(changes))
 	}
 }
 
