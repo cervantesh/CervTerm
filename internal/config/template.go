@@ -200,6 +200,7 @@ return {
   --   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
   --   { key = "p", mods = "ctrl+shift", action = cervterm.action.ActivateCommandPalette },
   --   { key = "q", mods = "ctrl+shift", action = cervterm.action.ActivateQuickSelect },
+  --   { key = "l", mods = "ctrl+shift", action = cervterm.action.ActivateLaunchMenu },
   --   { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
   --   { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
   --   { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },
@@ -233,6 +234,9 @@ return {
   --   rules = {
   --     { id = "issue", pattern = "[A-Z]+-[0-9]+", action = "copy", priority = 10 },
   --   },
+  -- },
+  -- launch_menu = {
+  --   { id = "powershell", label = "PowerShell", program = "pwsh", args = { "-NoLogo" }, cwd = "", env = {} },
   -- },
   -- events = {
   --   output = function(term, data) end,

@@ -37,9 +37,8 @@ type compositionBuilder struct {
 	deferColors bool
 }
 
-// ComposeSourceGraph applies schema-driven low-to-high merge semantics to a
-// completed candidate graph. It does not mutate active configuration or publish
-// Teal outputs; callers retain ownership of the graph and candidate Lua state.
+// ComposeSourceGraph merges a candidate graph without active mutation or publication.
+// The caller retains the graph and candidate Lua state.
 func ComposeSourceGraph(state *lua.LState, graph *SourceGraph, options CompositionOptions) (Composition, error) {
 	if state == nil || graph == nil {
 		return Composition{}, fmt.Errorf("compose config source graph: state and graph are required")
@@ -214,6 +213,10 @@ func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchem
 			if err := b.mergeEvents(dst, child, path, value); err != nil {
 				return err
 			}
+		case KindLaunchTargetList:
+			if err := b.mergeLaunchTargets(dst, child, path, value); err != nil {
+				return err
+			}
 		case KindQuickSelectRuleList:
 			if err := b.mergeQuickSelectRules(dst, child, path, value); err != nil {
 				return err
@@ -232,6 +235,7 @@ func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchem
 	}
 	return nil
 }
+
 func (b *compositionBuilder) mergeQuickSelectRules(dst *lua.LTable, schema fieldSchema, path string, value lua.LValue) error {
 	list, ok := value.(*lua.LTable)
 	if !ok {
@@ -429,7 +433,7 @@ func (b *compositionBuilder) seedDefaults(schema fieldSchema, prefix string) {
 			for _, child := range field.children {
 				seed(child, joinPath(path, child.name))
 			}
-		case KindStringMap, KindFeatureMap, KindIndexedColorMap, KindKeyList, KindEvents, KindDescriptorList, KindFontRuleList, KindQuickSelectRuleList:
+		case KindStringMap, KindFeatureMap, KindIndexedColorMap, KindKeyList, KindEvents, KindDescriptorList, KindFontRuleList, KindQuickSelectRuleList, KindLaunchTargetList:
 			// These surfaces have no fixed built-in winner: map provenance begins
 			// at concrete keys, while bindings and callbacks are absent by default.
 		default:
@@ -470,7 +474,7 @@ func fixedLeafPaths(schema fieldSchema, path string) []schemaLeaf {
 
 func legacyValueCompatible(value lua.LValue, kind ValueKind) bool {
 	switch kind {
-	case KindTable, KindStringList, KindStringMap, KindFeatureMap, KindIndexedColorMap, KindKeyList, KindEvents, KindColorSchemeMap, KindDescriptorList, KindFontRuleList, KindQuickSelectRuleList:
+	case KindTable, KindStringList, KindStringMap, KindFeatureMap, KindIndexedColorMap, KindKeyList, KindEvents, KindColorSchemeMap, KindDescriptorList, KindFontRuleList, KindQuickSelectRuleList, KindLaunchTargetList:
 		_, ok := value.(*lua.LTable)
 		return ok
 	case KindString:

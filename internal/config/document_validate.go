@@ -120,6 +120,8 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		return validateFontRuleList(source, path, value)
 	case KindQuickSelectRuleList:
 		return validateQuickSelectRuleList(source, path, value)
+	case KindLaunchTargetList:
+		return validateLaunchTargetList(source, path, value)
 	case KindStringMap:
 		return validateStringMap(source, path, value, allowUnset)
 	case KindFeatureMap:

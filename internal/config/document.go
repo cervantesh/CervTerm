@@ -33,6 +33,7 @@ const (
 	KindColorSchemeMap      ValueKind = "color_scheme_map"
 	KindBackgroundLayerList ValueKind = "background_layer_list"
 	KindQuickSelectRuleList ValueKind = "quick_select_rule_list"
+	KindLaunchTargetList    ValueKind = "launch_target_list"
 )
 
 type ApplyScope string
@@ -155,6 +156,7 @@ func FromDocument(base Config, document Document) Config {
 		cfg.QuickSelect.Rules = quickSelectRuleListField(quick, "rules", cfg.QuickSelect.Rules)
 		cfg.QuickSelect.Compiled, _ = PrepareQuickSelect(cfg.QuickSelect.Rules)
 	}
+	cfg.LaunchMenu = launchTargetListField(document.Root, "launch_menu", cfg.LaunchMenu)
 	return cfg
 }
 
@@ -229,6 +231,7 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "program", kind: KindString}, {name: "args", kind: KindStringList},
 		{name: "working_directory", kind: KindString}, {name: "env", kind: KindStringMap, sensitive: true},
 	}},
+	{name: "launch_menu", kind: KindLaunchTargetList, apply: ApplyLive},
 	{name: "quick_select", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
 		{name: "rules", kind: KindQuickSelectRuleList},
 	}},
@@ -246,7 +249,7 @@ func isV2OnlyPath(path string) bool {
 	case "window.padding_left", "window.padding_right", "window.padding_top", "window.padding_bottom",
 		"window.text_opacity", "window.background_opacity",
 		"window.initial_rows", "window.initial_cols", "window.decorations", "window.titlebar",
-		"background.layers", "quick_select.rules",
+		"background.layers", "quick_select.rules", "launch_menu",
 		"scrollbar.mode", "scrollbar.stable_gutter", "scrollbar.animation_fps", "render.max_fps",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true

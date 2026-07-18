@@ -132,6 +132,7 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, !slices.Equal(desired.Shell.Args, effective.Shell.Args), "shell.args", ApplyNewPane)
 	changes = appendChange(changes, desired.Shell.WorkingDirectory != effective.Shell.WorkingDirectory, "shell.working_directory", ApplyNewPane)
 	changes = appendChange(changes, !maps.Equal(desired.Shell.Env, effective.Shell.Env), "shell.env", ApplyNewPane)
+	changes = appendChange(changes, !reflect.DeepEqual(desired.LaunchMenu, effective.LaunchMenu), "launch_menu", ApplyLive)
 	changes = appendChange(changes, !slices.Equal(desired.QuickSelect.Rules, effective.QuickSelect.Rules), "quick_select.rules", ApplyLive)
 	return changes
 }
@@ -163,6 +164,7 @@ func MergeLiveConfig(base, source Config) Config {
 	base.Scrollbar = source.Scrollbar
 	base.Cursor = source.Cursor
 	base.Render.MaxFPS = source.Render.MaxFPS
+	base.LaunchMenu = cloneLaunchTargets(source.LaunchMenu)
 	base.QuickSelect = source.QuickSelect
 	base.QuickSelect.Rules = append([]QuickSelectRule(nil), source.QuickSelect.Rules...)
 	base.QuickSelect.Compiled = append([]quickselect.PreparedRule(nil), source.QuickSelect.Compiled...)

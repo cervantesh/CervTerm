@@ -69,6 +69,10 @@ func (a *App) commandPaletteSnapshot(hasPane bool) ([]modal.Entry, map[string]co
 			command = termaction.ClosePane{}
 		case termaction.IDActivateCommandPalette:
 			command = termaction.ActivateCommandPalette{}
+		case termaction.IDActivateQuickSelect:
+			command = termaction.ActivateQuickSelect{}
+		case termaction.IDActivateLaunchMenu:
+			command = termaction.ActivateLaunchMenu{}
 		default:
 			continue
 		}

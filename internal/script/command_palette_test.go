@@ -40,3 +40,20 @@ func TestQuickSelectActionLoadsFromLua(t *testing.T) {
 		t.Fatalf("action=%T", bindings[0].Action.Action)
 	}
 }
+
+func TestLaunchMenuActionLoadsFromLua(t *testing.T) {
+	path := writeScriptConfig(t, `local cervterm=require("cervterm")
+	return { keys={{key="l",mods="ctrl+shift",label="Launch",action=cervterm.action.ActivateLaunchMenu}} }`)
+	_, runtime, err := Load(path, config.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	bindings := runtime.Bindings()
+	if len(bindings) != 1 {
+		t.Fatalf("bindings=%#v", bindings)
+	}
+	if _, ok := bindings[0].Action.Action.(termaction.ActivateLaunchMenu); !ok {
+		t.Fatalf("action=%T", bindings[0].Action.Action)
+	}
+}
