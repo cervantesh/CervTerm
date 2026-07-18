@@ -132,16 +132,16 @@ func TestTopologyFailuresRollbackExactlyWithoutEffects(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m, factory := newNestedTopologyMux(t)
-			beforeTree := topologyString(m.model.root)
-			beforeFocus := m.model.focused
+			beforeTree := topologyString(m.model.activeTab().root)
+			beforeFocus := m.model.activeTab().focused
 			beforeViews := paneViews(m)
 			beforeCounts := resizeCounts(factory)
 			events, err := tt.run(m)
 			if !errors.Is(err, tt.want) || len(events) != 0 {
 				t.Fatalf("events=%#v err=%v, want %v", events, err, tt.want)
 			}
-			if got := topologyString(m.model.root); got != beforeTree || m.model.focused != beforeFocus || !reflect.DeepEqual(paneViews(m), beforeViews) {
-				t.Fatalf("failure mutated state: tree %s -> %s focus %d -> %d", beforeTree, got, beforeFocus, m.model.focused)
+			if got := topologyString(m.model.activeTab().root); got != beforeTree || m.model.activeTab().focused != beforeFocus || !reflect.DeepEqual(paneViews(m), beforeViews) {
+				t.Fatalf("failure mutated state: tree %s -> %s focus %d -> %d", beforeTree, got, beforeFocus, m.model.activeTab().focused)
 			}
 			if got := resizeCounts(factory); !reflect.DeepEqual(got, beforeCounts) {
 				t.Fatalf("failure resized PTYs: before=%v after=%v", beforeCounts, got)

@@ -73,7 +73,7 @@ func (m *Model) ResizePaneDirection(pane PaneID, direction Direction, delta int,
 	if direction == FocusUp || direction == FocusDown {
 		axis = SplitRows
 	}
-	path, ok := separatingSplit(m.root, pane, neighbor, axis, bounds)
+	path, ok := separatingSplit(m.activeTab().root, pane, neighbor, axis, bounds)
 	if !ok {
 		return ErrNoPaneInDirection
 	}
@@ -106,11 +106,12 @@ func (m *Model) ResizePaneDirection(pane PaneID, direction Direction, delta int,
 	} else {
 		ratio -= change
 	}
-	candidate, replaced := replaceSplitRatio(m.root, path.node.split, ratio)
+	tab := m.activeTab()
+	candidate, replaced := replaceSplitRatio(tab.root, path.node.split, ratio)
 	if !replaced || !validRatio(ratio) {
 		return ErrTopologyTooSmall
 	}
-	return m.commitTopology(candidate, m.focused, bounds, resolve)
+	return m.commitTopology(candidate, tab.focused, bounds, resolve)
 }
 
 // SwapPaneDirection exchanges the focused pane identity with its directional
@@ -120,11 +121,12 @@ func (m *Model) SwapPaneDirection(pane PaneID, direction Direction, bounds Pixel
 	if err != nil {
 		return 0, err
 	}
-	candidate, ok := swapLeaves(m.root, pane, neighbor)
+	tab := m.activeTab()
+	candidate, ok := swapLeaves(tab.root, pane, neighbor)
 	if !ok {
 		return 0, invariantError("could not swap panes %d and %d", pane, neighbor)
 	}
-	focus := m.focused
+	focus := tab.focused
 	if focus == pane {
 		focus = neighbor
 	} else if focus == neighbor {
@@ -143,16 +145,18 @@ func (m *Model) MovePaneDirection(pane PaneID, direction Direction, bounds Pixel
 	if err != nil {
 		return err
 	}
-	candidate, ok := swapLeaves(m.root, pane, neighbor)
+	tab := m.activeTab()
+	candidate, ok := swapLeaves(tab.root, pane, neighbor)
 	if !ok {
 		return invariantError("could not move pane %d toward %d", pane, neighbor)
 	}
-	return m.commitTopology(candidate, m.focused, bounds, resolve)
+	return m.commitTopology(candidate, tab.focused, bounds, resolve)
 }
 
 func (m *Model) commitTopology(candidate *node, focus PaneID, bounds PixelRect, resolve CellMetricsResolver) error {
-	previousRoot, previousFocus := m.root, m.focused
-	m.root, m.focused = candidate, focus
+	tab := m.activeTab()
+	previousRoot, previousFocus := tab.root, tab.focused
+	tab.root, tab.focused = candidate, focus
 	layout, err := m.LayoutWithMetrics(bounds, resolve)
 	if err == nil {
 		for _, geometry := range layout.Panes {
@@ -166,7 +170,7 @@ func (m *Model) commitTopology(candidate *node, focus PaneID, bounds PixelRect, 
 		err = m.CheckInvariants()
 	}
 	if err != nil {
-		m.root, m.focused = previousRoot, previousFocus
+		tab.root, tab.focused = previousRoot, previousFocus
 	}
 	return err
 }
