@@ -2,6 +2,10 @@
   "Window": {
     "Width": 1200,
     "Height": 800,
+    "InitialRows": 0,
+    "InitialCols": 0,
+    "Decorations": "system",
+    "Titlebar": "dark",
     "PaddingX": 8,
     "PaddingY": 9,
     "PaddingLeft": 8,

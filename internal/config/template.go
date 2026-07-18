@@ -25,6 +25,12 @@ return {
   window = {
     width = %d,
     height = %d,
+    -- Set both to 0 for the existing 1100x720 pixel startup, or both 10..1000.
+    initial_rows = %d,
+    initial_cols = %d,
+    -- Native creation controls: decorations = "system"|"none"; titlebar = "system"|"dark".
+    decorations = %q,
+    titlebar = %q,
     padding_x = %d,
     padding_y = %d,
     -- Per-side values override padding_x/padding_y in config_version = 2.
@@ -222,7 +228,7 @@ return {
   --   local cervterm = require("cervterm")
   --   cervterm.every(1000, function(term) term:set_title(os.date("%%H:%%M:%%S")) end)
 }
-`, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY,
+`, cfg.Window.Width, cfg.Window.Height, cfg.Window.InitialRows, cfg.Window.InitialCols, cfg.Window.Decorations, cfg.Window.Titlebar, cfg.Window.PaddingX, cfg.Window.PaddingY,
 		cfg.Window.PaddingLeft, cfg.Window.PaddingRight, cfg.Window.PaddingTop, cfg.Window.PaddingBottom,
 		cfg.Window.DynamicTitle, cfg.Window.Opacity, cfg.Window.TextOpacity, cfg.Window.BackgroundOpacity, cfg.Window.Blur,
 		cfg.Font.Family, cfg.Font.Size, cfg.Font.Ligatures, cfg.Font.LineHeight, cfg.Font.CellWidth, cfg.Font.BaselineOffset, cfg.Font.GlyphOffsetX, cfg.Font.GlyphOffsetY,

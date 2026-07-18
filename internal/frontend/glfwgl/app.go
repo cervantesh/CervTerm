@@ -226,8 +226,7 @@ func (a *App) runWindow() error {
 	glfw.WindowHint(glfw.ContextVersionMajor, 2)
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	glfw.WindowHint(glfw.Resizable, glfw.True)
-	// Request transparency up front so live alpha changes need no window recreation.
-	glfw.WindowHint(glfw.TransparentFramebuffer, glfw.True)
+	a.applyNativeWindowCreationHints()
 	w, err := glfw.CreateWindow(a.cfg.Window.Width, a.cfg.Window.Height, "CervTerm", nil, nil)
 	if err != nil {
 		return err
@@ -241,10 +240,7 @@ func (a *App) runWindow() error {
 			log.Printf("close blur provider %q: %v", a.blurProvider.Name(), err)
 		}
 	}()
-	if icons := windowIcons(); len(icons) > 0 {
-		w.SetIcon(icons)
-	}
-	applyDarkTitleBar(w)
+	a.configureNativeWindow(w)
 	a.applyWindowAppearance()
 	w.MakeContextCurrent()
 	swapInterval := 1
@@ -299,6 +295,9 @@ func (a *App) runWindow() error {
 	a.ligaturesActive = atlas.supportsLigatures(a.cfg.Font.Ligatures)
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
+	if err := a.applyInitialGridWindowPlan(w, sx, sy); err != nil {
+		return err
+	}
 	a.initMux()
 	// Every fallible window/renderer/font resource now exists. Publish staged v2
 	// Teal immediately before the remaining in-memory activation and PTY spawn.
