@@ -249,7 +249,6 @@ func formatPendingConfigChanges(changes []config.ConfigChange, limit int) string
 	return strings.Join(parts, ", ")
 }
 
-// preparedLiveConfig owns fallible candidate resources until commit or abort.
 type preparedLiveConfig struct {
 	next                  config.Config
 	preparedContexts      map[atlasFontKey]*atlasFontContext
@@ -278,7 +277,6 @@ func (p *preparedLiveConfig) Close() {
 	}
 }
 
-// prepareLiveConfig builds fallible candidate resources without active mutation.
 func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error) {
 	return a.prepareLiveConfigWithProvenance(next, a.composedProvenance)
 }
@@ -373,7 +371,6 @@ func (a *App) prepareLiveConfigWithProvenance(next config.Config, provenance []c
 	return prepared, nil
 }
 
-// commitLiveConfig performs only mechanically infallible main-thread mutations.
 func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	if prepared.rasterChanged {
 		a.atlas.commitContextInstall(prepared.contextInstall)
@@ -396,6 +393,8 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	}
 	next := prepared.next
 	oldScrollbar := a.cfg.Scrollbar
+	oldTabBarHeight := a.effectiveTabBarHeight()
+	oldTabBarPosition := a.cfg.TabBar.Position
 	a.mux.SetScrollbackCapacity(next.Scrolling.History)
 	a.mux.SetHideCursorWhenScrolled(next.Scrolling.HideCursorWhenScrolled)
 	a.syncFocusedProjection()
@@ -409,6 +408,7 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	a.mux.SetPaletteBase(configuredPaletteBase(a.cfg.Colors))
 	a.cfg.Scrolling = next.Scrolling
 	a.cfg.Scrollbar = next.Scrollbar
+	a.cfg.TabBar = next.TabBar
 	a.cfg.Cursor = next.Cursor
 	a.cfg.Render.MaxFPS = next.Render.MaxFPS
 	a.applyWindowAppearance()
@@ -423,14 +423,14 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	} else {
 		a.scrollbar.lastActivity = time.Now()
 	}
-	if a.window != nil && scrollbarGutterWidth(oldScrollbar, a.uiScale) != scrollbarGutterWidth(a.cfg.Scrollbar, a.uiScale) {
+	geometryChanged := scrollbarGutterWidth(oldScrollbar, a.uiScale) != scrollbarGutterWidth(a.cfg.Scrollbar, a.uiScale) || oldTabBarHeight != a.effectiveTabBarHeight() || oldTabBarPosition != a.cfg.TabBar.Position
+	if a.window != nil && geometryChanged {
 		a.resizeToWindow()
 	}
 	a.damage.valid = false
 	a.requestRedraw()
 }
 
-// applyLiveConfig shares the atomic prepare/commit seam with runtime setters.
 func (a *App) applyLiveConfig(next config.Config) error {
 	a.ensureConfigState()
 	transaction, err := a.runtimeScopes.ProposeConfig(a.configScope, a.composedCfg, a.cfg, next)

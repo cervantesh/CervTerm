@@ -518,3 +518,7 @@ permission controls are future work for third-party plugin support.
 Event handlers observe only: an `output` handler cannot rewrite or suppress the
 bytes shown. This runtime does not add command palettes, multiple handlers per
 event, or multi-chord sequences.
+
+## Tab bar configuration
+
+The v2 `tab_bar` table is a live, runtime-overridable configuration surface. Supported leaves are `mode`, `position`, `height_px`, `min_width_px`, `max_width_px`, `padding_x`, `show_new_button`, and `show_close_button`. Runtime scope patches remain transactional: invalid width relationships or bounds preserve the prior bar and geometry.

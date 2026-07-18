@@ -75,6 +75,16 @@ local config: cervterm.Config = {
     page_step = 0.9,
     track_click = "page",
   },
+  tab_bar = {
+    mode = "multiple",
+    position = "top",
+    height_px = 28,
+    min_width_px = 96,
+    max_width_px = 220,
+    padding_x = 8,
+    show_new_button = true,
+    show_close_button = true,
+  },
   cursor = {
     shape = "underline",
     blink = true,

@@ -128,6 +128,7 @@ return {
   colors = { background = "#080B12E6" },
   scrolling = { history = 2000, wheel_multiplier = 3, hide_cursor_when_scrolled = true },
   scrollbar = { mode = "scrolling", stable_gutter = true, animation_fps = 30 },
+  tab_bar = { mode = "multiple", position = "top", min_width_px = 96, max_width_px = 220 },
   render = { max_fps = 0 },
   shell = { program = "cmd.exe", args = {} },
 }
@@ -148,6 +149,8 @@ Runtime diagnostics are written to stderr and to a local log file by default. Ov
 ## Display scaling and Phase 5 appearance controls
 
 Per-side logical padding is scaled with DPI and participates in grid sizing and pointer hit testing. The scrollbar supports `always`, `hover`, `scrolling`, and `never`; `stable_gutter` reserves its slot so visibility changes do not resize the PTY, and `animation_fps` bounds fade updates.
+
+	The retained tab bar supports `multiple` (default), `always`, and `hidden` visibility plus top/bottom placement. Its bounded tab widths, add/close controls, active-visible overflow, and geometry reservation reload atomically; the default one-tab window remains pixel-compatible with no bar.
 
 Text opacity and composed background opacity are independent, while `window.opacity` remains whole-window opacity. Validation prevents incompatible simultaneous translucency modes. Background composition is a bounded ordered layer stack: solid colors, linear gradients, and locally decoded images with explicit fit/alignment, decode limits, cache budgets, and asynchronous replacement on resize/reload.
 

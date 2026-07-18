@@ -146,6 +146,17 @@ local record cervterm
     track_click: string
   end
 
+  record TabBarConfig
+    mode: string
+    position: string
+    height_px: integer
+    min_width_px: integer
+    max_width_px: integer
+    padding_x: integer
+    show_new_button: boolean
+    show_close_button: boolean
+  end
+
   record CursorConfig
     shape: string
     blink: boolean
@@ -333,6 +344,17 @@ local record cervterm
     track_click: string | Unset
   end
 
+  record TabBarDocument
+    mode: string | Unset
+    position: string | Unset
+    height_px: integer | Unset
+    min_width_px: integer | Unset
+    max_width_px: integer | Unset
+    padding_x: integer | Unset
+    show_new_button: boolean | Unset
+    show_close_button: boolean | Unset
+  end
+
   record CursorDocument
     shape: string | Unset
     blink: boolean | Unset
@@ -434,6 +456,7 @@ local record cervterm
     background: BackgroundDocument | Unset | nil
     scrolling: ScrollingDocument | Unset
     scrollbar: ScrollbarDocument | Unset
+    tab_bar: TabBarDocument | Unset
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
     render: RenderDocument | Unset
@@ -462,6 +485,7 @@ local record cervterm
     background: BackgroundDocument | Unset | nil
     scrolling: ScrollingDocument | Unset
     scrollbar: ScrollbarDocument | Unset
+    tab_bar: TabBarDocument | Unset
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
     render: RenderDocument | Unset
