@@ -119,6 +119,7 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Render.ZoomOutHotkey != effective.Render.ZoomOutHotkey, "render.zoom_out_hotkey", ApplyRestart)
 	changes = appendChange(changes, desired.Render.ZoomResetHotkey != effective.Render.ZoomResetHotkey, "render.zoom_reset_hotkey", ApplyRestart)
 	changes = appendChange(changes, desired.Render.VSync != effective.Render.VSync, "render.vsync", ApplyRestart)
+	changes = appendChange(changes, desired.Render.MaxFPS != effective.Render.MaxFPS, "render.max_fps", ApplyLive)
 	changes = appendChange(changes, desired.Render.Redraw != effective.Render.Redraw, "render.redraw", ApplyRestart)
 	changes = appendChange(changes, desired.Render.Damage != effective.Render.Damage, "render.damage", ApplyRestart)
 
@@ -155,5 +156,6 @@ func MergeLiveConfig(base, source Config) Config {
 	base.Scrolling = source.Scrolling
 	base.Scrollbar = source.Scrollbar
 	base.Cursor = source.Cursor
+	base.Render.MaxFPS = source.Render.MaxFPS
 	return base
 }

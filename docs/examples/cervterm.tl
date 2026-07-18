@@ -94,6 +94,7 @@ local config: cervterm.Config = {
     zoom_out_hotkey = "ctrl+minus",
     zoom_reset_hotkey = "ctrl+0",
     vsync = true,
+    max_fps = 0,
     redraw = "on_demand",
     damage = "rows",
   },

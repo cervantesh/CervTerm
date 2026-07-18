@@ -302,6 +302,8 @@ func runtimeOverrideRawValue(source Config, path string) (string, error) {
 		value = source.Scrollbar.PageStep
 	case "scrollbar.track_click":
 		value = source.Scrollbar.TrackClick
+	case "render.max_fps":
+		value = source.Render.MaxFPS
 	default:
 		return "", fmt.Errorf("runtime configuration path %q does not permit scoped override", path)
 	}
@@ -430,6 +432,8 @@ func applyRuntimePath(target *Config, source Config, path string) {
 		target.Scrollbar.PageStep = source.Scrollbar.PageStep
 	case "scrollbar.track_click":
 		target.Scrollbar.TrackClick = source.Scrollbar.TrackClick
+	case "render.max_fps":
+		target.Render.MaxFPS = source.Render.MaxFPS
 	default:
 		panic("applyRuntimePath called for unsupported path: " + path)
 	}

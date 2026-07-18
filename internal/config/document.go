@@ -120,6 +120,7 @@ func FromDocument(base Config, document Document) Config {
 	if document.AuthoredVersion < 2 {
 		cfg.Window.TextOpacity = base.Window.TextOpacity
 		cfg.Window.BackgroundOpacity = base.Window.BackgroundOpacity
+		cfg.Render.MaxFPS = base.Render.MaxFPS
 	}
 	if document.AuthoredVersion >= 2 {
 		cfg.ColorScheme = stringField(document.Root, "color_scheme", cfg.ColorScheme)
@@ -136,6 +137,9 @@ func FromDocument(base Config, document Document) Config {
 			cfg.Font.BaselineOffset = numberField(font, "baseline_offset", cfg.Font.BaselineOffset)
 			cfg.Font.GlyphOffsetX = numberField(font, "glyph_offset_x", cfg.Font.GlyphOffsetX)
 			cfg.Font.GlyphOffsetY = numberField(font, "glyph_offset_y", cfg.Font.GlyphOffsetY)
+		}
+		if render := tableField(document.Root, "render"); render != nil {
+			cfg.Render.MaxFPS = intField(render, "max_fps", cfg.Render.MaxFPS)
 		}
 	}
 	return cfg
@@ -203,6 +207,7 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "text_raster", kind: KindString}, {name: "stats_hotkey", kind: KindString},
 		{name: "zoom_in_hotkey", kind: KindString}, {name: "zoom_out_hotkey", kind: KindString},
 		{name: "zoom_reset_hotkey", kind: KindString}, {name: "vsync", kind: KindBoolean},
+		{name: "max_fps", kind: KindInteger, apply: ApplyLive, runtimeOverride: true},
 		{name: "redraw", kind: KindString}, {name: "damage", kind: KindString},
 	}},
 	{name: "shell", kind: KindTable, apply: ApplyNewPane, children: []fieldSchema{
@@ -223,7 +228,7 @@ func isV2OnlyPath(path string) bool {
 	case "window.padding_left", "window.padding_right", "window.padding_top", "window.padding_bottom",
 		"window.text_opacity", "window.background_opacity",
 		"background.layers",
-		"scrollbar.mode", "scrollbar.stable_gutter", "scrollbar.animation_fps",
+		"scrollbar.mode", "scrollbar.stable_gutter", "scrollbar.animation_fps", "render.max_fps",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true
 	default:
@@ -316,6 +321,7 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 		delete(document.Present, "scrollbar.mode")
 		delete(document.Present, "scrollbar.stable_gutter")
 		delete(document.Present, "scrollbar.animation_fps")
+		delete(document.Present, "render.max_fps")
 		delete(document.Present, "font.descriptors")
 		delete(document.Present, "font.fallback")
 		delete(document.Present, "font.rules")

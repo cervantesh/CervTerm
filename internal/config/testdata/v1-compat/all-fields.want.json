@@ -101,6 +101,7 @@
     "ZoomOutHotkey": "ctrl+minus",
     "ZoomResetHotkey": "ctrl+0",
     "VSync": false,
+    "MaxFPS": 0,
     "Redraw": "continuous",
     "Damage": "frame"
   },

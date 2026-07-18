@@ -82,6 +82,7 @@ func fullyDifferentConfig(base Config) Config {
 	value.Render.ZoomOutHotkey += "+x"
 	value.Render.ZoomResetHotkey += "+x"
 	value.Render.VSync = !value.Render.VSync
+	value.Render.MaxFPS = 60
 	value.Render.Redraw = "continuous"
 	value.Render.Damage = "full"
 	value.Shell.Program = "different-shell"
@@ -108,8 +109,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 79 {
-		t.Fatalf("config leaf count = %d, want 79", len(changes))
+	if len(changes) != 80 {
+		t.Fatalf("config leaf count = %d, want 80", len(changes))
 	}
 }
 
