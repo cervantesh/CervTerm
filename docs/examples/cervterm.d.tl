@@ -232,6 +232,9 @@ local record cervterm
     Zoom: function(number): Action
     SplitPane: function(string): Action
     FocusPane: function(string): Action
+    ResizePane: function(string, integer): Action
+    SwapPane: function(string): Action
+    MovePane: function(string): Action
     Multiple: function({Action}): Action
     WithTarget: function(Action, string): Action
   end

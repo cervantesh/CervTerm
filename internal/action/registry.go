@@ -181,6 +181,9 @@ func DefaultRegistry() *Registry {
 			registration{descriptor: metadata(IDSplitPane, "Split pane", CategoryPane, TargetPane, true, true, pressAndRepeat), codec: splitPaneCodec},
 			registration{descriptor: metadata(IDFocusPane, "Focus pane", CategoryPane, TargetPane, true, true, pressAndRepeat), codec: focusPaneCodec},
 			registration{descriptor: metadata(IDClosePane, "Close pane", CategoryPane, TargetPane, true, true, pressAndRepeat), codec: simpleCodec(ClosePane{})},
+			registration{descriptor: metadata(IDResizePane, "Resize pane", CategoryPane, TargetPane, true, true, pressAndRepeat), codec: resizePaneCodec},
+			registration{descriptor: metadata(IDSwapPane, "Swap pane", CategoryPane, TargetPane, true, true, callbackPolicy), codec: swapPaneCodec},
+			registration{descriptor: metadata(IDMovePane, "Move pane", CategoryPane, TargetPane, true, true, callbackPolicy), codec: movePaneCodec},
 			registration{descriptor: metadata(IDMultiple, "Run multiple actions", CategorySequence, TargetOptional, true, true, callbackPolicy), codec: multipleCodec},
 			registration{descriptor: metadata(IDCallback, "Lua callback", CategoryScript, TargetPane, false, false, callbackPolicy)},
 		)
