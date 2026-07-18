@@ -18,13 +18,12 @@ func (a *App) handleModalKey(key glfw.Key, eventAction glfw.Action, _ glfw.Modif
 	if eventAction != glfw.Press && eventAction != glfw.Repeat {
 		return true
 	}
-	before := a.modal.Snapshot().Revision
+	before := a.modal.Revision()
 	switch key {
 	case glfw.KeyEscape:
 		a.applyModalIntents(a.modal.Close())
 	case glfw.KeyEnter, glfw.KeyKPEnter:
-		// Acceptance is intentionally only a pure retained intent in this slice.
-		_ = a.modal.Accept()
+		a.applyModalIntents(a.modal.Accept())
 	case glfw.KeyBackspace:
 		a.modal.Backspace()
 	case glfw.KeyUp:
@@ -48,7 +47,7 @@ func (a *App) handleModalChar(char rune) bool {
 	if !a.modal.Active() {
 		return false
 	}
-	before := a.modal.Snapshot().Revision
+	before := a.modal.Revision()
 	a.modal.AppendRune(char)
 	a.redrawModalMutation(before)
 	return true
@@ -64,7 +63,7 @@ func (a *App) handleModalScroll(_, yoff float64) bool {
 	if !a.modal.Active() {
 		return false
 	}
-	before := a.modal.Snapshot().Revision
+	before := a.modal.Revision()
 	delta := -1
 	if yoff < 0 {
 		delta = 1
@@ -85,15 +84,28 @@ func (a *App) modalVisibleRows() int {
 }
 
 func (a *App) redrawModalMutation(before uint64) {
-	if a.modal.Snapshot().Revision != before {
+	if a.modal.Revision() != before {
 		a.requestRedraw()
 	}
 }
 
 func (a *App) applyModalIntents(intents []modal.Intent) {
 	for _, intent := range intents {
-		if intent.Kind == modal.IntentRestoreFocus && intent.Pane != 0 && a.mux != nil {
-			_ = a.focusPane(termmux.PaneID(intent.Pane))
+		switch intent.Kind {
+		case modal.IntentAccept:
+			if a.modal.Mode() != modal.ModeCommandPalette {
+				continue
+			}
+			if err := a.acceptCommandPalette(intent.Entry, termmux.PaneID(intent.Pane)); err != nil {
+				a.modal.SetError(err.Error())
+				a.requestRedraw()
+				continue
+			}
+			a.applyModalIntents(a.modal.Close())
+		case modal.IntentRestoreFocus:
+			if intent.Pane != 0 && a.mux != nil {
+				_ = a.focusPane(termmux.PaneID(intent.Pane))
+			}
 		}
 	}
 }

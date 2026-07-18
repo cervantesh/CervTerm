@@ -90,6 +90,8 @@ type App struct {
 	scriptBundle     *script.CandidateBundle
 	scriptActivation *script.CandidateActivation
 	legacyTransition *config.LegacyTealTransition
+	scriptGeneration uint64
+	commandPalette   map[string]commandPaletteActivation
 	notice           string
 	noticeUntil      time.Time
 	suppressNextChar bool
@@ -122,11 +124,8 @@ type App struct {
 	lastBlinkPhase bool
 	lastStatsDraw  time.Time
 
-	// wakeReady gates the reader's PostEmptyEvent to the window between
-	// glfw.Init succeeding and glfw.Terminate running: the reader starts before
-	// GLFW is initialized and can outlive it, and posting outside that window
-	// panics. A wake skipped around the transitions self-heals within the
-	// loop's 500ms bounded wait.
+	// wakeReady prevents PostEmptyEvent before GLFW init or after termination;
+	// a skipped transition wake self-heals within the bounded loop wait.
 	wakeReady atomic.Bool
 
 	lterm               searchTerminal
@@ -162,6 +161,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 		configPath:             sourcePath,
 		candidateOptions:       initialOptions,
 		scriptRT:               rt,
+		scriptGeneration:       1,
 		scriptBundle:           bundle,
 		scriptActivation:       activation,
 		legacyTransition:       legacyTransition,

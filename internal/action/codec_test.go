@@ -23,6 +23,7 @@ func TestCodecRoundTripsBuiltInActions(t *testing.T) {
 		focused(PasteClipboard{}),
 		focused(ToggleSearch{}),
 		focused(ToggleStats{}),
+		focused(ActivateCommandPalette{}),
 		focused(ReloadConfig{}),
 		focused(ClosePane{}),
 		focused(Scroll{Unit: ScrollPage, Amount: -1}),
