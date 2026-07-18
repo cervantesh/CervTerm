@@ -65,6 +65,9 @@
   },
   "Scrollbar": {
     "Enabled": true,
+    "Mode": "scrolling",
+    "StableGutter": true,
+    "AnimationFPS": 60,
     "ReservedWidthPX": 16,
     "WidthPX": 10,
     "MarginPX": 3,

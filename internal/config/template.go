@@ -120,8 +120,13 @@ return {
     hide_cursor_when_scrolled = %t,
   },
   scrollbar = {
-    -- The slot stays reserved while the track/thumb auto-hide and fade.
+    -- mode: always, hover, scrolling, or never. In v2 it shadows enabled.
     enabled = %t,
+    mode = %q,
+    -- Stable reserves the gutter; false overlays chrome on terminal content.
+    stable_gutter = %t,
+    -- Active fades are sampled at this cadence; idle adds no periodic wake.
+    animation_fps = %d,
     reserved_width_px = %d,
     width_px = %d,
     margin_px = %d,
@@ -227,7 +232,8 @@ return {
 		cfg.Colors.ANSI[8], cfg.Colors.ANSI[9], cfg.Colors.ANSI[10], cfg.Colors.ANSI[11],
 		cfg.Colors.ANSI[12], cfg.Colors.ANSI[13], cfg.Colors.ANSI[14], cfg.Colors.ANSI[15],
 		cfg.Scrolling.History, cfg.Scrolling.WheelMultiplier, cfg.Scrolling.HideCursorWhenScrolled,
-		cfg.Scrollbar.Enabled, cfg.Scrollbar.ReservedWidthPX, cfg.Scrollbar.WidthPX, cfg.Scrollbar.MarginPX, cfg.Scrollbar.RadiusPX, cfg.Scrollbar.MinThumbPX,
+		cfg.Scrollbar.Enabled, cfg.Scrollbar.Mode, cfg.Scrollbar.StableGutter, cfg.Scrollbar.AnimationFPS,
+		cfg.Scrollbar.ReservedWidthPX, cfg.Scrollbar.WidthPX, cfg.Scrollbar.MarginPX, cfg.Scrollbar.RadiusPX, cfg.Scrollbar.MinThumbPX,
 		cfg.Scrollbar.TrackColor, cfg.Scrollbar.ThumbColor, cfg.Scrollbar.ThumbHoverColor, cfg.Scrollbar.ThumbPressColor,
 		cfg.Scrollbar.AutoHideDelayMS, cfg.Scrollbar.FadeMS, cfg.Scrollbar.PageStep, cfg.Scrollbar.TrackClick,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,

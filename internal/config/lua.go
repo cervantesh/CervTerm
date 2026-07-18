@@ -98,6 +98,9 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 	}
 	if tbl := tableField(root, "scrollbar"); tbl != nil {
 		cfg.Scrollbar.Enabled = boolField(tbl, "enabled", cfg.Scrollbar.Enabled)
+		cfg.Scrollbar.Mode = stringField(tbl, "mode", cfg.Scrollbar.Mode)
+		cfg.Scrollbar.StableGutter = boolField(tbl, "stable_gutter", cfg.Scrollbar.StableGutter)
+		cfg.Scrollbar.AnimationFPS = intField(tbl, "animation_fps", cfg.Scrollbar.AnimationFPS)
 		cfg.Scrollbar.ReservedWidthPX = intField(tbl, "reserved_width_px", cfg.Scrollbar.ReservedWidthPX)
 		cfg.Scrollbar.WidthPX = intField(tbl, "width_px", cfg.Scrollbar.WidthPX)
 		cfg.Scrollbar.MarginPX = intField(tbl, "margin_px", cfg.Scrollbar.MarginPX)
