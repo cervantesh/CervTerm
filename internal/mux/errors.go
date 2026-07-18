@@ -17,6 +17,8 @@ var (
 	ErrInvalidGeometry     = errors.New("mux: invalid geometry")
 	ErrSplitTooSmall       = errors.New("mux: split would create a pane below the minimum size")
 	ErrNoPaneInDirection   = errors.New("mux: no pane in focus direction")
+	ErrInvalidResizeDelta  = errors.New("mux: resize delta must be positive")
+	ErrTopologyTooSmall    = errors.New("mux: topology mutation would create a pane below 2x2 cells")
 	ErrIDExhausted         = errors.New("mux: identifier space exhausted")
 	ErrInvariant           = errors.New("mux: invariant violation")
 )
