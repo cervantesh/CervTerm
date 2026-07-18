@@ -1,0 +1,20 @@
+Phase 4 Windows installed-font doctor evidence
+Host: Windows 11 windows/amd64; Go 1.25.8
+Runtime base: 03efcc5 plus Phase 4.6 path-free diagnostics
+Configuration: JetBrainsMono Nerd Font primary; Microsoft YaHei UI CJK rule; Segoe UI Emoji rule
+
+font-feature-capability: directwrite
+font-cell-metrics: natural=11x28/21 projected=11x28/21
+font-style[normal]: family="JetBrainsMono Nerd Font" subfamily="Regular" weight=400 style=normal stretch=100 collection=0 tier=primary source-index=0 synthetic=none
+font-style[bold]: family="JetBrainsMono Nerd Font" subfamily="Bold" weight=700 style=normal stretch=100 collection=0 tier=primary source-index=0 synthetic=none
+font-style[italic]: family="JetBrainsMono Nerd Font" subfamily="Italic" weight=400 style=italic stretch=100 collection=0 tier=primary source-index=0 synthetic=none
+font-style[bold-italic]: family="JetBrainsMono Nerd Font" subfamily="Bold Italic" weight=700 style=italic stretch=100 collection=0 tier=primary source-index=0 synthetic=none
+font-content[powerline]: family="JetBrainsMono Nerd Font" subfamily="Regular" weight=400 style=normal stretch=100 collection=0 tier=rule source-index=0 synthetic=none
+font-content[nerd-font]: family="JetBrainsMono Nerd Font" subfamily="Regular" weight=400 style=normal stretch=100 collection=0 tier=rule source-index=1 synthetic=none
+font-content[cjk]: family="Microsoft YaHei UI" subfamily="Normal" weight=400 style=normal stretch=100 collection=1 tier=rule source-index=2 synthetic=none
+font-content[emoji]: family="Segoe UI Emoji" subfamily="Regular" weight=400 style=normal stretch=100 collection=0 tier=rule source-index=3 synthetic=none
+font-contexts: unavailable (no active frontend; limit=64)
+font-negative-cache: unavailable (no active frontend; limit=8192/context)
+font-parsed-cache: unavailable (diagnostic probe; limits=128 faces/268435456 bytes)
+
+No font path, cache key, source bytes, or backend error is present in this evidence. The normal selected subfamily is Regular, not ExtraLight.

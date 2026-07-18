@@ -34,6 +34,9 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Local v2 `color_schemes` catalogs and live `color_scheme` selection with deterministic composition, inline color precedence, provenance, diagnostics, Teal types, and atomic reload.
 - Six live semantic chrome colors for application surfaces, muted text, accents, pane dividers, search matches, and error state, available in inline colors and local named schemes.
 - Bounded pane-local OSC 4/10/11 palette set/query and OSC 104/110/111 reset support, with canonical replies, live base-palette reload, and logical scrollback reprojection.
+- Deterministic v2 font descriptors with real normal/bold/italic/bold-italic selection, bounded parsed resources, and safe legacy shorthand fallback.
+- Lazy whole-cluster fallback and symbol rules with ordered primary/fallback/embedded resolution and bounded font discovery.
+- OpenType feature projection and fixed-grid line-height, cell-width, baseline, and glyph offsets with pane-safe cache identities and redacted diagnostics.
 
 ### Fixed
 
