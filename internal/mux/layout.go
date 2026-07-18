@@ -84,10 +84,11 @@ func (m *Model) LayoutWithMetrics(bounds PixelRect, resolve CellMetricsResolver)
 	}
 
 	result := Layout{}
-	if m.root == nil {
+	tab := m.activeTab()
+	if tab == nil {
 		return result, nil
 	}
-	if err := layoutNode(m.root, bounds, resolve, &result); err != nil {
+	if err := layoutNode(tab.root, bounds, resolve, &result); err != nil {
 		return Layout{}, err
 	}
 	return result, nil
