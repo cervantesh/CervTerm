@@ -61,6 +61,10 @@ return {
     -- that lack ligatures (e.g. the default Go Mono). Render-only: grid,
     -- selection, and copied text are unchanged.
     ligatures = %t,
+    -- OpenType feature tags merge by key across config layers. Explicit entries
+    -- override the ligatures projection; cervterm.config.unset reveals it again.
+    -- Values are integers 0..65535 and at most 64 effective tags are allowed.
+    -- features = { liga = 0, clig = 0, calt = 0, dlig = 1, ss01 = 1 },
   },
   colors = {
     foreground = %q,

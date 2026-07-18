@@ -163,10 +163,15 @@ func TestAtlasDescriptorKeysPreserveOrderAndLegacyIdentity(t *testing.T) {
 
 func TestAtlasFontModelIdentityIncludesFallbackRules(t *testing.T) {
 	spec := fontglyph.Spec{Family: "ignored", Size: 14, DPI: 96, TextRaster: "gray"}
+	features, err := fontdesc.NewFeatureSet(false, map[string]int{"ss01": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
 	model := atlasFontModel{
 		descriptors: []fontdesc.Descriptor{{Family: "Primary"}},
 		fallback:    []fontdesc.Descriptor{{Family: "Fallback One"}, {Family: "Fallback Two"}},
 		rules:       []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Emoji"}}},
+		features:    features,
 	}
 	base, err := makeAtlasFontKeyWithModel(spec, 1, 0, model)
 	if err != nil {
@@ -185,8 +190,18 @@ func TestAtlasFontModelIdentityIncludesFallbackRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if base.environment == reorderedKey.environment || base.environment == mutatedKey.environment {
-		t.Fatal("fallback/rule mutation did not change atlas environment")
+	changedFeatures, err := fontdesc.NewFeatureSet(false, map[string]int{"ss01": 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	featureMutated := model
+	featureMutated.features = changedFeatures
+	featureKey, err := makeAtlasFontKeyWithModel(spec, 1, 0, featureMutated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.environment == reorderedKey.environment || base.environment == mutatedKey.environment || base.environment == featureKey.environment {
+		t.Fatal("fallback/rule/feature mutation did not change atlas environment")
 	}
 }
 
@@ -457,5 +472,64 @@ func TestAtlasCapacityFailureResetsAtMostOncePerGeneration(t *testing.T) {
 	}
 	if atlas.generation != generation || renderer.clearCalls != clears {
 		t.Fatalf("repeated capacity miss reset atlas again: generation/clears = %d/%d", atlas.generation, renderer.clearCalls)
+	}
+}
+
+func TestFeatureIdentitySeparatesPositiveAndNegativeAtlasEntries(t *testing.T) {
+	spec := fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96, TextRaster: "go"}
+	enabled, err := fontdesc.NewFeatureSet(true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled, err := fontdesc.NewFeatureSet(false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabledKey, err := makeAtlasFontKeyWithModel(spec, 1, 0, atlasFontModel{descriptors: []fontdesc.Descriptor{{Family: "Go Mono"}}, features: enabled})
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabledKey, err := makeAtlasFontKeyWithModel(spec, 1, 0, atlasFontModel{descriptors: []fontdesc.Descriptor{{Family: "Go Mono"}}, features: disabled})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enabledKey == disabledKey {
+		t.Fatal("enabled and disabled feature contexts aliased")
+	}
+	atlas := &glyphAtlas{generation: 1, entries: make(map[atlasKey]atlasEntry)}
+	enabledRun := atlasKey{spec: enabledKey, kind: 'l', text: "->", span: 2}
+	disabledRun := atlasKey{spec: disabledKey, kind: 'l', text: "->", span: 2}
+	atlas.entries[enabledRun] = atlasEntry{generation: 1}
+	atlas.recordRunNegative(enabledRun)
+	atlas.recordInsertionFailure(enabledRun)
+	if _, ok := atlas.currentEntry(disabledRun); ok {
+		t.Fatal("positive feature entry aliased disabled context")
+	}
+	if _, ok := atlas.runNegative[disabledRun]; ok || atlas.insertionFailedThisGeneration(disabledRun) {
+		t.Fatal("negative feature entry aliased disabled context")
+	}
+}
+
+func TestExplicitFeatureEnablesRunCollectionWithoutLigatureShorthand(t *testing.T) {
+	features, err := fontdesc.NewFeatureSet(false, map[string]int{"dlig": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := &atlasTestBackend{}
+	atlas := &glyphAtlas{activeContext: &atlasFontContext{backend: backend, features: features}}
+	if !atlas.supportsLigatures(false) {
+		t.Fatal("explicit substitution feature did not enable run collection")
+	}
+	disabled, err := fontdesc.NewFeatureSet(false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	atlas.activeContext.features = disabled
+	if atlas.supportsLigatures(false) {
+		t.Fatal("disabled feature projection enabled run collection")
+	}
+	atlas.activeContext.features = fontdesc.FeatureSet{}
+	if !atlas.supportsLigatures(true) {
+		t.Fatal("legacy zero feature model stopped honoring ligature shorthand")
 	}
 }

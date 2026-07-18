@@ -367,7 +367,7 @@ func (a *App) installPreparedRasterContexts(prepared map[atlasFontKey]*atlasFont
 		cellW, cellH, _, ok := a.atlas.useSpec(a.fontSpec(a.cfg.Font.Size, a.contentScaleX, a.contentScaleY), a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
 		if ok {
 			a.cellW, a.cellH = float32(cellW), float32(cellH)
-			a.ligaturesActive = a.cfg.Font.Ligatures && a.atlas.supportsLigatures()
+			a.ligaturesActive = a.atlas.supportsLigatures(a.cfg.Font.Ligatures)
 		}
 		return
 	}
