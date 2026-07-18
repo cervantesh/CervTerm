@@ -33,8 +33,6 @@ func (a *App) muxMetrics() termmux.CellMetrics {
 	return termmux.CellMetrics{
 		CellWidth:  max(1, int(a.cellW)),
 		CellHeight: max(1, int(a.cellH)),
-		PaddingX:   max(0, int(a.paddingX)),
-		PaddingY:   max(0, int(a.paddingY)),
 	}
 }
 
@@ -263,7 +261,7 @@ func (a *App) paneGridMetrics(id termmux.PaneID, cols, rows int) gridMetrics {
 	if state := a.paneUI[id]; state != nil {
 		cellW, cellH = state.font.cellW, state.font.cellH
 	}
-	return gridMetrics{cellW: cellW, cellH: cellH, paddingX: a.paddingX, paddingY: a.paddingY, cols: cols, rows: rows}
+	return gridMetrics{cellW: cellW, cellH: cellH, cols: cols, rows: rows}
 }
 
 func (a *App) pointForPaneFramebufferPosition(id termmux.PaneID, geometry termmux.PaneGeometry, fx, fy float32) termsel.Point {

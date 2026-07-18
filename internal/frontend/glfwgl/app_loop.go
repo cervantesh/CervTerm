@@ -3,7 +3,6 @@
 package glfwgl
 
 import (
-	"math"
 	"time"
 
 	termmux "cervterm/internal/mux"
@@ -214,17 +213,28 @@ func (a *App) spawnInitialPTY(w *glfw.Window) {
 	}
 }
 
-func (a *App) muxContentBounds(width, height int) termmux.PixelRect {
-	reserved := int(math.Ceil(float64(a.scrollbarReservedWidth())))
-	return termmux.PixelRect{Width: max(0, width-reserved), Height: max(0, height)}
+func (a *App) outerInsets() OuterInsets {
+	return OuterInsets{
+		Left: float64(a.cfg.Window.PaddingLeft), Right: float64(a.cfg.Window.PaddingRight),
+		Top: float64(a.cfg.Window.PaddingTop), Bottom: float64(a.cfg.Window.PaddingBottom),
+	}
 }
 
-// gridSize maps a framebuffer size (in pixels) to the terminal grid, applying
-// the padding and cell metrics. Shared by resizeToWindow and the initial PTY
-// spawn in runWindow so the two sites cannot drift.
+func (a *App) windowGeometry(width, height int) WindowGeometry {
+	return resolveWindowGeometry(width, height, a.insets, a.scrollbarReservedWidth())
+}
+
+func (a *App) muxContentBounds(width, height int) termmux.PixelRect {
+	content := a.windowGeometry(width, height).Content
+	return termmux.PixelRect{X: content.X, Y: content.Y, Width: content.Width, Height: content.Height}
+}
+
+// gridSize maps a framebuffer size to the terminal grid through the same content
+// rectangle used by mux layout and PTY sizing.
 func (a *App) gridSize(w, h int) (cols, rows int) {
-	cols = max(2, int((float32(w)-2*a.paddingX-a.scrollbarReservedWidth())/a.cellW))
-	rows = max(1, int((float32(h)-2*a.paddingY)/a.cellH))
+	content := a.windowGeometry(w, h).Content
+	cols = max(2, int(float32(content.Width)/a.cellW))
+	rows = max(1, int(float32(content.Height)/a.cellH))
 	return cols, rows
 }
 

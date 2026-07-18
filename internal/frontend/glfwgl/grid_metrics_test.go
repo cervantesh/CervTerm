@@ -4,7 +4,7 @@ import "testing"
 
 func TestGridMetricsCellAt(t *testing.T) {
 	// 10x20 cells, 5px padding, an 8x4 grid.
-	g := gridMetrics{cellW: 10, cellH: 20, paddingX: 5, paddingY: 5, cols: 8, rows: 4}
+	g := gridMetrics{cellW: 10, cellH: 20, originX: 5, originY: 5, cols: 8, rows: 4}
 
 	cases := []struct {
 		name             string
@@ -29,7 +29,7 @@ func TestGridMetricsCellAt(t *testing.T) {
 }
 
 func TestGridMetricsRejectsReservedGutter(t *testing.T) {
-	g := gridMetrics{cellW: 10, cellH: 20, paddingX: 5, paddingY: 5, contentRight: 85, cols: 8, rows: 4}
+	g := gridMetrics{cellW: 10, cellH: 20, originX: 5, originY: 5, contentRight: 85, cols: 8, rows: 4}
 	if !g.containsCell(84.9, 10) {
 		t.Fatal("last grid pixel should be inside content")
 	}

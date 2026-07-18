@@ -28,21 +28,22 @@ type mouseReportState struct {
 	mods   input.Mod
 }
 
-// metrics snapshots the focused pane's local grid geometry.
+// metrics snapshots the focused pane's framebuffer-space grid geometry.
 func (a *App) metrics() gridMetrics {
 	_, view, ok := a.focusedView()
 	if !ok {
 		return gridMetrics{
 			cellW: a.cellW, cellH: a.cellH,
-			paddingX: a.paddingX, paddingY: a.paddingY,
-			contentRight: a.paddingX + float32(a.cols)*a.cellW,
+			originX: a.drawOriginX, originY: a.drawOriginY,
+			contentRight: a.drawOriginX + float32(a.cols)*a.cellW,
 			cols:         a.cols, rows: a.rows,
 		}
 	}
+	originX, originY := float32(view.Geometry.Pixels.X), float32(view.Geometry.Pixels.Y)
 	return gridMetrics{
 		cellW: a.cellW, cellH: a.cellH,
-		paddingX: a.paddingX, paddingY: a.paddingY,
-		contentRight: a.paddingX + float32(view.Geometry.Cols)*a.cellW,
+		originX: originX, originY: originY,
+		contentRight: originX + float32(view.Geometry.Cols)*a.cellW,
 		cols:         view.Geometry.Cols, rows: view.Geometry.Rows,
 	}
 }
