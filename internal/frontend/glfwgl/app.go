@@ -133,13 +133,15 @@ type App struct {
 	// loop's 500ms bounded wait.
 	wakeReady atomic.Bool
 
-	lterm            searchTerminal
-	search           searchController
-	selection        selectionState
-	mouseReport      mouseReportState
-	mouseCapturePane termmux.PaneID
-	divider          dividerInteraction
-	scrollbar        scrollbarState
+	lterm               searchTerminal
+	search              searchController
+	selection           selectionState
+	mouseReport         mouseReportState
+	mouseCapturePane    termmux.PaneID
+	mouseBindingCapture mouseBindingCapture
+	mouseClicks         mouseClickState
+	divider             dividerInteraction
+	scrollbar           scrollbarState
 }
 
 func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, watchPaths []string, watchHashes map[string][32]byte, sourcePath string, options script.CandidateOptions) error {
@@ -362,6 +364,9 @@ func (a *App) installCallbacks() {
 
 	a.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 		x, y := a.window.GetCursorPos()
+		if a.handleConfiguredMouseButton(button, action, mods, x, y) {
+			return
+		}
 		if a.divider.active {
 			if button == glfw.MouseButtonLeft && action == glfw.Release {
 				a.finishDividerDrag()
@@ -375,14 +380,6 @@ func (a *App) installCallbacks() {
 		fx, fy := a.windowToFramebuffer(x, y)
 		if a.handleScrollbarButton(button, action, fx, fy) {
 			a.clearDividerCursor()
-			return
-		}
-		if action == glfw.Press {
-			if pane, _, ok := a.paneAtWindowPosition(x, y); ok {
-				a.focusPane(pane)
-			}
-		}
-		if a.sendMouseButton(button, action, mods) {
 			return
 		}
 		if button != glfw.MouseButtonLeft {
@@ -401,23 +398,23 @@ func (a *App) installCallbacks() {
 		if action == glfw.Release {
 			a.selection.end = point
 			a.selection.dragging = false
-			// A plain click (no drag → selectionActive stays false) over a URL
-			// opens it; a drag is a text selection and never opens a link.
 			if !a.selection.active && a.handleLinkClick(point) {
 				a.requestRedraw()
 				return
 			}
 			a.requestRedraw()
-			return
 		}
 	})
 	a.window.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
-		if a.dragDivider(x, y) {
-			return
-		}
 		if a.mouseCapturePane != 0 {
 			a.clearDividerCursor()
 			a.sendMouseMove(x, y)
+			return
+		}
+		if a.handleConfiguredMouseDrag(x, y) {
+			return
+		}
+		if a.dragDivider(x, y) {
 			return
 		}
 		fx, fy := a.windowToFramebuffer(x, y)
@@ -445,21 +442,15 @@ func (a *App) installCallbacks() {
 		a.requestRedraw()
 	})
 	a.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {
-		// Ctrl+wheel zooms (font size), taking priority over app mouse reporting —
-		// the standard terminal shortcut. GLFW does not pass modifiers to the
-		// scroll callback, so query the live Ctrl state.
+		x, y := a.window.GetCursorPos()
+		if a.handleConfiguredMouseWheel(yoff, x, y) {
+			return
+		}
 		if a.handleZoomWheel(yoff) {
 			return
 		}
-		x, y := a.window.GetCursorPos()
 		fx, fy := a.windowToFramebuffer(x, y)
 		if a.handleScrollbarWheel(yoff, fx, fy) {
-			return
-		}
-		if pane, _, ok := a.paneAtWindowPosition(x, y); ok {
-			a.focusPane(pane)
-		}
-		if a.sendMouseWheel(yoff, a.currentModifiers()) {
 			return
 		}
 		rows := scrollRowsFromWheelDelta(yoff, a.cfg.Scrolling.WheelMultiplier)
@@ -467,8 +458,6 @@ func (a *App) installCallbacks() {
 			return
 		}
 		moved, _ := a.mux.ScrollViewport(a.focusedPane, rows)
-		// A wheel tick at the clamp moves nothing: skip the redraw so no frame is
-		// drawn (the event still woke the loop; nothing damages).
 		if moved {
 			a.scrollbar.lastActivity = time.Now()
 			a.requestRedraw()
@@ -481,6 +470,7 @@ func (a *App) installCallbacks() {
 			a.finishDividerDrag()
 			a.clearDividerCursor()
 			a.cancelMouseCapture()
+			a.mouseBindingCapture = mouseBindingCapture{}
 		}
 		// The script focus event is independent of the terminal's focus-report
 		// mode. The callback runs on the loop thread (not inside a handler), so
