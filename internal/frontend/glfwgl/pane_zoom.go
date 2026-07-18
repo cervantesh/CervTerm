@@ -273,7 +273,7 @@ func (a *App) activatePaneFont(id termmux.PaneID) bool {
 		}
 		state.font.cellW, state.font.cellH = float32(cellW), float32(cellH)
 		state.font.baseline = baseline
-		a.ligaturesActive = a.cfg.Font.Ligatures && a.atlas.supportsLigatures()
+		a.ligaturesActive = a.atlas.supportsLigatures(a.cfg.Font.Ligatures)
 	}
 	a.cellW, a.cellH = state.font.cellW, state.font.cellH
 	return true

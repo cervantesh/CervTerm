@@ -37,7 +37,7 @@ type cliFontDescriptor struct {
 
 func cliOverrideKindAllowed(kind ValueKind) bool {
 	switch kind {
-	case KindString, KindNumber, KindInteger, KindBoolean, KindStringList, KindDescriptorList, KindFontRuleList:
+	case KindString, KindNumber, KindInteger, KindBoolean, KindStringList, KindFeatureMap, KindDescriptorList, KindFontRuleList:
 		return true
 	default:
 		return false
@@ -174,6 +174,38 @@ func decodeCLIOverrideValue(state *lua.LState, path resolvedOverridePath, raw st
 			table.Append(entry)
 		}
 		return table, 1 + len(values)*8, nil
+	case KindFeatureMap:
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.UseNumber()
+		var values map[string]any
+		if err := decoder.Decode(&values); err != nil || values == nil {
+			return nil, 0, fmt.Errorf("must be a JSON object of feature integers or null tombstones")
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			return nil, 0, fmt.Errorf("must contain exactly one JSON object")
+		}
+		table := state.NewTable()
+		keys := make([]string, 0, len(values))
+		for key := range values {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if values[key] == nil {
+				table.RawSetString(key, NewUnsetValue(state))
+				continue
+			}
+			number, ok := values[key].(json.Number)
+			if !ok {
+				return nil, 0, fmt.Errorf("feature %q must be a JSON integer or null", key)
+			}
+			parsed, err := exactCLIInteger(number.String())
+			if err != nil {
+				return nil, 0, fmt.Errorf("feature %q: %w", key, err)
+			}
+			table.RawSetString(key, lua.LNumber(parsed))
+		}
+		return table, len(values) + 1, nil
 	case KindFontRuleList:
 		decoder := json.NewDecoder(strings.NewReader(raw))
 		decoder.UseNumber()
@@ -287,7 +319,7 @@ func (b *compositionBuilder) applyCLIOverrides(overrides []CLIOverride) error {
 		if err != nil {
 			return fmt.Errorf("config override argument %d path %q: %w", override.ArgumentIndex, override.Path, err)
 		}
-		if err := validateStrictValue("CLI override", override.Path, value, resolved.field, false); err != nil {
+		if err := validateStrictValue("CLI override", override.Path, value, resolved.field, resolved.field.kind == KindFeatureMap); err != nil {
 			return fmt.Errorf("config override argument %d path %q: %w", override.ArgumentIndex, override.Path, err)
 		}
 		if err := b.consume(cost, override.Path); err != nil {
@@ -302,11 +334,37 @@ func (b *compositionBuilder) applyCLIOverrides(overrides []CLIOverride) error {
 			}
 			target = nested
 		}
-		target.RawSetString(resolved.parts[len(resolved.parts)-1], value)
 		origin := ProvenanceOrigin{
 			Layer: LayerCLI, Name: "--config-override",
 			CLIArgumentIndex: override.ArgumentIndex, HasCLIArgumentIndex: true,
 		}
+		if resolved.field.kind == KindFeatureMap {
+			table := value.(*lua.LTable)
+			existing, ok := target.RawGetString(resolved.parts[len(resolved.parts)-1]).(*lua.LTable)
+			if !ok {
+				existing = b.state.NewTable()
+				target.RawSetString(resolved.parts[len(resolved.parts)-1], existing)
+			}
+			keys := make([]string, 0, table.Len())
+			table.ForEach(func(key, _ lua.LValue) {
+				if text, ok := key.(lua.LString); ok {
+					keys = append(keys, string(text))
+				}
+			})
+			sort.Strings(keys)
+			for _, key := range keys {
+				entry := table.RawGetString(key)
+				tombstone := isUnsetValue(entry)
+				if tombstone {
+					existing.RawSetString(key, lua.LNil)
+				} else {
+					existing.RawSetString(key, entry)
+				}
+				b.provenance.set(mapEntryPath(override.Path, key), origin, tombstone, false)
+			}
+			continue
+		}
+		target.RawSetString(resolved.parts[len(resolved.parts)-1], value)
 		b.provenance.set(override.Path, origin, false, false)
 	}
 	return nil

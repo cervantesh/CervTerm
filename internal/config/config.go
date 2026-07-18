@@ -42,6 +42,7 @@ type FontConfig struct {
 	Rules       []fontdesc.Rule       `json:"Rules,omitempty"`
 	Size        float64
 	Ligatures   bool
+	Features    map[string]int `json:"Features,omitempty"`
 }
 
 type ColorsConfig struct {
@@ -120,7 +121,7 @@ func Defaults() Config {
 			Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6, DynamicTitle: true,
 			Opacity: 1.0, Blur: true,
 		},
-		Font: FontConfig{Family: "Go Mono", Size: 14, Ligatures: false},
+		Font: FontConfig{Family: "Go Mono", Size: 14, Ligatures: false, Features: map[string]int{}},
 		Colors: ColorsConfig{
 			Foreground: "#E6E1D8", Background: "#080B12E6", Cursor: "#60E8F0", SelectionBackground: "#2A6377",
 			ChromeBackground: "#10141CF0", ChromeMuted: "#A8B3C7FF", Accent: "#60E8F0FF",
@@ -148,6 +149,13 @@ func (c Config) Clone() Config {
 	c.Font.Descriptors = append([]fontdesc.Descriptor(nil), c.Font.Descriptors...)
 	c.Font.Fallback = append([]fontdesc.Descriptor(nil), c.Font.Fallback...)
 	c.Font.Rules = cloneFontRules(c.Font.Rules)
+	if c.Font.Features != nil {
+		features := make(map[string]int, len(c.Font.Features))
+		for tag, value := range c.Font.Features {
+			features[tag] = value
+		}
+		c.Font.Features = features
+	}
 	c.Shell.Args = append([]string(nil), c.Shell.Args...)
 	if c.Shell.Env != nil {
 		environment := make(map[string]string, len(c.Shell.Env))
@@ -231,8 +239,12 @@ func (c Config) Validate() error {
 	errs = append(errs, fallbackErrors...)
 	normalizedRules, ruleErrors := normalizeRuleConfigList(c.Font.Rules)
 	errs = append(errs, ruleErrors...)
-	if len(primaryErrors) == 0 && len(fallbackErrors) == 0 && len(ruleErrors) == 0 {
-		if _, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{Descriptors: normalizedPrimary, Fallback: normalizedFallback, Rules: normalizedRules}); err != nil {
+	features, featureErr := fontdesc.NewFeatureSet(c.Font.Ligatures, c.Font.Features)
+	if featureErr != nil {
+		errs = append(errs, fmt.Errorf("font.features: %w", featureErr))
+	}
+	if len(primaryErrors) == 0 && len(fallbackErrors) == 0 && len(ruleErrors) == 0 && featureErr == nil {
+		if _, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{Descriptors: normalizedPrimary, Fallback: normalizedFallback, Rules: normalizedRules, Features: features.CanonicalBytes()}); err != nil {
 			errs = append(errs, fmt.Errorf("font canonical payload: %w", err))
 		}
 	}

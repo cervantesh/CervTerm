@@ -110,6 +110,9 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 	if safeFonts && len(report.Config.Font.Rules) != 0 {
 		fmt.Printf("  font-rules-suppressed-by-safe-mode: %d\n", len(report.Config.Font.Rules))
 	}
+	if safeFonts && len(report.Config.Font.Features) != 0 {
+		fmt.Printf("  font-features-suppressed-by-safe-mode: %d\n", len(report.Config.Font.Features))
+	}
 	cfg := effectiveDoctorConfig(report.Config, safeFonts)
 	if cfg.Shell.Program == "" {
 		fmt.Println("  shell: platform default")
@@ -121,6 +124,12 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 	}
 	fmt.Printf("  text-gamma: %.2f\n", cfg.Render.TextGamma)
 	fmt.Printf("  text-darken: %.2f\n", cfg.Render.TextDarken)
+	features, featureErr := fontdesc.NewFeatureSet(cfg.Font.Ligatures, cfg.Font.Features)
+	if featureErr != nil {
+		fmt.Printf("  font-features: error: %v\n", featureErr)
+		return false
+	}
+	fmt.Printf("  font-features: %s\n", formatFeatureSet(features))
 	spec := fontglyph.Spec{Family: cfg.Font.Family, Size: cfg.Font.Size, DPI: 96, TextRaster: cfg.Render.TextRaster}
 	var backend fontglyph.Backend
 	var backendErr error
@@ -133,6 +142,7 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 		environment, identityErr := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{
 			Descriptors: primary, Fallback: cfg.Font.Fallback, Rules: cfg.Font.Rules, BaseSizeBits: math.Float64bits(cfg.Font.Size), PaneZoomBits: math.Float64bits(1),
 			DPI: 96, RasterMode: cfg.Render.TextRaster, GammaBits: math.Float64bits(cfg.Render.TextGamma), DarkeningBits: math.Float64bits(cfg.Render.TextDarken),
+			Features: features.CanonicalBytes(),
 		})
 		if identityErr != nil {
 			backendErr = identityErr
@@ -150,6 +160,10 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 		}
 	} else {
 		backend, backendErr = fontglyph.NewOpenTypeBackend(spec)
+	}
+	if backendErr == nil {
+		fontglyph.ConfigureBackendFeatures(backend, features)
+		fmt.Printf("  font-feature-capability: %s\n", fontglyph.BackendFeatureCapability(backend))
 	}
 	if backendErr != nil {
 		fmt.Printf("  text-raster: go (font probe failed: %v)\n", backendErr)
@@ -174,8 +188,21 @@ func effectiveDoctorConfig(authored config.Config, safeFonts bool) config.Config
 		effective.Font.Descriptors = nil
 		effective.Font.Fallback = nil
 		effective.Font.Rules = nil
+		effective.Font.Features = nil
 	}
 	return effective
+}
+
+func formatFeatureSet(features fontdesc.FeatureSet) string {
+	entries := features.Entries()
+	if len(entries) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(entries))
+	for _, feature := range entries {
+		parts = append(parts, fmt.Sprintf("%s=%d", feature.Tag, feature.Value))
+	}
+	return strings.Join(parts, ",")
 }
 
 func printFontDoctor(family string) {

@@ -71,6 +71,7 @@ local record cervterm
     rules: {FontRule} | nil
     size: number
     ligatures: boolean
+    features: {string: integer} | nil
   end
 
   record ColorsConfig
@@ -217,6 +218,7 @@ local record cervterm
     rules: {FontRule} | Unset
     size: number | Unset
     ligatures: boolean | Unset
+    features: {string: integer | Unset} | Unset
   end
 
   record ColorsDocument

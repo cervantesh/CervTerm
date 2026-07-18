@@ -129,14 +129,20 @@ func TestPrepareRasterContextsIncludesEveryPaneSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.atlas = atlas
+	features, err := fontdesc.NewFeatureSet(false, map[string]int{"ss01": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
 	model := atlasFontModel{
 		descriptors: []fontdesc.Descriptor{{Family: "Primary"}},
 		fallback:    []fontdesc.Descriptor{{Family: "Fallback"}},
 		rules:       []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Rule"}}},
+		features:    features,
 	}
 	atlas.activeContext.descriptors = model.descriptors
 	atlas.activeContext.fallback = model.fallback
 	atlas.activeContext.rules = model.rules
+	atlas.activeContext.features = model.features
 	t.Cleanup(atlas.close)
 
 	first := a.focusedPane
@@ -165,8 +171,8 @@ func TestPrepareRasterContextsIncludesEveryPaneSize(t *testing.T) {
 		if _, ok := prepared[key]; !ok {
 			t.Fatalf("missing prepared context for size %.0f", size)
 		}
-		if ctx := prepared[key]; len(ctx.fallback) != 1 || len(ctx.rules) != 1 {
-			t.Fatalf("prepared context lost fallback/rules: %#v", ctx)
+		if ctx := prepared[key]; len(ctx.fallback) != 1 || len(ctx.rules) != 1 || ctx.features.ID() != features.ID() {
+			t.Fatalf("prepared context lost fallback/rules/features: %#v", ctx)
 		}
 	}
 }
@@ -316,6 +322,29 @@ func TestReloadFailurePreservesConfigAndRuntime(t *testing.T) {
 	}
 	if app.LastConfigReloadError() != "" {
 		t.Fatalf("successful recovery retained error %q", app.LastConfigReloadError())
+	}
+}
+
+func TestReloadKeepsFontFeaturesPendingRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cervterm.lua")
+	writeReloadConfig(t, path, `return {config_version=2,font={features={ss01=1}}}`)
+	cfg, rt, err := script.Load(path, config.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	app.configWatch = newConfigWatchState(path)
+	writeReloadConfig(t, path, `return {config_version=2,font={features={ss01=2}}}`)
+	if err := app.reloadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	defer app.scriptRT.Close()
+	if app.cfg.Font.Features["ss01"] != 1 || app.DesiredConfig().Font.Features["ss01"] != 2 {
+		t.Fatalf("effective/desired feature values = %#v/%#v", app.cfg.Font.Features, app.DesiredConfig().Font.Features)
+	}
+	want := []config.ConfigChange{{Path: "font.features", Scope: config.ApplyRestart}}
+	if got := app.PendingConfigChanges(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("pending feature changes = %#v, want %#v", got, want)
 	}
 }
 

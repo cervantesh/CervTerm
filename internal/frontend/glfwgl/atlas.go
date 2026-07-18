@@ -161,10 +161,16 @@ func (a *glyphAtlas) drawClusterStyle(request fontdesc.RequestedFaceStyle, clust
 
 // supportsLigatures reports whether the active context's shaper can substitute
 // ligature glyphs. Probed once by the App so no per-frame reflection happens.
-func (a *glyphAtlas) supportsLigatures() bool {
+func (a *glyphAtlas) supportsLigatures(compatibility bool) bool {
 	ctx := a.activeContext
 	backend, ok := activeLigatureBackend(ctx)
-	return ok && backend.SupportsLigatures()
+	if !ok {
+		return false
+	}
+	if ctx.features.IsZero() {
+		return compatibility && backend.SupportsLigatures()
+	}
+	return ctx.features.RequiresRunShaping() && backend.SupportsLigatures()
 }
 
 // drawRun draws a shaped ligature spanning cellSpan cells, returning false when

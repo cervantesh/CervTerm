@@ -1,5 +1,7 @@
 package fontglyph
 
+import "cervterm/internal/fontdesc"
+
 // SupportsLigatures reports whether the active shaper can produce GSUB
 // substitutions across multiple cells. The pure-Go SimpleShaper only maps one
 // glyph per input rune, so ligatures require an advanced shaper (DirectWrite).
@@ -32,11 +34,11 @@ func (b *OpenTypeBackend) RasterizeRun(run string, cellSpan int) (RasterizedGlyp
 	if !ok || lf.sfnt == nil {
 		return RasterizedGlyph{}, false
 	}
-	shaped, ok := b.shaper.Shape(run, lf, b.ppem)
+	shaped, ok := shapeWithFeatures(b.shaper, run, lf, b.ppem, b.features)
 	if !ok || len(shaped) == 0 {
 		return RasterizedGlyph{}, false
 	}
-	if !runSubstituted(b.shaper, lf, b.ppem, run, shaped) {
+	if !runSubstituted(b.shaper, lf, b.ppem, run, shaped, b.features) {
 		return RasterizedGlyph{}, false
 	}
 	cellSpan = max(1, cellSpan)
@@ -55,7 +57,7 @@ func (b *OpenTypeBackend) RasterizeRun(run string, cellSpan int) (RasterizedGlyp
 // rune independently. Fewer output glyphs than input runes is an unambiguous
 // ligature. Otherwise the glyph IDs are compared position-by-position: matching
 // IDs mean only advances changed (kerning/GPOS), which is not a ligature.
-func runSubstituted(shaper Shaper, lf loadedFace, ppem uint16, run string, shaped []ShapedGlyph) bool {
+func runSubstituted(shaper Shaper, lf loadedFace, ppem uint16, run string, shaped []ShapedGlyph, features fontdesc.FeatureSet) bool {
 	runeCount := 0
 	perChar := make([]ShapedGlyph, 0, len(shaped))
 	perCharOK := true
@@ -64,7 +66,7 @@ func runSubstituted(shaper Shaper, lf loadedFace, ppem uint16, run string, shape
 		if !perCharOK {
 			continue
 		}
-		g, ok := shaper.Shape(string(r), lf, ppem)
+		g, ok := shapeWithFeatures(shaper, string(r), lf, ppem, features)
 		if !ok {
 			perCharOK = false
 			continue

@@ -283,7 +283,7 @@ func (a *App) runWindow() error {
 		}
 	}()
 	// Probe ligature support once (not per frame): stays off with SimpleShaper.
-	a.ligaturesActive = a.cfg.Font.Ligatures && atlas.supportsLigatures()
+	a.ligaturesActive = atlas.supportsLigatures(a.cfg.Font.Ligatures)
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
 	a.initMux()
