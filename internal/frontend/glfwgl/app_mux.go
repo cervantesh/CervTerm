@@ -123,6 +123,12 @@ func (a *App) handleMuxEvents(events []termmux.Event) bool {
 			a.ensurePaneUI(event.Pane)
 		case termmux.PaneOutput:
 			a.meter.AddBytes(len(event.Data))
+			if tab, ok := a.mux.TabForPane(event.Pane); ok && tab != a.mux.ActiveTab() {
+				if a.tabActivity == nil {
+					a.tabActivity = make(map[termmux.TabID]bool)
+				}
+				a.tabActivity[tab] = true
+			}
 			if a.scriptRT != nil && a.scriptRT.WantsOutput() {
 				if err := a.scriptRT.FireOutput(host, string(event.Data)); err != nil {
 					a.Notify("script error: " + err.Error())
@@ -189,6 +195,9 @@ func (a *App) handleMuxEvents(events []termmux.Event) bool {
 			}
 			consumed = true
 		case termmux.TabSpawned, termmux.TabActivated, termmux.TabRenamed, termmux.TabMoved, termmux.TabClosed, termmux.TabRevisionChanged, termmux.PaneTransferred:
+			if event.Kind == termmux.TabActivated || event.Kind == termmux.TabClosed {
+				delete(a.tabActivity, event.Tab)
+			}
 			newHeight := a.effectiveTabBarHeight()
 			if newHeight != a.tabBarHeight {
 				a.tabBarHeight = newHeight
@@ -197,7 +206,7 @@ func (a *App) handleMuxEvents(events []termmux.Event) bool {
 				}
 			}
 			consumed = true
-		case termmux.TabEmpty:
+		case termmux.TabEmpty, termmux.WindowTabsEmpty:
 			if a.window != nil {
 				a.window.SetShouldClose(true)
 			}

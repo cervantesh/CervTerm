@@ -166,3 +166,7 @@ func (m *Mux) TransferPane(pane PaneID, destinationTab TabID, destinationPane Pa
 	}
 	return events, nil
 }
+
+func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
+	return m.SpawnSplit(target, axis, spec)
+}
