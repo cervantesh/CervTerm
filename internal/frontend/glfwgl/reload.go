@@ -181,6 +181,7 @@ func (a *App) activateLoadedConfig(loaded script.VersionedSource, watchBefore co
 		}
 		candidateRT = activation.Commit()
 	}
+	a.keyTable.cancel()
 	oldBundle, oldRT := a.scriptBundle, a.scriptRT
 	a.commitLiveConfig(prepared)
 	a.composedCfg = loaded.Config.Clone()
@@ -247,8 +248,7 @@ func formatPendingConfigChanges(changes []config.ConfigChange, limit int) string
 	return strings.Join(parts, ", ")
 }
 
-// preparedLiveConfig owns all resources created by the fallible preparation
-// phase until commit transfers them to the App or Close aborts them.
+// preparedLiveConfig owns fallible candidate resources until commit or abort.
 type preparedLiveConfig struct {
 	next                  config.Config
 	preparedContexts      map[atlasFontKey]*atlasFontContext
