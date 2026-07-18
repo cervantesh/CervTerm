@@ -223,6 +223,7 @@ local record cervterm
     PasteClipboard: Action
     ToggleSearch: Action
     ToggleStats: Action
+    ActivateCommandPalette: Action
     ReloadConfig: Action
     ClosePane: Action
     ResetFontSize: Action

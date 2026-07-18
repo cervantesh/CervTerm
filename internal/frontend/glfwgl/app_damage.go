@@ -28,6 +28,8 @@ type damageState struct {
 	searchMatchRow    int
 	searchMatchCol    int
 	searchMatchLen    int
+	modalMode         uint8
+	modalRevision     uint64
 	statusSeq         int
 	statusGeometry    statusGeometry
 	overlaySeq        int
@@ -60,6 +62,7 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 		a.search.active != a.damage.searching || a.search.hasMatch != a.damage.searchHasMatch ||
 		a.search.matchRow != a.damage.searchMatchRow || a.search.matchCol != a.damage.searchMatchCol ||
 		a.search.matchLen != a.damage.searchMatchLen ||
+		uint8(a.modal.Mode()) != a.damage.modalMode || a.modal.Revision() != a.damage.modalRevision ||
 		a.status.seq != a.damage.statusSeq || a.status.geometry != a.damage.statusGeometry ||
 		a.overlays.seq != a.damage.overlaySeq ||
 		a.link.hoverActive != a.damage.hoverActive ||
@@ -138,6 +141,7 @@ func (a *App) recordDamageFrame(w, h, displayOffset int, alternateScreen, notice
 	a.damage.searching, a.damage.searchHasMatch = a.search.active, a.search.hasMatch
 	a.damage.searchMatchRow, a.damage.searchMatchCol = a.search.matchRow, a.search.matchCol
 	a.damage.searchMatchLen = a.search.matchLen
+	a.damage.modalMode, a.damage.modalRevision = uint8(a.modal.Mode()), a.modal.Revision()
 	a.damage.statusSeq, a.damage.statusGeometry = a.status.seq, a.status.geometry
 	a.damage.overlaySeq = a.overlays.seq
 	a.damage.hoverActive = a.link.hoverActive

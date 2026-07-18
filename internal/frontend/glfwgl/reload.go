@@ -191,6 +191,7 @@ func (a *App) activateLoadedConfig(loaded script.VersionedSource, watchBefore co
 	a.pendingConfig = config.PendingConfigChanges(a.desiredCfg, a.cfg)
 	a.scriptBundle = candidate
 	a.scriptRT = candidateRT
+	a.scriptGeneration++
 	candidate, candidateRT = nil, nil
 	if legacyTransition != nil {
 		legacyTransition.Commit()
@@ -277,8 +278,7 @@ func (p *preparedLiveConfig) Close() {
 	}
 }
 
-// prepareLiveConfig validates and constructs every fallible frontend resource
-// without mutating active application state.
+// prepareLiveConfig builds fallible candidate resources without active mutation.
 func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error) {
 	return a.prepareLiveConfigWithProvenance(next, a.composedProvenance)
 }

@@ -70,6 +70,7 @@ return { keys = {
       term:notify("legacy callback still supported")
     end },
   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
+  { key = "p", mods = "ctrl+shift", action = cervterm.action.ActivateCommandPalette },
   { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
   { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
   { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },
@@ -82,9 +83,13 @@ return { keys = {
 } }
 ```
 
-Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ReloadConfig`, `ClosePane`, and `ResetFontSize`. Constructors: `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, `SplitPane("columns"|"rows")`, `FocusPane(direction)`, `ResizePane(direction, delta_cells)`, `SwapPane(direction)`, `MovePane(direction)`, and `Multiple({...})`, where direction is `"left"|"right"|"up"|"down"` and resize deltas are 1–1024 cells. `WithTarget(action, "origin")` is also available.
+Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ReloadConfig`, `ClosePane`, and `ResetFontSize`. Constructors: `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, `SplitPane("columns"|"rows")`, `FocusPane(direction)`, `ResizePane(direction, delta_cells)`, `SwapPane(direction)`, `MovePane(direction)`, and `Multiple({...})`, where direction is `"left"|"right"|"up"|"down"` and resize deltas are 1–1024 cells. `WithTarget(action, "origin")` is also available.
 
 Arguments are validated during config loading. Typed actions use registry press/repeat policy. Function callbacks preserve legacy behavior: they execute on press, consume repeat without executing, and run through the existing watchdog.
+
+### Command palette
+
+Bind `cervterm.action.ActivateCommandPalette` to any free chord to open the window-global palette. It lists discoverable built-in actions and only labeled configured key/table/mouse bindings. Type to filter, use arrows or Page Up/Down to navigate, Enter to execute, and Escape to close. The palette captures keyboard, character, pointer, wheel, and terminal mouse-reporting paths while open, so input never reaches the PTY twice. Actions execute with the pane that opened the palette as origin. A failed or reload-invalidated callback leaves the query and selection visible with one error; successful execution closes the palette. Unchanged visible palettes do not schedule frames.
 
 ### Leader and named key tables
 
