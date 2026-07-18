@@ -52,6 +52,11 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Font.Size != effective.Font.Size, "font.size", ApplyRestart)
 	changes = appendChange(changes, desired.Font.Ligatures != effective.Font.Ligatures, "font.ligatures", ApplyRestart)
 	changes = appendChange(changes, !maps.Equal(desired.Font.Features, effective.Font.Features), "font.features", ApplyRestart)
+	changes = appendChange(changes, desired.Font.LineHeight != effective.Font.LineHeight, "font.line_height", ApplyRestart)
+	changes = appendChange(changes, desired.Font.CellWidth != effective.Font.CellWidth, "font.cell_width", ApplyRestart)
+	changes = appendChange(changes, desired.Font.BaselineOffset != effective.Font.BaselineOffset, "font.baseline_offset", ApplyRestart)
+	changes = appendChange(changes, desired.Font.GlyphOffsetX != effective.Font.GlyphOffsetX, "font.glyph_offset_x", ApplyRestart)
+	changes = appendChange(changes, desired.Font.GlyphOffsetY != effective.Font.GlyphOffsetY, "font.glyph_offset_y", ApplyRestart)
 
 	changes = appendChange(changes, desired.ColorScheme != effective.ColorScheme, "color_scheme", ApplyLive)
 

@@ -36,13 +36,18 @@ type WindowConfig struct {
 }
 
 type FontConfig struct {
-	Family      string
-	Descriptors []fontdesc.Descriptor `json:"Descriptors,omitempty"`
-	Fallback    []fontdesc.Descriptor `json:"Fallback,omitempty"`
-	Rules       []fontdesc.Rule       `json:"Rules,omitempty"`
-	Size        float64
-	Ligatures   bool
-	Features    map[string]int `json:"Features,omitempty"`
+	Family         string
+	Descriptors    []fontdesc.Descriptor `json:"Descriptors,omitempty"`
+	Fallback       []fontdesc.Descriptor `json:"Fallback,omitempty"`
+	Rules          []fontdesc.Rule       `json:"Rules,omitempty"`
+	Size           float64
+	Ligatures      bool
+	Features       map[string]int `json:"Features,omitempty"`
+	LineHeight     float64
+	CellWidth      float64
+	BaselineOffset float64
+	GlyphOffsetX   float64
+	GlyphOffsetY   float64
 }
 
 type ColorsConfig struct {
@@ -121,7 +126,7 @@ func Defaults() Config {
 			Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6, DynamicTitle: true,
 			Opacity: 1.0, Blur: true,
 		},
-		Font: FontConfig{Family: "Go Mono", Size: 14, Ligatures: false, Features: map[string]int{}},
+		Font: FontConfig{Family: "Go Mono", Size: 14, Ligatures: false, Features: map[string]int{}, LineHeight: 1, CellWidth: 1},
 		Colors: ColorsConfig{
 			Foreground: "#E6E1D8", Background: "#080B12E6", Cursor: "#60E8F0", SelectionBackground: "#2A6377",
 			ChromeBackground: "#10141CF0", ChromeMuted: "#A8B3C7FF", Accent: "#60E8F0FF",
@@ -243,8 +248,12 @@ func (c Config) Validate() error {
 	if featureErr != nil {
 		errs = append(errs, fmt.Errorf("font.features: %w", featureErr))
 	}
-	if len(primaryErrors) == 0 && len(fallbackErrors) == 0 && len(ruleErrors) == 0 && featureErr == nil {
-		if _, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{Descriptors: normalizedPrimary, Fallback: normalizedFallback, Rules: normalizedRules, Features: features.CanonicalBytes()}); err != nil {
+	metrics, metricErr := fontdesc.NewMetricProjection(c.Font.LineHeight, c.Font.CellWidth, c.Font.BaselineOffset, c.Font.GlyphOffsetX, c.Font.GlyphOffsetY)
+	if metricErr != nil {
+		errs = append(errs, fmt.Errorf("font metrics: %w", metricErr))
+	}
+	if len(primaryErrors) == 0 && len(fallbackErrors) == 0 && len(ruleErrors) == 0 && featureErr == nil && metricErr == nil {
+		if _, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{Descriptors: normalizedPrimary, Fallback: normalizedFallback, Rules: normalizedRules, Features: features.CanonicalBytes(), Metrics: metrics.CanonicalBytes()}); err != nil {
 			errs = append(errs, fmt.Errorf("font canonical payload: %w", err))
 		}
 	}
