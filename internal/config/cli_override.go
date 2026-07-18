@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -36,7 +37,7 @@ type cliFontDescriptor struct {
 
 func cliOverrideKindAllowed(kind ValueKind) bool {
 	switch kind {
-	case KindString, KindNumber, KindInteger, KindBoolean, KindStringList, KindDescriptorList:
+	case KindString, KindNumber, KindInteger, KindBoolean, KindStringList, KindDescriptorList, KindFontRuleList:
 		return true
 	default:
 		return false
@@ -173,6 +174,25 @@ func decodeCLIOverrideValue(state *lua.LState, path resolvedOverridePath, raw st
 			table.Append(entry)
 		}
 		return table, 1 + len(values)*8, nil
+	case KindFontRuleList:
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.UseNumber()
+		var value any
+		if err := decoder.Decode(&value); err != nil {
+			return nil, 0, fmt.Errorf("must be a JSON array of font rule objects")
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			return nil, 0, fmt.Errorf("must contain exactly one JSON array")
+		}
+		values, ok := value.([]any)
+		if !ok || values == nil {
+			return nil, 0, fmt.Errorf("must be a JSON array of font rule objects")
+		}
+		converted, cost, err := cliJSONValueToLua(state, values)
+		if err != nil {
+			return nil, 0, err
+		}
+		return converted, cost, nil
 	default:
 		return nil, 0, fmt.Errorf("field kind %s is not CLI-overridable", path.field.kind)
 	}
@@ -198,6 +218,54 @@ func exactCLIInteger(raw string) (float64, error) {
 		return 0, fmt.Errorf("must be exactly representable as a terminal configuration integer")
 	}
 	return value, nil
+}
+
+func cliJSONValueToLua(state *lua.LState, value any) (lua.LValue, int, error) {
+	switch typed := value.(type) {
+	case string:
+		return lua.LString(typed), 1, nil
+	case bool:
+		return lua.LBool(typed), 1, nil
+	case json.Number:
+		parsed, err := exactCLIInteger(typed.String())
+		if err != nil {
+			return nil, 0, err
+		}
+		return lua.LNumber(parsed), 1, nil
+	case []any:
+		table := state.NewTable()
+		cost := 1
+		for _, entry := range typed {
+			converted, entryCost, err := cliJSONValueToLua(state, entry)
+			if err != nil {
+				return nil, 0, err
+			}
+			table.Append(converted)
+			cost += entryCost
+		}
+		return table, cost, nil
+	case map[string]any:
+		table := state.NewTable()
+		cost := 1
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			converted, entryCost, err := cliJSONValueToLua(state, typed[key])
+			if err != nil {
+				return nil, 0, fmt.Errorf("%s: %w", key, err)
+			}
+			table.RawSetString(key, converted)
+			cost += 1 + entryCost
+		}
+		return table, cost, nil
+	case nil:
+		return nil, 0, fmt.Errorf("JSON null is not valid in font rules")
+	default:
+		return nil, 0, fmt.Errorf("unsupported JSON value %T", value)
+	}
 }
 
 func (b *compositionBuilder) applyCLIOverrides(overrides []CLIOverride) error {

@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const canonicalFormatVersion uint16 = 1
+const canonicalFormatVersion uint16 = 2
 
 var canonicalDomain = []byte("cervterm/fontdesc")
 
@@ -131,7 +131,7 @@ type FontEnvironmentInput struct {
 	Version       uint16
 	Descriptors   []Descriptor
 	Fallback      []Descriptor
-	Rules         [][]byte
+	Rules         []Rule
 	Features      []byte
 	Metrics       []byte
 	BaseSizeBits  uint64
@@ -164,9 +164,8 @@ func NewFontEnvironmentKey(input FontEnvironmentInput) (FontEnvironmentKey, erro
 	if err := addDescriptors(e, 20, input.Fallback); err != nil {
 		return FontEnvironmentKey{}, err
 	}
-	e.AddUint32(30, uint32(len(input.Rules)))
-	for _, rule := range input.Rules {
-		e.AddBytes(31, rule)
+	if err := addRules(e, 30, input.Rules); err != nil {
+		return FontEnvironmentKey{}, err
 	}
 	e.AddBytes(40, input.Features)
 	e.AddBytes(50, input.Metrics)
@@ -184,6 +183,27 @@ func addDescriptors(e *CanonicalEncoder, tag uint16, descriptors []Descriptor) e
 	e.AddUint32(tag, uint32(len(descriptors)))
 	for _, descriptor := range descriptors {
 		encoded, err := encodeDescriptor(descriptor)
+		if err != nil {
+			return err
+		}
+		e.AddBytes(tag+1, encoded)
+	}
+	return nil
+}
+
+func addRules(e *CanonicalEncoder, tag uint16, rules []Rule) error {
+	e.AddUint32(tag, uint32(len(rules)))
+	totalRanges := 0
+	for _, rule := range rules {
+		normalized, err := rule.Normalize()
+		if err != nil {
+			return err
+		}
+		totalRanges += len(normalized.Match.Ranges)
+		if totalRanges > MaxTotalRanges {
+			return fmt.Errorf("total rule range count %d exceeds %d", totalRanges, MaxTotalRanges)
+		}
+		encoded, err := normalized.CanonicalBytes()
 		if err != nil {
 			return err
 		}

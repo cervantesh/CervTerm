@@ -18,6 +18,7 @@ type styledAtlasBackend struct {
 	clusterCalls [4]int
 	runCalls     [4]int
 	oversized    bool
+	rasterMiss   bool
 }
 
 func newStyledAtlasBackend() *styledAtlasBackend {
@@ -44,6 +45,9 @@ func (b *styledAtlasBackend) StyleResolution(request fontdesc.RequestedFaceStyle
 }
 func (b *styledAtlasBackend) RasterizeStyle(request fontdesc.RequestedFaceStyle, _ rune, _ int) (fontglyph.RasterizedGlyph, bool) {
 	b.runeCalls[request]++
+	if b.rasterMiss {
+		return fontglyph.RasterizedGlyph{}, false
+	}
 	size := 1
 	if b.oversized {
 		size = atlasPageSize + 1
@@ -52,6 +56,9 @@ func (b *styledAtlasBackend) RasterizeStyle(request fontdesc.RequestedFaceStyle,
 }
 func (b *styledAtlasBackend) RasterizeClusterStyle(request fontdesc.RequestedFaceStyle, _ string, _ int) (fontglyph.RasterizedGlyph, bool) {
 	b.clusterCalls[request]++
+	if b.rasterMiss {
+		return fontglyph.RasterizedGlyph{}, false
+	}
 	return fontglyph.RasterizedGlyph{Image: image.NewRGBA(image.Rect(0, 0, 1, 1)), Width: 1, Height: 1, CellSpan: 1}, true
 }
 func (b *styledAtlasBackend) RasterizeRunStyle(request fontdesc.RequestedFaceStyle, _ string, _ int) (fontglyph.RasterizedGlyph, bool) {
@@ -122,5 +129,82 @@ func TestStyleDrawEffectsAndLigatureBoundaries(t *testing.T) {
 	}
 	if renderSpanMatchesStyle(cells, 0, 3, fontdesc.RequestedFaceStyleBold) {
 		t.Fatal("cross-style span accepted")
+	}
+}
+
+type contentStyledAtlasBackend struct {
+	*styledAtlasBackend
+	runeKey    fontdesc.ResolvedFaceKey
+	clusterKey fontdesc.ResolvedFaceKey
+}
+
+func (b *contentStyledAtlasBackend) RuneResolution(request fontdesc.RequestedFaceStyle, _ rune) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode, bool) {
+	return b.runeKey, fontdesc.SyntheticNone, request <= fontdesc.RequestedFaceStyleBoldItalic
+}
+
+func (b *contentStyledAtlasBackend) ClusterResolution(request fontdesc.RequestedFaceStyle, _ string) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode, bool) {
+	return b.clusterKey, fontdesc.SyntheticItalic, request <= fontdesc.RequestedFaceStyleBoldItalic
+}
+
+func TestAtlasUsesContentResolvedFaceKeys(t *testing.T) {
+	backend := &contentStyledAtlasBackend{
+		styledAtlasBackend: newStyledAtlasBackend(),
+		runeKey:            fontdesc.ResolvedFaceKey(fontdesc.CanonicalFaceIDFromBytes([]byte("fallback-rune"))),
+		clusterKey:         fontdesc.ResolvedFaceKey(fontdesc.CanonicalFaceIDFromBytes([]byte("rule-cluster"))),
+	}
+	atlas, err := newGlyphAtlasWithBackendFactory(&atlasTestRenderer{}, fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96}, 1, 0, func(fontglyph.Spec) (fontglyph.Backend, error) { return backend, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer atlas.close()
+	clear(atlas.entries)
+	if _, ok := atlas.cachedRuneStyle(fontdesc.RequestedFaceStyleNormal, 'A'); !ok {
+		t.Fatal("content-resolved rune failed")
+	}
+	if _, ok := atlas.cachedClusterStyle(fontdesc.RequestedFaceStyleNormal, "A", 1); !ok {
+		t.Fatal("content-resolved cluster failed")
+	}
+	runeKey := atlasKey{spec: atlas.activeContext.key, face: backend.runeKey, kind: 'r', r: 'A'}
+	clusterKey := atlasKey{spec: atlas.activeContext.key, face: backend.clusterKey, kind: 'c', text: "A", span: 1}
+	if _, ok := atlas.entries[runeKey]; !ok {
+		t.Fatalf("rune cache missing content face key: %#v", atlas.entries)
+	}
+	if _, ok := atlas.entries[clusterKey]; !ok {
+		t.Fatalf("cluster cache missing content face key: %#v", atlas.entries)
+	}
+	if _, synthetic := atlas.resolveClusterStyle(fontdesc.RequestedFaceStyleNormal, "A"); synthetic != fontdesc.SyntheticItalic {
+		t.Fatalf("cluster synthetic mode = %d, want italic", synthetic)
+	}
+}
+
+func TestAtlasBoundsAndCachesRasterNegatives(t *testing.T) {
+	backend := newStyledAtlasBackend()
+	backend.rasterMiss = true
+	atlas, err := newGlyphAtlasWithBackendFactory(&atlasTestRenderer{}, fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96}, 1, 0, func(fontglyph.Spec) (fontglyph.Backend, error) { return backend, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer atlas.close()
+	backend.runeCalls = [4]int{}
+	clear(atlas.rasterNegative)
+	atlas.rasterNegativeRing = nil
+	atlas.rasterNegativeNext = 0
+	for attempt := 0; attempt < 2; attempt++ {
+		if _, ok := atlas.cachedRuneStyle(fontdesc.RequestedFaceStyleNormal, '漢'); ok {
+			t.Fatal("raster miss produced rune entry")
+		}
+		if _, ok := atlas.cachedClusterStyle(fontdesc.RequestedFaceStyleNormal, "漢", 2); ok {
+			t.Fatal("raster miss produced cluster entry")
+		}
+	}
+	if backend.runeCalls[0] != 1 || backend.clusterCalls[0] != 1 || len(atlas.rasterNegative) != 2 {
+		t.Fatalf("negative cache calls/entries = %d/%d/%d", backend.runeCalls[0], backend.clusterCalls[0], len(atlas.rasterNegative))
+	}
+	for index := 0; index <= fontdesc.MaxNegativeEntries; index++ {
+		atlas.recordRunNegative(atlasKey{kind: 'l', text: string(rune(index + 1))})
+		atlas.recordInsertionFailure(atlasKey{kind: 'r', r: rune(index + 1)})
+	}
+	if len(atlas.runNegative) != fontdesc.MaxNegativeEntries || len(atlas.insertNegative) != fontdesc.MaxNegativeEntries {
+		t.Fatalf("bounded negatives = %d/%d, want %d", len(atlas.runNegative), len(atlas.insertNegative), fontdesc.MaxNegativeEntries)
 	}
 }

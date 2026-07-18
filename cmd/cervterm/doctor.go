@@ -104,6 +104,12 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 	if safeFonts && len(report.Config.Font.Descriptors) != 0 {
 		fmt.Printf("  font-descriptors-suppressed-by-safe-mode: %d\n", len(report.Config.Font.Descriptors))
 	}
+	if safeFonts && len(report.Config.Font.Fallback) != 0 {
+		fmt.Printf("  font-fallback-suppressed-by-safe-mode: %d\n", len(report.Config.Font.Fallback))
+	}
+	if safeFonts && len(report.Config.Font.Rules) != 0 {
+		fmt.Printf("  font-rules-suppressed-by-safe-mode: %d\n", len(report.Config.Font.Rules))
+	}
 	cfg := effectiveDoctorConfig(report.Config, safeFonts)
 	if cfg.Shell.Program == "" {
 		fmt.Println("  shell: platform default")
@@ -118,18 +124,27 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 	spec := fontglyph.Spec{Family: cfg.Font.Family, Size: cfg.Font.Size, DPI: 96, TextRaster: cfg.Render.TextRaster}
 	var backend fontglyph.Backend
 	var backendErr error
-	if len(cfg.Font.Descriptors) != 0 {
+	advanced := len(cfg.Font.Descriptors) != 0 || len(cfg.Font.Fallback) != 0 || len(cfg.Font.Rules) != 0
+	if advanced {
+		primary := cfg.Font.Descriptors
+		if len(primary) == 0 {
+			primary = []fontdesc.Descriptor{{Family: cfg.Font.Family}}
+		}
 		environment, identityErr := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{
-			Descriptors: cfg.Font.Descriptors, BaseSizeBits: math.Float64bits(cfg.Font.Size), PaneZoomBits: math.Float64bits(1),
+			Descriptors: primary, Fallback: cfg.Font.Fallback, Rules: cfg.Font.Rules, BaseSizeBits: math.Float64bits(cfg.Font.Size), PaneZoomBits: math.Float64bits(1),
 			DPI: 96, RasterMode: cfg.Render.TextRaster, GammaBits: math.Float64bits(cfg.Render.TextGamma), DarkeningBits: math.Float64bits(cfg.Render.TextDarken),
 		})
 		if identityErr != nil {
 			backendErr = identityErr
+		} else if len(cfg.Font.Fallback) != 0 || len(cfg.Font.Rules) != 0 {
+			backend, backendErr = fontglyph.NewFallbackBackend(spec, environment, primary, cfg.Font.Fallback, cfg.Font.Rules)
 		} else {
-			backend, backendErr = fontglyph.NewDescriptorBackend(spec, environment, cfg.Font.Descriptors)
+			backend, backendErr = fontglyph.NewDescriptorBackend(spec, environment, primary)
 		}
 		fmt.Printf("  font-descriptors: %d\n", len(cfg.Font.Descriptors))
-		for index, descriptor := range cfg.Font.Descriptors {
+		fmt.Printf("  font-fallback: %d\n", len(cfg.Font.Fallback))
+		fmt.Printf("  font-rules: %d\n", len(cfg.Font.Rules))
+		for index, descriptor := range primary {
 			normalized := descriptor.Normalized()
 			fmt.Printf("  font-descriptor[%d]: %s weight=%d style=%s stretch=%d mode=%s\n", index+1, normalized.Family, normalized.Weight, normalized.Style, normalized.Stretch, normalized.AttributeMode)
 		}
@@ -146,7 +161,7 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 		fmt.Printf("  text-raster: %s\n", engine)
 		backend.Close()
 	}
-	if len(cfg.Font.Descriptors) == 0 {
+	if !advanced {
 		printFontDoctor(cfg.Font.Family)
 	}
 	return true
@@ -157,6 +172,8 @@ func effectiveDoctorConfig(authored config.Config, safeFonts bool) config.Config
 	if safeFonts {
 		effective.Font.Family = "Go Mono"
 		effective.Font.Descriptors = nil
+		effective.Font.Fallback = nil
+		effective.Font.Rules = nil
 	}
 	return effective
 }
