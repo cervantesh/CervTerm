@@ -22,6 +22,59 @@ type styledFontBackend interface {
 	RasterizeRunStyle(request fontdesc.RequestedFaceStyle, run string, cellSpan int) (RasterizedGlyph, bool)
 }
 
+// FaceDiagnostic is a path-free snapshot of one concrete selected face.
+// It is intended for one-shot diagnostic probes and never exposes cache keys or files.
+type FaceDiagnostic struct {
+	Metadata      fontdesc.FaceMetadata
+	Tier          fontdesc.SourceTier
+	AuthoredIndex uint32
+	Synthetic     fontdesc.SyntheticMode
+}
+
+func diagnosticFace(plan resolvedFacePlan) FaceDiagnostic {
+	return FaceDiagnostic{
+		Metadata:      plan.selected.metadata.Normalized(),
+		Tier:          plan.tier,
+		AuthoredIndex: plan.authoredIndex,
+		Synthetic:     plan.synthetic,
+	}
+}
+
+// DiagnosticStyleFace reports the selected primary face for one requested style.
+// The returned value is detached and path-free.
+func DiagnosticStyleFace(backend Backend, request fontdesc.RequestedFaceStyle) (FaceDiagnostic, bool) {
+	switch typed := backend.(type) {
+	case *descriptorBackend:
+		if _, ok := typed.backendForStyle(request); !ok {
+			return FaceDiagnostic{}, false
+		}
+		return diagnosticFace(typed.plans[request]), true
+	case *fallbackBackend:
+		if typed == nil || typed.closed || typed.primary == nil {
+			return FaceDiagnostic{}, false
+		}
+		return DiagnosticStyleFace(typed.primary, request)
+	default:
+		return FaceDiagnostic{}, false
+	}
+}
+
+// DiagnosticContentFace resolves one representative cluster through the normal
+// lazy rule/primary/fallback/embedded order and returns only path-free metadata.
+func DiagnosticContentFace(backend Backend, request fontdesc.RequestedFaceStyle, content string) (FaceDiagnostic, bool) {
+	if content == "" {
+		return FaceDiagnostic{}, false
+	}
+	if fallback, ok := backend.(*fallbackBackend); ok {
+		selection, resolved := fallback.resolveContent(request, content)
+		if !resolved {
+			return FaceDiagnostic{}, false
+		}
+		return diagnosticFace(selection.plan), true
+	}
+	return FaceDiagnostic{}, false
+}
+
 type descriptorBackend struct {
 	backends  [4]*OpenTypeBackend
 	plans     [4]resolvedFacePlan

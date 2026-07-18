@@ -102,6 +102,7 @@ func (a *iWriteTextAnalyzer) analyzeScript(text []uint16) (dwriteScriptAnalysis,
 	return analysis.script, analysis.hasScript, nil
 }
 
+//go:nocheckptr
 func dwriteAnalysisQueryInterface(this uintptr, iid uintptr, object uintptr) uintptr {
 	if object != 0 {
 		*(*uintptr)(unsafe.Pointer(object)) = 0
@@ -112,6 +113,7 @@ func dwriteAnalysisQueryInterface(this uintptr, iid uintptr, object uintptr) uin
 func dwriteAnalysisAddRef(this uintptr) uintptr  { return 1 }
 func dwriteAnalysisRelease(this uintptr) uintptr { return 1 }
 
+//go:nocheckptr
 func dwriteGetTextAtPosition(this uintptr, textPosition uintptr, textString uintptr, textLength uintptr) uintptr {
 	source := (*dwriteTextAnalysisSource)(unsafe.Pointer(this))
 	text := source.owner.text
@@ -126,6 +128,7 @@ func dwriteGetTextAtPosition(this uintptr, textPosition uintptr, textString uint
 	return 0
 }
 
+//go:nocheckptr
 func dwriteGetTextBeforePosition(this uintptr, textPosition uintptr, textString uintptr, textLength uintptr) uintptr {
 	source := (*dwriteTextAnalysisSource)(unsafe.Pointer(this))
 	text := source.owner.text
@@ -147,6 +150,7 @@ func dwriteGetParagraphDirection(this uintptr) uintptr {
 	return dwriteReadingDirectionLeftToRight
 }
 
+//go:nocheckptr
 func dwriteGetLocaleName(this uintptr, textPosition uintptr, textLength uintptr, localeName uintptr) uintptr {
 	source := (*dwriteTextAnalysisSource)(unsafe.Pointer(this))
 	remaining := len(source.owner.text) - int(textPosition)
@@ -158,6 +162,7 @@ func dwriteGetLocaleName(this uintptr, textPosition uintptr, textLength uintptr,
 	return 0
 }
 
+//go:nocheckptr
 func dwriteGetNumberSubstitution(this uintptr, textPosition uintptr, textLength uintptr, numberSubstitution uintptr) uintptr {
 	source := (*dwriteTextAnalysisSource)(unsafe.Pointer(this))
 	remaining := len(source.owner.text) - int(textPosition)
@@ -169,6 +174,7 @@ func dwriteGetNumberSubstitution(this uintptr, textPosition uintptr, textLength 
 	return 0
 }
 
+//go:nocheckptr
 func dwriteSetScriptAnalysis(this uintptr, textPosition uintptr, textLength uintptr, scriptAnalysis uintptr) uintptr {
 	sink := (*dwriteTextAnalysisSink)(unsafe.Pointer(this))
 	if scriptAnalysis != 0 {

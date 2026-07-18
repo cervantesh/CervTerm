@@ -158,9 +158,11 @@ Monochrome text coverage is adjusted with `render.text_gamma` (default `1.15`) a
 
 Text uses unhinted, typeface-faithful rasterization by default (`render.text_raster = "go"`). On Windows, set `render.text_raster = "auto"` to opt into DirectWrite's grid-fitted hinting for Windows-Terminal-style uniform stems. Set `render.text_raster = "subpixel"` on any OS for a classic-macOS look: unhinted outlines with per-channel antialiasing designed for horizontal-RGB-stripe LCDs. Prefer `"go"` on rotated displays and OLED/PenTile panels. Color emoji and shaped clusters remain on their existing color or grayscale paths; subpixel rendering applies to individual monochrome glyphs, including fallback faces.
 
-`font.family` resolves installed `.ttf`, `.otf`, and `.ttc` faces from standard system and per-user font directories. Empty values and `Go Mono` keep the embedded font. An unknown or unreadable family logs a warning and safely falls back to Go Mono; `--doctor` shows the configured family and resolved files. Bold and italic variants are discovered for diagnostics, while rendering currently retains synthetic bold and italic transforms.
+`font.family`, `font.size`, and `font.ligatures` remain compatible shorthand. Explicit v2 configuration can instead provide ordered `font.descriptors` with collection, weight, style, stretch, and augment/fixed matching; normal, bold, italic, and bold-italic resolve real faces when available and otherwise use cache-keyed synthetic modes. Unknown or unreadable candidates fail over deterministically, with embedded Go Mono as the final safe fallback.
 
-`font.ligatures` (default `false`, opt-in) renders programming ligatures (`->`, `=>`, `!=`, `===`, ...) as render-only GSUB substitutions across cells when the configured font provides them (Fira Code, Cascadia Code, JetBrains Mono) and an advanced shaper is active; the logical grid, selection, and copied text are unchanged, and the run under the cursor stays unligated.
+`font.fallback` and bounded `font.rules` select one face for a whole cluster in authored-rule → primary → ordered-fallback → embedded order. Symbol classes cover emoji, CJK, Nerd Font PUA, Powerline, box drawing, braille, and symbols. Fallback is lazy: ordinary ASCII does not load fallback faces. `font.features` projects validated OpenType tags while the legacy `ligatures` boolean remains shorthand; all font resource fields require restart.
+
+Fixed-grid controls `font.line_height`/`font.cell_width` (0.5–3.0) and `baseline_offset`/`glyph_offset_x`/`glyph_offset_y` (-64..64 px) change the shared cell canvas without changing logical per-glyph advances. Font environments retain at most 64 contexts, parsed font data remains bounded to 128 faces/256 MiB, and each context retains at most 8,192 negative results. `--safe-fonts` restores Go Mono and natural metrics. `--doctor` reports effective metrics, feature capability, concrete path-free primary style metadata, representative Powerline/Nerd/CJK/emoji/rule-tier selections, and capacity limits. Arbitrary active-terminal content selections and live cache counts remain unavailable in diagnostic-only mode.
 
 ## Known limitations
 
@@ -172,7 +174,7 @@ and rounded corners use square light-line joins rather than true arcs.
 
 Set `render = { bidi = true }` to reorder each terminal row visually with the Unicode Bidirectional Algorithm. It is experimental and defaults to off. Terminal storage and selection remain logical: wrapped rows do not share paragraph context, mixed-direction selections may look discontiguous, and Arabic letters are not contextually joined across cells. Wide-cell pairs and combining marks remain attached while visual ordering is applied.
 
-- Bold and italic rendering in the GLFW frontend are synthesized (1px double draw for bold, quad shear for italic); real font variants remain future work.
+- Real primary style faces, deterministic synthetic fallback, lazy whole-cluster font fallback, feature projection, and metric offsets are implemented; broader installed-font qualification beyond Windows remains ongoing.
 - DirectWrite shaping is implemented on Windows with Arabic/Indic/emoji smoke coverage; broader real-world fixture coverage is still growing.
 - SVG text rasterization has basic layout support; real font selection/outline text remains future work.
 - More redistributable color-font fixture subsets are needed for broad cross-platform emoji validation.
