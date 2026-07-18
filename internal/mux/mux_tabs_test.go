@@ -115,3 +115,20 @@ func TestInactiveTabIngressDoesNotChangeActiveProjection(t *testing.T) {
 		t.Fatalf("background pane not advanced")
 	}
 }
+
+func TestTabForPaneFindsInactiveOwnership(t *testing.T) {
+	m, _, _ := newTestMux(t)
+	_, pane, _, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "two")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.ActivateTab(1); err != nil {
+		t.Fatal(err)
+	}
+	if tab, ok := m.TabForPane(pane); !ok || tab != 2 {
+		t.Fatalf("tab=%d ok=%v", tab, ok)
+	}
+	if _, ok := m.TabForPane(999); ok {
+		t.Fatal("unknown pane resolved")
+	}
+}
