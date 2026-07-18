@@ -118,5 +118,8 @@
     "Env": {
       "TERM_PROGRAM": "CervTerm"
     }
+  },
+  "QuickSelect": {
+    "Rules": null
   }
 }

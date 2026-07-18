@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"cervterm/internal/fontdesc"
+	"cervterm/internal/quickselect"
 
 	lua "github.com/yuin/gopher-lua"
 )
@@ -148,6 +149,10 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Shell.Args = stringListField(tbl, "args", cfg.Shell.Args)
 		cfg.Shell.Env = stringMapField(tbl, "env", cfg.Shell.Env)
 	}
+	if tbl := tableField(root, "quick_select"); tbl != nil {
+		cfg.QuickSelect.Rules = quickSelectRuleListField(tbl, "rules", cfg.QuickSelect.Rules)
+		cfg.QuickSelect.Compiled, _ = PrepareQuickSelect(cfg.QuickSelect.Rules)
+	}
 	return cfg
 }
 
@@ -260,6 +265,25 @@ func fontRuleListField(tbl *lua.LTable, key string, fallback []fontdesc.Rule) []
 			return fallback
 		}
 		out[index] = rule
+	}
+	return out
+}
+
+func quickSelectRuleListField(tbl *lua.LTable, key string, fallback []QuickSelectRule) []QuickSelectRule {
+	list, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	out := make([]QuickSelectRule, list.Len())
+	for i := range out {
+		entry, ok := list.RawGetInt(i + 1).(*lua.LTable)
+		if !ok {
+			return fallback
+		}
+		out[i] = QuickSelectRule{
+			ID: stringField(entry, "id", ""), Pattern: stringField(entry, "pattern", ""),
+			Action: quickselect.Action(stringField(entry, "action", "")), Priority: intField(entry, "priority", 0),
+		}
 	}
 	return out
 }

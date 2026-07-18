@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"cervterm/internal/fontdesc"
+	"cervterm/internal/quickselect"
 )
 
 const (
@@ -27,6 +28,7 @@ type Config struct {
 	Clipboard   ClipboardConfig
 	Render      RenderConfig
 	Shell       ShellConfig
+	QuickSelect QuickSelectConfig
 }
 
 type WindowConfig struct {
@@ -139,6 +141,18 @@ type ShellConfig struct {
 	Env              map[string]string
 }
 
+type QuickSelectRule struct {
+	ID       string
+	Pattern  string
+	Action   quickselect.Action
+	Priority int
+}
+
+type QuickSelectConfig struct {
+	Rules    []QuickSelectRule
+	Compiled []quickselect.PreparedRule `json:"-"`
+}
+
 func Defaults() Config {
 	return Config{
 		Window: WindowConfig{
@@ -191,6 +205,8 @@ func (c Config) Clone() Config {
 		}
 		c.Shell.Env = environment
 	}
+	c.QuickSelect.Rules = append([]QuickSelectRule(nil), c.QuickSelect.Rules...)
+	c.QuickSelect.Compiled = append([]quickselect.PreparedRule(nil), c.QuickSelect.Compiled...)
 	return c
 }
 
@@ -246,8 +262,33 @@ func normalizeRuleConfigList(rules []fontdesc.Rule) ([]fontdesc.Rule, []error) {
 	return normalized, errs
 }
 
+func PrepareQuickSelect(rules []QuickSelectRule) ([]quickselect.PreparedRule, error) {
+	if len(rules) > quickselect.MaxRules {
+		return nil, fmt.Errorf("quick_select.rules must contain at most %d entries", quickselect.MaxRules)
+	}
+	seen := make(map[string]struct{}, len(rules))
+	prepared := make([]quickselect.PreparedRule, len(rules))
+	for i, rule := range rules {
+		if _, ok := seen[rule.ID]; ok {
+			return nil, fmt.Errorf("quick_select.rules[%d].id %q is duplicated", i+1, rule.ID)
+		}
+		seen[rule.ID] = struct{}{}
+		compiled, err := quickselect.PrepareRuleWithAction(rule.ID, rule.Pattern, rule.Action, rule.Priority)
+		if err != nil {
+			return nil, fmt.Errorf("quick_select.rules[%d]: %w", i+1, err)
+		}
+		prepared[i] = compiled
+	}
+	return prepared, nil
+}
+
 func (c Config) Validate() error {
 	var errs []error
+	preparedQuickSelect, quickSelectErr := PrepareQuickSelect(c.QuickSelect.Rules)
+	_ = preparedQuickSelect
+	if quickSelectErr != nil {
+		errs = append(errs, quickSelectErr)
+	}
 	if c.Window.Width < 100 || c.Window.Height < 100 {
 		errs = append(errs, errors.New("window width and height must be >= 100"))
 	}

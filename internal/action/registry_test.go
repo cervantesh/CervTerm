@@ -80,7 +80,7 @@ func TestRegistryRejectsInvalidDescriptors(t *testing.T) {
 
 func TestDefaultRegistryContract(t *testing.T) {
 	wantIDs := []ID{
-		IDActivateCommandPalette, IDCallback, IDClosePane, IDCopySelection, IDFocusPane, IDMovePane, IDMultiple, IDPasteClipboard,
+		IDActivateCommandPalette, IDActivateQuickSelect, IDCallback, IDClosePane, IDCopySelection, IDFocusPane, IDMovePane, IDMultiple, IDPasteClipboard,
 		IDReloadConfig, IDResizePane, IDScroll, IDSplitPane, IDSwapPane, IDToggleSearch, IDToggleStats, IDZoom,
 	}
 	descriptors := DefaultRegistry().Descriptors()
@@ -106,6 +106,10 @@ func TestDefaultRegistryContract(t *testing.T) {
 	palette, _ := DefaultRegistry().Lookup(IDActivateCommandPalette)
 	if !palette.Discoverable || palette.Target != TargetOptional || palette.TriggerPolicy != pressOnly {
 		t.Fatalf("palette metadata = %#v", palette)
+	}
+	quick, _ := DefaultRegistry().Lookup(IDActivateQuickSelect)
+	if !quick.Discoverable || quick.Target != TargetPane || quick.TriggerPolicy != pressOnly {
+		t.Fatalf("quick select metadata = %#v", quick)
 	}
 	zoom, _ := DefaultRegistry().Lookup(IDZoom)
 	if !zoom.TriggerPolicy.ConsumeRepeat || !zoom.TriggerPolicy.ExecuteRepeat {

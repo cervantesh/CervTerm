@@ -71,6 +71,7 @@ return { keys = {
     end },
   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
   { key = "p", mods = "ctrl+shift", action = cervterm.action.ActivateCommandPalette },
+  { key = "q", mods = "ctrl+shift", action = cervterm.action.ActivateQuickSelect },
   { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
   { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
   { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },
@@ -83,13 +84,27 @@ return { keys = {
 } }
 ```
 
-Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ReloadConfig`, `ClosePane`, and `ResetFontSize`. Constructors: `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, `SplitPane("columns"|"rows")`, `FocusPane(direction)`, `ResizePane(direction, delta_cells)`, `SwapPane(direction)`, `MovePane(direction)`, and `Multiple({...})`, where direction is `"left"|"right"|"up"|"down"` and resize deltas are 1–1024 cells. `WithTarget(action, "origin")` is also available.
+Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ReloadConfig`, `ClosePane`, and `ResetFontSize`. Constructors: `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, `SplitPane("columns"|"rows")`, `FocusPane(direction)`, `ResizePane(direction, delta_cells)`, `SwapPane(direction)`, `MovePane(direction)`, and `Multiple({...})`, where direction is `"left"|"right"|"up"|"down"` and resize deltas are 1–1024 cells. `WithTarget(action, "origin")` is also available.
 
 Arguments are validated during config loading. Typed actions use registry press/repeat policy. Function callbacks preserve legacy behavior: they execute on press, consume repeat without executing, and run through the existing watchdog.
 
 ### Command palette
 
 Bind `cervterm.action.ActivateCommandPalette` to any free chord to open the window-global palette. It lists discoverable built-in actions and only labeled configured key/table/mouse bindings. Type to filter, use arrows or Page Up/Down to navigate, Enter to execute, and Escape to close. The palette captures keyboard, character, pointer, wheel, and terminal mouse-reporting paths while open, so input never reaches the PTY twice. Actions execute with the pane that opened the palette as origin. A failed or reload-invalidated callback leaves the query and selection visible with one error; successful execution closes the palette. Unchanged visible palettes do not schedule frames.
+
+### Quick select
+
+Bind `cervterm.action.ActivateQuickSelect` to label visible HTTP(S) links and configured matches. Type the displayed label to act; Escape cancels. Built-in links open through the platform URL adapter. Rules use `action = "open"` only when the matched text is an absolute HTTP(S) URL; `action = "copy"` copies the exact match.
+
+```lua
+quick_select = {
+  rules = {
+    { id = "issue", pattern = "[A-Z]+-[0-9]+", action = "copy", priority = 10 },
+  },
+}
+```
+
+Rules replace as an ordered list at the winning configuration layer and are compiled before atomic activation. IDs are unique and at most 64 bytes; at most 32 rules are accepted; each pattern is at most 4 KiB. Invalid rules preserve the active config. Activation scans a bounded detached snapshot (at most 512 candidates and 4 KiB per match). Output, resize/reflow, viewport movement, or focus change invalidates labels before any clipboard or URL side effect.
 
 ### Leader and named key tables
 

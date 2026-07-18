@@ -40,6 +40,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Phase 5 appearance and window controls: per-side padding; independent text/background opacity; bounded solid, gradient, and image layers; scrollbar visibility/stable-gutter/fade-FPS policy; `render.max_fps`; and initial rows/columns plus native decoration/titlebar requests. Renderer selection remains explicitly excluded.
 - Bounded leader chords, named key tables, exact typed mouse bindings with exclusive gesture capture, and transactional pane resize/swap/move actions, while preserving legacy flat `keys` callbacks.
 - A retained command palette for discoverable typed actions and labeled bindings, with runtime-safe callback invalidation, complete modal input capture, and damage-driven idle rendering.
+- Bounded quick select for visible HTTP(S) links and compiled custom regex rules, with prefix-free labels, copy/open actions, and stale-generation rejection.
 
 ### Fixed
 
