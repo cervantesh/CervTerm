@@ -7,6 +7,7 @@ import (
 
 	termaction "cervterm/internal/action"
 	"cervterm/internal/input"
+	termmux "cervterm/internal/mux"
 	"cervterm/internal/script"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -108,6 +109,14 @@ func (a *App) dispatchReservedAction(command termaction.Action, key glfw.Key, mo
 }
 
 func (a *App) dispatchKeyAction(envelope termaction.Envelope, key glfw.Key, mods glfw.ModifierKey, repeat bool) bool {
+	return a.dispatchKeyActionAtOrigin(envelope, nil, key, mods, repeat, uint64(a.focusedPane))
+}
+
+func (a *App) dispatchScriptBinding(binding script.Binding, key glfw.Key, mods glfw.ModifierKey, repeat bool, origin uint64) bool {
+	return a.dispatchKeyActionAtOrigin(binding.Action, binding.Callback, key, mods, repeat, origin)
+}
+
+func (a *App) dispatchKeyActionAtOrigin(envelope termaction.Envelope, callback *script.CallbackRef, key glfw.Key, mods glfw.ModifierKey, repeat bool, origin uint64) bool {
 	descriptor, err := termaction.DefaultRegistry().Describe(envelope.Action)
 	if err != nil {
 		a.Notify(err.Error())
@@ -118,14 +127,31 @@ func (a *App) dispatchKeyAction(envelope termaction.Envelope, key glfw.Key, mods
 		consume, execute = descriptor.TriggerPolicy.ConsumeRepeat, descriptor.TriggerPolicy.ExecuteRepeat
 	}
 	if execute {
-		if err := a.executeAction(envelope, a.actionContext(termaction.SourceKeyboard)); err != nil {
-			a.notifyActionError(err)
+		if callback != nil {
+			if a.scriptRT == nil {
+				a.Notify("script error: runtime is unavailable")
+			} else if err := a.scriptRT.DispatchRef(*callback, bindingCallbackLabel(*callback), paneHost{app: a, pane: termmux.PaneID(origin)}); err != nil {
+				a.Notify("script error: " + err.Error())
+			}
+		} else {
+			context := a.actionContext(termaction.SourceKeyboard)
+			context.Origin = termaction.Ref{Kind: termaction.RefPane, ID: origin}
+			if err := a.executeAction(envelope, context); err != nil {
+				a.notifyActionError(err)
+			}
 		}
 	}
 	if consume {
 		a.suppressNextChar = scriptKeyProducesChar(key, mods)
 	}
 	return consume
+}
+
+func bindingCallbackLabel(ref script.CallbackRef) string {
+	if ref.Table != "" {
+		return "key_tables." + ref.Table
+	}
+	return "keys"
 }
 
 func (a *App) notifyActionError(err error) {
@@ -180,6 +206,9 @@ func (a *App) handleKeyEvent(key glfw.Key, eventAction glfw.Action, mods glfw.Mo
 		if a.dispatchReservedAction(termaction.ReloadConfig{}, key, mods, repeat) {
 			return
 		}
+	}
+	if a.dispatchScriptTableKey(key, mods, repeat) {
+		return
 	}
 	if a.dispatchScriptKey(key, mods, repeat) {
 		return

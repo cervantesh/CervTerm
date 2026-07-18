@@ -101,6 +101,7 @@ type App struct {
 	statsSpecOK      bool
 	zoom             zoomBindings
 	actionBindings   []keyActionBinding
+	keyTable         keyTableState
 	link             linkState
 	hud              hudCache
 	fps              float64
@@ -217,8 +218,7 @@ func (a *App) runWindow() error {
 			_ = a.mux.Shutdown()
 		}
 	}()
-	// Registered after the Terminate defer so it runs first (LIFO): the reader
-	// must stop posting wakes before GLFW tears down.
+	// Stop reader wake posts before GLFW teardown (registered after Terminate for LIFO).
 	a.wakeReady.Store(true)
 	defer a.wakeReady.Store(false)
 	defer a.discardConfigReloadWorkers()
@@ -477,6 +477,7 @@ func (a *App) installCallbacks() {
 	})
 	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
 		if !focused {
+			a.keyTable.cancel()
 			a.finishDividerDrag()
 			a.clearDividerCursor()
 			a.cancelMouseCapture()
