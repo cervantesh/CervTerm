@@ -20,6 +20,7 @@ This document is the executable contract for the MVP. Implementation must follow
 8. PTY readers only enqueue pane-addressed records; terminal/parser/mux mutation remains serialized on the GLFW main thread.
 9. Every pane render is confined by the backend-neutral renderer clip stack.
 
+10. OpenGL through GLFW remains the sole supported renderer; configuration must not expose renderer/backend selection.
 ## MVP behavior
 
 ### Core terminal
@@ -97,6 +98,16 @@ This document is the executable contract for the MVP. Implementation must follow
 - Font environments retain at most 64 contexts; the parsed cache retains at most 128 faces/256 MiB; each context retains at most 8,192 negative results. All font fields remain restart-scoped.
 - `--safe-fonts` restores embedded Go Mono, clears descriptors/fallback/rules/features, and restores natural 1/1/0/0/0 metrics.
 
+
+### Phase 5 appearance and native window controls
+
+- `padding.left/right/top/bottom` are independent logical insets used consistently for DPI-scaled layout, grid sizing, clipping, and hit testing.
+- Text and composed-background opacity are independent; whole-window opacity/blur compatibility validation remains authoritative.
+- Backgrounds are ordered, bounded solid/linear-gradient/image layers with constrained decode dimensions/bytes, cache ownership, and deterministic fit/alignment.
+- Scrollbar visibility is `always`, `hover`, `scrolling`, or `never`; stable gutter prevents PTY resize, and animation FPS bounds fade wakeups.
+- `render.max_fps` is an optional presentation cap. It does not replace vsync or create continuous idle rendering.
+- Initial `window.rows`/`window.cols` and native `decorations`/`titlebar` are startup/recreation controls with platform capability fallback.
+- Renderer selection is not a Phase 5 field and remains excluded.
 
 ### Visual theme
 

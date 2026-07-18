@@ -131,22 +131,24 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 
 **Rollback:** legacy shorthand maps to one descriptor with current metrics.
 
-## Phase 5 — Appearance and Window Controls
-**Scope:** per-side padding, separate text/background opacity, backgrounds/gradients, decorations, FPS policy, scrollbar visibility.
+## Phase 5 — Appearance and Window Controls (implemented; qualification bounded by platform evidence)
+**Scope:** per-side padding, separate text/background opacity, bounded solid/gradient/image backgrounds, native startup controls, FPS policy, and scrollbar visibility.
 
-**Work**
-- Add left/right/top/bottom padding and correct hit-testing/grid calculations.
-- Separate text and background opacity while preserving existing translucency/blur invariants.
-- Add solid/gradient/image background layers with scale/fit/alignment and bounded decode/cache.
-- Add supported decoration/titlebar/initial-size options with platform capability diagnostics.
-- Add animation/max-FPS and idle/on-demand policy; do not add renderer selection.
-- Expand scrollbar modes: always, hover, scrolling, never, with stable gutter option.
+**Delivered**
+- Phase 5.1: left/right/top/bottom padding with DPI-aware layout, hit testing, and grid calculations.
+- Phase 5.2: independent text/background opacity while preserving whole-window translucency/blur validation.
+- Phase 5.3: ordered solid, linear-gradient, and image layers with bounded decode/cache/work and deterministic fit/alignment.
+- Phase 5.4: scrollbar `always`, `hover`, `scrolling`, and `never` modes, stable gutter, and bounded fade animation FPS.
+- Phase 5.5: `render.max_fps` presentation cap layered over vsync and damage-driven redraw.
+- Phase 5.6: initial rows/columns and capability-aware native decoration/titlebar startup requests.
 
-**Success:** current config remains visually identical by default; live-safe fields reload; recreation-required fields are diagnosed; idle mode keeps zero-frame behavior.
+**Explicit exclusion:** no renderer selector was added; GLFW/OpenGL remains the sole supported renderer. Native window behavior is platform-capability dependent, and unrun GUI checks are recorded as skips rather than parity passes.
 
-**Tests:** layout/hit-testing, opacity combinations, image limits, FPS timing, scrollbar policies, platform capability tests.
+**Success:** defaults preserve prior behavior; live-safe fields reload atomically; recreation-scoped fields are diagnosed; idle mode does not acquire a continuous frame source.
 
-**Rollback:** each feature is independently optional.
+**Evidence:** focused and full automated gates plus platform pass/skip are recorded in `docs/manual-verification.md`.
+
+**Rollback:** each feature remains independently optional; legacy/default values preserve the compatibility path.
 
 ## Phase 6 — Advanced Keyboard and Mouse Bindings
 **Scope:** WezTerm-style ergonomic actions without copying domain actions.

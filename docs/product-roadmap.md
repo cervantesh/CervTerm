@@ -15,7 +15,7 @@ CervTerm already has:
 - ANSI/bright/256/truecolor VT parsing, keyboard/mouse reporting, OSC 7 CWD, OSC 52 clipboard, and detected hyperlinks.
 - Lua configuration, Teal check/gen, discovery/validation/templates, scripting callbacks/timers/status/overlays, and atomic single-file reload.
 - System font discovery, OpenType shaping/ligatures, lazy fallback, color glyphs, a bounded shared multi-size atlas, and DirectWrite coverage.
-- Configurable opacity, capability-aware native blur, scrollbar, cursor, on-demand redraw, and diagnostics.
+- Phase 5 appearance/window controls: per-side padding, independent text/background opacity, bounded layered backgrounds, scrollbar modes/stable gutter/fade FPS, `render.max_fps`, and initial rows/columns plus native decoration/titlebar requests.
 - Parser/render benchmarks, fuzz/golden fixtures, daily-driver smoke, package smoke, CI, and release provenance.
 
 ## Historical four-phase MVP roadmap
@@ -235,6 +235,18 @@ Deliverable:
 Deliverable:
 
 - CervTerm looks like a real terminal rather than a bitmap-font prototype.
+
+### Milestone 4.5: Appearance and window controls (completed, platform-qualified)
+
+1. Per-side padding participates in DPI-scaled layout and hit testing.
+2. Text/background opacity remains separate from validated whole-window opacity/blur.
+3. Solid, gradient, and image background layers are bounded by decode/cache/work budgets.
+4. Scrollbar modes, stable gutter, fade FPS, and `render.max_fps` preserve damage-driven idle behavior.
+5. Initial rows/columns and native decorations/titlebar are capability-aware startup controls.
+6. Renderer selection remains excluded; no cross-platform GUI parity is claimed without a recorded pass.
+
+Deliverable: Phase 5.1-5.6 is automated-test qualified; platform GUI pass/skip evidence is recorded in `docs/manual-verification.md`.
+
 
 ### Milestone 5: Config slice
 

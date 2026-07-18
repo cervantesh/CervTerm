@@ -17,7 +17,7 @@ CervTerm is not a finished daily-driver terminal yet, but it already includes:
 - Keyboard encoding for navigation keys, F1-F12, and Ctrl/Alt/Shift modifiers.
 - SGR mouse press/release/wheel/drag encoding, including modifiers.
 - Lua config loading, Teal check/gen support, atomic runtime reload, and `--print-default-config`.
-- Configurable opacity, platform-capability-aware native blur, and an interactive scrollbar.
+- Per-side padding; independent text/background opacity; bounded solid, gradient, and image background layers; configurable scrollbar visibility/stable gutter/fade FPS; and capability-aware native blur.
 - Renderer-neutral OpenType glyph backend with bitmap color fonts, broad COLRv1 paint/composite/variation support, SVG glyph extraction/rasterization, DirectWrite shaping smoke coverage, and shaped color cluster handling.
 - Diagnostics logging via `--log-file` / `CERVTERM_LOG_FILE`, including panic stack capture.
 - Parser fuzz smoke coverage, replay-style VT golden fixtures, and a Windows daily-driver smoke matrix for cmd.exe, git, pager, alternate-screen, resize/reflow, and longer-session paths.
@@ -119,16 +119,21 @@ GOOS=linux GOARCH=amd64 go build -o dist/cervterm-linux-amd64 ./cmd/cervterm
 
 ## Lua config example
 
-Generate a complete editable template with `--print-default-config`. The default enables the new appearance schema (`#080B12E6` background, optional blur request, and compact reserved scrollbar) while keeping whole-window opacity at `1.0`. A minimal override:
+Generate a complete editable template with `--print-default-config`. The default keeps compatibility behavior while exposing Phase 5 appearance/window controls. A minimal v2 override:
 
 ```lua
 return {
-  window = { width = 1100, height = 720, opacity = 1.0, blur = true },
+  config_version = 2,
+  window = { initial_rows = 30, initial_cols = 100, decorations = "system", titlebar = "dark", opacity = 1.0, text_opacity = 1.0, background_opacity = 1.0, padding_left = 8, padding_right = 8, padding_top = 8, padding_bottom = 8 },
   colors = { background = "#080B12E6" },
   scrolling = { history = 2000, wheel_multiplier = 3, hide_cursor_when_scrolled = true },
+  scrollbar = { mode = "scrolling", stable_gutter = true, animation_fps = 30 },
+  render = { max_fps = 0 },
   shell = { program = "cmd.exe", args = {} },
 }
 ```
+
+`render.max_fps = 0` means uncapped apart from vsync/event policy; a positive value caps presentation without changing the damage-driven idle policy. Renderer selection is intentionally unavailable: GLFW/OpenGL remains the only supported frontend/backend.
 
 The selected source is watched with debounce. `ctrl+shift+r` and `term:reload_config()` request a manual atomic reload; invalid edits preserve the last valid runtime. Shell and other startup-only changes are reported as requiring restart.
 
@@ -140,15 +145,17 @@ The selected source is watched with debounce. `ctrl+shift+r` and `term:reload_co
 
 Runtime diagnostics are written to stderr and to a local log file by default. Override the location with `--log-file path/to/cervterm.log` or `CERVTERM_LOG_FILE`; use `--log-file -` to keep diagnostics on stderr only. Run `--doctor` to print the effective log path, config discovery state, environment hints, and support checklist. Unexpected panics are captured with a stack trace before CervTerm exits.
 
-## Display scaling
+## Display scaling and Phase 5 appearance controls
 
-The terminal reserves the configured scrollbar slot outside the cell grid (12 logical px by default), so auto-hide/fade never covers text or resizes the PTY. The OS title bar is themed dark, and a two-row stats overlay is toggled by `render.stats_hotkey` (default `ctrl+shift+i`; empty to disable). The default background uses alpha `E6`; `window.opacity` is a separate whole-window mode and validation prevents activating both non-neutral opacity modes together.
+Per-side logical padding is scaled with DPI and participates in grid sizing and pointer hit testing. The scrollbar supports `always`, `hover`, `scrolling`, and `never`; `stable_gutter` reserves its slot so visibility changes do not resize the PTY, and `animation_fps` bounds fade updates.
 
-Rendering is damage-driven by default (`render.redraw = "on_demand"`): the main loop blocks in the OS event wait and repaints only when something visible changed, so an idle terminal draws about the cursor blink rate and near zero with blink and the stats overlay off. Set `render.redraw = "continuous"` to restore the old always-draw loop for benchmarking or as an escape hatch. `render.vsync` still caps the swap rate to the monitor refresh.
+Text opacity and composed background opacity are independent, while `window.opacity` remains whole-window opacity. Validation prevents incompatible simultaneous translucency modes. Background composition is a bounded ordered layer stack: solid colors, linear gradients, and locally decoded images with explicit fit/alignment, decode limits, cache budgets, and asynchronous replacement on resize/reload.
 
-Drawn frames repaint changed rows by default (`render.damage = "rows"`); set `render.damage = "frame"` as an escape hatch if partial-redraw artifacts appear.
+Rendering remains damage-driven by default (`render.redraw = "on_demand"`). `render.max_fps` caps presentation when positive; it does not create frames while idle. `render.vsync` still limits swaps to the monitor refresh. There is no renderer selector.
 
-The OpenGL backend keeps an authoritative RGBA offscreen frame image: damaged background pixels replace prior RGBA, while glyphs and overlays blend normally, and the complete image is presented each frame. Blur is routed through a capability-aware `BlurProvider`; providers report `active`, `disabled`, `unsupported`, `incompatible`, or `failed` and degrade without terminating. **The macOS AppKit, KDE/X11, and KDE/Wayland providers are experimental and compile-validated but have not yet completed real-compositor smoke testing.** KDE/X11 uses `_KDE_NET_WM_BLUR_BEHIND_REGION`; KDE/Wayland uses `org_kde_kwin_blur` in builds compiled with `-tags "glfw wayland"`. GNOME and compositors without a supported protocol retain plain transparency. The Windows provider still disables its native material when background alpha is active because that material makes the GLFW client opaque. Please report native-platform results in [community testing issue #104](https://github.com/cervantesh/CervTerm/issues/104) before treating any experimental provider as supported.
+Initial terminal geometry can be set with `window.rows`/`window.cols`. `window.decorations` and `window.titlebar` request the supported native startup mode and are recreation-scoped; unsupported platform combinations degrade through capability diagnostics rather than implying cross-platform parity. Phase 5 GUI qualification is Windows-only unless a platform pass is explicitly recorded in [`docs/manual-verification.md`](docs/manual-verification.md).
+
+The OpenGL backend keeps an authoritative RGBA offscreen frame image: damaged background pixels replace prior RGBA, while glyphs and overlays blend normally, and the complete image is presented each frame. Blur is routed through a capability-aware `BlurProvider`; providers report `active`, `disabled`, `unsupported`, `incompatible`, or `failed` and degrade without terminating. **The macOS AppKit, KDE/X11, and KDE/Wayland providers are experimental and compile-validated but have not yet completed real-compositor smoke testing.**
 
 The GLFW frontend uses the current monitor content scale to rasterize text and scale window padding and chrome in framebuffer pixels. Moving the window between monitors rebuilds the glyph atlas at the new effective DPI. A GLFW-enabled `--doctor` reports the primary monitor scale and effective DPI; headless builds report that scale detection is unavailable.
 
