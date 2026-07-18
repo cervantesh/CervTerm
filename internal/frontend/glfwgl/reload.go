@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"cervterm/internal/config"
-	"cervterm/internal/fontglyph"
 	"cervterm/internal/frontend/gpu"
 	"cervterm/internal/script"
 )
@@ -33,11 +32,11 @@ const configReloadFailureNoticeInterval = 30 * time.Second
 
 func (a *App) reportConfigReloadFailure(err error, now time.Time) bool {
 	message := err.Error()
-	if message == a.lastReloadNoticeError && !a.lastReloadNoticeAt.IsZero() && now.Sub(a.lastReloadNoticeAt) < configReloadFailureNoticeInterval {
+	if message == a.lastReloadNoticeError && !a.configReloadAsync.lastNoticeAt.IsZero() && now.Sub(a.configReloadAsync.lastNoticeAt) < configReloadFailureNoticeInterval {
 		return false
 	}
 	a.lastReloadNoticeError = message
-	a.lastReloadNoticeAt = now
+	a.configReloadAsync.lastNoticeAt = now
 	log.Printf("config reload failed: %v", err)
 	a.Notify("config reload failed: " + message)
 	return true
@@ -45,7 +44,7 @@ func (a *App) reportConfigReloadFailure(err error, now time.Time) bool {
 
 func (a *App) clearConfigReloadFailureNotice() {
 	a.lastReloadNoticeError = ""
-	a.lastReloadNoticeAt = time.Time{}
+	a.configReloadAsync.lastNoticeAt = time.Time{}
 }
 
 func (a *App) acknowledgeConfigReloadFailure(before configWatchSnapshot, expectations []config.SourceWatchExpectation) {
@@ -57,15 +56,19 @@ func (a *App) acknowledgeConfigReloadFailure(before configWatchSnapshot, expecta
 }
 
 func (a *App) applyPendingConfigReload() {
+	a.applyConfigReloadWorkerResults()
 	if !a.reloadPending {
 		return
 	}
-	a.reloadPending = false
-	if err := a.reloadConfig(); err != nil {
-		a.reportConfigReloadFailure(err, time.Now())
+	if a.configReloadAsync.workers >= 2 {
 		return
 	}
-	a.clearConfigReloadFailureNotice()
+	a.reloadPending = false
+	if a.configPath == "" {
+		a.reportConfigReloadFailure(fmt.Errorf("no config source is active"), time.Now())
+		return
+	}
+	a.startConfigReloadWorker()
 }
 
 func (a *App) reloadConfig() (resultErr error) {
@@ -86,7 +89,22 @@ func (a *App) reloadConfig() (resultErr error) {
 		a.acknowledgeConfigReloadFailure(watchBefore, script.FailedWatchExpectations(err))
 		return err
 	}
+	return a.activateLoadedConfig(loaded, watchBefore, nil, nil)
+}
+
+func (a *App) activateLoadedConfig(loaded script.VersionedSource, watchBefore configWatchSnapshot, workerExpectations []config.SourceWatchExpectation, generation *PreparedAppearanceGeneration) (resultErr error) {
+	a.ensureConfigState()
+	defer func() {
+		if resultErr != nil {
+			a.lastConfigReloadError = resultErr.Error()
+		} else {
+			a.lastConfigReloadError = ""
+		}
+	}()
 	failureExpectations := watchExpectations(loaded.WatchPaths)
+	if len(workerExpectations) > 0 {
+		failureExpectations = workerExpectations
+	}
 	defer func() {
 		if resultErr == nil {
 			return
@@ -127,20 +145,42 @@ func (a *App) reloadConfig() (resultErr error) {
 			return err
 		}
 	}
-	prepared, err := a.prepareLiveConfig(resolvedDesired)
+	prepared, err := a.prepareLiveConfigWithProvenance(resolvedDesired, candidateProvenance)
 	if err != nil {
 		return err
 	}
+	if generation != nil && prepared.backgroundChanged {
+		generation.state = appearancePreparedGPU
+	}
+	backgroundWatchPaths, backgroundWatchHashes := prepared.backgroundWatchPaths, prepared.backgroundWatchHashes
+	if len(backgroundWatchPaths) == 0 && a.configReloadAsync.prepared != nil && a.configReloadAsync.prepared.cpu != nil {
+		backgroundWatchPaths = a.configReloadAsync.prepared.cpu.watchPaths
+		backgroundWatchHashes = a.configReloadAsync.prepared.cpu.watchHashes
+	}
+	if len(backgroundWatchPaths) > 0 {
+		loaded.WatchPaths = append(loaded.WatchPaths, backgroundWatchPaths...)
+		if loaded.WatchHashes == nil {
+			loaded.WatchHashes = make(map[string][32]byte)
+		}
+		for path, hash := range backgroundWatchHashes {
+			loaded.WatchHashes[path] = hash
+		}
+		failureExpectations = watchExpectations(loaded.WatchPaths)
+	}
 	defer prepared.Close()
+	watchAfterEvaluation := a.configWatch.snapshot()
+	changedDuringEvaluation := configWatchSnapshotsDiffer(watchBefore, watchAfterEvaluation)
 	candidateFilesChanged := watchHashesChanged(loaded.WatchHashes)
+	if changedDuringEvaluation || candidateFilesChanged {
+		a.reloadPending = true
+		return fmt.Errorf("config sources changed while preparing reload; queued a newer generation")
+	}
 	if candidate != nil {
 		if _, err := candidate.PublishTeal(a.tealPublicationOptions); err != nil {
 			return err
 		}
 		candidateRT = activation.Commit()
 	}
-	watchAfterEvaluation := a.configWatch.snapshot()
-	changedDuringEvaluation := configWatchSnapshotsDiffer(watchBefore, watchAfterEvaluation)
 	oldBundle, oldRT := a.scriptBundle, a.scriptRT
 	a.commitLiveConfig(prepared)
 	a.composedCfg = loaded.Config.Clone()
@@ -159,10 +199,8 @@ func (a *App) reloadConfig() (resultErr error) {
 	a.overlays.seq = -1
 	a.configWatch.acknowledgeSuccess(loaded.WatchPaths)
 	changedBeforeAcknowledgement := a.configWatch.changedSince(watchAfterEvaluation)
-	candidateFilesChanged = candidateFilesChanged || watchHashesChanged(loaded.WatchHashes)
-	if changedDuringEvaluation || changedBeforeAcknowledgement || candidateFilesChanged {
-		// An active source/include/module changed during evaluation or in the
-		// commit window. Queue a newer generation rather than acknowledging it away.
+	if changedBeforeAcknowledgement || watchHashesChanged(loaded.WatchHashes) {
+		// A source changed in the non-fallible commit window; queue a newer generation.
 		a.reloadPending = true
 	}
 	if oldBundle != nil {
@@ -212,13 +250,19 @@ func formatPendingConfigChanges(changes []config.ConfigChange, limit int) string
 // preparedLiveConfig owns all resources created by the fallible preparation
 // phase until commit transfers them to the App or Close aborts them.
 type preparedLiveConfig struct {
-	next              config.Config
-	preparedContexts  map[atlasFontKey]*atlasFontContext
-	contextInstall    *atlasPreparedContextInstall
-	backgroundSurface gpu.BackgroundSurface
-	rasterChanged     bool
-	backgroundChanged bool
-	committed         bool
+	next                  config.Config
+	preparedContexts      map[atlasFontKey]*atlasFontContext
+	contextInstall        *atlasPreparedContextInstall
+	backgroundSurface     gpu.BackgroundSurface
+	backgroundWidth       int
+	backgroundHeight      int
+	backgroundBytes       uint64
+	backgroundDPI         float64
+	backgroundWatchPaths  []string
+	backgroundWatchHashes map[string][32]byte
+	rasterChanged         bool
+	backgroundChanged     bool
+	committed             bool
 }
 
 func (p *preparedLiveConfig) Close() {
@@ -236,6 +280,10 @@ func (p *preparedLiveConfig) Close() {
 // prepareLiveConfig validates and constructs every fallible frontend resource
 // without mutating active application state.
 func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error) {
+	return a.prepareLiveConfigWithProvenance(next, a.composedProvenance)
+}
+
+func (a *App) prepareLiveConfigWithProvenance(next config.Config, provenance []config.ProvenanceRecord) (*preparedLiveConfig, error) {
 	if err := next.Validate(); err != nil {
 		return nil, err
 	}
@@ -245,7 +293,7 @@ func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error)
 	liveNext.Window.TextOpacity = next.Window.TextOpacity
 	liveNext.Window.BackgroundOpacity = next.Window.BackgroundOpacity
 	newRaster := effectiveTextRasterFor(liveNext)
-	backgroundChanged := a.cfg.Colors.Background != next.Colors.Background || a.cfg.Window.BackgroundOpacity != next.Window.BackgroundOpacity
+	backgroundChanged := a.cfg.Colors.Background != next.Colors.Background || a.cfg.Window.BackgroundOpacity != next.Window.BackgroundOpacity || !reflect.DeepEqual(a.cfg.Background.Layers, next.Background.Layers)
 	prepared := &preparedLiveConfig{next: next, rasterChanged: a.atlas != nil && oldRaster != newRaster, backgroundChanged: backgroundChanged}
 	if prepared.rasterChanged {
 		contexts, err := a.prepareRasterContexts(newRaster)
@@ -276,19 +324,56 @@ func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error)
 		prepared.contextInstall = install
 	}
 	if prepared.backgroundChanged {
-		surface, err := prepareSolidBackgroundSurface(a.r, liveNext)
+		var surface gpu.BackgroundSurface
+		var err error
+		surfaceWidth, surfaceHeight := 0, 0
+		candidateBytes := uint64(0)
+		candidateDPI := float64(0)
+		if len(next.Background.Layers) == 0 {
+			pixels := solidBackgroundPixels(liveNext)
+			candidateBytes, err = backgroundGPUTransferBytes(a.configReloadAsync.activeGPUBytes, pixels)
+			if err == nil {
+				surface, err = prepareRGBABackgroundSurface(a.r, pixels)
+				if surface == nil {
+					candidateBytes = 0
+				}
+			}
+		} else {
+			cpuResult, prepareErr := a.layeredBackgroundCPU(next, provenance)
+			if prepareErr != nil {
+				err = prepareErr
+			} else {
+				defer cpuResult.Close()
+				surfaceWidth, surfaceHeight = cpuResult.surface.Bounds().Dx(), cpuResult.surface.Bounds().Dy()
+				candidateDPI = cpuResult.dpi
+				candidateBytes, err = backgroundGPUTransferBytes(a.configReloadAsync.activeGPUBytes, cpuResult.surface)
+				if err == nil {
+					surface, err = prepareRGBABackgroundSurface(a.r, cpuResult.surface)
+					if surface == nil && err == nil {
+						err = fmt.Errorf("background layers: renderer capability unavailable")
+					}
+					prepared.backgroundWatchPaths = append([]string(nil), cpuResult.watchPaths...)
+					prepared.backgroundWatchHashes = make(map[string][32]byte, len(cpuResult.watchHashes))
+					for path, hash := range cpuResult.watchHashes {
+						prepared.backgroundWatchHashes[path] = hash
+					}
+				}
+			}
+		}
 		if err != nil {
 			closePreparedRasterContexts(prepared.preparedContexts)
 			prepared.preparedContexts = nil
 			return nil, err
 		}
 		prepared.backgroundSurface = surface
+		prepared.backgroundWidth, prepared.backgroundHeight = surfaceWidth, surfaceHeight
+		prepared.backgroundBytes = candidateBytes
+		prepared.backgroundDPI = candidateDPI
 	}
 	return prepared, nil
 }
 
-// commitLiveConfig is the mechanically infallible main-thread mutation phase.
-// The caller must have completed every fallible operation before invoking it.
+// commitLiveConfig performs only mechanically infallible main-thread mutations.
 func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	if prepared.rasterChanged {
 		a.atlas.commitContextInstall(prepared.contextInstall)
@@ -299,6 +384,12 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 		oldSurface := a.backgroundSurface
 		a.backgroundSurface = prepared.backgroundSurface
 		prepared.backgroundSurface = nil
+		a.configReloadAsync.activeGPUBytes = prepared.backgroundBytes
+		a.backgroundSurfaceWidth, a.backgroundSurfaceHeight = prepared.backgroundWidth, prepared.backgroundHeight
+		a.backgroundRequestedWidth, a.backgroundRequestedHeight = prepared.backgroundWidth, prepared.backgroundHeight
+		a.configReloadAsync.activeBackgroundDPI = prepared.backgroundDPI
+		a.configReloadAsync.requestedBackgroundDPI = prepared.backgroundDPI
+		a.backgroundGeneration++
 		if oldSurface != nil {
 			_ = oldSurface.Close()
 		}
@@ -313,6 +404,8 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	a.cfg.Window.BackgroundOpacity = next.Window.BackgroundOpacity
 	a.cfg.Window.Blur = next.Window.Blur
 	a.cfg.Colors = next.Colors
+	a.cfg.Background = next.Background
+	a.cfg.Background.Layers = next.Clone().Background.Layers
 	a.mux.SetPaletteBase(configuredPaletteBase(a.cfg.Colors))
 	a.cfg.Scrolling = next.Scrolling
 	a.cfg.Scrollbar = next.Scrollbar
@@ -360,89 +453,6 @@ func (a *App) applyRuntimeTransaction(transaction *config.RuntimePatchTransactio
 	a.runtimeOverrideRecords = transaction.Records()
 	a.pendingConfig = config.PendingConfigChanges(a.desiredCfg, a.cfg)
 	return nil
-}
-
-func (a *App) prepareRasterContexts(textRaster string) (map[atlasFontKey]*atlasFontContext, error) {
-	prepared := make(map[atlasFontKey]*atlasFontContext)
-	sizes := []float64{a.cfg.Font.Size}
-	if a.mux != nil && len(a.mux.PaneIDs()) > 0 {
-		sizes = sizes[:0]
-		for _, id := range a.mux.PaneIDs() {
-			size := a.cfg.Font.Size
-			if state := a.paneUI[id]; state != nil && state.font.fontSize > 0 {
-				size = state.font.fontSize
-			}
-			sizes = append(sizes, size)
-		}
-	}
-	for _, size := range sizes {
-		spec := fontglyph.Spec{Family: a.cfg.Font.Family, Size: size, DPI: effectiveDPI(a.contentScaleX, a.contentScaleY), TextRaster: textRaster}
-		model := a.atlas.modelForSpec(spec)
-		key, err := makeAtlasFontKeyWithModel(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken, model)
-		if err != nil {
-			closePreparedRasterContexts(prepared)
-			return nil, err
-		}
-		if _, ok := a.atlas.contexts[key]; ok {
-			continue
-		}
-		if _, ok := prepared[key]; ok {
-			continue
-		}
-		ctx, err := makeAtlasFontContextWithModel(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken, model, a.atlas.backendFactory)
-		if err != nil {
-			closePreparedRasterContexts(prepared)
-			return nil, err
-		}
-		prepared[key] = ctx
-	}
-	return prepared, nil
-}
-
-func closePreparedRasterContexts(prepared map[atlasFontKey]*atlasFontContext) {
-	closed := make([]fontglyph.Backend, 0, len(prepared))
-	for _, ctx := range prepared {
-		duplicate := false
-		for _, backend := range closed {
-			if sameAtlasBackend(ctx.backend, backend) {
-				duplicate = true
-				break
-			}
-		}
-		if !duplicate {
-			ctx.backend.Close()
-			closed = append(closed, ctx.backend)
-		}
-	}
-}
-
-func (a *App) activateInstalledRasterContexts() {
-	if a.mux == nil || len(a.mux.PaneIDs()) == 0 {
-		cellW, cellH, _, ok := a.atlas.useSpec(a.fontSpec(a.cfg.Font.Size, a.contentScaleX, a.contentScaleY), a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
-		if ok {
-			a.cellW, a.cellH = float32(cellW), float32(cellH)
-			a.ligaturesActive = a.atlas.supportsLigatures(a.cfg.Font.Ligatures)
-		}
-		return
-	}
-	for _, id := range a.mux.PaneIDs() {
-		state := a.ensurePaneUI(id)
-		gridChanged, applied := a.applyPaneFontVisual(id, state.font.fontSize, a.contentScaleX, a.contentScaleY)
-		state.font.ptyDirty = state.font.ptyDirty || (applied && gridChanged)
-	}
-	now := time.Now()
-	for _, id := range a.mux.PaneIDs() {
-		state := a.ensurePaneUI(id)
-		if !state.font.ptyDirty {
-			continue
-		}
-		if a.applyPanePTYResize(id) {
-			state.font.ptyDirty = false
-			continue
-		}
-		a.schedulePanePTYResizeRetry(id, now)
-	}
-	a.restoreFocusedFontProjection()
 }
 
 func (a *App) RuntimeConfig() config.Config { return a.cfg.Clone() }

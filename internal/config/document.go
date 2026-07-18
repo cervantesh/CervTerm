@@ -16,21 +16,22 @@ const (
 type ValueKind string
 
 const (
-	KindTable           ValueKind = "table"
-	KindString          ValueKind = "string"
-	KindNumber          ValueKind = "number"
-	KindInteger         ValueKind = "integer"
-	KindBoolean         ValueKind = "boolean"
-	KindStringList      ValueKind = "string_list"
-	KindStringMap       ValueKind = "string_map"
-	KindFeatureMap      ValueKind = "feature_map"
-	KindIndexedColorMap ValueKind = "indexed_color_map"
-	KindKeyList         ValueKind = "key_list"
-	KindEvents          ValueKind = "events"
-	KindDocumentMap     ValueKind = "document_map"
-	KindDescriptorList  ValueKind = "descriptor_list"
-	KindFontRuleList    ValueKind = "font_rule_list"
-	KindColorSchemeMap  ValueKind = "color_scheme_map"
+	KindTable               ValueKind = "table"
+	KindString              ValueKind = "string"
+	KindNumber              ValueKind = "number"
+	KindInteger             ValueKind = "integer"
+	KindBoolean             ValueKind = "boolean"
+	KindStringList          ValueKind = "string_list"
+	KindStringMap           ValueKind = "string_map"
+	KindFeatureMap          ValueKind = "feature_map"
+	KindIndexedColorMap     ValueKind = "indexed_color_map"
+	KindKeyList             ValueKind = "key_list"
+	KindEvents              ValueKind = "events"
+	KindDocumentMap         ValueKind = "document_map"
+	KindDescriptorList      ValueKind = "descriptor_list"
+	KindFontRuleList        ValueKind = "font_rule_list"
+	KindColorSchemeMap      ValueKind = "color_scheme_map"
+	KindBackgroundLayerList ValueKind = "background_layer_list"
 )
 
 type ApplyScope string
@@ -98,6 +99,9 @@ func FromDocument(base Config, document Document) Config {
 	}
 	if document.AuthoredVersion >= 2 {
 		cfg.ColorScheme = stringField(document.Root, "color_scheme", cfg.ColorScheme)
+		if background := tableField(document.Root, "background"); background != nil {
+			cfg.Background.Layers = backgroundLayerListField(background, "layers", cfg.Background.Layers)
+		}
 		if font := tableField(document.Root, "font"); font != nil {
 			cfg.Font.Descriptors = descriptorListField(font, "descriptors", cfg.Font.Descriptors)
 			cfg.Font.Fallback = descriptorListField(font, "fallback", cfg.Font.Fallback)
@@ -150,6 +154,9 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "search_match", kind: KindString}, {name: "error", kind: KindString},
 		{name: "ansi", kind: KindStringList}, {name: "indexed_colors", kind: KindIndexedColorMap},
 	}},
+	{name: "background", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
+		{name: "layers", kind: KindBackgroundLayerList},
+	}},
 	{name: "scrolling", kind: KindTable, apply: ApplyLive, runtimeOverride: true, children: []fieldSchema{
 		{name: "history", kind: KindInteger}, {name: "wheel_multiplier", kind: KindInteger}, {name: "hide_cursor_when_scrolled", kind: KindBoolean},
 	}},
@@ -191,6 +198,7 @@ func isV2OnlyPath(path string) bool {
 	switch path {
 	case "window.padding_left", "window.padding_right", "window.padding_top", "window.padding_bottom",
 		"window.text_opacity", "window.background_opacity",
+		"background.layers",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true
 	default:
@@ -279,6 +287,7 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 		delete(document.Present, "window.padding_bottom")
 		delete(document.Present, "window.text_opacity")
 		delete(document.Present, "window.background_opacity")
+		delete(document.Present, "background.layers")
 		delete(document.Present, "font.descriptors")
 		delete(document.Present, "font.fallback")
 		delete(document.Present, "font.rules")

@@ -41,6 +41,14 @@ return {
     background_opacity = %.2f,
     blur = %t,
   },
+  -- Layers replace as one list across includes/profiles. Image paths resolve
+  -- relative to the source that supplied the winning list.
+  -- background = {
+  --   layers = {
+  --     { kind = "linear_gradient", colors = { "#080B12", "#182040" }, angle = 90 },
+  --     { kind = "image", path = "background.png", fit = "cover", opacity = 0.25 },
+  --   },
+  -- },
   font = {
     family = %q,
     -- Optional ordered primary face descriptors replace family selection as a

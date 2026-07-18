@@ -37,7 +37,7 @@ type App struct {
 	pendingConfig          []config.ConfigChange
 	lastConfigReloadError  string
 	lastReloadNoticeError  string
-	lastReloadNoticeAt     time.Time
+	configReloadAsync      configReloadAsyncState
 	configPath             string
 	candidateOptions       script.CandidateOptions
 	configWatch            configWatchState
@@ -59,10 +59,16 @@ type App struct {
 	blurWarned             bool
 	blurWarnedStatus       BlurStatus
 
-	window            *glfw.Window
-	r                 gpu.Renderer
-	backgroundSurface gpu.BackgroundSurface
-	atlas             *glyphAtlas
+	window                    *glfw.Window
+	r                         gpu.Renderer
+	backgroundSurface         gpu.BackgroundSurface
+	backgroundSurfaceWidth    int
+	backgroundSurfaceHeight   int
+	backgroundRequestedWidth  int
+	backgroundRequestedHeight int
+	backgroundGeneration      uint64
+	backgroundResizeResults   chan backgroundResizeResult
+	atlas                     *glyphAtlas
 
 	// Last framebuffer size handed to the renderer; draw() calls r.Resize only when
 	// it changes, so a backend recreates its swapchain/drawable on real size changes
@@ -214,13 +220,13 @@ func (a *App) runWindow() error {
 	// must stop posting wakes before GLFW tears down.
 	a.wakeReady.Store(true)
 	defer a.wakeReady.Store(false)
+	defer a.discardConfigReloadWorkers()
 
 	glfw.WindowHint(glfw.ContextVersionMajor, 2)
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	glfw.WindowHint(glfw.Resizable, glfw.True)
-	// The capability is a creation-time hint. Request it unconditionally so an
-	// opaque startup config can later switch to background alpha without recreating
-	// the terminal window.
+	// Request transparency at creation so live background alpha changes do not
+	// require recreating the terminal window.
 	glfw.WindowHint(glfw.TransparentFramebuffer, glfw.True)
 	w, err := glfw.CreateWindow(a.cfg.Window.Width, a.cfg.Window.Height, "CervTerm", nil, nil)
 	if err != nil {
@@ -323,11 +329,6 @@ func (a *App) runWindow() error {
 	a.needsRedraw = true
 
 	return a.runLoop(w)
-}
-
-func (a *App) bracketedPasteMode() bool {
-	_, view, ok := a.focusedView()
-	return ok && view.BracketedPaste
 }
 
 func (a *App) installCallbacks() {
