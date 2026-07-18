@@ -198,6 +198,7 @@ return {
   -- keys = {
   --   -- Typed actions are validated while loading and share built-in behavior:
   --   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
+  --   { key = "p", mods = "ctrl+shift", action = cervterm.action.ActivateCommandPalette },
   --   { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
   --   { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
   --   { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },

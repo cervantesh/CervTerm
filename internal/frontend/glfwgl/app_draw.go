@@ -147,6 +147,7 @@ func (a *App) draw() {
 	a.drawHUD(w, h, a.chrome, frameNow)
 	a.drawStatusBand(w, a.chrome)
 	a.drawSearchBar(w, h, a.chrome)
+	a.drawModal(w, h, a.chrome)
 	a.drawScrollbar(frameNow, background, w, h)
 	a.lastBlinkPhase = frameBlink
 	if a.showStats {

@@ -67,6 +67,10 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		} else {
 			a.search.open()
 		}
+	case termaction.ActivateCommandPalette:
+		if err := a.openCommandPalette(); err != nil {
+			return actionExecutionError(command, termaction.ErrorAction, err)
+		}
 	case termaction.ToggleStats:
 		a.showStats = !a.showStats
 		a.requestRedraw()
