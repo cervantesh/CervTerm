@@ -20,6 +20,9 @@ return {
     }) },
     { key = "o", action = cervterm.action.WithTarget(cervterm.action.Zoom(2), "origin") },
     { key = "l", label = "Legacy callback", action = function(term) term:notify("legacy") end },
+    { key = "r", action = cervterm.action.ResizePane("right", 3) },
+    { key = "s", action = cervterm.action.SwapPane("left") },
+    { key = "v", action = cervterm.action.MovePane("down") },
   },
 }`)
 	_, runtime, err := Load(path, config.Defaults())
@@ -28,7 +31,7 @@ return {
 	}
 	defer runtime.Close()
 	bindings := runtime.Bindings()
-	if len(bindings) != 5 {
+	if len(bindings) != 8 {
 		t.Fatalf("bindings = %#v", bindings)
 	}
 	if _, ok := bindings[0].Action.Action.(termaction.CopySelection); !ok || bindings[0].Label != "Copy selected text" {
@@ -47,6 +50,16 @@ return {
 	callback, ok := bindings[4].Action.Action.(termaction.Callback)
 	if !ok || callback.BindingIndex != 4 || callback.Label != "Legacy callback" {
 		t.Fatalf("callback binding = %#v", bindings[4])
+	}
+	resize, ok := bindings[5].Action.Action.(termaction.ResizePane)
+	if !ok || resize.Direction != termaction.FocusRight || resize.Delta != 3 {
+		t.Fatalf("resize binding = %#v", bindings[5])
+	}
+	if swap, ok := bindings[6].Action.Action.(termaction.SwapPane); !ok || swap.Direction != termaction.FocusLeft {
+		t.Fatalf("swap binding = %#v", bindings[6])
+	}
+	if move, ok := bindings[7].Action.Action.(termaction.MovePane); !ok || move.Direction != termaction.FocusDown {
+		t.Fatalf("move binding = %#v", bindings[7])
 	}
 	descriptor, err := termaction.DefaultRegistry().Describe(callback)
 	if err != nil || !descriptor.Discoverable || descriptor.Label != "Legacy callback" {
@@ -76,6 +89,11 @@ func TestTypedActionConstructorsRejectInvalidArguments(t *testing.T) {
 		{name: "overflow scroll", action: `cervterm.action.ScrollPage(1e100)`, want: "integer"},
 		{name: "bad split", action: `cervterm.action.SplitPane("diagonal")`, want: "split axis"},
 		{name: "bad focus", action: `cervterm.action.FocusPane("next")`, want: "focus direction"},
+		{name: "bad resize direction", action: `cervterm.action.ResizePane("next", 1)`, want: "direction"},
+		{name: "zero resize", action: `cervterm.action.ResizePane("left", 0)`, want: "delta"},
+		{name: "oversized resize", action: `cervterm.action.ResizePane("left", 1025)`, want: "delta"},
+		{name: "bad swap", action: `cervterm.action.SwapPane("next")`, want: "direction"},
+		{name: "bad move", action: `cervterm.action.MovePane("next")`, want: "direction"},
 		{name: "empty multiple", action: `cervterm.action.Multiple({})`, want: "at least one"},
 		{name: "bad target", action: `cervterm.action.WithTarget(cervterm.action.CopySelection, "pane-9")`, want: "target"},
 	}

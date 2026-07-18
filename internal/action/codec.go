@@ -103,6 +103,13 @@ type splitPaneArgs struct {
 type focusPaneArgs struct {
 	Direction Direction `json:"direction"`
 }
+type resizePaneArgs struct {
+	Direction Direction `json:"direction"`
+	Delta     int       `json:"delta"`
+}
+type directionalPaneArgs struct {
+	Direction Direction `json:"direction"`
+}
 type multipleArgs struct {
 	Actions []json.RawMessage `json:"actions"`
 }
@@ -252,6 +259,55 @@ var focusPaneCodec = codecOps{
 		return FocusPane{Direction: args.Direction}, nil
 	},
 }
+
+func directionalPaneCodec(name string, makeAction func(Direction) Action) codecOps {
+	return codecOps{
+		encode: func(action Action, _ *Codec, _ int, _ *codecBudget) (json.RawMessage, error) {
+			direction := Direction("")
+			switch value := action.(type) {
+			case SwapPane:
+				direction = value.Direction
+			case MovePane:
+				direction = value.Direction
+			default:
+				return nil, fmt.Errorf("expected %s, got %T", name, action)
+			}
+			return json.Marshal(directionalPaneArgs{Direction: direction})
+		},
+		decode: func(data json.RawMessage, _ *Codec, _ int, _ *codecBudget) (Action, error) {
+			var args directionalPaneArgs
+			if err := decodeObject(data, &args); err != nil {
+				return nil, err
+			}
+			return makeAction(args.Direction), nil
+		},
+	}
+}
+
+var resizePaneCodec = codecOps{
+	encode: func(action Action, _ *Codec, _ int, _ *codecBudget) (json.RawMessage, error) {
+		value, ok := action.(ResizePane)
+		if !ok {
+			return nil, fmt.Errorf("expected ResizePane, got %T", action)
+		}
+		return json.Marshal(resizePaneArgs{Direction: value.Direction, Delta: value.Delta})
+	},
+	decode: func(data json.RawMessage, _ *Codec, _ int, _ *codecBudget) (Action, error) {
+		var args resizePaneArgs
+		if err := decodeObject(data, &args); err != nil {
+			return nil, err
+		}
+		return ResizePane{Direction: args.Direction, Delta: args.Delta}, nil
+	},
+}
+
+var swapPaneCodec = directionalPaneCodec("SwapPane", func(direction Direction) Action {
+	return SwapPane{Direction: direction}
+})
+
+var movePaneCodec = directionalPaneCodec("MovePane", func(direction Direction) Action {
+	return MovePane{Direction: direction}
+})
 
 var multipleCodec = codecOps{
 	encode: func(action Action, codec *Codec, depth int, budget *codecBudget) (json.RawMessage, error) {

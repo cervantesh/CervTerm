@@ -54,6 +54,18 @@ func installActionModule(state *lua.LState, module *lua.LTable) {
 		pushLuaAction(l, termaction.FocusPane{Direction: termaction.Direction(l.CheckString(1))}, termaction.TargetFocused)
 		return 1
 	}))
+	actions.RawSetString("ResizePane", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.ResizePane{Direction: termaction.Direction(l.CheckString(1)), Delta: checkLuaActionInt(l, 2)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("SwapPane", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.SwapPane{Direction: termaction.Direction(l.CheckString(1))}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("MovePane", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.MovePane{Direction: termaction.Direction(l.CheckString(1))}, termaction.TargetFocused)
+		return 1
+	}))
 	actions.RawSetString("Multiple", state.NewFunction(func(l *lua.LState) int {
 		values := l.CheckTable(1)
 		children := make([]termaction.Envelope, values.Len())

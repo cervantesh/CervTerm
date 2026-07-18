@@ -30,6 +30,9 @@ func TestCodecRoundTripsBuiltInActions(t *testing.T) {
 		focused(Zoom{Mode: ZoomReset}),
 		focused(SplitPane{Axis: SplitColumns}),
 		focused(FocusPane{Direction: FocusDown}),
+		focused(ResizePane{Direction: FocusRight, Delta: 3}),
+		focused(SwapPane{Direction: FocusLeft}),
+		focused(MovePane{Direction: FocusUp}),
 		focused(multiple),
 	}
 
@@ -100,6 +103,9 @@ func TestCodecRejectsInvalidJSONAndActions(t *testing.T) {
 		{name: "invalid scroll", data: `{"type":"scroll","target":"focused","args":{"unit":"page","amount":0}}`, want: "must not be zero"},
 		{name: "invalid split", data: `{"type":"split_pane","target":"focused","args":{"axis":"diagonal"}}`, want: "axis"},
 		{name: "callback", data: `{"type":"callback","target":"focused","args":{}}`, want: "not serializable"},
+		{name: "invalid resize direction", data: `{"type":"resize_pane","target":"focused","args":{"direction":"next","delta":1}}`, want: "direction"},
+		{name: "invalid resize delta", data: `{"type":"resize_pane","target":"focused","args":{"direction":"left","delta":0}}`, want: "delta"},
+		{name: "oversized resize delta", data: `{"type":"resize_pane","target":"focused","args":{"direction":"left","delta":1025}}`, want: "delta"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -22,6 +22,9 @@ const (
 	IDClosePane      ID = "close_pane"
 	IDMultiple       ID = "multiple"
 	IDCallback       ID = "callback"
+	IDResizePane     ID = "resize_pane"
+	IDSwapPane       ID = "swap_pane"
+	IDMovePane       ID = "move_pane"
 )
 
 var (
@@ -160,19 +163,66 @@ type FocusPane struct{ Direction Direction }
 func (FocusPane) ID() ID  { return IDFocusPane }
 func (FocusPane) action() {}
 func (a FocusPane) Validate() error {
-	switch a.Direction {
-	case FocusLeft, FocusRight, FocusUp, FocusDown:
-		return nil
-	default:
-		return fmt.Errorf("focus direction %q is invalid", a.Direction)
+	if err := validateDirection(a.Direction); err != nil {
+		return fmt.Errorf("focus %w", err)
 	}
+	return nil
 }
 
 const (
 	MaxSequenceActions = 64
 	MaxSequenceDepth   = 32
 	MaxActionNodes     = 4096
+	MaxResizePaneDelta = 1024
 )
+
+type ResizePane struct {
+	Direction Direction
+	Delta     int
+}
+
+func (ResizePane) ID() ID  { return IDResizePane }
+func (ResizePane) action() {}
+func (a ResizePane) Validate() error {
+	if err := validateDirection(a.Direction); err != nil {
+		return fmt.Errorf("resize pane: %w", err)
+	}
+	if a.Delta <= 0 || a.Delta > MaxResizePaneDelta {
+		return fmt.Errorf("resize pane delta must be in [1, %d] cells", MaxResizePaneDelta)
+	}
+	return nil
+}
+
+type SwapPane struct{ Direction Direction }
+
+func (SwapPane) ID() ID  { return IDSwapPane }
+func (SwapPane) action() {}
+func (a SwapPane) Validate() error {
+	if err := validateDirection(a.Direction); err != nil {
+		return fmt.Errorf("swap pane: %w", err)
+	}
+	return nil
+}
+
+type MovePane struct{ Direction Direction }
+
+func (MovePane) ID() ID  { return IDMovePane }
+func (MovePane) action() {}
+func (a MovePane) Validate() error {
+	if err := validateDirection(a.Direction); err != nil {
+		return fmt.Errorf("move pane: %w", err)
+	}
+	return nil
+}
+
+func validateDirection(direction Direction) error {
+	switch direction {
+	case FocusLeft, FocusRight, FocusUp, FocusDown:
+		return nil
+	default:
+		return fmt.Errorf("direction %q is invalid", direction)
+	}
+}
 
 // Multiple owns a copy of its children and returns copies to callers.
 type Multiple struct{ actions []Envelope }
@@ -249,6 +299,12 @@ func actionIdentity(action Action) (ID, error) {
 		return IDSplitPane, nil
 	case FocusPane:
 		return IDFocusPane, nil
+	case ResizePane:
+		return IDResizePane, nil
+	case SwapPane:
+		return IDSwapPane, nil
+	case MovePane:
+		return IDMovePane, nil
 	case ClosePane:
 		return IDClosePane, nil
 	case Multiple:
