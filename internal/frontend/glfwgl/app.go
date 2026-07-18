@@ -92,6 +92,7 @@ type App struct {
 	legacyTransition *config.LegacyTealTransition
 	scriptGeneration uint64
 	commandPalette   map[string]commandPaletteActivation
+	quickSelect      quickSelectActivation
 	notice           string
 	noticeUntil      time.Time
 	suppressNextChar bool

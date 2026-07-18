@@ -26,6 +26,7 @@ func installActionModule(state *lua.LState, module *lua.LTable) {
 	setActionConstant(state, actions, "PasteClipboard", termaction.PasteClipboard{})
 	setActionConstant(state, actions, "ToggleSearch", termaction.ToggleSearch{})
 	setActionConstant(state, actions, "ActivateCommandPalette", termaction.ActivateCommandPalette{})
+	setActionConstant(state, actions, "ActivateQuickSelect", termaction.ActivateQuickSelect{})
 	setActionConstant(state, actions, "ToggleStats", termaction.ToggleStats{})
 	setActionConstant(state, actions, "ReloadConfig", termaction.ReloadConfig{})
 	setActionConstant(state, actions, "ClosePane", termaction.ClosePane{})

@@ -23,3 +23,20 @@ return { keys={{key="p",mods="ctrl+shift",label="Commands",action=cervterm.actio
 		t.Fatalf("action=%T", bindings[0].Action.Action)
 	}
 }
+
+func TestQuickSelectActionLoadsFromLua(t *testing.T) {
+	path := writeScriptConfig(t, `local cervterm=require("cervterm")
+	return { keys={{key="q",mods="ctrl+shift",label="Quick select",action=cervterm.action.ActivateQuickSelect}} }`)
+	_, runtime, err := Load(path, config.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	bindings := runtime.Bindings()
+	if len(bindings) != 1 {
+		t.Fatalf("bindings=%#v", bindings)
+	}
+	if _, ok := bindings[0].Action.Action.(termaction.ActivateQuickSelect); !ok {
+		t.Fatalf("action=%T", bindings[0].Action.Action)
+	}
+}
