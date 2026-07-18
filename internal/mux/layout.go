@@ -83,12 +83,22 @@ func (m *Model) LayoutWithMetrics(bounds PixelRect, resolve CellMetricsResolver)
 		return Layout{}, ErrInvalidGeometry
 	}
 
-	result := Layout{}
 	tab := m.activeTab()
 	if tab == nil {
+		return Layout{}, nil
+	}
+	return layoutRoot(tab.root, bounds, resolve)
+}
+
+func layoutRoot(root *node, bounds PixelRect, resolve CellMetricsResolver) (Layout, error) {
+	if err := validateBounds(bounds); err != nil || resolve == nil {
+		return Layout{}, ErrInvalidGeometry
+	}
+	result := Layout{}
+	if root == nil {
 		return result, nil
 	}
-	if err := layoutNode(tab.root, bounds, resolve, &result); err != nil {
+	if err := layoutNode(root, bounds, resolve, &result); err != nil {
 		return Layout{}, err
 	}
 	return result, nil
