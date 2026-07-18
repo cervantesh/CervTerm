@@ -81,6 +81,12 @@ Public legacy `script.Load` remains available. The executable is the only proces
 
 `--explain-config`, repeatable `--explain-config-field`, and composed `--doctor` run through a diagnostic-only `LoadVersioned` path before logging, profiling, GLFW, window, frontend, or PTY startup. Candidate bundles expose detached config/provenance and value-free graph snapshots; no source bytes, hashes, Lua functions, raw CLI values, or Teal staging paths render. Schema-sensitive values such as `shell.env` are always `<redacted>`. V2 explanation fails closed for v1/no-source/unknown fields, while doctor keeps explicit v1/no-source support boundaries and returns nonzero on load failure. Diagnostic-only v1 Teal evaluation skips legacy adjacent publication. Pending active-process fields and reload failures are honestly unavailable without IPC/persistence. Future native-window origin/focus mapping remains deferred.
 
+## Visible tab ownership and retained chrome
+
+The process-local mux owns a bounded ordered collection of stable `TabID` states. Each tab owns one split tree, remembered focused pane, title and monotonic revision; pane/session/parser/terminal identity remains globally unique and survives transactional cross-tab transfer. Candidate source/destination trees are projected with per-pane metrics before a single commit, and inactive tabs remain excluded from terminal input, active layout and PTY resize.
+
+The GLFW frontend projects only the active tab and treats `Mux.Tabs()` as detached metadata. The retained top/bottom tab bar reserves the same authoritative geometry used by startup planning, runtime grid sizing and scrollbar tracks. Modal input precedes tab chrome, which precedes terminal mouse routing. Close confirmation retains the clicked stable ID and revision and rejects rename, reorder, pane-membership or lifecycle drift; background activity produces one retained badge update without creating a frame cadence.
+
 ## Verifiable measurements
 
 Run parser/core allocation checks:
