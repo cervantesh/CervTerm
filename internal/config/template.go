@@ -215,6 +215,15 @@ return {
   --     end,
   --   },
   -- },
+  -- leader = { key = "a", mods = "ctrl", timeout_ms = 1000 },
+  -- key_tables = {
+  --   { name = "pane", one_shot = true, timeout_ms = 1500, keys = {
+  --     { key = "h", action = cervterm.action.FocusPane("left") },
+  --   } },
+  -- },
+  -- mouse_bindings = {
+  --   { event = "press", button = "right", mods = "shift", action = cervterm.action.PasteClipboard },
+  -- },
   -- events = {
   --   output = function(term, data) end,
   --   title = function(term, title) end,
