@@ -64,6 +64,10 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 	if tbl := tableField(root, "window"); tbl != nil {
 		cfg.Window.Width = intField(tbl, "width", cfg.Window.Width)
 		cfg.Window.Height = intField(tbl, "height", cfg.Window.Height)
+		cfg.Window.InitialRows = intField(tbl, "initial_rows", cfg.Window.InitialRows)
+		cfg.Window.InitialCols = intField(tbl, "initial_cols", cfg.Window.InitialCols)
+		cfg.Window.Decorations = stringField(tbl, "decorations", cfg.Window.Decorations)
+		cfg.Window.Titlebar = stringField(tbl, "titlebar", cfg.Window.Titlebar)
 		cfg.Window.PaddingX = intField(tbl, "padding_x", cfg.Window.PaddingX)
 		cfg.Window.PaddingY = intField(tbl, "padding_y", cfg.Window.PaddingY)
 		cfg.Window.DynamicTitle = boolField(tbl, "dynamic_title", cfg.Window.DynamicTitle)

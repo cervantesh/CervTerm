@@ -91,6 +91,10 @@ func FromDocument(base Config, document Document) Config {
 			cfg.Window.PaddingBottom = intField(window, "padding_bottom", cfg.Window.PaddingBottom)
 			cfg.Window.TextOpacity = numberField(window, "text_opacity", cfg.Window.TextOpacity)
 			cfg.Window.BackgroundOpacity = numberField(window, "background_opacity", cfg.Window.BackgroundOpacity)
+			cfg.Window.InitialRows = intField(window, "initial_rows", cfg.Window.InitialRows)
+			cfg.Window.InitialCols = intField(window, "initial_cols", cfg.Window.InitialCols)
+			cfg.Window.Decorations = stringField(window, "decorations", cfg.Window.Decorations)
+			cfg.Window.Titlebar = stringField(window, "titlebar", cfg.Window.Titlebar)
 		}
 	}
 	if scrollbar := tableField(document.Root, "scrollbar"); scrollbar != nil {
@@ -121,6 +125,10 @@ func FromDocument(base Config, document Document) Config {
 		cfg.Window.TextOpacity = base.Window.TextOpacity
 		cfg.Window.BackgroundOpacity = base.Window.BackgroundOpacity
 		cfg.Render.MaxFPS = base.Render.MaxFPS
+		cfg.Window.InitialRows = base.Window.InitialRows
+		cfg.Window.InitialCols = base.Window.InitialCols
+		cfg.Window.Decorations = base.Window.Decorations
+		cfg.Window.Titlebar = base.Window.Titlebar
 	}
 	if document.AuthoredVersion >= 2 {
 		cfg.ColorScheme = stringField(document.Root, "color_scheme", cfg.ColorScheme)
@@ -158,6 +166,8 @@ type fieldSchema struct {
 var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	{name: "window", kind: KindTable, children: []fieldSchema{
 		{name: "width", kind: KindInteger, apply: ApplyNewWindow}, {name: "height", kind: KindInteger, apply: ApplyNewWindow},
+		{name: "initial_rows", kind: KindInteger, apply: ApplyNewWindow}, {name: "initial_cols", kind: KindInteger, apply: ApplyNewWindow},
+		{name: "decorations", kind: KindString, apply: ApplyWindowRecreate}, {name: "titlebar", kind: KindString, apply: ApplyWindowRecreate},
 		{name: "padding_x", kind: KindInteger, apply: ApplyRestart}, {name: "padding_y", kind: KindInteger, apply: ApplyRestart},
 		{name: "padding_left", kind: KindInteger, apply: ApplyRestart}, {name: "padding_right", kind: KindInteger, apply: ApplyRestart},
 		{name: "padding_top", kind: KindInteger, apply: ApplyRestart}, {name: "padding_bottom", kind: KindInteger, apply: ApplyRestart},
@@ -227,6 +237,7 @@ func isV2OnlyPath(path string) bool {
 	switch path {
 	case "window.padding_left", "window.padding_right", "window.padding_top", "window.padding_bottom",
 		"window.text_opacity", "window.background_opacity",
+		"window.initial_rows", "window.initial_cols", "window.decorations", "window.titlebar",
 		"background.layers",
 		"scrollbar.mode", "scrollbar.stable_gutter", "scrollbar.animation_fps", "render.max_fps",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
@@ -317,6 +328,10 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 		delete(document.Present, "window.padding_bottom")
 		delete(document.Present, "window.text_opacity")
 		delete(document.Present, "window.background_opacity")
+		delete(document.Present, "window.initial_rows")
+		delete(document.Present, "window.initial_cols")
+		delete(document.Present, "window.decorations")
+		delete(document.Present, "window.titlebar")
 		delete(document.Present, "background.layers")
 		delete(document.Present, "scrollbar.mode")
 		delete(document.Present, "scrollbar.stable_gutter")
