@@ -155,6 +155,12 @@ Rendering remains damage-driven by default (`render.redraw = "on_demand"`). `ren
 
 Initial terminal geometry can be set with `window.rows`/`window.cols`. `window.decorations` and `window.titlebar` request the supported native startup mode and are recreation-scoped; unsupported platform combinations degrade through capability diagnostics rather than implying cross-platform parity. Phase 5 GUI qualification is Windows-only unless a platform pass is explicitly recorded in [`docs/manual-verification.md`](docs/manual-verification.md).
 
+## Phase 6–7 input and retained UX
+
+CervTerm supports bounded leader chords, named key tables, exact typed mouse bindings, and transactional pane resize/swap/move actions. Phase 7 adds retained command palette, quick select, and local launch menu modes. Active modes capture keyboard, character, pointer, wheel, and terminal mouse-reporting paths before the PTY while preserving damage-driven idle rendering.
+
+Quick select labels visible HTTP(S) links plus compiled custom rules and rejects stale output/geometry/viewport/focus snapshots before copy/open side effects. Launch targets are declarative executable-plus-argv records; environment values are redacted in provenance, no shell wrapper or interpolation is inserted, and process spawn succeeds before pane topology commits. See [`docs/scripting.md`](docs/scripting.md) for syntax and hard limits.
+
 The OpenGL backend keeps an authoritative RGBA offscreen frame image: damaged background pixels replace prior RGBA, while glyphs and overlays blend normally, and the complete image is presented each frame. Blur is routed through a capability-aware `BlurProvider`; providers report `active`, `disabled`, `unsupported`, `incompatible`, or `failed` and degrade without terminating. **The macOS AppKit, KDE/X11, and KDE/Wayland providers are experimental and compile-validated but have not yet completed real-compositor smoke testing.**
 
 The GLFW frontend uses the current monitor content scale to rasterize text and scale window padding and chrome in framebuffer pixels. Moving the window between monitors rebuilds the glyph atlas at the new effective DPI. A GLFW-enabled `--doctor` reports the primary monitor scale and effective DPI; headless builds report that scale detection is unavailable.
