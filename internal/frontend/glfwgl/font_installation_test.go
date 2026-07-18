@@ -28,9 +28,11 @@ func TestEffectiveStartupConfigSafeFontsIsIsolated(t *testing.T) {
 	authored := config.Defaults()
 	authored.Font.Family = "Configured Family"
 	authored.Font.Descriptors = []fontdesc.Descriptor{{Family: "Configured Family"}}
+	authored.Font.Fallback = []fontdesc.Descriptor{{Family: "Fallback"}}
+	authored.Font.Rules = []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Rule"}}}
 	normal := effectiveStartupConfig(authored, false)
 	safe := effectiveStartupConfig(authored, true)
-	if normal.Font.Family != "Configured Family" || len(normal.Font.Descriptors) != 1 || safe.Font.Family != "Go Mono" || len(safe.Font.Descriptors) != 0 {
+	if normal.Font.Family != "Configured Family" || len(normal.Font.Descriptors) != 1 || len(normal.Font.Fallback) != 1 || len(normal.Font.Rules) != 1 || safe.Font.Family != "Go Mono" || len(safe.Font.Descriptors) != 0 || len(safe.Font.Fallback) != 0 || len(safe.Font.Rules) != 0 {
 		t.Fatalf("normal/safe font configs = %#v/%#v", normal.Font, safe.Font)
 	}
 	if authored.Font.Family != "Configured Family" || len(authored.Font.Descriptors) != 1 {
@@ -289,5 +291,47 @@ func TestFontInstallationRejectsInvalidMetricsAndIncompleteStages(t *testing.T) 
 	stages.load = nil
 	if _, err := prepareFontInstallation(plan, stages); err == nil {
 		t.Fatal("incomplete stages were accepted")
+	}
+}
+
+func TestFallbackFontInstallationPlanCarriesCompleteModel(t *testing.T) {
+	cfg := config.Defaults()
+	descriptors := []fontdesc.Descriptor{{Family: "Primary"}}
+	fallback := []fontdesc.Descriptor{{Family: "Fallback"}}
+	rules := []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Rule"}}}
+	backend := &atlasTestBackend{cellW: 8, cellH: 16, baseline: 12}
+	var gotEnvironment fontdesc.FontEnvironmentKey
+	plan, err := newFallbackFontInstallationPlanWithFactory(cfg, 96, "go", descriptors, fallback, rules, func(_ fontglyph.Spec, environment fontdesc.FontEnvironmentKey, gotPrimary, gotFallback []fontdesc.Descriptor, gotRules []fontdesc.Rule) (fontglyph.Backend, error) {
+		gotEnvironment = environment
+		if len(gotPrimary) != 1 || gotPrimary[0].Family != "Primary" || len(gotFallback) != 1 || gotFallback[0].Family != "Fallback" || len(gotRules) != 1 || gotRules[0].Use.Family != "Rule" {
+			t.Fatalf("constructor model = %#v / %#v / %#v", gotPrimary, gotFallback, gotRules)
+		}
+		return backend, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := makeAtlasFontKeyWithModel(plan.spec, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: descriptors, fallback: fallback, rules: rules})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := prepareFontInstallation(plan, defaultFontInstallationStages())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	if gotEnvironment != want.environment || prepared.context.key.environment != want.environment || len(prepared.context.fallback) != 1 || len(prepared.context.rules) != 1 {
+		t.Fatalf("prepared fallback model environment/context mismatch: %s %#v", gotEnvironment, prepared.context)
+	}
+	atlas := &glyphAtlas{activeContext: prepared.context}
+	zoomed := plan.spec
+	zoomed.Size += 2
+	zoomKey, err := atlas.fontKey(zoomed, plan.textGamma, plan.textDarken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantZoom, err := makeAtlasFontKeyWithModel(zoomed, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: descriptors, fallback: fallback, rules: rules})
+	if err != nil || zoomKey != wantZoom {
+		t.Fatalf("zoomed fallback model key = %#v, %v; want %#v", zoomKey, err, wantZoom)
 	}
 }

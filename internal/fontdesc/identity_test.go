@@ -34,9 +34,12 @@ func TestFontEnvironmentKeyStabilityAndOrderSensitivity(t *testing.T) {
 	a := Descriptor{Family: "Alpha"}
 	b := Descriptor{Family: "Beta", CollectionIndex: SomeCollectionIndex(0)}
 	input := FontEnvironmentInput{
-		Descriptors:  []Descriptor{a, b},
-		Fallback:     []Descriptor{{Family: "Fallback"}},
-		Rules:        [][]byte{[]byte("rule-a"), []byte("rule-b")},
+		Descriptors: []Descriptor{a, b},
+		Fallback:    []Descriptor{{Family: "Fallback"}},
+		Rules: []Rule{
+			{Match: RuleMatch{Class: SymbolClassEmoji}, Use: Descriptor{Family: "Emoji"}},
+			{Match: RuleMatch{Class: SymbolClassCJK}, Use: Descriptor{Family: "CJK"}},
+		},
 		Features:     []byte("features-v1"),
 		Metrics:      []byte("metrics-v1"),
 		BaseSizeBits: 0x4028000000000000,
@@ -76,6 +79,31 @@ func TestFontEnvironmentKeyStabilityAndOrderSensitivity(t *testing.T) {
 	}
 	if first == third {
 		t.Fatal("ordered descriptors did not affect environment identity")
+	}
+	reorderedFallback := input
+	orderedFallback := []Descriptor{{Family: "One"}, {Family: "Two"}}
+	reorderedFallback.Fallback = orderedFallback
+	fallbackKey, err := NewFontEnvironmentKey(reorderedFallback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reorderedFallback.Fallback = []Descriptor{orderedFallback[1], orderedFallback[0]}
+	reversedFallbackKey, err := NewFontEnvironmentKey(reorderedFallback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fallbackKey == reversedFallbackKey {
+		t.Fatal("ordered fallback descriptors did not affect environment identity")
+	}
+	mutatedRule := input
+	mutatedRule.Rules = cloneResolvedRulesForIdentityTest(input.Rules)
+	mutatedRule.Rules[0].Match.Class = SymbolClassSymbols
+	mutatedRuleKey, err := NewFontEnvironmentKey(mutatedRule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == mutatedRuleKey {
+		t.Fatal("rule predicate did not affect environment identity")
 	}
 
 	absent := FontEnvironmentInput{Descriptors: []Descriptor{{Family: "Alpha"}}}
@@ -130,4 +158,14 @@ func TestResolvedFaceKeySeparatesResolutionDimensions(t *testing.T) {
 			t.Fatalf("mutation %d did not separate resolved key", i)
 		}
 	}
+}
+
+func cloneResolvedRulesForIdentityTest(rules []Rule) []Rule {
+	cloned := make([]Rule, len(rules))
+	copy(cloned, rules)
+	for index := range cloned {
+		cloned[index].Match.Styles = append([]Style(nil), rules[index].Match.Styles...)
+		cloned[index].Match.Ranges = append([]RuneRange(nil), rules[index].Match.Ranges...)
+	}
+	return cloned
 }

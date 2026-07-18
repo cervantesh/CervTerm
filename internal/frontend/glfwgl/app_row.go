@@ -82,14 +82,14 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 			continue
 		}
 		request := fontdesc.RequestedFaceStyleFromAttributes(cell.Attr.Bold, cell.Attr.Italic)
-		_, synthetic := a.atlas.resolveStyle(request)
-		duplicateBold, skew := styleDrawEffects(synthetic, a.cellH)
 		// A ligature hit draws the whole span once (bold doubling + decorations
 		// over the span) and marks the covered cells; a miss falls through to the
 		// per-cell path. Per-cell backgrounds/selection already painted above.
 		if ligate {
 			if run, ok := detectLigatureRun(rowCells, logicalCol, cursorCol); ok &&
 				renderSpanMatchesStyle(rowCells, logicalCol, run.CellSpan, request) {
+				_, synthetic := a.atlas.resolveClusterStyle(request, run.Text)
+				duplicateBold, skew := styleDrawEffects(synthetic, a.cellH)
 				if a.atlas.drawRunStyle(request, run.Text, run.CellSpan, x, y, fg, 1, skew) {
 					if duplicateBold {
 						a.atlas.drawRunStyle(request, run.Text, run.CellSpan, x+1, y, fg, 1, skew)
@@ -104,6 +104,8 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 		}
 		if cluster, ok := collectRenderCluster(a.snap.Cells, a.snap.Cols, r, logicalCol); ok &&
 			renderSpanMatchesStyle(rowCells, logicalCol, cluster.CellSpan, request) {
+			_, synthetic := a.atlas.resolveClusterStyle(request, cluster.Text)
+			duplicateBold, skew := styleDrawEffects(synthetic, a.cellH)
 			if a.atlas.drawClusterStyle(request, cluster.Text, cluster.CellSpan, x, y, fg, 1, skew) {
 				if duplicateBold {
 					a.atlas.drawClusterStyle(request, cluster.Text, cluster.CellSpan, x+1, y, fg, 1, skew)
@@ -115,14 +117,18 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 				continue
 			}
 		}
+		_, synthetic := a.atlas.resolveRuneStyle(request, cell.Rune)
+		duplicateBold, skew := styleDrawEffects(synthetic, a.cellH)
 		a.atlas.drawRuneStyle(request, cell.Rune, x, y, fg, 1, skew)
 		if duplicateBold {
 			a.atlas.drawRuneStyle(request, cell.Rune, x+1, y, fg, 1, skew)
 		}
 		for _, combining := range cell.Combining() {
-			a.atlas.drawRuneStyle(request, combining, x, y, fg, 1, skew)
-			if duplicateBold {
-				a.atlas.drawRuneStyle(request, combining, x+1, y, fg, 1, skew)
+			_, combiningSynthetic := a.atlas.resolveRuneStyle(request, combining)
+			combiningBold, combiningSkew := styleDrawEffects(combiningSynthetic, a.cellH)
+			a.atlas.drawRuneStyle(request, combining, x, y, fg, 1, combiningSkew)
+			if combiningBold {
+				a.atlas.drawRuneStyle(request, combining, x+1, y, fg, 1, combiningSkew)
 			}
 		}
 		a.drawTextDecorations(x, y, a.cellW, a.cellH, fg, cell.Attr)

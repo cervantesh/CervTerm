@@ -31,6 +31,12 @@ local config: cervterm.Config = {
     descriptors = {
       { family = "Go Mono", weight = 400, style = "normal", stretch = 100, attribute_mode = "augment" },
     },
+    fallback = {
+      { family = "Go Mono" },
+    },
+    rules = {
+      { match = { class = "box_drawing" }, use = { family = "Go Mono", attribute_mode = "fixed" } },
+    },
     size = 14.0,
     ligatures = false,
   },
