@@ -44,6 +44,9 @@ func checkModelInvariants(m *Model) error {
 		if tab.focused == 0 {
 			return invariantError("tab %d has zero focus", tab.id)
 		}
+		if tab.revision == 0 {
+			return invariantError("tab %d has zero revision", tab.id)
+		}
 		seenNodes := make(map[*node]struct{})
 		focused := 0
 		var visit func(*node) error

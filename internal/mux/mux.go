@@ -79,7 +79,6 @@ func New(factory SessionFactory, options Options) *Mux {
 	}
 }
 
-// Bootstrap preserves a diagnostic failed leaf when initial spawn fails.
 func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) (TabID, PaneID, []Event, error) {
 	if m.bootstrapped {
 		return 0, 0, nil, ErrAlreadyBootstrapped
@@ -162,7 +161,6 @@ func (m *Mux) PaneView(id PaneID) (PaneView, bool) {
 	return view, true
 }
 
-// Split preserves the shell API via the targeted spawn-before-commit path.
 func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
 	return m.SpawnSplit(target, axis, spec)
 }
@@ -303,7 +301,6 @@ func (m *Mux) Write(id PaneID, data []byte) ([]Event, error) {
 	return nil, nil
 }
 
-// FeedFallback advances the interactive diagnostic pane without a PTY.
 func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
 	p, ok := m.panes[id]
 	if !ok || !m.model.paneExists(id) {
@@ -450,16 +447,19 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 	m.closed[id] = struct{}{}
 	var events []Event
 	if closeErr != nil {
-		events = append(events, Event{Kind: PaneCloseFailed, Pane: id, Err: closeErr})
+		events = append(events, Event{Kind: PaneCloseFailed, Tab: result.Tab, Pane: id, Err: closeErr})
 	}
 	var resizeErr error
 	if result.Closed {
-		events = append(events, Event{Kind: PaneClosed, Pane: id})
+		events = append(events, Event{Kind: PaneClosed, Tab: result.Tab, Pane: id})
+		if result.TabClosed {
+			events = append(events, Event{Kind: TabClosed, Tab: result.Tab})
+		}
 		if result.Focused != 0 {
-			events = append(events, Event{Kind: PaneFocused, Pane: result.Focused})
+			events = append(events, Event{Kind: PaneFocused, Tab: m.model.TabID(), Pane: result.Focused})
 		}
 		if result.Empty {
-			events = append(events, Event{Kind: TabEmpty})
+			events = append(events, Event{Kind: WindowTabsEmpty, Tab: result.Tab}, Event{Kind: TabEmpty, Tab: result.Tab})
 		} else {
 			var resizeEvents []Event
 			resizeEvents, resizeErr = m.resizeBoundsAndApply(m.bounds)
