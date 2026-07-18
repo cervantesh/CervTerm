@@ -15,6 +15,7 @@ import (
 
 	termaction "cervterm/internal/action"
 	"cervterm/internal/config"
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/fontglyph"
 	termmux "cervterm/internal/mux"
 	"cervterm/internal/script"
@@ -128,6 +129,14 @@ func TestPrepareRasterContextsIncludesEveryPaneSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.atlas = atlas
+	model := atlasFontModel{
+		descriptors: []fontdesc.Descriptor{{Family: "Primary"}},
+		fallback:    []fontdesc.Descriptor{{Family: "Fallback"}},
+		rules:       []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Rule"}}},
+	}
+	atlas.activeContext.descriptors = model.descriptors
+	atlas.activeContext.fallback = model.fallback
+	atlas.activeContext.rules = model.rules
 	t.Cleanup(atlas.close)
 
 	first := a.focusedPane
@@ -149,9 +158,15 @@ func TestPrepareRasterContextsIncludesEveryPaneSize(t *testing.T) {
 	}
 	for _, size := range []float64{12, 18} {
 		spec := fontglyph.Spec{Family: a.cfg.Font.Family, Size: size, DPI: 96, TextRaster: "go"}
-		key := newAtlasFontKey(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+		key, keyErr := makeAtlasFontKeyWithModel(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken, model)
+		if keyErr != nil {
+			t.Fatal(keyErr)
+		}
 		if _, ok := prepared[key]; !ok {
 			t.Fatalf("missing prepared context for size %.0f", size)
+		}
+		if ctx := prepared[key]; len(ctx.fallback) != 1 || len(ctx.rules) != 1 {
+			t.Fatalf("prepared context lost fallback/rules: %#v", ctx)
 		}
 	}
 }

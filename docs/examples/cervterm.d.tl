@@ -1,5 +1,25 @@
 local record cervterm
   type Unset = userdata
+  enum FontStyle
+    "normal"
+    "italic"
+    "oblique"
+  end
+
+  enum FontAttributeMode
+    "augment"
+    "fixed"
+  end
+
+  enum FontSymbolClass
+    "emoji"
+    "cjk"
+    "nerd_font"
+    "powerline"
+    "box_drawing"
+    "braille"
+    "symbols"
+  end
 
   record WindowConfig
     width: integer
@@ -16,14 +36,39 @@ local record cervterm
     collection_face: string | nil
     collection_index: integer | nil
     weight: integer | nil
-    style: string | nil
+    style: FontStyle | nil
     stretch: integer | nil
-    attribute_mode: string | nil
+    attribute_mode: FontAttributeMode | nil
+  end
+
+  record FontIntegerRange
+    min: integer
+    max: integer
+  end
+
+  record FontRuneRange
+    first: integer
+    last: integer
+  end
+
+  record FontRuleMatch
+    weight: FontIntegerRange | nil
+    styles: {FontStyle} | nil
+    stretch: FontIntegerRange | nil
+    ranges: {FontRuneRange} | nil
+    class: FontSymbolClass | nil
+  end
+
+  record FontRule
+    match: FontRuleMatch
+    use: FontDescriptor
   end
 
   record FontConfig
     family: string
     descriptors: {FontDescriptor} | nil
+    fallback: {FontDescriptor} | nil
+    rules: {FontRule} | nil
     size: number
     ligatures: boolean
   end
@@ -168,6 +213,8 @@ local record cervterm
   record FontDocument
     family: string | Unset
     descriptors: {FontDescriptor} | Unset
+    fallback: {FontDescriptor} | Unset
+    rules: {FontRule} | Unset
     size: number | Unset
     ligatures: boolean | Unset
   end

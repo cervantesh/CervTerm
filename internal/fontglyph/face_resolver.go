@@ -38,6 +38,10 @@ type resolvedFacePlan struct {
 // load attempts. Missing families and selectors do not prevent later authored
 // descriptors from contributing attempts.
 func resolvePrimaryFacePlan(index *FontIndex, environment fontdesc.FontEnvironmentKey, descriptors []fontdesc.Descriptor, request fontdesc.RequestedFaceStyle) ([]resolvedFacePlan, error) {
+	return resolveDescriptorFacePlans(index, environment, descriptors, request, fontdesc.SourceTierPrimary, 0)
+}
+
+func resolveDescriptorFacePlans(index *FontIndex, environment fontdesc.FontEnvironmentKey, descriptors []fontdesc.Descriptor, request fontdesc.RequestedFaceStyle, tier fontdesc.SourceTier, authoredOffset uint32) ([]resolvedFacePlan, error) {
 	if environment == (fontdesc.FontEnvironmentKey{}) {
 		return nil, fmt.Errorf("resolve primary face plan: zero font environment key")
 	}
@@ -58,7 +62,8 @@ func resolvePrimaryFacePlan(index *FontIndex, environment fontdesc.FontEnvironme
 			failures = append(failures, fmt.Errorf("descriptor %d family %q target: %w", authoredIndex, descriptor.Family, err))
 			continue
 		}
-		candidates, err := resolveFaceCandidates(index, descriptor, target, fontdesc.SourceTierPrimary, uint32(authoredIndex))
+		order := authoredOffset + uint32(authoredIndex)
+		candidates, err := resolveFaceCandidates(index, descriptor, target, tier, order)
 		if err != nil {
 			failures = append(failures, fmt.Errorf("descriptor %d family %q: %w", authoredIndex, descriptor.Family, err))
 			continue
@@ -69,8 +74,8 @@ func resolvePrimaryFacePlan(index *FontIndex, environment fontdesc.FontEnvironme
 				continue
 			}
 			candidate.rank, err = fontdesc.Rank(target, candidate.metadata, fontdesc.RankingTieBreaks{
-				Tier:            fontdesc.SourceTierPrimary,
-				AuthoredOrder:   uint32(authoredIndex),
+				Tier:            tier,
+				AuthoredOrder:   order,
 				Synthetic:       synthetic != fontdesc.SyntheticNone,
 				CanonicalSource: candidate.path,
 			})
@@ -78,7 +83,7 @@ func resolvePrimaryFacePlan(index *FontIndex, environment fontdesc.FontEnvironme
 				failures = append(failures, fmt.Errorf("descriptor %d family %q candidate %q index %d: %w", authoredIndex, descriptor.Family, candidate.path, candidate.index, err))
 				continue
 			}
-			plan, err := newResolvedFacePlan(environment, descriptor, target, candidate, fontdesc.SourceTierPrimary, uint32(authoredIndex), synthetic)
+			plan, err := newResolvedFacePlan(environment, descriptor, target, candidate, tier, order, synthetic)
 			if err != nil {
 				failures = append(failures, fmt.Errorf("descriptor %d family %q candidate %q index %d: %w", authoredIndex, descriptor.Family, candidate.path, candidate.index, err))
 				continue
@@ -90,7 +95,7 @@ func resolvePrimaryFacePlan(index *FontIndex, environment fontdesc.FontEnvironme
 		if len(failures) == 0 {
 			failures = append(failures, fmt.Errorf("no descriptors produced compatible candidates"))
 		}
-		return nil, fmt.Errorf("resolve primary face plan: no load attempts: %w", errors.Join(failures...))
+		return nil, fmt.Errorf("resolve descriptor face plans: no load attempts: %w", errors.Join(failures...))
 	}
 	sort.Slice(plans, func(i, j int) bool {
 		return fontdesc.Compare(plans[i].selected.rank, plans[j].selected.rank) < 0

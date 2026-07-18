@@ -44,6 +44,17 @@ return {
     --     stretch = 100, attribute_mode = "augment" },
     --   { family = "Example Collection", collection_index = 0 },
     -- },
+    -- Ordered fallback descriptors are tried lazily after rules and primaries.
+    -- fallback = { { family = "Example Symbols" }, { family = "Example CJK" } },
+    -- Rules are first-match face routes. A match may combine requested weight/
+    -- stretch ranges, a style set, up to 64 inclusive scalar ranges, and one
+    -- class: emoji, cjk, nerd_font, powerline, box_drawing, braille, or symbols.
+    -- rules = {
+    --   { match = { class = "emoji", styles = { "normal", "italic" } },
+    --     use = { family = "Example Emoji", attribute_mode = "fixed" } },
+    --   { match = { ranges = { { first = 0xE000, last = 0xF8FF } } },
+    --     use = { family = "Example Icons" } },
+    -- },
     size = %.1f,
     -- Render programming ligatures (-> => != === etc.) when the font provides
     -- them (Fira Code, Cascadia Code, JetBrains Mono). No effect with fonts

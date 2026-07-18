@@ -222,6 +222,38 @@ func descriptorListField(tbl *lua.LTable, key string, fallback []fontdesc.Descri
 	return out
 }
 
+func fontRuleListField(tbl *lua.LTable, key string, fallback []fontdesc.Rule) []fontdesc.Rule {
+	list, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	out := make([]fontdesc.Rule, list.Len())
+	for index := range out {
+		entry, ok := list.RawGetInt(index + 1).(*lua.LTable)
+		if !ok {
+			return fallback
+		}
+		matchTable, ok := entry.RawGetString("match").(*lua.LTable)
+		if !ok {
+			return fallback
+		}
+		use, err := parseDescriptorValue("", fmt.Sprintf("font.rules[%d].use", index+1), entry.RawGetString("use"))
+		if err != nil {
+			return fallback
+		}
+		match, _, err := parseFontRuleMatch("", fmt.Sprintf("font.rules[%d].match", index+1), matchTable)
+		if err != nil {
+			return fallback
+		}
+		rule, err := (fontdesc.Rule{Match: match, Use: use}).Normalize()
+		if err != nil {
+			return fallback
+		}
+		out[index] = rule
+	}
+	return out
+}
+
 func ansiField(tbl *lua.LTable, key string, fallback [16]string) [16]string {
 	list, ok := tbl.RawGetString(key).(*lua.LTable)
 	if !ok || list.Len() != len(fallback) {

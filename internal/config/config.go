@@ -38,6 +38,8 @@ type WindowConfig struct {
 type FontConfig struct {
 	Family      string
 	Descriptors []fontdesc.Descriptor `json:"Descriptors,omitempty"`
+	Fallback    []fontdesc.Descriptor `json:"Fallback,omitempty"`
+	Rules       []fontdesc.Rule       `json:"Rules,omitempty"`
 	Size        float64
 	Ligatures   bool
 }
@@ -144,6 +146,8 @@ func Defaults() Config {
 // Clone returns a detached configuration copy, including mutable shell values.
 func (c Config) Clone() Config {
 	c.Font.Descriptors = append([]fontdesc.Descriptor(nil), c.Font.Descriptors...)
+	c.Font.Fallback = append([]fontdesc.Descriptor(nil), c.Font.Fallback...)
+	c.Font.Rules = cloneFontRules(c.Font.Rules)
 	c.Shell.Args = append([]string(nil), c.Shell.Args...)
 	if c.Shell.Env != nil {
 		environment := make(map[string]string, len(c.Shell.Env))
@@ -153,6 +157,58 @@ func (c Config) Clone() Config {
 		c.Shell.Env = environment
 	}
 	return c
+}
+
+func cloneFontRules(rules []fontdesc.Rule) []fontdesc.Rule {
+	if rules == nil {
+		return nil
+	}
+	cloned := make([]fontdesc.Rule, len(rules))
+	for index, rule := range rules {
+		cloned[index] = rule
+		cloned[index].Match.Styles = append([]fontdesc.Style(nil), rule.Match.Styles...)
+		cloned[index].Match.Ranges = append([]fontdesc.RuneRange(nil), rule.Match.Ranges...)
+	}
+	return cloned
+}
+
+func normalizeDescriptorConfigList(path string, descriptors []fontdesc.Descriptor, limit int) ([]fontdesc.Descriptor, []error) {
+	if len(descriptors) > limit {
+		return nil, []error{fmt.Errorf("%s must contain at most %d entries", path, limit)}
+	}
+	normalized := make([]fontdesc.Descriptor, len(descriptors))
+	var errs []error
+	for index, descriptor := range descriptors {
+		value, err := descriptor.Normalize()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s[%d]: %w", path, index+1, err))
+			continue
+		}
+		normalized[index] = value
+	}
+	return normalized, errs
+}
+
+func normalizeRuleConfigList(rules []fontdesc.Rule) ([]fontdesc.Rule, []error) {
+	if len(rules) > fontdesc.MaxRules {
+		return nil, []error{fmt.Errorf("font.rules must contain at most %d entries", fontdesc.MaxRules)}
+	}
+	normalized := make([]fontdesc.Rule, len(rules))
+	totalRanges := 0
+	var errs []error
+	for index, rule := range rules {
+		value, err := rule.Normalize()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("font.rules[%d]: %w", index+1, err))
+			continue
+		}
+		totalRanges += len(value.Match.Ranges)
+		normalized[index] = value
+	}
+	if totalRanges > fontdesc.MaxTotalRanges {
+		errs = append(errs, fmt.Errorf("font.rules contain %d normalized ranges, maximum is %d", totalRanges, fontdesc.MaxTotalRanges))
+	}
+	return normalized, errs
 }
 
 func (c Config) Validate() error {
@@ -169,24 +225,15 @@ func (c Config) Validate() error {
 	if c.Font.Size <= 0 {
 		errs = append(errs, errors.New("font size must be > 0"))
 	}
-	if len(c.Font.Descriptors) > fontdesc.MaxPrimaryDescriptors {
-		errs = append(errs, fmt.Errorf("font.descriptors must contain at most %d entries", fontdesc.MaxPrimaryDescriptors))
-	} else if len(c.Font.Descriptors) != 0 {
-		normalized := make([]fontdesc.Descriptor, len(c.Font.Descriptors))
-		valid := true
-		for index, descriptor := range c.Font.Descriptors {
-			value, err := descriptor.Normalize()
-			if err != nil {
-				errs = append(errs, fmt.Errorf("font.descriptors[%d]: %w", index+1, err))
-				valid = false
-				continue
-			}
-			normalized[index] = value
-		}
-		if valid {
-			if _, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{Descriptors: normalized}); err != nil {
-				errs = append(errs, fmt.Errorf("font.descriptors canonical payload: %w", err))
-			}
+	normalizedPrimary, primaryErrors := normalizeDescriptorConfigList("font.descriptors", c.Font.Descriptors, fontdesc.MaxPrimaryDescriptors)
+	errs = append(errs, primaryErrors...)
+	normalizedFallback, fallbackErrors := normalizeDescriptorConfigList("font.fallback", c.Font.Fallback, fontdesc.MaxFallbackDescriptors)
+	errs = append(errs, fallbackErrors...)
+	normalizedRules, ruleErrors := normalizeRuleConfigList(c.Font.Rules)
+	errs = append(errs, ruleErrors...)
+	if len(primaryErrors) == 0 && len(fallbackErrors) == 0 && len(ruleErrors) == 0 {
+		if _, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{Descriptors: normalizedPrimary, Fallback: normalizedFallback, Rules: normalizedRules}); err != nil {
+			errs = append(errs, fmt.Errorf("font canonical payload: %w", err))
 		}
 	}
 	if c.Scrolling.History < 0 || c.Scrolling.History > MaxScrollbackHistory || c.Scrolling.WheelMultiplier <= 0 {

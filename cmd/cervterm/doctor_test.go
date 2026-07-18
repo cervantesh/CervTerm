@@ -114,7 +114,7 @@ func TestRunDoctorReturnsFailureForInvalidComposedConfig(t *testing.T) {
 
 func TestRunDoctorReportsSafeFontsEffectiveFamily(t *testing.T) {
 	path := t.TempDir() + "/cervterm.lua"
-	if err := os.WriteFile(path, []byte(`return { config_version = 2, font = { family = "Configured Missing Family", descriptors = {{ family = "Configured Descriptor" }} } }`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`return { config_version = 2, font = { family = "Configured Missing Family", descriptors = {{ family = "Configured Descriptor" }}, fallback = {{ family = "Configured Fallback" }}, rules = {{ match = { class = "emoji" }, use = { family = "Configured Rule" } }} } }`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	output := captureStdout(t, func() {
@@ -122,7 +122,7 @@ func TestRunDoctorReportsSafeFontsEffectiveFamily(t *testing.T) {
 			t.Fatalf("runDoctor exit code = %d, want 0", code)
 		}
 	})
-	for _, want := range []string{"safe-fonts: enabled", "font-configured-family: Configured Missing Family", "font-descriptors-suppressed-by-safe-mode: 1", "font-family: Go Mono"} {
+	for _, want := range []string{"safe-fonts: enabled", "font-configured-family: Configured Missing Family", "font-descriptors-suppressed-by-safe-mode: 1", "font-fallback-suppressed-by-safe-mode: 1", "font-rules-suppressed-by-safe-mode: 1", "font-family: Go Mono"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("doctor safe-font output missing %q\n%s", want, output)
 		}
@@ -139,6 +139,20 @@ func TestRunDoctorProbesFontDescriptors(t *testing.T) {
 	for _, want := range []string{"font-descriptors: 1", "font-descriptor[1]: Go Mono weight=400 style=normal stretch=100 mode=augment", "text-raster:"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("doctor descriptor output missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestRunDoctorProbesFallbackRules(t *testing.T) {
+	path := writeDiagnosticConfig(t, `return {config_version=2,font={family="Go Mono",fallback={{family="Go Mono"}},rules={{match={class="box_drawing"},use={family="Go Mono"}}}}}`)
+	output := captureStdout(t, func() {
+		if code := runDoctor(doctorOptions{ConfigPath: path, LogPath: "-"}); code != 0 {
+			t.Fatalf("runDoctor exit code = %d, want 0", code)
+		}
+	})
+	for _, want := range []string{"font-descriptors: 0", "font-fallback: 1", "font-rules: 1", "text-raster:"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("doctor fallback/rule output missing %q\n%s", want, output)
 		}
 	}
 }

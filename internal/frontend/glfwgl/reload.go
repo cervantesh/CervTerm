@@ -320,14 +320,19 @@ func (a *App) prepareRasterContexts(textRaster string) (map[atlasFontKey]*atlasF
 	}
 	for _, size := range sizes {
 		spec := fontglyph.Spec{Family: a.cfg.Font.Family, Size: size, DPI: effectiveDPI(a.contentScaleX, a.contentScaleY), TextRaster: textRaster}
-		key := newAtlasFontKey(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+		model := a.atlas.modelForSpec(spec)
+		key, err := makeAtlasFontKeyWithModel(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken, model)
+		if err != nil {
+			closePreparedRasterContexts(prepared)
+			return nil, err
+		}
 		if _, ok := a.atlas.contexts[key]; ok {
 			continue
 		}
 		if _, ok := prepared[key]; ok {
 			continue
 		}
-		ctx, err := makeAtlasFontContext(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken, a.atlas.backendFactory)
+		ctx, err := makeAtlasFontContextWithModel(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken, model, a.atlas.backendFactory)
 		if err != nil {
 			closePreparedRasterContexts(prepared)
 			return nil, err
