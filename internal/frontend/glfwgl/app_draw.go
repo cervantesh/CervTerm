@@ -38,6 +38,8 @@ func (a *App) draw() {
 		a.r.Resize(w, h)
 		a.lastFBW, a.lastFBH = w, h
 	}
+	a.applyPreparedBackgroundResize()
+	a.requestBackgroundResize(w, h)
 	a.r.BeginFrame(w, h)
 
 	a.chrome = resolveChromeColors(a.cfg)
@@ -83,7 +85,9 @@ func (a *App) draw() {
 		a.drawOriginY = float32(geometry.Pixels.Y)
 		a.refreshLinks()
 		a.r.PushClip(gpu.ClipRect{X: geometry.Pixels.X, Y: geometry.Pixels.Y, Width: geometry.Pixels.Width, Height: geometry.Pixels.Height})
-		a.replaceRect(float32(geometry.Pixels.X), float32(geometry.Pixels.Y), float32(geometry.Pixels.Width), float32(geometry.Pixels.Height), paneBackground)
+		if paneNeedsFlatBackground(len(a.cfg.Background.Layers), a.snap.PaletteOverrides.BGSet) {
+			a.replaceRect(float32(geometry.Pixels.X), float32(geometry.Pixels.Y), float32(geometry.Pixels.Width), float32(geometry.Pixels.Height), paneBackground)
+		}
 		var cursorRowOrder []int
 		for row := 0; row < a.snap.Rows; row++ {
 			rowsDrawn++

@@ -132,6 +132,8 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		return validateDocumentMap(source, path, value)
 	case KindColorSchemeMap:
 		return validateColorSchemeMap(source, path, value, allowUnset)
+	case KindBackgroundLayerList:
+		return validateBackgroundLayerList(source, path, value)
 	default:
 		return documentError(source, path, "has unsupported schema kind %q", schema.kind)
 	}

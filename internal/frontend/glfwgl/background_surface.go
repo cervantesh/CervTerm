@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"math"
 
+	backgroundcore "cervterm/internal/background"
 	"cervterm/internal/config"
 	"cervterm/internal/frontend/gpu"
 )
@@ -52,27 +53,107 @@ func effectiveSolidBackground(cfg config.Config) color.RGBA {
 	return applyOpacity(configColor(cfg.Colors.Background, color.RGBA{0x08, 0x0B, 0x12, 0xFF}), cfg.Window.BackgroundOpacity)
 }
 
-func prepareSolidBackgroundSurface(renderer gpu.Renderer, cfg config.Config) (gpu.BackgroundSurface, error) {
+func prepareRGBABackgroundSurface(renderer gpu.Renderer, pixels *image.RGBA) (gpu.BackgroundSurface, error) {
 	capability, ok := renderer.(gpu.BackgroundSurfaceRenderer)
 	if !ok {
 		return nil, nil
 	}
-	pixel := image.NewRGBA(image.Rect(0, 0, 1, 1))
-	pixel.SetRGBA(0, 0, effectiveSolidBackground(cfg))
-	surface, err := capability.PrepareBackgroundSurface(pixel)
+	surface, err := capability.PrepareBackgroundSurface(pixels)
 	if err != nil {
-		return nil, fmt.Errorf("prepare solid background surface: %w", err)
+		return nil, fmt.Errorf("prepare background surface: %w", err)
 	}
 	return surface, nil
 }
 
+func solidBackgroundPixels(cfg config.Config) *image.RGBA {
+	pixel := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	pixel.SetRGBA(0, 0, effectiveSolidBackground(cfg))
+	return pixel
+}
+
+func prepareSolidBackgroundSurface(renderer gpu.Renderer, cfg config.Config) (gpu.BackgroundSurface, error) {
+	return prepareRGBABackgroundSurface(renderer, solidBackgroundPixels(cfg))
+}
+
+func backgroundGPUTransferBytes(activeBytes uint64, surface *image.RGBA) (uint64, error) {
+	if surface == nil {
+		return 0, fmt.Errorf("background GPU budget: surface is required")
+	}
+	candidateBytes, err := backgroundcore.SurfaceBytes(surface.Bounds().Dx(), surface.Bounds().Dy())
+	if err != nil {
+		return 0, err
+	}
+	if activeBytes > backgroundcore.MaxAggregateGPUBytes || candidateBytes > backgroundcore.MaxAggregateGPUBytes-activeBytes {
+		return 0, fmt.Errorf("background GPU aggregate budget: exceeds limit")
+	}
+	return candidateBytes, nil
+}
+
 func (a *App) prepareInitialBackgroundSurface() error {
-	surface, err := prepareSolidBackgroundSurface(a.r, a.cfg)
+	if len(a.cfg.Background.Layers) == 0 {
+		surface, err := prepareSolidBackgroundSurface(a.r, a.cfg)
+		if err != nil {
+			return err
+		}
+		a.backgroundSurface = surface
+		if surface != nil {
+			a.configReloadAsync.activeGPUBytes = 4
+		}
+		return nil
+	}
+	width, height := a.window.GetFramebufferSize()
+	result := make(chan struct {
+		cpu *preparedBackgroundCPU
+		err error
+	}, 1)
+	baseDir := backgroundLayerBase(a.composedProvenance, a.configPath)
+	pool := a.ensureBackgroundResourcePool()
+	dpi := effectiveDPI(a.contentScaleX, a.contentScaleY)
+	go func() {
+		cpu, err := pool.prepare(a.cfg.Clone(), baseDir, width, height, dpi)
+		result <- struct {
+			cpu *preparedBackgroundCPU
+			err error
+		}{cpu: cpu, err: err}
+	}()
+	prepared := <-result
+	if prepared.err != nil {
+		return prepared.err
+	}
+	defer prepared.cpu.Close()
+	gpuBytes, err := backgroundGPUTransferBytes(0, prepared.cpu.surface)
 	if err != nil {
 		return err
 	}
+	surface, err := prepareRGBABackgroundSurface(a.r, prepared.cpu.surface)
+	if err != nil {
+		return err
+	}
+	if surface == nil {
+		return fmt.Errorf("background layers: renderer capability unavailable")
+	}
 	a.backgroundSurface = surface
+	a.configReloadAsync.activeGPUBytes = gpuBytes
+	a.configReloadAsync.activeBackgroundDPI = prepared.cpu.dpi
+	a.configReloadAsync.requestedBackgroundDPI = prepared.cpu.dpi
+	a.backgroundSurfaceWidth, a.backgroundSurfaceHeight = width, height
+	a.backgroundRequestedWidth, a.backgroundRequestedHeight = width, height
+	a.registerInitialBackgroundDependencies(prepared.cpu)
 	return nil
+}
+
+func (a *App) registerInitialBackgroundDependencies(prepared *preparedBackgroundCPU) {
+	if prepared == nil || len(prepared.watchPaths) == 0 {
+		return
+	}
+	if a.configWatchHashes == nil {
+		a.configWatchHashes = make(map[string][32]byte)
+	}
+	for path, hash := range prepared.watchHashes {
+		a.configWatchHashes[path] = hash
+	}
+	paths := append(append([]string(nil), a.configWatch.activePaths...), prepared.watchPaths...)
+	a.configWatch.acknowledgeSuccess(paths)
 }
 
 func (a *App) closeBackgroundSurface() {
@@ -80,10 +161,18 @@ func (a *App) closeBackgroundSurface() {
 		return
 	}
 	_ = a.backgroundSurface.Close()
+	a.backgroundSurfaceWidth, a.backgroundSurfaceHeight = 0, 0
 	a.backgroundSurface = nil
+	a.configReloadAsync.activeGPUBytes = 0
+	a.configReloadAsync.activeBackgroundDPI = 0
+	a.configReloadAsync.requestedBackgroundDPI = 0
 }
 
 func (a *App) restoreBackgroundSurface(fallback color.RGBA, width, height int) {
+	if len(a.cfg.Background.Layers) > 0 && (a.backgroundSurfaceWidth != width || a.backgroundSurfaceHeight != height) {
+		a.r.Clear(fallback)
+		return
+	}
 	capability, ok := a.r.(gpu.BackgroundSurfaceRenderer)
 	if !ok || a.backgroundSurface == nil {
 		a.r.Clear(fallback)

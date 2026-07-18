@@ -768,11 +768,12 @@ func TestReloadQueuesNewGenerationWhenActiveIncludeChangesDuringEvaluation(t *te
 	f:close()
 	return {config_version=2,includes={"base.lua"}}`, include)
 	writeReloadConfig(t, primary, body)
-	if err := app.reloadConfig(); err != nil {
-		t.Fatal(err)
+	oldBundle := app.scriptBundle
+	if err := app.reloadConfig(); err == nil || !strings.Contains(err.Error(), "changed while preparing") {
+		t.Fatalf("stale include snapshot error = %v", err)
 	}
-	if app.scriptBundle == nil || app.scriptBundle.Config().Font.Family != "New" {
-		t.Fatal("candidate did not consume include edit made during evaluation")
+	if app.scriptBundle != oldBundle || app.cfg.Font.Family != "Old" {
+		t.Fatal("include edit during evaluation partially activated")
 	}
 	if !app.reloadPending {
 		t.Fatal("include edit during evaluation was acknowledged away")
@@ -809,11 +810,12 @@ func TestReloadQueuesNewlyIntroducedIncludeChangedDuringItsEvaluation(t *testing
 	return {font={family="Snapshot"}}`, include)
 	writeReloadConfig(t, include, includeBody)
 	writeReloadConfig(t, primary, `return {config_version=2,includes={"new.lua"}}`)
-	if err := app.reloadConfig(); err != nil {
-		t.Fatal(err)
+	oldBundle := app.scriptBundle
+	if err := app.reloadConfig(); err == nil || !strings.Contains(err.Error(), "changed while preparing") {
+		t.Fatalf("stale new-include snapshot error = %v", err)
 	}
-	if app.scriptBundle == nil || app.scriptBundle.Config().Font.Family != "Snapshot" {
-		t.Fatal("candidate did not retain the evaluated include snapshot")
+	if app.scriptBundle != oldBundle || app.cfg.Font.Family == "Snapshot" {
+		t.Fatal("new include snapshot partially activated")
 	}
 	if !app.reloadPending {
 		t.Fatal("new include edit during evaluation was acknowledged away")

@@ -18,6 +18,7 @@ type replaceRecordingRenderer struct {
 	surfaceReplaced    int
 	preparedBackground color.RGBA
 	preparedSurface    *recordingBackgroundSurface
+	prepareErr         error
 }
 
 type recordingBackgroundSurface struct{ closed int }
@@ -43,6 +44,9 @@ func (*replaceRecordingRenderer) ClearAtlasPage(int)                            
 func (*replaceRecordingRenderer) EndFrame()                                         {}
 func (*replaceRecordingRenderer) Destroy()                                          {}
 func (r *replaceRecordingRenderer) PrepareBackgroundSurface(surface *image.RGBA) (gpu.BackgroundSurface, error) {
+	if r.prepareErr != nil {
+		return nil, r.prepareErr
+	}
 	r.preparedBackground = surface.RGBAAt(surface.Rect.Min.X, surface.Rect.Min.Y)
 	r.preparedSurface = &recordingBackgroundSurface{}
 	return r.preparedSurface, nil
@@ -104,5 +108,20 @@ func TestComposeSolidPanePreservesLegacyPixelsThenAppliesMultiplier(t *testing.T
 	osc := color.RGBA{R: 0xAA, G: 0xBB, B: 0xCC, A: 0xE6}
 	if got, want := effectivePaneBackground(configured, osc, true, 0.5), (color.RGBA{R: 0xAA, G: 0xBB, B: 0xCC, A: 0x73}); got != want {
 		t.Fatalf("OSC pane = %#v, want pure override %#v", got, want)
+	}
+}
+
+func TestLayeredBackgroundOSC11PrecedenceAndResetPolicy(t *testing.T) {
+	if paneNeedsFlatBackground(1, false) {
+		t.Fatal("layered pane without OSC 11 flattened composed surface")
+	}
+	if !paneNeedsFlatBackground(1, true) {
+		t.Fatal("OSC 11 did not override layered surface")
+	}
+	if paneNeedsFlatBackground(1, false) {
+		t.Fatal("OSC reset did not reveal composed surface")
+	}
+	if !paneNeedsFlatBackground(0, false) {
+		t.Fatal("solid compatibility pane stopped drawing flat background")
 	}
 }
