@@ -20,6 +20,7 @@ type atlasFontModel struct {
 	fallback    []fontdesc.Descriptor
 	rules       []fontdesc.Rule
 	features    fontdesc.FeatureSet
+	metrics     fontdesc.MetricProjection
 }
 
 type atlasFontKey struct {
@@ -38,6 +39,7 @@ type atlasFontContext struct {
 	fallback     []fontdesc.Descriptor
 	rules        []fontdesc.Rule
 	features     fontdesc.FeatureSet
+	metrics      fontdesc.MetricProjection
 	resolvedFace fontdesc.ResolvedFaceKey
 	backend      fontglyph.Backend
 	cellW        int
@@ -45,6 +47,8 @@ type atlasFontContext struct {
 	baseline     int
 	coverageLUT  *[256]uint8
 	prewarmed    bool
+	lastUsed     uint64
+	negatives    atlasNegativeCache
 }
 
 type atlasBackendFactory func(fontglyph.Spec) (fontglyph.Backend, error)
@@ -91,6 +95,7 @@ func makeAtlasFontKeyWithModel(spec fontglyph.Spec, textGamma, textDarken float6
 		Fallback:      model.fallback,
 		Rules:         model.rules,
 		Features:      model.features.CanonicalBytes(),
+		Metrics:       effectiveAtlasMetrics(model.metrics).CanonicalBytes(),
 		BaseSizeBits:  stableFloatBits(spec.Size),
 		PaneZoomBits:  stableFloatBits(1),
 		DPI:           uint32(math.Round(spec.DPI)),
@@ -150,6 +155,7 @@ func newGlyphAtlasWithPreparedContext(r gpu.Renderer, ctx *atlasFontContext, fac
 		generation:     1,
 		contexts:       map[atlasFontKey]*atlasFontContext{ctx.key: ctx},
 		backendFactory: factory,
+		pinnedContexts: map[atlasFontKey]struct{}{ctx.key: {}},
 	}
 	for i := range a.pages {
 		a.pages[i].packer = newShelfPacker(atlasPageSize, atlasPageSize)
@@ -241,17 +247,20 @@ func makeAtlasFontContextFromBackendWithModel(spec fontglyph.Spec, textGamma, te
 	if resolvedFace == (fontdesc.ResolvedFaceKey{}) {
 		return nil, errors.New("resolved face identity is zero")
 	}
+	projection := effectiveAtlasMetrics(model.metrics)
+	cellW, cellH, baseline := projection.ProjectCellMetrics(metrics.cellW, metrics.cellH, metrics.baseline)
 	ctx := &atlasFontContext{
 		key:          key,
 		descriptors:  append([]fontdesc.Descriptor(nil), model.descriptors...),
 		fallback:     append([]fontdesc.Descriptor(nil), model.fallback...),
 		rules:        cloneAtlasRules(model.rules),
 		features:     model.features,
+		metrics:      projection,
 		resolvedFace: resolvedFace,
 		backend:      backend,
-		cellW:        metrics.cellW,
-		cellH:        metrics.cellH,
-		baseline:     metrics.baseline,
+		cellW:        cellW,
+		cellH:        cellH,
+		baseline:     baseline,
 	}
 	if textGamma != 1 || textDarken != 0 {
 		lut := render.CoverageLUT(textGamma, textDarken)
@@ -328,79 +337,22 @@ func (ctx *atlasFontContext) resolveClusterStyle(request fontdesc.RequestedFaceS
 	return ctx.resolveStyle(request)
 }
 
+func effectiveAtlasMetrics(metrics fontdesc.MetricProjection) fontdesc.MetricProjection {
+	if metrics == (fontdesc.MetricProjection{}) {
+		return fontdesc.DefaultMetricProjection()
+	}
+	return metrics
+}
+
 func (a *glyphAtlas) modelForSpec(spec fontglyph.Spec) atlasFontModel {
 	if a != nil && a.activeContext != nil && len(a.activeContext.descriptors) > 0 {
-		return atlasFontModel{descriptors: a.activeContext.descriptors, fallback: a.activeContext.fallback, rules: a.activeContext.rules, features: a.activeContext.features}
+		return atlasFontModel{descriptors: a.activeContext.descriptors, fallback: a.activeContext.fallback, rules: a.activeContext.rules, features: a.activeContext.features, metrics: a.activeContext.metrics}
 	}
 	return atlasFontModel{descriptors: []fontdesc.Descriptor{{Family: spec.Family}}}
 }
 
 func (a *glyphAtlas) fontKey(spec fontglyph.Spec, textGamma, textDarken float64) (atlasFontKey, error) {
 	return makeAtlasFontKeyWithModel(spec, textGamma, textDarken, a.modelForSpec(spec))
-}
-
-// useSpec selects an existing raster context or creates one without touching the
-// shared GPU pages or atlas generation. It returns the selected cell metrics.
-func (a *glyphAtlas) useSpec(spec fontglyph.Spec, textGamma, textDarken float64) (int, int, int, bool) {
-	if a == nil || a.closed {
-		return 0, 0, 0, false
-	}
-	model := a.modelForSpec(spec)
-	key, err := a.fontKey(spec, textGamma, textDarken)
-	if err != nil {
-		return 0, 0, 0, false
-	}
-	if ctx, ok := a.contexts[key]; ok {
-		a.activateContext(ctx)
-		a.prewarmASCII()
-		return ctx.cellW, ctx.cellH, ctx.baseline, true
-	}
-	ctx, err := makeAtlasFontContextWithModel(spec, textGamma, textDarken, model, a.backendFactory)
-	if err != nil {
-		return 0, 0, 0, false
-	}
-	a.contexts[key] = ctx
-	a.activateContext(ctx)
-	a.prewarmASCII()
-	return ctx.cellW, ctx.cellH, ctx.baseline, true
-}
-
-// retainContexts bounds CPU-side raster resources to the specs used by visible
-// panes. Uploaded atlas entries remain valid after their backend is closed.
-func (a *glyphAtlas) retainContexts(keep map[atlasFontKey]struct{}) {
-	if a == nil || a.closed {
-		return
-	}
-	if a.activeContext != nil {
-		keep[a.activeContext.key] = struct{}{}
-	}
-	closed := make([]fontglyph.Backend, 0)
-	for key, ctx := range a.contexts {
-		if _, ok := keep[key]; ok {
-			continue
-		}
-		sharedWithKept := false
-		for keptKey := range keep {
-			if kept := a.contexts[keptKey]; kept != nil && sameAtlasBackend(ctx.backend, kept.backend) {
-				sharedWithKept = true
-				break
-			}
-		}
-		if !sharedWithKept {
-			alreadyClosed := false
-			for _, backend := range closed {
-				if sameAtlasBackend(ctx.backend, backend) {
-					alreadyClosed = true
-					break
-				}
-			}
-			if !alreadyClosed {
-				ctx.backend.Close()
-				closed = append(closed, ctx.backend)
-			}
-		}
-		delete(a.contexts, key)
-	}
 }
 
 // reconfigure remains as a compatibility wrapper until pane rendering selects
@@ -411,6 +363,8 @@ func (a *glyphAtlas) reconfigure(spec fontglyph.Spec, textGamma, textDarken floa
 }
 
 func (a *glyphAtlas) activateContext(ctx *atlasFontContext) {
+	a.contextClock++
+	ctx.lastUsed = a.contextClock
 	a.activeContext = ctx
 	// Keep the legacy app-facing fields coherent during the Phase 3 transition.
 	a.backend = ctx.backend
@@ -473,12 +427,6 @@ func (a *glyphAtlas) close() {
 	}
 	a.r.Destroy()
 	a.entries = nil
-	a.runNegative = nil
-	a.runNegativeRing = nil
-	a.rasterNegative = nil
-	a.rasterNegativeRing = nil
-	a.insertNegative = nil
-	a.insertNegativeRing = nil
 	a.contexts = nil
 	a.activeContext = nil
 	a.backend = nil

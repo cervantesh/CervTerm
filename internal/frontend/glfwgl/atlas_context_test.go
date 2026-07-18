@@ -12,6 +12,16 @@ import (
 	"cervterm/internal/frontend/gpu"
 )
 
+func atlasNegativeReasonCount(ctx *atlasFontContext, reason byte) int {
+	count := 0
+	for entry := range ctx.negatives.entries {
+		if entry.reason == reason {
+			count++
+		}
+	}
+	return count
+}
+
 type atlasTestRenderer struct {
 	configureCalls  int
 	configuredPages int
@@ -364,8 +374,8 @@ func TestAtlasNegativeLigatureCacheIsSpecNamespaced(t *testing.T) {
 		t.Fatal("return to first spec failed")
 	}
 	_, _ = atlas.cachedRun("->", 2)
-	if backends[0].runCalls["->"] != 1 || len(atlas.runNegative) != 2 {
-		t.Fatalf("negative cache not spec-isolated: first calls=%d entries=%d", backends[0].runCalls["->"], len(atlas.runNegative))
+	if backends[0].runCalls["->"] != 1 || atlasNegativeReasonCount(atlas.activeContext, negativeRun) != 1 {
+		t.Fatalf("negative cache not context-isolated: first calls=%d entries=%d", backends[0].runCalls["->"], atlasNegativeReasonCount(atlas.activeContext, negativeRun))
 	}
 }
 
@@ -418,7 +428,7 @@ func TestAtlasPrewarmCapacityMissDoesNotReset(t *testing.T) {
 	}
 }
 
-func TestAtlasRetainsOnlyVisibleBackendContexts(t *testing.T) {
+func TestAtlasRetainsInactiveBackendContextsWithinBudget(t *testing.T) {
 	renderer := &atlasTestRenderer{}
 	backends := make(map[float64]*atlasTestBackend)
 	factory := func(spec fontglyph.Spec) (fontglyph.Backend, error) {
@@ -439,12 +449,14 @@ func TestAtlasRetainsOnlyVisibleBackendContexts(t *testing.T) {
 		t.Fatal("first spec reselection failed")
 	}
 	keep := map[atlasFontKey]struct{}{newAtlasFontKey(spec1, 1, 0): {}}
-	atlas.retainContexts(keep)
-	if len(atlas.contexts) != 1 {
-		t.Fatalf("live backend contexts = %d, want 1", len(atlas.contexts))
+	if !atlas.retainContexts(keep) {
+		t.Fatal("visible context pin was rejected")
 	}
-	if backends[12].closeCalls != 1 || backends[10].closeCalls != 0 {
-		t.Fatalf("backend close calls active/inactive = %d/%d, want 0/1", backends[10].closeCalls, backends[12].closeCalls)
+	if len(atlas.contexts) != 2 {
+		t.Fatalf("retained backend contexts = %d, want 2", len(atlas.contexts))
+	}
+	if backends[12].closeCalls != 0 || backends[10].closeCalls != 0 {
+		t.Fatalf("backend close calls active/inactive = %d/%d, want 0/0", backends[10].closeCalls, backends[12].closeCalls)
 	}
 	atlas.close()
 }
@@ -500,12 +512,14 @@ func TestFeatureIdentitySeparatesPositiveAndNegativeAtlasEntries(t *testing.T) {
 	enabledRun := atlasKey{spec: enabledKey, kind: 'l', text: "->", span: 2}
 	disabledRun := atlasKey{spec: disabledKey, kind: 'l', text: "->", span: 2}
 	atlas.entries[enabledRun] = atlasEntry{generation: 1}
-	atlas.recordRunNegative(enabledRun)
-	atlas.recordInsertionFailure(enabledRun)
+	enabledContext := &atlasFontContext{key: enabledKey}
+	disabledContext := &atlasFontContext{key: disabledKey}
+	enabledContext.negatives.record(atlas.generation, negativeRun, enabledRun)
+	enabledContext.negatives.record(atlas.generation, negativeInsertion, enabledRun)
 	if _, ok := atlas.currentEntry(disabledRun); ok {
 		t.Fatal("positive feature entry aliased disabled context")
 	}
-	if _, ok := atlas.runNegative[disabledRun]; ok || atlas.insertionFailedThisGeneration(disabledRun) {
+	if disabledContext.negatives.contains(atlas.generation, negativeRun, disabledRun) || atlas.insertionFailedThisGeneration(disabledContext, disabledRun) {
 		t.Fatal("negative feature entry aliased disabled context")
 	}
 }
@@ -531,5 +545,164 @@ func TestExplicitFeatureEnablesRunCollectionWithoutLigatureShorthand(t *testing.
 	atlas.activeContext.features = fontdesc.FeatureSet{}
 	if !atlas.supportsLigatures(true) {
 		t.Fatal("legacy zero feature model stopped honoring ligature shorthand")
+	}
+}
+
+func TestAtlasMetricProjectionChangesEnvironmentAndProjectedRaster(t *testing.T) {
+	spec := fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96}
+	base := fontdesc.DefaultMetricProjection()
+	baseKey, err := makeAtlasFontKeyWithModel(spec, 1, 0, atlasFontModel{descriptors: []fontdesc.Descriptor{{Family: spec.Family}}, metrics: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := fontdesc.NewMetricProjection(1.5, 1.25, 2, 3, -4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectedKey, err := makeAtlasFontKeyWithModel(spec, 1, 0, atlasFontModel{descriptors: []fontdesc.Descriptor{{Family: spec.Family}}, metrics: projection})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projectedKey == baseKey {
+		t.Fatal("metric projection did not change environment identity")
+	}
+	backend := &atlasTestBackend{cellW: 8, cellH: 16, baseline: 12}
+	ctx, err := makeAtlasFontContextFromBackendWithModel(spec, 1, 0, atlasFontModel{descriptors: []fontdesc.Descriptor{{Family: spec.Family}}, metrics: projection}, backend, fontInstallationMetrics{cellW: 8, cellH: 16, baseline: 12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ctx.cellW != 10 || ctx.cellH != 24 || ctx.baseline != 18 {
+		t.Fatalf("projected context metrics=%d/%d/%d, want 10/24/18", ctx.cellW, ctx.cellH, ctx.baseline)
+	}
+	source := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	for y := 0; y < 2; y++ {
+		for x := 0; x < 2; x++ {
+			source.SetRGBA(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+		}
+	}
+	glyph := projectRasterToContext(fontglyph.RasterizedGlyph{Image: source, CellSpan: 1}, ctx)
+	if glyph.Image.Bounds().Dx() != 10 || glyph.Image.Bounds().Dy() != 24 {
+		t.Fatalf("projected raster bounds=%v", glyph.Image.Bounds())
+	}
+	if _, _, _, alpha := glyph.Image.At(7, 9).RGBA(); alpha == 0 {
+		t.Fatal("glyph metric offsets were not projected into the fixed cell canvas")
+	}
+}
+
+func TestAtlasRejectsSixtyFifthPinnedContextTransactionally(t *testing.T) {
+	factoryCalls := 0
+	factory := func(spec fontglyph.Spec) (fontglyph.Backend, error) {
+		factoryCalls++
+		return &atlasTestBackend{cellW: 8, cellH: 16, baseline: 12}, nil
+	}
+	base := fontglyph.Spec{Family: "Go Mono", Size: 10, DPI: 96}
+	atlas, err := newGlyphAtlasWithBackendFactory(&atlasTestRenderer{}, base, 1, 0, factory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer atlas.close()
+	pins := cloneContextPins(atlas.pinnedContexts)
+	for index := 1; index < maxAtlasFontContexts; index++ {
+		spec := base
+		spec.Size += float64(index)
+		key, keyErr := atlas.fontKey(spec, 1, 0)
+		if keyErr != nil {
+			t.Fatal(keyErr)
+		}
+		pins[key] = struct{}{}
+		if _, _, _, ok := atlas.usePinnedSpec(spec, 1, 0, pins); !ok {
+			t.Fatalf("pinned context %d rejected", index+1)
+		}
+	}
+	active, contextCount, callCount := atlas.activeContext, len(atlas.contexts), factoryCalls
+	rejected := base
+	rejected.Size += maxAtlasFontContexts
+	rejectedKey, err := atlas.fontKey(rejected, 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pins[rejectedKey] = struct{}{}
+	if _, _, _, ok := atlas.usePinnedSpec(rejected, 1, 0, pins); ok {
+		t.Fatal("65th pinned context was admitted")
+	}
+	if atlas.activeContext != active || len(atlas.contexts) != contextCount || factoryCalls != callCount || len(atlas.pinnedContexts) != maxAtlasFontContexts {
+		t.Fatalf("rejection mutated state: active=%v contexts=%d calls=%d pins=%d", atlas.activeContext == active, len(atlas.contexts), factoryCalls, len(atlas.pinnedContexts))
+	}
+}
+
+func TestAtlasEvictsDeterministicInactiveLRUAtContextBudget(t *testing.T) {
+	backends := make(map[float64]*atlasTestBackend)
+	factory := func(spec fontglyph.Spec) (fontglyph.Backend, error) {
+		backend := &atlasTestBackend{cellW: 8, cellH: 16, baseline: 12}
+		backends[spec.Size] = backend
+		return backend, nil
+	}
+	base := fontglyph.Spec{Family: "Go Mono", Size: 10, DPI: 96}
+	atlas, err := newGlyphAtlasWithBackendFactory(&atlasTestRenderer{}, base, 1, 0, factory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer atlas.close()
+	for index := 1; index < maxAtlasFontContexts; index++ {
+		spec := base
+		spec.Size += float64(index)
+		if _, _, _, ok := atlas.useSpec(spec, 1, 0); !ok {
+			t.Fatalf("context %d rejected", index+1)
+		}
+	}
+	touched := base
+	touched.Size++
+	if _, _, _, ok := atlas.useSpec(touched, 1, 0); !ok {
+		t.Fatal("LRU touch failed")
+	}
+	oldestUntouched := base
+	oldestUntouched.Size += 2
+	oldestKey, err := atlas.fontKey(oldestUntouched, 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admitted := base
+	admitted.Size += maxAtlasFontContexts
+	if _, _, _, ok := atlas.useSpec(admitted, 1, 0); !ok {
+		t.Fatal("inactive LRU admission failed")
+	}
+	if len(atlas.contexts) != maxAtlasFontContexts || atlas.contexts[oldestKey] != nil || backends[oldestUntouched.Size].closeCalls != 1 {
+		t.Fatalf("LRU eviction state: contexts=%d victimPresent=%v closeCalls=%d", len(atlas.contexts), atlas.contexts[oldestKey] != nil, backends[oldestUntouched.Size].closeCalls)
+	}
+}
+
+func TestAtlasContextAdmissionAbortIsMutationFree(t *testing.T) {
+	var backends []*atlasTestBackend
+	factory := func(fontglyph.Spec) (fontglyph.Backend, error) {
+		backend := &atlasTestBackend{cellW: 8, cellH: 16, baseline: 12}
+		backends = append(backends, backend)
+		return backend, nil
+	}
+	base := fontglyph.Spec{Family: "Go Mono", Size: 10, DPI: 96}
+	atlas, err := newGlyphAtlasWithBackendFactory(&atlasTestRenderer{}, base, 1, 0, factory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer atlas.close()
+	active := atlas.activeContext
+	pins := cloneContextPins(atlas.pinnedContexts)
+	candidate := base
+	candidate.Size = 12
+	candidateKey, err := atlas.fontKey(candidate, 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(pins, active.key)
+	pins[candidateKey] = struct{}{}
+	admission, ok := atlas.prepareSpecWithPins(candidate, 1, 0, pins)
+	if !ok {
+		t.Fatal("candidate preparation failed")
+	}
+	if atlas.activeContext != active || len(atlas.contexts) != 1 || atlas.contexts[candidateKey] != nil || len(atlas.pinnedContexts) != 1 {
+		t.Fatal("candidate preparation mutated active atlas state")
+	}
+	atlas.abortContextAdmission(admission)
+	if atlas.activeContext != active || len(atlas.contexts) != 1 || backends[0].closeCalls != 0 || backends[1].closeCalls != 1 {
+		t.Fatalf("abort state active=%v contexts=%d closes=%d/%d", atlas.activeContext == active, len(atlas.contexts), backends[0].closeCalls, backends[1].closeCalls)
 	}
 }

@@ -81,6 +81,11 @@ func FromDocument(base Config, document Document) Config {
 			cfg.Font.Fallback = descriptorListField(font, "fallback", cfg.Font.Fallback)
 			cfg.Font.Rules = fontRuleListField(font, "rules", cfg.Font.Rules)
 			cfg.Font.Features = integerMapField(font, "features", cfg.Font.Features)
+			cfg.Font.LineHeight = numberField(font, "line_height", cfg.Font.LineHeight)
+			cfg.Font.CellWidth = numberField(font, "cell_width", cfg.Font.CellWidth)
+			cfg.Font.BaselineOffset = numberField(font, "baseline_offset", cfg.Font.BaselineOffset)
+			cfg.Font.GlyphOffsetX = numberField(font, "glyph_offset_x", cfg.Font.GlyphOffsetX)
+			cfg.Font.GlyphOffsetY = numberField(font, "glyph_offset_y", cfg.Font.GlyphOffsetY)
 		}
 	}
 	return cfg
@@ -107,6 +112,8 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	{name: "font", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
 		{name: "family", kind: KindString}, {name: "descriptors", kind: KindDescriptorList}, {name: "fallback", kind: KindDescriptorList}, {name: "rules", kind: KindFontRuleList},
 		{name: "size", kind: KindNumber}, {name: "ligatures", kind: KindBoolean}, {name: "features", kind: KindFeatureMap},
+		{name: "line_height", kind: KindNumber}, {name: "cell_width", kind: KindNumber}, {name: "baseline_offset", kind: KindNumber},
+		{name: "glyph_offset_x", kind: KindNumber}, {name: "glyph_offset_y", kind: KindNumber},
 	}},
 	{name: "color_scheme", kind: KindString, apply: ApplyLive},
 	{name: "colors", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
@@ -154,6 +161,15 @@ var unavailableV2Fields = map[string]ValueKind{
 	"environments": KindDocumentMap, "profiles": KindDocumentMap, "color_schemes": KindColorSchemeMap,
 }
 
+func isV2OnlyFontPath(path string) bool {
+	switch path {
+	case "font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
+		return true
+	default:
+		return false
+	}
+}
+
 func SchemaFields(version int) ([]FieldMetadata, error) {
 	if version < MinimumSchemaVersion || version > CurrentSchemaVersion {
 		return nil, fmt.Errorf("unsupported config schema version %d", version)
@@ -169,7 +185,7 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 			if prefix != "" {
 				path = prefix + "." + child.name
 			}
-			if version == 1 && (path == "font.descriptors" || path == "font.fallback" || path == "font.rules" || path == "font.features") {
+			if version == 1 && isV2OnlyFontPath(path) {
 				continue
 			}
 			apply := child.apply
@@ -233,6 +249,11 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 		delete(document.Present, "font.fallback")
 		delete(document.Present, "font.rules")
 		delete(document.Present, "font.features")
+		delete(document.Present, "font.line_height")
+		delete(document.Present, "font.cell_width")
+		delete(document.Present, "font.baseline_offset")
+		delete(document.Present, "font.glyph_offset_x")
+		delete(document.Present, "font.glyph_offset_y")
 	}
 	if root.RawGetString("config_version") != lua.LNil {
 		document.Present["config_version"] = struct{}{}

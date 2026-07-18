@@ -165,7 +165,7 @@ func (b *compositionBuilder) mergeRecord(dst, src *lua.LTable, schema fieldSchem
 		if b.document.AuthoredVersion == 1 && path == "color_scheme" {
 			continue
 		}
-		if b.document.AuthoredVersion == 1 && (path == "font.descriptors" || path == "font.fallback" || path == "font.rules" || path == "font.features") {
+		if b.document.AuthoredVersion == 1 && isV2OnlyFontPath(path) {
 			continue
 		}
 		if b.deferColors && path == "colors" {

@@ -65,6 +65,13 @@ return {
     -- override the ligatures projection; cervterm.config.unset reveals it again.
     -- Values are integers 0..65535 and at most 64 effective tags are allowed.
     -- features = { liga = 0, clig = 0, calt = 0, dlig = 1, ss01 = 1 },
+    -- Fixed-grid metric projection; scale bounds are 0.5..3.0 and pixel offsets
+    -- are -64..64. All changes require restart and never alter per-glyph advances.
+    line_height = %.2f,
+    cell_width = %.2f,
+    baseline_offset = %.2f,
+    glyph_offset_x = %.2f,
+    glyph_offset_y = %.2f,
   },
   colors = {
     foreground = %q,
@@ -194,7 +201,7 @@ return {
   --   cervterm.every(1000, function(term) term:set_title(os.date("%%H:%%M:%%S")) end)
 }
 `, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY, cfg.Window.DynamicTitle, cfg.Window.Opacity, cfg.Window.Blur,
-		cfg.Font.Family, cfg.Font.Size, cfg.Font.Ligatures,
+		cfg.Font.Family, cfg.Font.Size, cfg.Font.Ligatures, cfg.Font.LineHeight, cfg.Font.CellWidth, cfg.Font.BaselineOffset, cfg.Font.GlyphOffsetX, cfg.Font.GlyphOffsetY,
 		cfg.Colors.Foreground, cfg.Colors.Background, cfg.Colors.Cursor, cfg.Colors.SelectionBackground,
 		cfg.Colors.ChromeBackground, cfg.Colors.ChromeMuted, cfg.Colors.Accent, cfg.Colors.Split, cfg.Colors.SearchMatch, cfg.Colors.Error,
 		cfg.Colors.ANSI[0], cfg.Colors.ANSI[1], cfg.Colors.ANSI[2], cfg.Colors.ANSI[3],

@@ -349,3 +349,17 @@ func requiredUnicodeScalar(source, path string, value lua.LValue) (rune, error) 
 	}
 	return rune(parsed), nil
 }
+
+func validateFontMetricNumber(source, path string, value float64) error {
+	switch path {
+	case "font.line_height", "font.cell_width":
+		if value < fontdesc.MetricScaleMinimum || value > fontdesc.MetricScaleMaximum {
+			return documentError(source, path, "must be between %.1f and %.1f", fontdesc.MetricScaleMinimum, fontdesc.MetricScaleMaximum)
+		}
+	case "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
+		if value < fontdesc.MetricOffsetMinimum || value > fontdesc.MetricOffsetMaximum {
+			return documentError(source, path, "must be between %.0f and %.0f", fontdesc.MetricOffsetMinimum, fontdesc.MetricOffsetMaximum)
+		}
+	}
+	return nil
+}

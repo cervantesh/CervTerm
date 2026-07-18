@@ -213,6 +213,7 @@ func formatPendingConfigChanges(changes []config.ConfigChange, limit int) string
 type preparedLiveConfig struct {
 	next             config.Config
 	preparedContexts map[atlasFontKey]*atlasFontContext
+	contextInstall   *atlasPreparedContextInstall
 	rasterChanged    bool
 	committed        bool
 }
@@ -242,6 +243,27 @@ func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error)
 			return nil, fmt.Errorf("prepare text raster: %w", err)
 		}
 		prepared.preparedContexts = contexts
+		pins := make(map[atlasFontKey]struct{})
+		if a.mux != nil {
+			layout, layoutErr := a.mux.Layout()
+			if layoutErr != nil {
+				closePreparedRasterContexts(contexts)
+				return nil, fmt.Errorf("prepare text raster pins: %w", layoutErr)
+			}
+			pins = a.visibleFontContextKeysForRaster(layout, 0, 0, newRaster)
+		}
+		if len(pins) == 0 {
+			for key := range contexts {
+				pins[key] = struct{}{}
+				break
+			}
+		}
+		install, installOK := a.atlas.prepareContextInstall(contexts, pins)
+		if !installOK {
+			closePreparedRasterContexts(contexts)
+			return nil, fmt.Errorf("prepare text raster: retained font context limit")
+		}
+		prepared.contextInstall = install
 	}
 	return prepared, nil
 }
@@ -249,6 +271,11 @@ func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error)
 // commitLiveConfig is the mechanically infallible main-thread mutation phase.
 // The caller must have completed every fallible operation before invoking it.
 func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
+	if prepared.rasterChanged {
+		a.atlas.commitContextInstall(prepared.contextInstall)
+		prepared.preparedContexts = nil
+		prepared.contextInstall = nil
+	}
 	next := prepared.next
 	oldScrollbar := a.cfg.Scrollbar
 	a.mux.SetScrollbackCapacity(next.Scrolling.History)
@@ -263,7 +290,7 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	a.cfg.Cursor = next.Cursor
 	a.applyWindowAppearance()
 	if prepared.rasterChanged {
-		a.installPreparedRasterContexts(prepared.preparedContexts)
+		a.activateInstalledRasterContexts()
 	}
 	prepared.preparedContexts = nil
 	prepared.committed = true
@@ -359,10 +386,7 @@ func closePreparedRasterContexts(prepared map[atlasFontKey]*atlasFontContext) {
 	}
 }
 
-func (a *App) installPreparedRasterContexts(prepared map[atlasFontKey]*atlasFontContext) {
-	for key, ctx := range prepared {
-		a.atlas.contexts[key] = ctx
-	}
+func (a *App) activateInstalledRasterContexts() {
 	if a.mux == nil || len(a.mux.PaneIDs()) == 0 {
 		cellW, cellH, _, ok := a.atlas.useSpec(a.fontSpec(a.cfg.Font.Size, a.contentScaleX, a.contentScaleY), a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
 		if ok {
