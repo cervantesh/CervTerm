@@ -419,7 +419,7 @@ Implemented Phase 5.1-5.6 fields include:
 - `render.max_fps` presentation limiting without changing on-demand idle policy;
 - initial terminal rows/columns and capability-aware native decorations/titlebar requests.
 
-Renderer/backend selection is deliberately not part of the schema. Key tables and advanced mouse bindings remain Phase 6; theme catalogs/imports are tracked by their own parity phases.
+Renderer/backend selection is deliberately not part of the schema. Phase 6 key tables and advanced mouse bindings are implemented. Phase 7 adds bounded `quick_select.rules` and ordered `launch_menu` descriptors with atomic composition, provenance, Teal declarations, retained UI actions, and argv-only spawn semantics; theme catalogs/imports remain tracked by their own parity phases.
 
 ## Original v1 non-goals and current disposition
 
