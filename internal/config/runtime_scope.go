@@ -254,6 +254,10 @@ func runtimeOverrideRawValue(source Config, path string) (string, error) {
 	switch path {
 	case "window.opacity":
 		value = source.Window.Opacity
+	case "window.text_opacity":
+		value = source.Window.TextOpacity
+	case "window.background_opacity":
+		value = source.Window.BackgroundOpacity
 	case "window.blur":
 		value = source.Window.Blur
 	case "colors.background":
@@ -372,6 +376,10 @@ func applyRuntimePath(target *Config, source Config, path string) {
 	switch path {
 	case "window.opacity":
 		target.Window.Opacity = source.Window.Opacity
+	case "window.text_opacity":
+		target.Window.TextOpacity = source.Window.TextOpacity
+	case "window.background_opacity":
+		target.Window.BackgroundOpacity = source.Window.BackgroundOpacity
 	case "window.blur":
 		target.Window.Blur = source.Window.Blur
 	case "colors.background":

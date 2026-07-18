@@ -39,8 +39,10 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 		cell := rowCells[logicalCol]
 		x := a.drawOriginX + float32(visualCol)*a.cellW
 		y := a.drawOriginY + float32(r)*a.cellH
+		// Explicit cell backgrounds composite over the canonical pane surface; the
+		// multiplier changes source alpha once and blending is not a second multiplier.
 		if cell.Attr.HasExplicitBG() {
-			a.fillRect(x, y, a.cellW, a.cellH, rgb(resolver.ResolveBG(cell.Attr.BG)))
+			a.fillRect(x, y, a.cellW, a.cellH, applyOpacity(rgb(resolver.ResolveBG(cell.Attr.BG)), a.cfg.Window.BackgroundOpacity))
 		}
 		if a.selection.active && termsel.Contains(termsel.Range{Start: a.selection.start, End: a.selection.end}, termsel.Point{Row: r, Col: logicalCol}) {
 			a.fillRect(x, y, a.cellW, a.cellH, selectionColor)
@@ -59,7 +61,8 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 		}
 		if cell.Attr.Inverse {
 			fg, bg = bg, fg
-			a.fillRect(x, y, a.cellW, a.cellH, bg)
+			// Inverse video promotes the resolved foreground into the background role.
+			a.fillRect(x, y, a.cellW, a.cellH, applyOpacity(bg, a.cfg.Window.BackgroundOpacity))
 		}
 		if skippedGlyph[logicalCol] || cell.Rune == ' ' || cell.Rune == 0 || cell.WideContinuation {
 			continue
@@ -70,6 +73,7 @@ func (a *App) drawRow(r int, background, selectionColor, defaultFG color.RGBA, r
 		if cell.Attr.Dim {
 			fg = dim(fg)
 		}
+		fg = applyOpacity(fg, a.cfg.Window.TextOpacity)
 		if rects, ok := render.BoxGlyph(cell.Rune, a.cellW, a.cellH); ok {
 			for _, rc := range rects {
 				c := fg

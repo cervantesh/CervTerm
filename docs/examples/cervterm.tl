@@ -28,6 +28,8 @@ local config: cervterm.Config = {
     padding_bottom = 6,
     dynamic_title = true,
     opacity = 1.0,
+    text_opacity = 1.0,
+    background_opacity = 1.0,
     blur = true,
   },
   font = {

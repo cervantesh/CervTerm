@@ -10,6 +10,8 @@
     "PaddingBottom": 9,
     "DynamicTitle": false,
     "Opacity": 0.9,
+    "TextOpacity": 1,
+    "BackgroundOpacity": 1,
     "Blur": false
   },
   "Font": {

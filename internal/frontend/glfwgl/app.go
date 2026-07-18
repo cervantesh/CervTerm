@@ -59,9 +59,10 @@ type App struct {
 	blurWarned             bool
 	blurWarnedStatus       BlurStatus
 
-	window *glfw.Window
-	r      gpu.Renderer
-	atlas  *glyphAtlas
+	window            *glfw.Window
+	r                 gpu.Renderer
+	backgroundSurface gpu.BackgroundSurface
+	atlas             *glyphAtlas
 
 	// Last framebuffer size handed to the renderer; draw() calls r.Resize only when
 	// it changes, so a backend recreates its swapchain/drawable on real size changes
@@ -257,6 +258,10 @@ func (a *App) runWindow() error {
 			a.r.Destroy()
 		}
 	}()
+	if err := a.prepareInitialBackgroundSurface(); err != nil {
+		return err
+	}
+	defer a.closeBackgroundSurface()
 	// -1 (not 0) so the first draw always drives Resize, even if the initial
 	// framebuffer is 0x0 (0 is a valid size, so it cannot double as the sentinel).
 	a.lastFBW, a.lastFBH = -1, -1
@@ -280,6 +285,7 @@ func (a *App) runWindow() error {
 	rendererAdopted = true
 	defer func() {
 		if a.atlas != nil {
+			a.closeBackgroundSurface()
 			a.atlas.close()
 		}
 	}()

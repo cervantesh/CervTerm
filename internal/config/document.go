@@ -88,7 +88,13 @@ func FromDocument(base Config, document Document) Config {
 			cfg.Window.PaddingRight = intField(window, "padding_right", cfg.Window.PaddingRight)
 			cfg.Window.PaddingTop = intField(window, "padding_top", cfg.Window.PaddingTop)
 			cfg.Window.PaddingBottom = intField(window, "padding_bottom", cfg.Window.PaddingBottom)
+			cfg.Window.TextOpacity = numberField(window, "text_opacity", cfg.Window.TextOpacity)
+			cfg.Window.BackgroundOpacity = numberField(window, "background_opacity", cfg.Window.BackgroundOpacity)
 		}
+	}
+	if document.AuthoredVersion < 2 {
+		cfg.Window.TextOpacity = base.Window.TextOpacity
+		cfg.Window.BackgroundOpacity = base.Window.BackgroundOpacity
 	}
 	if document.AuthoredVersion >= 2 {
 		cfg.ColorScheme = stringField(document.Root, "color_scheme", cfg.ColorScheme)
@@ -125,6 +131,8 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "padding_top", kind: KindInteger, apply: ApplyRestart}, {name: "padding_bottom", kind: KindInteger, apply: ApplyRestart},
 		{name: "dynamic_title", kind: KindBoolean, apply: ApplyRestart},
 		{name: "opacity", kind: KindNumber, apply: ApplyLive, runtimeOverride: true},
+		{name: "text_opacity", kind: KindNumber, apply: ApplyLive, runtimeOverride: true},
+		{name: "background_opacity", kind: KindNumber, apply: ApplyLive, runtimeOverride: true},
 		{name: "blur", kind: KindBoolean, apply: ApplyLive, runtimeOverride: true},
 	}},
 	{name: "font", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
@@ -182,6 +190,7 @@ var unavailableV2Fields = map[string]ValueKind{
 func isV2OnlyPath(path string) bool {
 	switch path {
 	case "window.padding_left", "window.padding_right", "window.padding_top", "window.padding_bottom",
+		"window.text_opacity", "window.background_opacity",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true
 	default:
@@ -268,6 +277,8 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 		delete(document.Present, "window.padding_right")
 		delete(document.Present, "window.padding_top")
 		delete(document.Present, "window.padding_bottom")
+		delete(document.Present, "window.text_opacity")
+		delete(document.Present, "window.background_opacity")
 		delete(document.Present, "font.descriptors")
 		delete(document.Present, "font.fallback")
 		delete(document.Present, "font.rules")

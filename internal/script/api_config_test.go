@@ -31,6 +31,8 @@ func TestRuntimeConfigAPI(t *testing.T) {
 	action = function(term)
 		term:set_background("#010203FF")
 		term:set_window_opacity(0.75)
+		term:set_text_opacity(0.6)
+		if term:text_opacity() ~= 0.6 then error("text opacity not synchronous") end
 		term:set_blur(false)
 		term:set_scrolling({ history = 77, wheel_multiplier = 5, hide_cursor_when_scrolled = false })
 		term:set_scrollbar({ enabled = false, track_click = "jump", fade_ms = 0 })
@@ -46,7 +48,7 @@ func TestRuntimeConfigAPI(t *testing.T) {
 	if err := rt.Dispatch(0, host); err != nil {
 		t.Fatalf("Dispatch: %v", err)
 	}
-	if host.cfg.Colors.Background != "#010203FF" || host.cfg.Window.Opacity != .75 || host.cfg.Window.Blur {
+	if host.cfg.Colors.Background != "#010203FF" || host.cfg.Window.Opacity != .75 || host.cfg.Window.TextOpacity != .6 || host.cfg.Window.Blur {
 		t.Fatalf("appearance API did not apply: %#v %#v", host.cfg.Window, host.cfg.Colors)
 	}
 	if host.cfg.Scrolling.History != 77 || host.cfg.Scrolling.WheelMultiplier != 5 || host.cfg.Scrolling.HideCursorWhenScrolled {
@@ -75,5 +77,24 @@ func TestRuntimeConfigAPIRejectsInvalidMutation(t *testing.T) {
 	}
 	if host.cfg.Window.Opacity != 1 {
 		t.Fatalf("invalid mutation changed host config: %#v", host.cfg.Window)
+	}
+}
+
+func TestRuntimeConfigAPIBackgroundOpacity(t *testing.T) {
+	path := writeScriptConfig(t, `return { keys = {{ key = "a", action = function(term)
+		term:set_background_opacity(0.5)
+		if term:background_opacity() ~= 0.5 then error("background opacity not synchronous") end
+	end }} }`)
+	_, rt, err := Load(path, config.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rt.Close()
+	host := &runtimeConfigFakeHost{cfg: config.Defaults()}
+	if err := rt.Dispatch(0, host); err != nil {
+		t.Fatal(err)
+	}
+	if host.cfg.Window.BackgroundOpacity != 0.5 {
+		t.Fatalf("background opacity = %v", host.cfg.Window.BackgroundOpacity)
 	}
 }

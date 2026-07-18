@@ -29,17 +29,19 @@ type Config struct {
 }
 
 type WindowConfig struct {
-	Width         int
-	Height        int
-	PaddingX      int
-	PaddingY      int
-	PaddingLeft   int
-	PaddingRight  int
-	PaddingTop    int
-	PaddingBottom int
-	DynamicTitle  bool
-	Opacity       float64
-	Blur          bool
+	Width             int
+	Height            int
+	PaddingX          int
+	PaddingY          int
+	PaddingLeft       int
+	PaddingRight      int
+	PaddingTop        int
+	PaddingBottom     int
+	DynamicTitle      bool
+	Opacity           float64
+	TextOpacity       float64
+	BackgroundOpacity float64
+	Blur              bool
 }
 
 type FontConfig struct {
@@ -132,7 +134,7 @@ func Defaults() Config {
 		Window: WindowConfig{
 			Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6,
 			PaddingLeft: 6, PaddingRight: 6, PaddingTop: 6, PaddingBottom: 6,
-			DynamicTitle: true, Opacity: 1.0, Blur: true,
+			DynamicTitle: true, Opacity: 1.0, TextOpacity: 1.0, BackgroundOpacity: 1.0, Blur: true,
 		},
 		Font: FontConfig{Family: "Go Mono", Size: 14, Ligatures: false, Features: map[string]int{}, LineHeight: 1, CellWidth: 1},
 		Colors: ColorsConfig{
@@ -256,6 +258,12 @@ func (c Config) Validate() error {
 	if math.IsNaN(c.Window.Opacity) || math.IsInf(c.Window.Opacity, 0) || c.Window.Opacity < 0 || c.Window.Opacity > 1 {
 		errs = append(errs, errors.New("window.opacity must be a finite number between 0.0 and 1.0"))
 	}
+	if math.IsNaN(c.Window.TextOpacity) || math.IsInf(c.Window.TextOpacity, 0) || c.Window.TextOpacity < 0 || c.Window.TextOpacity > 1 {
+		errs = append(errs, errors.New("window.text_opacity must be a finite number between 0.0 and 1.0"))
+	}
+	if math.IsNaN(c.Window.BackgroundOpacity) || math.IsInf(c.Window.BackgroundOpacity, 0) || c.Window.BackgroundOpacity < 0 || c.Window.BackgroundOpacity > 1 {
+		errs = append(errs, errors.New("window.background_opacity must be a finite number between 0.0 and 1.0"))
+	}
 	if c.Font.Size <= 0 {
 		errs = append(errs, errors.New("font size must be > 0"))
 	}
@@ -354,8 +362,8 @@ func (c Config) Validate() error {
 			errs = append(errs, fmt.Errorf("scrollbar.%s must be #RRGGBB or #RRGGBBAA", name))
 		}
 	}
-	if c.BackgroundAlpha() < 0xff && c.Window.Opacity < 1 {
-		errs = append(errs, errors.New("transparent colors.background and window.opacity < 1 cannot be enabled together"))
+	if c.EffectiveBackgroundAlpha() < 0xff && c.Window.Opacity < 1 {
+		errs = append(errs, errors.New("translucent terminal background and window.opacity < 1 cannot be enabled together"))
 	}
 	return errors.Join(errs...)
 }
@@ -382,4 +390,10 @@ func (c Config) BackgroundAlpha() uint8 {
 		return 0xff
 	}
 	return uint8(n)
+}
+
+// EffectiveBackgroundAlpha applies the terminal-background opacity multiplier
+// once to the configured solid background alpha.
+func (c Config) EffectiveBackgroundAlpha() uint8 {
+	return uint8(math.Round(float64(c.BackgroundAlpha()) * c.Window.BackgroundOpacity))
 }
