@@ -134,6 +134,7 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Render.ZoomOutHotkey = stringField(tbl, "zoom_out_hotkey", cfg.Render.ZoomOutHotkey)
 		cfg.Render.ZoomResetHotkey = stringField(tbl, "zoom_reset_hotkey", cfg.Render.ZoomResetHotkey)
 		cfg.Render.VSync = boolField(tbl, "vsync", cfg.Render.VSync)
+		cfg.Render.MaxFPS = intField(tbl, "max_fps", cfg.Render.MaxFPS)
 		cfg.Render.Redraw = stringField(tbl, "redraw", cfg.Render.Redraw)
 		cfg.Render.Damage = stringField(tbl, "damage", cfg.Render.Damage)
 	}
