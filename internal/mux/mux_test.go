@@ -84,12 +84,16 @@ type fakeFactory struct {
 	err            error
 	sessionOnError *fakeSession
 	calls          []pty.Size
+	options        []pty.Options
 }
 
-func (f *fakeFactory) Spawn(rows, cols uint16, _ pty.Options) (pty.Session, error) {
+func (f *fakeFactory) Spawn(rows, cols uint16, options pty.Options) (pty.Session, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, pty.Size{Rows: rows, Cols: cols})
+	options.ShellArgs = append([]string(nil), options.ShellArgs...)
+	options.Env = cloneEnvironment(options.Env)
+	f.options = append(f.options, options)
 	if f.err != nil {
 		if f.sessionOnError == nil {
 			return nil, f.err
@@ -99,6 +103,17 @@ func (f *fakeFactory) Spawn(rows, cols uint16, _ pty.Options) (pty.Session, erro
 	s := newFakeSession()
 	f.sessions = append(f.sessions, s)
 	return s, nil
+}
+
+func cloneEnvironment(env map[string]string) map[string]string {
+	if env == nil {
+		return nil
+	}
+	result := make(map[string]string, len(env))
+	for key, value := range env {
+		result[key] = value
+	}
+	return result
 }
 
 func newTestMux(t *testing.T) (*Mux, *fakeSession, chan struct{}) {
@@ -378,7 +393,7 @@ func TestMuxSetSplitRatioReflowsBeforeSettledPTYResize(t *testing.T) {
 	}
 }
 
-func TestMuxSplitSpawnFailureIsAtomic(t *testing.T) {
+func TestMuxSpawnSplitFailureIsAtomicAndSilent(t *testing.T) {
 	factory := &fakeFactory{}
 	m := New(factory, Options{})
 	defer m.Shutdown()
@@ -386,16 +401,53 @@ func TestMuxSplitSpawnFailureIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	beforeIDs := m.PaneIDs()
+	beforeLayout, err := m.Layout()
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeFocus := m.model.FocusedPane()
+	beforeSessions := len(factory.sessions)
+	partial := newFakeSession()
 	factory.mu.Lock()
 	factory.err = errors.New("second spawn failed")
+	factory.sessionOnError = partial
 	factory.mu.Unlock()
-	before := m.PaneIDs()
-	if _, _, err := m.Split(1, SplitColumns, SpawnSpec{}); err == nil {
-		t.Fatal("split spawn failure returned nil")
+	created, events, err := m.SpawnSplit(1, SplitColumns, SpawnSpec{Options: pty.Options{ShellProgram: "program", ShellArgs: []string{"space arg", `quote"arg`, "&|;$()"}}})
+	if err == nil || created != 0 || len(events) != 0 {
+		t.Fatalf("failed spawn = pane %d events=%#v err=%v", created, events, err)
 	}
-	after := m.PaneIDs()
-	if !reflect.DeepEqual(before, after) || m.model.nextPaneID != 2 || m.model.FocusedPane() != 1 {
-		t.Fatalf("failed split mutated model: before=%v after=%v next=%d focus=%d", before, after, m.model.nextPaneID, m.model.FocusedPane())
+	afterLayout, layoutErr := m.Layout()
+	if layoutErr != nil {
+		t.Fatal(layoutErr)
+	}
+	if !reflect.DeepEqual(beforeIDs, m.PaneIDs()) || !reflect.DeepEqual(beforeLayout, afterLayout) || m.model.nextPaneID != 2 || m.model.FocusedPane() != beforeFocus {
+		t.Fatalf("failed spawn mutated model: panes=%v layout=%#v next=%d focus=%d", m.PaneIDs(), afterLayout, m.model.nextPaneID, m.model.FocusedPane())
+	}
+	if len(factory.sessions) != beforeSessions || partial.closes() != 1 {
+		t.Fatalf("failed spawn leaked process: sessions=%d want=%d partial closes=%d", len(factory.sessions), beforeSessions, partial.closes())
+	}
+}
+
+func TestMuxSpawnSplitTransportsExactOptionsWithoutShellWrapper(t *testing.T) {
+	factory := &fakeFactory{}
+	m := New(factory, Options{})
+	defer m.Shutdown()
+	if _, _, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16}); err != nil {
+		t.Fatal(err)
+	}
+	want := pty.Options{
+		ShellProgram:     "literal program",
+		ShellArgs:        []string{"space arg", `quote"arg`, `'single'`, "&|;$()<>*?"},
+		WorkingDirectory: "directory with spaces",
+		Env:              map[string]string{"VALUE": `spaces " quotes & metacharacters`},
+	}
+	created, events, err := m.SpawnSplit(1, SplitRows, SpawnSpec{Options: want})
+	if err != nil || created != 2 || len(events) == 0 {
+		t.Fatalf("SpawnSplit = pane %d events=%#v err=%v", created, events, err)
+	}
+	if got := factory.options[len(factory.options)-1]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("spawn options = %#v, want exact %#v", got, want)
 	}
 }
 

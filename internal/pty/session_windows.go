@@ -44,7 +44,7 @@ func NewLocalWithOptions(rows, cols uint16, opts Options) (Session, error) {
 		_ = cp.Close()
 		return nil, err
 	}
-	args := opts.ShellArgs
+	args := append([]string(nil), opts.ShellArgs...)
 	if len(args) == 0 {
 		args = []string{shell}
 	} else if args[0] == opts.ShellProgram {
@@ -53,23 +53,16 @@ func NewLocalWithOptions(rows, cols uint16, opts Options) (Session, error) {
 		args = append([]string{shell}, args...)
 	}
 
-	// Pass the full parent environment (PATH etc.) to the child, mirroring the
-	// Unix path. conpty.Spawn treats a nil ProcAttr as an EMPTY environment (only
-	// SYSTEMROOT survives), which leaves the shell without a PATH — every external
-	// program (git, node, python, npx...) then fails to launch.
-	env := append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
-	// Advertise ANSI/VT color support the way Windows console apps detect it. Many
-	// (Django, and CLIs using colorama/supports-color) gate coloring on ANSICON
-	// rather than the Unix TERM/COLORTERM, so without this they print monochrome
-	// even though CervTerm renders SGR fine. The value is the ansicon convention
-	// (COLUMNSxROWS). Don't override a real ansicon the user is already running under.
-	if !hasEnvKey(env, "ANSICON") {
-		env = append(env, fmt.Sprintf("ANSICON=%dx%d", cols, rows))
-	}
+	configuredEnv := map[string]string{"TERM": "xterm-256color", "COLORTERM": "truecolor"}
 	for key, value := range opts.Env {
-		env = append(env, key+"="+value)
+		configuredEnv[key] = value
 	}
-	_, handle, err := cp.Spawn(shell, args, &syscall.ProcAttr{Env: env})
+	envWithoutANSICON := MergeEnvironment(os.Environ(), configuredEnv, true)
+	if !hasEnvKey(envWithoutANSICON, "ANSICON") {
+		configuredEnv["ANSICON"] = fmt.Sprintf("%dx%d", cols, rows)
+	}
+	env := MergeEnvironment(os.Environ(), configuredEnv, true)
+	_, handle, err := cp.Spawn(shell, args, &syscall.ProcAttr{Dir: opts.WorkingDirectory, Env: env})
 	if err != nil {
 		_ = cp.Close()
 		return nil, err

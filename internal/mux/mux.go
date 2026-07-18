@@ -40,8 +40,7 @@ type PaneView struct {
 	MouseMode         core.MouseMode
 }
 
-// Mux owns the implicit tab model and every pane session aggregate. Its methods
-// are called by one main-thread owner; only reader goroutines touch ingress.
+// Mux owns pane sessions on one main-thread owner; readers only touch ingress.
 type Mux struct {
 	factory      SessionFactory
 	options      Options
@@ -80,8 +79,7 @@ func New(factory SessionFactory, options Options) *Mux {
 	}
 }
 
-// Bootstrap starts the sole model leaf. A spawn failure preserves a failed leaf
-// with a diagnostic banner so the window can remain usable for diagnostics.
+// Bootstrap preserves a diagnostic failed leaf when initial spawn fails.
 func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) (TabID, PaneID, []Event, error) {
 	if m.bootstrapped {
 		return 0, 0, nil, ErrAlreadyBootstrapped
@@ -164,9 +162,14 @@ func (m *Mux) PaneView(id PaneID) (PaneView, bool) {
 	return view, true
 }
 
-// Split spawns a new session before committing topology, so a spawn failure is
-// atomic with respect to tree, focus, geometry, and ID allocation.
+// Split preserves the shell API via the targeted spawn-before-commit path.
 func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
+	return m.SpawnSplit(target, axis, spec)
+}
+
+// SpawnSplit preserves tree, focus, IDs and processes when argv-only spawn fails.
+func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
+	target := origin
 	if !m.bootstrapped {
 		return 0, nil, ErrEmptyModel
 	}
@@ -300,8 +303,7 @@ func (m *Mux) Write(id PaneID, data []byte) ([]Event, error) {
 	return nil, nil
 }
 
-// FeedFallback advances a failed pane without a PTY, preserving the interactive
-// diagnostic renderer used on platforms where local session creation is unavailable.
+// FeedFallback advances the interactive diagnostic pane without a PTY.
 func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
 	p, ok := m.panes[id]
 	if !ok || !m.model.paneExists(id) {
@@ -313,8 +315,7 @@ func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
 	return m.advancePane(p, data), nil
 }
 
-// Drain advances at most limit queued records. A non-positive limit drains the
-// channel until it is currently empty.
+// Drain advances up to limit records; a non-positive limit drains current input.
 func (m *Mux) Drain(limit int) []Event {
 	var events []Event
 	for count := 0; limit <= 0 || count < limit; count++ {
