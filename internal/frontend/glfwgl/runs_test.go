@@ -24,6 +24,12 @@ func TestDetectLigatureRunAlphabet(t *testing.T) {
 	if run.Text != "->=" || run.CellSpan != 3 {
 		t.Fatalf("run = %#v", run)
 	}
+	for _, text := range []string{"->", "=>", "!=", "==="} {
+		run, ok := detectLigatureRun(symbolCells(text), 0, -1)
+		if !ok || run.Text != text || run.CellSpan != len(text) {
+			t.Fatalf("grid-safe run %q = %#v ok=%v", text, run, ok)
+		}
+	}
 
 	// Letters and digits are excluded, so the run stops at the first non-symbol.
 	cells = symbolCells("->a>")

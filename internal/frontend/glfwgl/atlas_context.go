@@ -19,6 +19,7 @@ type atlasFontModel struct {
 	descriptors []fontdesc.Descriptor
 	fallback    []fontdesc.Descriptor
 	rules       []fontdesc.Rule
+	features    fontdesc.FeatureSet
 }
 
 type atlasFontKey struct {
@@ -36,6 +37,7 @@ type atlasFontContext struct {
 	descriptors  []fontdesc.Descriptor
 	fallback     []fontdesc.Descriptor
 	rules        []fontdesc.Rule
+	features     fontdesc.FeatureSet
 	resolvedFace fontdesc.ResolvedFaceKey
 	backend      fontglyph.Backend
 	cellW        int
@@ -88,6 +90,7 @@ func makeAtlasFontKeyWithModel(spec fontglyph.Spec, textGamma, textDarken float6
 		Descriptors:   model.descriptors,
 		Fallback:      model.fallback,
 		Rules:         model.rules,
+		Features:      model.features.CanonicalBytes(),
 		BaseSizeBits:  stableFloatBits(spec.Size),
 		PaneZoomBits:  stableFloatBits(1),
 		DPI:           uint32(math.Round(spec.DPI)),
@@ -211,6 +214,7 @@ func makeAtlasFontContextFromBackendWithModel(spec fontglyph.Spec, textGamma, te
 	if err != nil {
 		return nil, fmt.Errorf("font environment identity: %w", err)
 	}
+	fontglyph.ConfigureBackendFeatures(backend, model.features)
 	var resolvedFace fontdesc.ResolvedFaceKey
 	if styled, ok := backend.(atlasStyledBackend); ok {
 		face, _, resolved := styled.StyleResolution(fontdesc.RequestedFaceStyleNormal)
@@ -242,6 +246,7 @@ func makeAtlasFontContextFromBackendWithModel(spec fontglyph.Spec, textGamma, te
 		descriptors:  append([]fontdesc.Descriptor(nil), model.descriptors...),
 		fallback:     append([]fontdesc.Descriptor(nil), model.fallback...),
 		rules:        cloneAtlasRules(model.rules),
+		features:     model.features,
 		resolvedFace: resolvedFace,
 		backend:      backend,
 		cellW:        metrics.cellW,
@@ -325,7 +330,7 @@ func (ctx *atlasFontContext) resolveClusterStyle(request fontdesc.RequestedFaceS
 
 func (a *glyphAtlas) modelForSpec(spec fontglyph.Spec) atlasFontModel {
 	if a != nil && a.activeContext != nil && len(a.activeContext.descriptors) > 0 {
-		return atlasFontModel{descriptors: a.activeContext.descriptors, fallback: a.activeContext.fallback, rules: a.activeContext.rules}
+		return atlasFontModel{descriptors: a.activeContext.descriptors, fallback: a.activeContext.fallback, rules: a.activeContext.rules, features: a.activeContext.features}
 	}
 	return atlasFontModel{descriptors: []fontdesc.Descriptor{{Family: spec.Family}}}
 }

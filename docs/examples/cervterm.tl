@@ -39,6 +39,7 @@ local config: cervterm.Config = {
     },
     size = 14.0,
     ligatures = false,
+    features = { liga = 0, clig = 0, calt = 0 },
   },
   color_scheme = "Shades of Purple",
   color_schemes = { ["Shades of Purple"] = _shades_of_purple },

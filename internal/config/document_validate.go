@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	termaction "cervterm/internal/action"
+	"cervterm/internal/fontdesc"
 
 	lua "github.com/yuin/gopher-lua"
 )
@@ -110,6 +111,8 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		return validateFontRuleList(source, path, value)
 	case KindStringMap:
 		return validateStringMap(source, path, value, allowUnset)
+	case KindFeatureMap:
+		return validateFeatureMap(source, path, value, allowUnset)
 	case KindIndexedColorMap:
 		return validateIndexedColorMap(source, path, value, allowUnset)
 	case KindKeyList:
@@ -210,6 +213,48 @@ func unsetExpectation(allowUnset bool) string {
 		return " or cervterm.config.unset"
 	}
 	return ""
+}
+
+func validateFeatureMap(source, path string, value lua.LValue, allowUnset bool) error {
+	table, ok := value.(*lua.LTable)
+	if !ok {
+		return typeError(source, path, KindFeatureMap, value)
+	}
+	var failures []string
+	concrete := 0
+	table.ForEach(func(key, value lua.LValue) {
+		name, keyOK := key.(lua.LString)
+		if !keyOK {
+			failures = append(failures, fmt.Sprintf("%s: map key must be a 4-byte ASCII string, got %s", path, key.Type().String()))
+			return
+		}
+		entryPath := mapEntryPath(path, string(name))
+		if err := fontdesc.ValidateFeatureTag(string(name)); err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", entryPath, err))
+			return
+		}
+		if allowUnset && isUnsetValue(value) {
+			return
+		}
+		if err := validateInteger(source, entryPath, value); err != nil {
+			failures = append(failures, err.Error())
+			return
+		}
+		parsed := int(value.(lua.LNumber))
+		if parsed < 0 || parsed > fontdesc.FeatureValueMaximum {
+			failures = append(failures, fmt.Sprintf("%s: must be between 0 and %d", entryPath, fontdesc.FeatureValueMaximum))
+			return
+		}
+		concrete++
+	})
+	if concrete > fontdesc.MaxFeatureTags {
+		failures = append(failures, fmt.Sprintf("%s: must contain at most %d concrete entries", path, fontdesc.MaxFeatureTags))
+	}
+	if len(failures) != 0 {
+		sort.Strings(failures)
+		return fmt.Errorf("%s", failures[0])
+	}
+	return nil
 }
 
 func validateStringMap(source, path string, value lua.LValue, allowUnset bool) error {

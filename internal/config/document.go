@@ -23,6 +23,7 @@ const (
 	KindBoolean         ValueKind = "boolean"
 	KindStringList      ValueKind = "string_list"
 	KindStringMap       ValueKind = "string_map"
+	KindFeatureMap      ValueKind = "feature_map"
 	KindIndexedColorMap ValueKind = "indexed_color_map"
 	KindKeyList         ValueKind = "key_list"
 	KindEvents          ValueKind = "events"
@@ -79,6 +80,7 @@ func FromDocument(base Config, document Document) Config {
 			cfg.Font.Descriptors = descriptorListField(font, "descriptors", cfg.Font.Descriptors)
 			cfg.Font.Fallback = descriptorListField(font, "fallback", cfg.Font.Fallback)
 			cfg.Font.Rules = fontRuleListField(font, "rules", cfg.Font.Rules)
+			cfg.Font.Features = integerMapField(font, "features", cfg.Font.Features)
 		}
 	}
 	return cfg
@@ -104,7 +106,7 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	}},
 	{name: "font", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
 		{name: "family", kind: KindString}, {name: "descriptors", kind: KindDescriptorList}, {name: "fallback", kind: KindDescriptorList}, {name: "rules", kind: KindFontRuleList},
-		{name: "size", kind: KindNumber}, {name: "ligatures", kind: KindBoolean},
+		{name: "size", kind: KindNumber}, {name: "ligatures", kind: KindBoolean}, {name: "features", kind: KindFeatureMap},
 	}},
 	{name: "color_scheme", kind: KindString, apply: ApplyLive},
 	{name: "colors", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
@@ -167,7 +169,7 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 			if prefix != "" {
 				path = prefix + "." + child.name
 			}
-			if version == 1 && (path == "font.descriptors" || path == "font.fallback" || path == "font.rules") {
+			if version == 1 && (path == "font.descriptors" || path == "font.fallback" || path == "font.rules" || path == "font.features") {
 				continue
 			}
 			apply := child.apply
@@ -230,6 +232,7 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 		delete(document.Present, "font.descriptors")
 		delete(document.Present, "font.fallback")
 		delete(document.Present, "font.rules")
+		delete(document.Present, "font.features")
 	}
 	if root.RawGetString("config_version") != lua.LNil {
 		document.Present["config_version"] = struct{}{}
