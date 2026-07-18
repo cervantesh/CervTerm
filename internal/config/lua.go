@@ -153,6 +153,7 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.QuickSelect.Rules = quickSelectRuleListField(tbl, "rules", cfg.QuickSelect.Rules)
 		cfg.QuickSelect.Compiled, _ = PrepareQuickSelect(cfg.QuickSelect.Rules)
 	}
+	cfg.LaunchMenu = launchTargetListField(root, "launch_menu", cfg.LaunchMenu)
 	return cfg
 }
 
@@ -283,6 +284,26 @@ func quickSelectRuleListField(tbl *lua.LTable, key string, fallback []QuickSelec
 		out[i] = QuickSelectRule{
 			ID: stringField(entry, "id", ""), Pattern: stringField(entry, "pattern", ""),
 			Action: quickselect.Action(stringField(entry, "action", "")), Priority: intField(entry, "priority", 0),
+		}
+	}
+	return out
+}
+
+func launchTargetListField(tbl *lua.LTable, key string, fallback []LaunchTarget) []LaunchTarget {
+	list, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	out := make([]LaunchTarget, list.Len())
+	for i := range out {
+		entry, ok := list.RawGetInt(i + 1).(*lua.LTable)
+		if !ok {
+			return fallback
+		}
+		out[i] = LaunchTarget{
+			ID: stringField(entry, "id", ""), Label: stringField(entry, "label", ""),
+			Program: stringField(entry, "program", ""), CWD: stringField(entry, "cwd", ""),
+			Args: stringListField(entry, "args", nil), Env: stringMapField(entry, "env", nil),
 		}
 	}
 	return out

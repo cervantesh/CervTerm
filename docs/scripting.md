@@ -72,6 +72,7 @@ return { keys = {
   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
   { key = "p", mods = "ctrl+shift", action = cervterm.action.ActivateCommandPalette },
   { key = "q", mods = "ctrl+shift", action = cervterm.action.ActivateQuickSelect },
+  { key = "l", mods = "ctrl+shift", action = cervterm.action.ActivateLaunchMenu },
   { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
   { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
   { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },
@@ -84,7 +85,7 @@ return { keys = {
 } }
 ```
 
-Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ReloadConfig`, `ClosePane`, and `ResetFontSize`. Constructors: `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, `SplitPane("columns"|"rows")`, `FocusPane(direction)`, `ResizePane(direction, delta_cells)`, `SwapPane(direction)`, `MovePane(direction)`, and `Multiple({...})`, where direction is `"left"|"right"|"up"|"down"` and resize deltas are 1–1024 cells. `WithTarget(action, "origin")` is also available.
+Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ActivateLaunchMenu`, `ReloadConfig`, `ClosePane`, and `ResetFontSize`. Constructors: `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, `SplitPane("columns"|"rows")`, `FocusPane(direction)`, `ResizePane(direction, delta_cells)`, `SwapPane(direction)`, `MovePane(direction)`, and `Multiple({...})`, where direction is `"left"|"right"|"up"|"down"` and resize deltas are 1–1024 cells. `WithTarget(action, "origin")` is also available.
 
 Arguments are validated during config loading. Typed actions use registry press/repeat policy. Function callbacks preserve legacy behavior: they execute on press, consume repeat without executing, and run through the existing watchdog.
 
@@ -105,6 +106,19 @@ quick_select = {
 ```
 
 Rules replace as an ordered list at the winning configuration layer and are compiled before atomic activation. IDs are unique and at most 64 bytes; at most 32 rules are accepted; each pattern is at most 4 KiB. Invalid rules preserve the active config. Activation scans a bounded detached snapshot (at most 512 candidates and 4 KiB per match). Output, resize/reflow, viewport movement, or focus change invalidates labels before any clipboard or URL side effect.
+
+### Launch menu
+
+Bind `cervterm.action.ActivateLaunchMenu` to open declarative local launch targets in a new pane beside the action origin. Entries are exact executable-plus-argv descriptors; CervTerm never interpolates them or inserts `cmd /c`, PowerShell, or `sh -c`.
+
+```lua
+launch_menu = {
+  { id = "powershell", label = "PowerShell", program = "pwsh",
+    args = { "-NoLogo" }, cwd = "C:/work", env = { PROJECT = "demo" } },
+}
+```
+
+The ordered list is replaced at the winning configuration layer. Limits are 128 targets, 64 bytes per ID/label, 128 arguments, 256 environment entries, and 4 KiB per program/cwd/argument/environment key or value; NUL bytes and duplicate IDs reject atomically. Environment values are sensitive in provenance diagnostics. Acceptance re-resolves the target ID against the current desired config. Spawn completes before topology commit: failure leaves the menu query/selection, focus, panes, and process set unchanged with one error; success creates exactly one pane and closes the menu.
 
 ### Leader and named key tables
 

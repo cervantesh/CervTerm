@@ -41,6 +41,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Bounded leader chords, named key tables, exact typed mouse bindings with exclusive gesture capture, and transactional pane resize/swap/move actions, while preserving legacy flat `keys` callbacks.
 - A retained command palette for discoverable typed actions and labeled bindings, with runtime-safe callback invalidation, complete modal input capture, and damage-driven idle rendering.
 - Bounded quick select for visible HTTP(S) links and compiled custom regex rules, with prefix-free labels, copy/open actions, and stale-generation rejection.
+- A bounded retained launch menu with argv-only local process descriptors, sensitive environment provenance, deterministic environment merging, and spawn-before-topology commit.
 
 ### Fixed
 

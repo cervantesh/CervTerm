@@ -94,6 +94,7 @@ func fullyDifferentConfig(base Config) Config {
 	value.Shell.Args = []string{"--different"}
 	value.Shell.WorkingDirectory = "different-directory"
 	value.Shell.Env = map[string]string{"SECRET_TOKEN": "must-not-appear"}
+	value.LaunchMenu = []LaunchTarget{{ID: "tool", Label: "Tool", Program: "tool"}}
 	value.QuickSelect.Rules = []QuickSelectRule{{ID: "url", Pattern: "https://", Action: quickselect.ActionOpen}}
 	return value
 }
@@ -115,8 +116,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 85 {
-		t.Fatalf("config leaf count = %d, want 85", len(changes))
+	if len(changes) != 86 {
+		t.Fatalf("config leaf count = %d, want 86", len(changes))
 	}
 }
 
