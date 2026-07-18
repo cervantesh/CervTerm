@@ -410,6 +410,7 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	a.cfg.Scrolling = next.Scrolling
 	a.cfg.Scrollbar = next.Scrollbar
 	a.cfg.Cursor = next.Cursor
+	a.cfg.Render.MaxFPS = next.Render.MaxFPS
 	a.applyWindowAppearance()
 	if prepared.rasterChanged {
 		a.activateInstalledRasterContexts()
@@ -429,8 +430,7 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	a.requestRedraw()
 }
 
-// applyLiveConfig preserves the existing runtime-setter contract while sharing
-// the prepare/commit seam used by atomic configuration activation.
+// applyLiveConfig shares the atomic prepare/commit seam with runtime setters.
 func (a *App) applyLiveConfig(next config.Config) error {
 	a.ensureConfigState()
 	transaction, err := a.runtimeScopes.ProposeConfig(a.configScope, a.composedCfg, a.cfg, next)

@@ -53,8 +53,12 @@ func (a *App) runContinuousLoop(w *glfw.Window) error {
 		now := time.Now()
 		a.pollConfigReload(now)
 		a.applyPendingConfigReload()
+		if wait := a.presentation.wait(now, a.cfg.Render.MaxFPS); wait > 0 {
+			time.Sleep(wait)
+		}
 		a.draw()
 		a.r.EndFrame()
+		a.presentation.record(time.Now())
 		a.meter.AddFrame()
 	}
 	return nil
@@ -81,6 +85,7 @@ func (a *App) runOnDemandLoop(w *glfw.Window) error {
 		if a.shouldRedraw(now) {
 			a.draw()
 			a.r.EndFrame()
+			a.presentation.record(time.Now())
 			a.meter.AddFrame()
 			a.needsRedraw = false
 		}
@@ -105,10 +110,8 @@ func (a *App) processTermEvents(_ bool) {
 	a.handleMuxEvents(events)
 }
 
-// shouldRedraw reports whether the frame must be repainted now: an explicit
-// damage request, a blink phase flip, an expiring notice, or the stats HUD
-// refresh window elapsing.
-func (a *App) shouldRedraw(now time.Time) bool {
+// redrawWanted reports whether visible state currently demands a presentation.
+func (a *App) redrawWanted(now time.Time) bool {
 	if a.needsRedraw {
 		return true
 	}
@@ -121,18 +124,21 @@ func (a *App) shouldRedraw(now time.Time) bool {
 	if a.showStats && now.Sub(a.lastStatsDraw) >= 500*time.Millisecond {
 		return true
 	}
-	if a.scrollbarNeedsRedraw(now) {
-		return true
-	}
-	return false
+	return a.scrollbarNeedsRedraw(now)
+}
+
+// shouldRedraw applies the presentation cap without clearing redraw demand.
+func (a *App) shouldRedraw(now time.Time) bool {
+	return a.redrawWanted(now) && a.presentation.ready(now, a.cfg.Render.MaxFPS)
 }
 
 // nextWakeTimeout bridges the pure nextWake helper to App state. A redraw
 // already pending (e.g. the first frame before any OS event) short-circuits to
 // minWake so the wait does not stall the paint for up to maxWake.
 func (a *App) nextWakeTimeout(now time.Time) time.Duration {
-	if a.needsRedraw {
-		return minWake
+	presentationWait := a.presentation.wait(now, a.cfg.Render.MaxFPS)
+	if a.redrawWanted(now) {
+		return max(minWake, presentationWait)
 	}
 	// A pending timer bounds the wait. Zero (no timers, or no runtime) leaves
 	// nextWake unchanged, so an idle terminal with no timers still costs nothing.

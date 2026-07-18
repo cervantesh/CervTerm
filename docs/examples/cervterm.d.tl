@@ -163,6 +163,7 @@ local record cervterm
     zoom_out_hotkey: string
     zoom_reset_hotkey: string
     vsync: boolean
+    max_fps: integer
     redraw: string
     damage: string
   end
@@ -343,6 +344,7 @@ local record cervterm
     zoom_out_hotkey: string | Unset
     zoom_reset_hotkey: string | Unset
     vsync: boolean | Unset
+    max_fps: integer | Unset
     redraw: string | Unset
     damage: string | Unset
   end
