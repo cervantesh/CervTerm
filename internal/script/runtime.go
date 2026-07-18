@@ -6,18 +6,10 @@ import (
 	"strings"
 	"time"
 
-	termaction "cervterm/internal/action"
 	"cervterm/internal/config"
 
 	lua "github.com/yuin/gopher-lua"
 )
-
-type Binding struct {
-	Spec   Spec
-	Action termaction.Envelope
-	Label  string
-	fn     *lua.LFunction
-}
 
 // eventHandlers holds the optional Lua callbacks fired by terminal events.
 type eventHandlers struct {
@@ -35,7 +27,8 @@ type eventHandlers struct {
 // on its main loop thread.
 type Runtime struct {
 	state           *lua.LState
-	bindings        []Binding
+	bindings        BindingSet
+	callbacks       callbackTable
 	events          eventHandlers
 	timers          *timerTable
 	statuses        *statusTable
@@ -79,7 +72,7 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 		return base, nil, err
 	}
 	cfg := config.FromDocument(base, document)
-	bindings, err := loadBindings(root)
+	bindings, callbacks, err := loadBindingSet(root)
 	if err != nil {
 		state.Close()
 		return base, nil, err
@@ -89,28 +82,53 @@ func Load(path string, base config.Config) (config.Config, *Runtime, error) {
 		state.Close()
 		return base, nil, err
 	}
-	return cfg, &Runtime{state: state, bindings: bindings, events: events, timers: tmrs, statuses: statuses, overlays: overlays, dispatchTimeout: time.Second}, nil
+	return cfg, &Runtime{state: state, bindings: bindings, callbacks: callbacks, events: events, timers: tmrs, statuses: statuses, overlays: overlays, dispatchTimeout: time.Second}, nil
 }
 
+// BindingSet returns a detached snapshot of all decoded input bindings.
+func (r *Runtime) BindingSet() BindingSet {
+	if r == nil {
+		return BindingSet{}
+	}
+	return r.bindings.Clone()
+}
+
+// Bindings preserves the legacy flat-root adapter.
 func (r *Runtime) Bindings() []Binding {
-	out := make([]Binding, len(r.bindings))
-	copy(out, r.bindings)
-	return out
+	if r == nil {
+		return nil
+	}
+	return cloneBindings(r.bindings.Root)
 }
 
 func (r *Runtime) Dispatch(index int, host Host) error {
-	if index < 0 || index >= len(r.bindings) {
+	if index < 0 || index >= len(r.bindings.Root) {
 		return fmt.Errorf("binding index %d out of range", index)
 	}
-	binding := r.bindings[index]
-	callback, ok := binding.Action.Action.(termaction.Callback)
-	if !ok || binding.fn == nil {
+	binding := r.bindings.Root[index]
+	if binding.Callback == nil {
 		return fmt.Errorf("binding %d action %q is not a Lua callback", index, binding.Action.Action.ID())
 	}
-	if callback.BindingIndex != index {
-		return fmt.Errorf("binding %d callback index mismatch: %d", index, callback.BindingIndex)
+	fn := r.callbacks[*binding.Callback]
+	if fn == nil {
+		return fmt.Errorf("binding %d callback reference is not registered", index)
 	}
-	return r.callProtected("keys "+binding.Spec.String(), binding.fn, host)
+	return r.callProtected("keys "+binding.Spec.String(), fn, host)
+}
+
+// DispatchRef invokes a runtime-local callback from any binding domain.
+func (r *Runtime) DispatchRef(ref CallbackRef, label string, host Host) error {
+	if r == nil {
+		return fmt.Errorf("runtime is unavailable")
+	}
+	fn := r.callbacks[ref]
+	if fn == nil {
+		return fmt.Errorf("callback %s/%s/%d is not registered", ref.Domain, ref.Table, ref.Slot)
+	}
+	if label == "" {
+		label = fmt.Sprintf("%s/%s[%d]", ref.Domain, ref.Table, ref.Slot)
+	}
+	return r.callProtected(label, fn, host)
 }
 
 // WantsOutput reports whether an on-output handler is registered, so the frontend
@@ -197,71 +215,6 @@ func (r *Runtime) Close() {
 	}
 	r.state.Close()
 	r.state = nil
-}
-
-func loadBindings(root *lua.LTable) ([]Binding, error) {
-	value := root.RawGetString("keys")
-	if value == lua.LNil {
-		return nil, nil
-	}
-	keys, ok := value.(*lua.LTable)
-	if !ok {
-		return nil, fmt.Errorf("keys must be a table")
-	}
-	bindings := make([]Binding, 0, keys.Len())
-	for i := 1; i <= keys.Len(); i++ {
-		entry, ok := keys.RawGetInt(i).(*lua.LTable)
-		if !ok {
-			return nil, fmt.Errorf("keys[%d]: entry must be a table", i)
-		}
-		keyValue, ok := entry.RawGetString("key").(lua.LString)
-		if !ok {
-			return nil, fmt.Errorf("keys[%d]: key must be a string", i)
-		}
-		modsValue := ""
-		if value := entry.RawGetString("mods"); value != lua.LNil {
-			mods, ok := value.(lua.LString)
-			if !ok {
-				return nil, fmt.Errorf("keys[%d]: mods must be a string", i)
-			}
-			modsValue = string(mods)
-		}
-		label := ""
-		if value := entry.RawGetString("label"); value != lua.LNil {
-			parsed, ok := value.(lua.LString)
-			if !ok {
-				return nil, fmt.Errorf("keys[%d]: label must be a string", i)
-			}
-			label = string(parsed)
-		}
-		spec, err := ParseSpec(string(keyValue), modsValue)
-		if err != nil {
-			return nil, fmt.Errorf("keys[%d]: %w", i, err)
-		}
-		actionValue := entry.RawGetString("action")
-		binding := Binding{Spec: spec, Label: label}
-		switch value := actionValue.(type) {
-		case *lua.LFunction:
-			binding.fn = value
-			binding.Action, err = termaction.New(termaction.Callback{BindingIndex: len(bindings), Label: label}, termaction.TargetFocused)
-		case *lua.LUserData:
-			var ok bool
-			binding.Action, ok = luaAction(value)
-			if !ok {
-				return nil, fmt.Errorf("keys[%d]: action userdata is not a cervterm action", i)
-			}
-		default:
-			return nil, fmt.Errorf("keys[%d]: action must be a function or cervterm action", i)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("keys[%d]: %w", i, err)
-		}
-		if err := binding.Action.Validate(); err != nil {
-			return nil, fmt.Errorf("keys[%d]: invalid action: %w", i, err)
-		}
-		bindings = append(bindings, binding)
-	}
-	return bindings, nil
 }
 
 func loadEvents(root *lua.LTable) (eventHandlers, error) {
