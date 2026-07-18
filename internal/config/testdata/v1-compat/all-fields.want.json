@@ -55,6 +55,9 @@
     ],
     "IndexedColors": {}
   },
+  "Background": {
+    "Layers": null
+  },
   "Scrolling": {
     "History": 3210,
     "WheelMultiplier": 4,

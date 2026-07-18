@@ -85,6 +85,22 @@ local record cervterm
     glyph_offset_y: number
   end
 
+  record BackgroundLayer
+    kind: string
+    opacity: number | nil
+    color: string | nil
+    colors: {string} | nil
+    angle: number | nil
+    path: string | nil
+    fit: string | nil
+    horizontal_align: string | nil
+    vertical_align: string | nil
+  end
+
+  record BackgroundDocument
+    layers: {BackgroundLayer} | Unset
+  end
+
   record ColorsConfig
     foreground: string
     background: string
@@ -354,6 +370,7 @@ local record cervterm
     window: WindowDocument | Unset
     font: FontDocument | Unset
     colors: ColorsDocument | Unset
+    background: BackgroundDocument | Unset | nil
     scrolling: ScrollingDocument | Unset
     scrollbar: ScrollbarDocument | Unset
     cursor: CursorDocument | Unset
@@ -376,6 +393,7 @@ local record cervterm
     window: WindowDocument | Unset
     font: FontDocument | Unset
     colors: ColorsDocument | Unset
+    background: BackgroundDocument | Unset | nil
     scrolling: ScrollingDocument | Unset
     scrollbar: ScrollbarDocument | Unset
     cursor: CursorDocument | Unset

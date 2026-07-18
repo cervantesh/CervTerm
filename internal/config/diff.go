@@ -3,6 +3,7 @@ package config
 import (
 	"cervterm/internal/fontdesc"
 	"maps"
+	"reflect"
 	"slices"
 )
 
@@ -78,6 +79,7 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Colors.Error != effective.Colors.Error, "colors.error", ApplyLive)
 	changes = appendChange(changes, desired.Colors.ANSI != effective.Colors.ANSI, "colors.ansi", ApplyLive)
 	changes = appendChange(changes, desired.Colors.IndexedColors != effective.Colors.IndexedColors, "colors.indexed_colors", ApplyLive)
+	changes = appendChange(changes, !reflect.DeepEqual(desired.Background.Layers, effective.Background.Layers), "background.layers", ApplyLive)
 
 	changes = appendChange(changes, desired.Scrolling.History != effective.Scrolling.History, "scrolling.history", ApplyLive)
 	changes = appendChange(changes, desired.Scrolling.WheelMultiplier != effective.Scrolling.WheelMultiplier, "scrolling.wheel_multiplier", ApplyLive)
@@ -145,6 +147,8 @@ func MergeLiveConfig(base, source Config) Config {
 	base.Window.Blur = source.Window.Blur
 	base.ColorScheme = source.ColorScheme
 	base.Colors = source.Colors
+	base.Background = source.Background
+	base.Background.Layers = cloneBackgroundLayers(source.Background.Layers)
 	base.Scrolling = source.Scrolling
 	base.Scrollbar = source.Scrollbar
 	base.Cursor = source.Cursor
