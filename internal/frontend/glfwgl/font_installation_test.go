@@ -31,12 +31,13 @@ func TestEffectiveStartupConfigSafeFontsIsIsolated(t *testing.T) {
 	authored.Font.Fallback = []fontdesc.Descriptor{{Family: "Fallback"}}
 	authored.Font.Rules = []fontdesc.Rule{{Match: fontdesc.RuleMatch{Class: fontdesc.SymbolClassEmoji}, Use: fontdesc.Descriptor{Family: "Rule"}}}
 	authored.Font.Features = map[string]int{"ss01": 1}
+	authored.Font.LineHeight, authored.Font.CellWidth, authored.Font.BaselineOffset = 1.5, 1.25, 2
 	normal := effectiveStartupConfig(authored, false)
 	safe := effectiveStartupConfig(authored, true)
-	if normal.Font.Family != "Configured Family" || len(normal.Font.Descriptors) != 1 || len(normal.Font.Fallback) != 1 || len(normal.Font.Rules) != 1 || normal.Font.Features["ss01"] != 1 || safe.Font.Family != "Go Mono" || len(safe.Font.Descriptors) != 0 || len(safe.Font.Fallback) != 0 || len(safe.Font.Rules) != 0 || len(safe.Font.Features) != 0 {
+	if normal.Font.Family != "Configured Family" || len(normal.Font.Descriptors) != 1 || len(normal.Font.Fallback) != 1 || len(normal.Font.Rules) != 1 || normal.Font.Features["ss01"] != 1 || normal.Font.LineHeight != 1.5 || safe.Font.Family != "Go Mono" || len(safe.Font.Descriptors) != 0 || len(safe.Font.Fallback) != 0 || len(safe.Font.Rules) != 0 || len(safe.Font.Features) != 0 || safe.Font.LineHeight != 1 || safe.Font.CellWidth != 1 || safe.Font.BaselineOffset != 0 {
 		t.Fatalf("normal/safe font configs = %#v/%#v", normal.Font, safe.Font)
 	}
-	if authored.Font.Family != "Configured Family" || len(authored.Font.Descriptors) != 1 {
+	if authored.Font.Family != "Configured Family" || len(authored.Font.Descriptors) != 1 || authored.Font.LineHeight != 1.5 {
 		t.Fatal("safe mode mutated authored config")
 	}
 }
@@ -317,7 +318,7 @@ func TestFallbackFontInstallationPlanCarriesCompleteModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := makeAtlasFontKeyWithModel(plan.spec, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: descriptors, fallback: fallback, rules: rules, features: plan.features})
+	want, err := makeAtlasFontKeyWithModel(plan.spec, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: descriptors, fallback: fallback, rules: rules, features: plan.features, metrics: plan.metrics})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,8 +337,28 @@ func TestFallbackFontInstallationPlanCarriesCompleteModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantZoom, err := makeAtlasFontKeyWithModel(zoomed, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: descriptors, fallback: fallback, rules: rules, features: plan.features})
+	wantZoom, err := makeAtlasFontKeyWithModel(zoomed, plan.textGamma, plan.textDarken, atlasFontModel{descriptors: descriptors, fallback: fallback, rules: rules, features: plan.features, metrics: plan.metrics})
 	if err != nil || zoomKey != wantZoom {
 		t.Fatalf("zoomed fallback model key = %#v, %v; want %#v", zoomKey, err, wantZoom)
+	}
+}
+
+func TestFontInstallationProjectsConfiguredMetricsBeforeAdoption(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Font.LineHeight, cfg.Font.CellWidth = 1.5, 1.25
+	cfg.Font.BaselineOffset, cfg.Font.GlyphOffsetX, cfg.Font.GlyphOffsetY = 2, 3, -4
+	backend := &atlasTestBackend{cellW: 8, cellH: 16, baseline: 12}
+	plan, err := newFontInstallationPlan(cfg, 96, "go", func(fontglyph.Spec) (fontglyph.Backend, error) { return backend, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := prepareFontInstallation(plan, defaultFontInstallationStages())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	ctx := prepared.context
+	if ctx.cellW != 10 || ctx.cellH != 24 || ctx.baseline != 18 || ctx.metrics != plan.metrics {
+		t.Fatalf("prepared metric projection=%d/%d/%d %#v", ctx.cellW, ctx.cellH, ctx.baseline, ctx.metrics)
 	}
 }

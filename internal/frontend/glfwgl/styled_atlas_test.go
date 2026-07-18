@@ -66,6 +66,48 @@ func (b *styledAtlasBackend) RasterizeRunStyle(request fontdesc.RequestedFaceSty
 	return fontglyph.RasterizedGlyph{}, false
 }
 
+type metricPathBackend struct{ *styledAtlasBackend }
+
+func (b *metricPathBackend) RasterizeStyle(request fontdesc.RequestedFaceStyle, _ rune, _ int) (fontglyph.RasterizedGlyph, bool) {
+	b.runeCalls[request]++
+	return fontglyph.RasterizedGlyph{Image: image.NewRGBA(image.Rect(0, 0, 8, 16)), Width: 8, Height: 16, CellSpan: 1, HasColor: true}, true
+}
+
+func (b *metricPathBackend) RasterizeClusterStyle(request fontdesc.RequestedFaceStyle, _ string, span int) (fontglyph.RasterizedGlyph, bool) {
+	b.clusterCalls[request]++
+	return fontglyph.RasterizedGlyph{Image: image.NewRGBA(image.Rect(0, 0, 8*span, 16)), Width: 8 * span, Height: 16, CellSpan: span, Subpixel: true}, true
+}
+
+func (b *metricPathBackend) RasterizeRunStyle(request fontdesc.RequestedFaceStyle, _ string, span int) (fontglyph.RasterizedGlyph, bool) {
+	b.runCalls[request]++
+	return fontglyph.RasterizedGlyph{Image: image.NewRGBA(image.Rect(0, 0, 8*span, 16)), Width: 8 * span, Height: 16, CellSpan: span}, true
+}
+
+func TestMetricProjectionCoversRuneClusterRunAndColorPaths(t *testing.T) {
+	backend := &metricPathBackend{styledAtlasBackend: newStyledAtlasBackend()}
+	projection, err := fontdesc.NewMetricProjection(1.5, 1.25, 2, 3, -4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96}
+	ctx, err := makeAtlasFontContextFromBackendWithModel(spec, 1, 0, atlasFontModel{descriptors: []fontdesc.Descriptor{{Family: spec.Family}}, metrics: projection}, backend, fontInstallationMetrics{cellW: 8, cellH: 16, baseline: 12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	atlas := newGlyphAtlasWithPreparedContext(&atlasTestRenderer{}, ctx, func(fontglyph.Spec) (fontglyph.Backend, error) { return backend, nil })
+	defer atlas.close()
+	clear(atlas.entries)
+	runeEntry, runeOK := atlas.cachedRuneStyle(fontdesc.RequestedFaceStyleNormal, 'A')
+	clusterEntry, clusterOK := atlas.cachedClusterStyle(fontdesc.RequestedFaceStyleNormal, "ab", 2)
+	runEntry, runOK := atlas.cachedRunStyle(fontdesc.RequestedFaceStyleNormal, "->", 2)
+	if !runeOK || !clusterOK || !runOK {
+		t.Fatalf("projected path results rune/cluster/run=%v/%v/%v", runeOK, clusterOK, runOK)
+	}
+	if runeEntry.cellW != 10 || runeEntry.cellH != 24 || !runeEntry.colored || clusterEntry.cellSpan != 2 || !clusterEntry.subpixel || runEntry.cellSpan != 2 {
+		t.Fatalf("projected entries rune=%#v cluster=%#v run=%#v", runeEntry, clusterEntry, runEntry)
+	}
+}
+
 func TestStyledAtlasSeparatesPositiveAndNegativeKeys(t *testing.T) {
 	backend := newStyledAtlasBackend()
 	atlas, err := newGlyphAtlasWithBackendFactory(&atlasTestRenderer{}, fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96}, 1, 0, func(fontglyph.Spec) (fontglyph.Backend, error) { return backend, nil })
@@ -87,8 +129,8 @@ func TestStyledAtlasSeparatesPositiveAndNegativeKeys(t *testing.T) {
 			t.Fatalf("style %d unexpected ligature", request)
 		}
 	}
-	if len(atlas.entries) != 8 || len(atlas.runNegative) != 4 {
-		t.Fatalf("entries/run negatives = %d/%d, want 8/4", len(atlas.entries), len(atlas.runNegative))
+	if len(atlas.entries) != 8 || atlasNegativeReasonCount(atlas.activeContext, negativeRun) != 4 {
+		t.Fatalf("entries/run negatives = %d/%d, want 8/4", len(atlas.entries), atlasNegativeReasonCount(atlas.activeContext, negativeRun))
 	}
 	for i := range backend.runeCalls {
 		if backend.runeCalls[i] != 1 || backend.clusterCalls[i] != 1 || backend.runCalls[i] != 1 {
@@ -105,12 +147,12 @@ func TestStyledAtlasSeparatesInsertionNegatives(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer atlas.close()
-	clear(atlas.insertNegative)
+	atlas.activeContext.negatives = atlasNegativeCache{}
 	for request := fontdesc.RequestedFaceStyleNormal; request <= fontdesc.RequestedFaceStyleBoldItalic; request++ {
 		_, _ = atlas.cachedRuneStyle(request, 'Z')
 	}
-	if len(atlas.insertNegative) != 4 {
-		t.Fatalf("insertion negatives=%d, want 4", len(atlas.insertNegative))
+	if count := atlasNegativeReasonCount(atlas.activeContext, negativeInsertion); count != 4 {
+		t.Fatalf("insertion negatives=%d, want 4", count)
 	}
 }
 
@@ -186,9 +228,7 @@ func TestAtlasBoundsAndCachesRasterNegatives(t *testing.T) {
 	}
 	defer atlas.close()
 	backend.runeCalls = [4]int{}
-	clear(atlas.rasterNegative)
-	atlas.rasterNegativeRing = nil
-	atlas.rasterNegativeNext = 0
+	atlas.activeContext.negatives = atlasNegativeCache{}
 	for attempt := 0; attempt < 2; attempt++ {
 		if _, ok := atlas.cachedRuneStyle(fontdesc.RequestedFaceStyleNormal, '漢'); ok {
 			t.Fatal("raster miss produced rune entry")
@@ -197,14 +237,14 @@ func TestAtlasBoundsAndCachesRasterNegatives(t *testing.T) {
 			t.Fatal("raster miss produced cluster entry")
 		}
 	}
-	if backend.runeCalls[0] != 1 || backend.clusterCalls[0] != 1 || len(atlas.rasterNegative) != 2 {
-		t.Fatalf("negative cache calls/entries = %d/%d/%d", backend.runeCalls[0], backend.clusterCalls[0], len(atlas.rasterNegative))
+	if backend.runeCalls[0] != 1 || backend.clusterCalls[0] != 1 || atlasNegativeReasonCount(atlas.activeContext, negativeRaster) != 2 {
+		t.Fatalf("negative cache calls/entries = %d/%d/%d", backend.runeCalls[0], backend.clusterCalls[0], atlasNegativeReasonCount(atlas.activeContext, negativeRaster))
 	}
 	for index := 0; index <= fontdesc.MaxNegativeEntries; index++ {
-		atlas.recordRunNegative(atlasKey{kind: 'l', text: string(rune(index + 1))})
-		atlas.recordInsertionFailure(atlasKey{kind: 'r', r: rune(index + 1)})
+		atlas.activeContext.negatives.record(atlas.generation, negativeRun, atlasKey{kind: 'l', text: string(rune(index + 1))})
+		atlas.recordInsertionFailure(atlas.activeContext, atlasKey{kind: 'r', r: rune(index + 1)})
 	}
-	if len(atlas.runNegative) != fontdesc.MaxNegativeEntries || len(atlas.insertNegative) != fontdesc.MaxNegativeEntries {
-		t.Fatalf("bounded negatives = %d/%d, want %d", len(atlas.runNegative), len(atlas.insertNegative), fontdesc.MaxNegativeEntries)
+	if len(atlas.activeContext.negatives.entries) != fontdesc.MaxNegativeEntries {
+		t.Fatalf("bounded per-context negatives = %d, want %d", len(atlas.activeContext.negatives.entries), fontdesc.MaxNegativeEntries)
 	}
 }

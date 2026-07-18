@@ -11,7 +11,12 @@
   "Font": {
     "Family": "JetBrains Mono",
     "Size": 15.5,
-    "Ligatures": true
+    "Ligatures": true,
+    "LineHeight": 1,
+    "CellWidth": 1,
+    "BaselineOffset": 0,
+    "GlyphOffsetX": 0,
+    "GlyphOffsetY": 0
   },
   "Colors": {
     "Foreground": "#010203",
