@@ -19,9 +19,11 @@ const (
 	ModeCommandPalette
 	ModeQuickSelect
 	ModeLaunchMenu
+	ModeTabSwitcher
+	ModeTabCloseConfirmation
 )
 
-func (m Mode) Valid() bool { return m >= ModeSearch && m <= ModeLaunchMenu }
+func (m Mode) Valid() bool { return m >= ModeSearch && m <= ModeTabCloseConfirmation }
 
 type PaneIdentity uint64
 type FocusIdentity uint64

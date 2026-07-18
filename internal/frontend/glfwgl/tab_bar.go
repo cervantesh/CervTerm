@@ -26,6 +26,7 @@ type tabBarItem struct {
 	Bounds, Label, Close gpu.ClipRect
 	Text                 string
 	Active               bool
+	Activity             bool
 	Revision             uint64
 }
 type tabBarLayout struct {
