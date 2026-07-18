@@ -13,7 +13,7 @@ func focused(action Action) Envelope {
 
 func TestActionsValidate(t *testing.T) {
 	valid := []Action{
-		CopySelection{}, PasteClipboard{}, ToggleSearch{}, ToggleStats{}, ActivateCommandPalette{}, ActivateQuickSelect{}, ReloadConfig{}, ClosePane{},
+		CopySelection{}, PasteClipboard{}, ToggleSearch{}, ToggleStats{}, ActivateCommandPalette{}, ActivateQuickSelect{}, ActivateLaunchMenu{}, ReloadConfig{}, ClosePane{},
 		Scroll{Unit: ScrollLine, Amount: 1}, Scroll{Unit: ScrollPage, Amount: -2}, Scroll{Unit: ScrollBuffer, Amount: 1},
 		Zoom{Mode: ZoomDelta, Amount: -1}, Zoom{Mode: ZoomReset},
 		SplitPane{Axis: SplitColumns}, SplitPane{Axis: SplitRows},
