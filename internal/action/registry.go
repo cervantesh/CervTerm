@@ -176,6 +176,7 @@ func DefaultRegistry() *Registry {
 			registration{descriptor: metadata(IDPasteClipboard, "Paste clipboard", CategoryClipboard, TargetPane, true, true, pressAndRepeat), codec: simpleCodec(PasteClipboard{})},
 			registration{descriptor: metadata(IDToggleSearch, "Toggle search", CategorySearch, TargetPane, true, true, pressAndRepeat), codec: simpleCodec(ToggleSearch{})},
 			registration{descriptor: metadata(IDActivateCommandPalette, "Activate command palette", CategoryCommand, TargetOptional, true, true, pressOnly), codec: simpleCodec(ActivateCommandPalette{})},
+			registration{descriptor: metadata(IDActivateQuickSelect, "Activate quick select", CategoryCommand, TargetPane, true, true, pressOnly), codec: simpleCodec(ActivateQuickSelect{})},
 			registration{descriptor: metadata(IDToggleStats, "Toggle statistics", CategoryView, TargetOptional, true, true, pressOnly), codec: simpleCodec(ToggleStats{})},
 			registration{descriptor: metadata(IDScroll, "Scroll", CategoryView, TargetPane, true, true, pressAndRepeat), codec: scrollCodec},
 			registration{descriptor: metadata(IDZoom, "Zoom", CategoryView, TargetPane, true, true, pressAndRepeat), codec: zoomCodec},

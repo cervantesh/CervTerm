@@ -2,6 +2,7 @@ package quickselect
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -14,32 +15,49 @@ const (
 	MaxCandidates = 512
 	MaxTextBytes  = 4 * 1024
 	MaxPattern    = 4 * 1024
+	MaxRules      = 32
+	MaxIDBytes    = 64
 )
 
 var (
-	errRuleID  = errors.New("quick select rule ID is empty")
+	errRuleID  = errors.New("quick select rule ID is empty or exceeds 64 bytes")
 	errPattern = errors.New("quick select pattern is empty or exceeds 4 KiB")
 	httpRE     = regexp.MustCompile(`https?://[^\s<>"']+`)
+)
+
+type Action string
+
+const (
+	ActionOpen Action = "open"
+	ActionCopy Action = "copy"
 )
 
 type PreparedRule struct {
 	ID       string
 	Priority int
+	Action   Action
 	re       *regexp.Regexp
 }
 
 func PrepareRule(id, pattern string, priority int) (PreparedRule, error) {
-	if id == "" {
+	return PrepareRuleWithAction(id, pattern, ActionCopy, priority)
+}
+
+func PrepareRuleWithAction(id, pattern string, action Action, priority int) (PreparedRule, error) {
+	if id == "" || len(id) > MaxIDBytes {
 		return PreparedRule{}, errRuleID
 	}
 	if pattern == "" || len(pattern) > MaxPattern {
 		return PreparedRule{}, errPattern
 	}
+	if action != ActionOpen && action != ActionCopy {
+		return PreparedRule{}, fmt.Errorf("quick select action %q must be open or copy", action)
+	}
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return PreparedRule{}, err
 	}
-	return PreparedRule{ID: id, Priority: priority, re: re}, nil
+	return PreparedRule{ID: id, Priority: priority, Action: action, re: re}, nil
 }
 
 type Point struct {
@@ -50,6 +68,7 @@ type Point struct {
 type Candidate struct {
 	RuleID   string
 	Priority int
+	Action   Action
 	Text     string
 	Start    Point
 	End      Point // exclusive cell coordinate
@@ -77,10 +96,10 @@ type rawCandidate struct {
 func Find(snapshot mux.QuickSelectSnapshot, rules []PreparedRule) []Candidate {
 	var found []rawCandidate
 	for _, line := range snapshotLines(snapshot) {
-		found = appendMatches(found, line, "builtin:http", 0, httpRE, true)
+		found = appendMatches(found, line, "builtin:http", 0, ActionOpen, httpRE, true)
 		for _, rule := range rules {
 			if rule.re != nil {
-				found = appendMatches(found, line, rule.ID, rule.Priority, rule.re, false)
+				found = appendMatches(found, line, rule.ID, rule.Priority, rule.Action, rule.re, false)
 			}
 		}
 	}
@@ -146,7 +165,7 @@ func snapshotLines(snapshot mux.QuickSelectSnapshot) []logicalLine {
 	return lines
 }
 
-func appendMatches(dst []rawCandidate, line logicalLine, id string, priority int, re *regexp.Regexp, trimHTTP bool) []rawCandidate {
+func appendMatches(dst []rawCandidate, line logicalLine, id string, priority int, action Action, re *regexp.Regexp, trimHTTP bool) []rawCandidate {
 	for _, match := range re.FindAllStringIndex(line.text, -1) {
 		start, end := match[0], match[1]
 		if trimHTTP {
@@ -162,7 +181,7 @@ func appendMatches(dst []rawCandidate, line logicalLine, id string, priority int
 			continue
 		}
 		dst = append(dst, rawCandidate{Candidate: Candidate{
-			RuleID: id, Priority: priority, Text: text, Start: first.start, End: last.end,
+			RuleID: id, Priority: priority, Action: action, Text: text, Start: first.start, End: last.end,
 		}, startByte: start, endByte: end})
 	}
 	return dst
