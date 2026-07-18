@@ -417,12 +417,12 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	prepared.preparedContexts = nil
 	prepared.backgroundSurface = nil
 	prepared.committed = true
-	if !a.cfg.Scrollbar.Enabled {
+	if !scrollbarEnabled(a.cfg.Scrollbar) {
 		a.scrollbar = scrollbarState{}
 	} else {
 		a.scrollbar.lastActivity = time.Now()
 	}
-	if a.window != nil && (oldScrollbar.Enabled != a.cfg.Scrollbar.Enabled || oldScrollbar.ReservedWidthPX != a.cfg.Scrollbar.ReservedWidthPX) {
+	if a.window != nil && scrollbarGutterWidth(oldScrollbar, a.uiScale) != scrollbarGutterWidth(a.cfg.Scrollbar, a.uiScale) {
 		a.resizeToWindow()
 	}
 	a.damage.valid = false

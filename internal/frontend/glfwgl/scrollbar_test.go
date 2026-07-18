@@ -66,8 +66,8 @@ func TestScrollbarFadeReturnsToIdle(t *testing.T) {
 		t.Fatalf("visible-delay opacity = %v, want 1", got)
 	}
 	mid := a.scrollbarOpacity(t0.Add(1075*time.Millisecond), 10)
-	if math.Abs(float64(mid-.5)) > .02 {
-		t.Fatalf("mid-fade opacity = %v, want .5", mid)
+	if math.Abs(float64(mid-float32(5.0/9.0))) > .02 {
+		t.Fatalf("mid-fade quantized opacity = %v, want 5/9", mid)
 	}
 	a.scrollbar.lastPaintedOpacity = mid
 	if _, ok := a.scrollbarWake(t0.Add(1075 * time.Millisecond)); !ok {
@@ -94,5 +94,59 @@ func TestScrollbarGestureOwnerPersistsAcrossGutter(t *testing.T) {
 	a.scrollbar.owner = pointerOwnerScrollbar
 	if !a.handleScrollbarMove(0, 0) {
 		t.Fatal("scrollbar-owned move must remain captured through release")
+	}
+}
+
+func TestScrollbarModesAndGutterPolicy(t *testing.T) {
+	now := time.Unix(200, 0)
+	for _, tc := range []struct {
+		mode     string
+		hovered  bool
+		activity bool
+		want     float32
+	}{
+		{"always", false, false, 1}, {"hover", false, false, 0}, {"hover", true, false, 1},
+		{"scrolling", false, false, 0}, {"scrolling", false, true, 1}, {"never", true, true, 0},
+	} {
+		cfg := config.Defaults()
+		cfg.Scrollbar.Mode = tc.mode
+		cfg.Scrollbar.Enabled = tc.mode != "never"
+		a := &App{cfg: cfg}
+		a.scrollbar.hovered = tc.hovered
+		if tc.activity {
+			a.scrollbar.lastActivity = now
+		}
+		if got := a.scrollbarOpacity(now, 10); got != tc.want {
+			t.Fatalf("mode=%s hovered=%v activity=%v opacity=%v want=%v", tc.mode, tc.hovered, tc.activity, got, tc.want)
+		}
+	}
+	cfg := config.Defaults()
+	if got := scrollbarGutterWidth(cfg.Scrollbar, 1); got != 12 {
+		t.Fatalf("stable gutter=%v", got)
+	}
+	cfg.Scrollbar.StableGutter = false
+	if got := scrollbarGutterWidth(cfg.Scrollbar, 1); got != 0 {
+		t.Fatalf("overlay gutter=%v", got)
+	}
+	cfg.Scrollbar.Mode, cfg.Scrollbar.Enabled, cfg.Scrollbar.StableGutter = "never", false, true
+	if got := scrollbarGutterWidth(cfg.Scrollbar, 1); got != 0 {
+		t.Fatalf("never gutter=%v", got)
+	}
+}
+
+func TestScrollbarAnimationWakeQuantizesAndReturnsIdle(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Scrollbar.AnimationFPS = 20
+	t0 := time.Unix(300, 0)
+	a := &App{cfg: cfg, snap: render.Snapshot{HistoryRows: 10}}
+	a.scrollbar.lastActivity = t0
+	now := t0.Add(time.Duration(cfg.Scrollbar.AutoHideDelayMS)*time.Millisecond + 10*time.Millisecond)
+	wake, ok := a.scrollbarWake(now)
+	if !ok || wake != 40*time.Millisecond {
+		t.Fatalf("quantized wake=%v ok=%v", wake, ok)
+	}
+	a.scrollbar.lastPaintedOpacity = 0
+	if _, ok := a.scrollbarWake(t0.Add(3 * time.Second)); ok {
+		t.Fatal("idle scrollbar scheduled periodic wake")
 	}
 }
