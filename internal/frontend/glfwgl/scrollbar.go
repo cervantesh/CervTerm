@@ -111,12 +111,13 @@ func (a *App) currentScrollbarGeometry() scrollbarGeometry {
 	if !ok {
 		return scrollbarGeometry{}
 	}
-	w, _ := a.window.GetFramebufferSize()
+	w, h := a.window.GetFramebufferSize()
+	track := a.windowGeometry(w, h).ScrollbarTrack
 	pane := view.Geometry.Pixels
-	return paneScrollbarGeometry(w, pane.Y, pane.Height, a.paddingY, a.cellH, a.uiScale, a.cfg.Scrollbar, view.Snapshot.Rows, view.ScrollbackLines, view.DisplayOffset)
+	return paneScrollbarGeometry(track.X+track.Width, pane.Y, pane.Height, 0, a.cellH, a.uiScale, a.cfg.Scrollbar, view.Snapshot.Rows, view.ScrollbackLines, view.DisplayOffset)
 }
 
-func (a *App) scrollbarGeometryForSnapshot(w, _ int) scrollbarGeometry {
+func (a *App) scrollbarGeometryForSnapshot(w, h int) scrollbarGeometry {
 	if !a.cfg.Scrollbar.Enabled {
 		return scrollbarGeometry{}
 	}
@@ -124,8 +125,9 @@ func (a *App) scrollbarGeometryForSnapshot(w, _ int) scrollbarGeometry {
 	if !ok {
 		return scrollbarGeometry{}
 	}
+	track := a.windowGeometry(w, h).ScrollbarTrack
 	pane := view.Geometry.Pixels
-	return paneScrollbarGeometry(w, pane.Y, pane.Height, a.paddingY, a.cellH, a.uiScale, a.cfg.Scrollbar, a.snap.Rows, a.snap.HistoryRows, a.snap.DisplayOffset)
+	return paneScrollbarGeometry(track.X+track.Width, pane.Y, pane.Height, 0, a.cellH, a.uiScale, a.cfg.Scrollbar, a.snap.Rows, a.snap.HistoryRows, a.snap.DisplayOffset)
 }
 
 func (a *App) scrollViewport(lines int) bool {

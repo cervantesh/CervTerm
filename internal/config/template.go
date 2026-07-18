@@ -27,6 +27,11 @@ return {
     height = %d,
     padding_x = %d,
     padding_y = %d,
+    -- Per-side values override padding_x/padding_y in config_version = 2.
+    padding_left = %d,
+    padding_right = %d,
+    padding_top = %d,
+    padding_bottom = %d,
     dynamic_title = %t,
     -- Whole-window opacity requires an opaque background (#RRGGBB or alpha FF).
     -- Blur is best-effort; unsupported platforms keep transparency without blur.
@@ -200,7 +205,9 @@ return {
   --   local cervterm = require("cervterm")
   --   cervterm.every(1000, function(term) term:set_title(os.date("%%H:%%M:%%S")) end)
 }
-`, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY, cfg.Window.DynamicTitle, cfg.Window.Opacity, cfg.Window.Blur,
+`, cfg.Window.Width, cfg.Window.Height, cfg.Window.PaddingX, cfg.Window.PaddingY,
+		cfg.Window.PaddingLeft, cfg.Window.PaddingRight, cfg.Window.PaddingTop, cfg.Window.PaddingBottom,
+		cfg.Window.DynamicTitle, cfg.Window.Opacity, cfg.Window.Blur,
 		cfg.Font.Family, cfg.Font.Size, cfg.Font.Ligatures, cfg.Font.LineHeight, cfg.Font.CellWidth, cfg.Font.BaselineOffset, cfg.Font.GlyphOffsetX, cfg.Font.GlyphOffsetY,
 		cfg.Colors.Foreground, cfg.Colors.Background, cfg.Colors.Cursor, cfg.Colors.SelectionBackground,
 		cfg.Colors.ChromeBackground, cfg.Colors.ChromeMuted, cfg.Colors.Accent, cfg.Colors.Split, cfg.Colors.SearchMatch, cfg.Colors.Error,

@@ -138,8 +138,6 @@ func (a *App) metricsForCells(cellW, cellH float32) termmux.CellMetrics {
 	return termmux.CellMetrics{
 		CellWidth:  max(1, int(cellW)),
 		CellHeight: max(1, int(cellH)),
-		PaddingX:   max(0, int(a.paddingX)),
-		PaddingY:   max(0, int(a.paddingY)),
 	}
 }
 
