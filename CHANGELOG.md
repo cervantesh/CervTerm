@@ -38,6 +38,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Lazy whole-cluster fallback and symbol rules with ordered primary/fallback/embedded resolution and bounded font discovery.
 - OpenType feature projection and fixed-grid line-height, cell-width, baseline, and glyph offsets with pane-safe cache identities and redacted diagnostics.
 - Phase 5 appearance and window controls: per-side padding; independent text/background opacity; bounded solid, gradient, and image layers; scrollbar visibility/stable-gutter/fade-FPS policy; `render.max_fps`; and initial rows/columns plus native decoration/titlebar requests. Renderer selection remains explicitly excluded.
+- Bounded leader chords, named key tables, exact typed mouse bindings with exclusive gesture capture, and transactional pane resize/swap/move actions, while preserving legacy flat `keys` callbacks.
 
 ### Fixed
 

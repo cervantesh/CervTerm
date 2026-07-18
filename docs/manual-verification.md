@@ -81,6 +81,18 @@ Automated qualification covers default geometry/pixels, per-side insets, indepen
 | Linux/macOS GUI native appearance | Skip | no GUI runner available; no support claim implied |
 | Renderer selection | Excluded | Phase 5 does not expose or change renderer selection |
 
+## Phase 6 input and topology qualification
+
+Use a temporary config containing one legacy flat callback, a leader that enters both one-shot and persistent tables, exact mouse bindings, and all three topology actions. Then verify:
+
+- The legacy flat `keys` callback and typed root binding both execute; fixed reload and active search still take precedence.
+- Leader repeat does not leak bytes. `Escape`, mismatch, timeout, reload, and focus loss cancel without leaking the cancelling key; table actions retain the pane where the sequence began.
+- One-shot tables exit after a match; persistent tables remain active and refresh their timeout.
+- Mouse bindings require exact event/button/modifier/click-count matches. A matched press owns drag/release on the original pane without duplicate selection, link, divider, scrollbar, or PTY delivery.
+- With terminal mouse reporting enabled, reports win; holding Shift preserves the reporting override and allows the configured/UI route.
+- Resize/swap/move use the geometric neighbor in each direction. Resize respects the 2-column/2-row floor, swap keeps focus in the visual slot, and move keeps focus on the moved pane.
+- Attempt each topology action at an outer edge and minimum bound; an error notice appears and pane order, focus, geometry, and PTY sizes remain unchanged.
+
 ## Remaining CI check
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` is only verified after pushing this repo to GitHub and observing a green workflow run.
