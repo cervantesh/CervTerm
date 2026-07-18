@@ -74,6 +74,22 @@ func (d Document) Has(path string) bool {
 
 func FromDocument(base Config, document Document) Config {
 	cfg := FromTable(base, document.Root)
+	if window := tableField(document.Root, "window"); window != nil {
+		if document.Has("window.padding_x") {
+			cfg.Window.PaddingLeft = cfg.Window.PaddingX
+			cfg.Window.PaddingRight = cfg.Window.PaddingX
+		}
+		if document.Has("window.padding_y") {
+			cfg.Window.PaddingTop = cfg.Window.PaddingY
+			cfg.Window.PaddingBottom = cfg.Window.PaddingY
+		}
+		if document.AuthoredVersion >= 2 {
+			cfg.Window.PaddingLeft = intField(window, "padding_left", cfg.Window.PaddingLeft)
+			cfg.Window.PaddingRight = intField(window, "padding_right", cfg.Window.PaddingRight)
+			cfg.Window.PaddingTop = intField(window, "padding_top", cfg.Window.PaddingTop)
+			cfg.Window.PaddingBottom = intField(window, "padding_bottom", cfg.Window.PaddingBottom)
+		}
+	}
 	if document.AuthoredVersion >= 2 {
 		cfg.ColorScheme = stringField(document.Root, "color_scheme", cfg.ColorScheme)
 		if font := tableField(document.Root, "font"); font != nil {
@@ -105,6 +121,8 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	{name: "window", kind: KindTable, children: []fieldSchema{
 		{name: "width", kind: KindInteger, apply: ApplyNewWindow}, {name: "height", kind: KindInteger, apply: ApplyNewWindow},
 		{name: "padding_x", kind: KindInteger, apply: ApplyRestart}, {name: "padding_y", kind: KindInteger, apply: ApplyRestart},
+		{name: "padding_left", kind: KindInteger, apply: ApplyRestart}, {name: "padding_right", kind: KindInteger, apply: ApplyRestart},
+		{name: "padding_top", kind: KindInteger, apply: ApplyRestart}, {name: "padding_bottom", kind: KindInteger, apply: ApplyRestart},
 		{name: "dynamic_title", kind: KindBoolean, apply: ApplyRestart},
 		{name: "opacity", kind: KindNumber, apply: ApplyLive, runtimeOverride: true},
 		{name: "blur", kind: KindBoolean, apply: ApplyLive, runtimeOverride: true},
@@ -161,9 +179,10 @@ var unavailableV2Fields = map[string]ValueKind{
 	"environments": KindDocumentMap, "profiles": KindDocumentMap, "color_schemes": KindColorSchemeMap,
 }
 
-func isV2OnlyFontPath(path string) bool {
+func isV2OnlyPath(path string) bool {
 	switch path {
-	case "font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
+	case "window.padding_left", "window.padding_right", "window.padding_top", "window.padding_bottom",
+		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true
 	default:
 		return false
@@ -185,7 +204,7 @@ func SchemaFields(version int) ([]FieldMetadata, error) {
 			if prefix != "" {
 				path = prefix + "." + child.name
 			}
-			if version == 1 && isV2OnlyFontPath(path) {
+			if version == 1 && isV2OnlyPath(path) {
 				continue
 			}
 			apply := child.apply
@@ -245,6 +264,10 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 	collectPresence(root, rootSchema, "", document.Present)
 	if version == 1 {
 		delete(document.Present, "color_scheme")
+		delete(document.Present, "window.padding_left")
+		delete(document.Present, "window.padding_right")
+		delete(document.Present, "window.padding_top")
+		delete(document.Present, "window.padding_bottom")
 		delete(document.Present, "font.descriptors")
 		delete(document.Present, "font.fallback")
 		delete(document.Present, "font.rules")

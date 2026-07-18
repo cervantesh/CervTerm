@@ -4,6 +4,10 @@
     "Height": 800,
     "PaddingX": 8,
     "PaddingY": 9,
+    "PaddingLeft": 8,
+    "PaddingRight": 8,
+    "PaddingTop": 9,
+    "PaddingBottom": 9,
     "DynamicTitle": false,
     "Opacity": 0.9,
     "Blur": false

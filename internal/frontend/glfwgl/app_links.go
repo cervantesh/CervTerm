@@ -104,8 +104,8 @@ func (a *App) drawLinkUnderline(c color.RGBA) {
 		return
 	}
 	thickness := max(1, a.uiScale)
-	x := a.paddingX + float32(l.startCol)*a.cellW
-	y := a.paddingY + float32(l.row)*a.cellH + a.cellH - thickness
+	x := a.drawOriginX + float32(l.startCol)*a.cellW
+	y := a.drawOriginY + float32(l.row)*a.cellH + a.cellH - thickness
 	w := float32(l.endCol-l.startCol+1) * a.cellW
 	a.fillRect(x, y, w, thickness, c)
 }

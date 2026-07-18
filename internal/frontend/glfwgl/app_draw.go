@@ -54,7 +54,7 @@ func (a *App) draw() {
 		return
 	}
 	focused, _ := a.mux.FocusedPane()
-	basePaddingX, basePaddingY := a.paddingX, a.paddingY
+	baseOriginX, baseOriginY := a.drawOriginX, a.drawOriginY
 	a.saveActivePaneUI()
 	rowsDrawn := 0
 	for _, geometry := range layout.Panes {
@@ -77,8 +77,8 @@ func (a *App) draw() {
 				a.search.viewRow = row
 			}
 		}
-		a.paddingX = float32(geometry.Pixels.X) + basePaddingX
-		a.paddingY = float32(geometry.Pixels.Y) + basePaddingY
+		a.drawOriginX = float32(geometry.Pixels.X)
+		a.drawOriginY = float32(geometry.Pixels.Y)
 		a.refreshLinks()
 		a.r.PushClip(gpu.ClipRect{X: geometry.Pixels.X, Y: geometry.Pixels.Y, Width: geometry.Pixels.Width, Height: geometry.Pixels.Height})
 		a.fillRect(float32(geometry.Pixels.X), float32(geometry.Pixels.Y), float32(geometry.Pixels.Width), float32(geometry.Pixels.Height), paneBackground)
@@ -98,8 +98,8 @@ func (a *App) draw() {
 					cursorCol = inverse[cursorCol]
 				}
 			}
-			x := a.paddingX + float32(cursorCol)*a.cellW
-			y := a.paddingY + float32(cursorRow)*a.cellH
+			x := a.drawOriginX + float32(cursorCol)*a.cellW
+			y := a.drawOriginY + float32(cursorRow)*a.cellH
 			a.drawCursor(x, y, cursorColor, frameBlink)
 		}
 		a.drawLinkUnderline(cursorColor)
@@ -109,7 +109,7 @@ func (a *App) draw() {
 		a.r.PopClip()
 		state.selection, state.search, state.link, state.mouseReport = a.selection, a.search, a.link, a.mouseReport
 	}
-	a.paddingX, a.paddingY = basePaddingX, basePaddingY
+	a.drawOriginX, a.drawOriginY = baseOriginX, baseOriginY
 	for _, divider := range layout.Dividers {
 		r := divider.Pixels
 		a.fillRect(float32(r.X), float32(r.Y), float32(r.Width), float32(r.Height), a.chrome.split)
