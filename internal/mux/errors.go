@@ -23,6 +23,7 @@ var (
 	ErrTabNotFound         = errors.New("mux: tab not found")
 	ErrTabLimitReached     = errors.New("mux: tab limit reached")
 	ErrInvalidTabPosition  = errors.New("mux: invalid tab position")
+	ErrSameTabTransfer     = errors.New("mux: pane transfer requires different tabs")
 	ErrInvariant           = errors.New("mux: invariant violation")
 )
 

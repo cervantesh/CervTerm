@@ -18,6 +18,7 @@ const (
 	PaneResizeFailed
 	PaneCloseFailed
 	PaneClosed
+	PaneTransferred
 	TabEmpty // compatibility alias emitted when the final pane closes
 	TabSpawned
 	TabActivated
@@ -31,14 +32,15 @@ const (
 // Event contains values only; it never exposes a mutable terminal, parser, PTY,
 // renderer, or toolkit object.
 type Event struct {
-	Kind     EventKind
-	Pane     PaneID
-	Tab      TabID
-	Data     []byte
-	Text     string
-	Geometry PaneGeometry
-	Err      error
-	Revision uint64
+	Kind      EventKind
+	Pane      PaneID
+	Tab       TabID
+	SourceTab TabID
+	Data      []byte
+	Text      string
+	Geometry  PaneGeometry
+	Err       error
+	Revision  uint64
 }
 
 type ingressRecord struct {

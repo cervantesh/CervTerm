@@ -56,11 +56,24 @@ func (m *Mux) SpawnTab(spec SpawnSpec, metrics CellMetrics, title string) (TabID
 }
 
 func (m *Mux) ActivateTab(id TabID) ([]Event, error) {
+	tab := m.model.tabByID(id)
+	if tab == nil {
+		return nil, ErrTabNotFound
+	}
+	layout, err := layoutRoot(tab.root, m.bounds, m.resolveMetrics)
+	if err != nil {
+		return nil, err
+	}
 	if err := m.model.ActivateTab(id); err != nil {
 		return nil, err
 	}
 	focused := m.model.FocusedPane()
-	return []Event{{Kind: TabActivated, Tab: id, Pane: focused}, {Kind: PaneFocused, Tab: id, Pane: focused}}, nil
+	events := []Event{{Kind: TabActivated, Tab: id, Pane: focused}, {Kind: PaneFocused, Tab: id, Pane: focused}}
+	layoutEvents, err := m.applyLayout(layout)
+	for i := range layoutEvents {
+		layoutEvents[i].Tab = id
+	}
+	return append(events, layoutEvents...), err
 }
 func (m *Mux) RenameTab(id TabID, title string) ([]Event, error) {
 	if err := m.model.RenameTab(id, title); err != nil {
@@ -105,4 +118,44 @@ func (m *Mux) CloseTab(id TabID) ([]Event, error) {
 		events = append(events, Event{Kind: TabActivated, Tab: detached.active, Pane: detached.focused}, Event{Kind: PaneFocused, Tab: detached.active, Pane: detached.focused})
 	}
 	return events, errors.Join(closeErrs...)
+}
+
+// TransferPane atomically changes tree ownership without spawning, closing, or resizing a PTY.
+func (m *Mux) TransferPane(pane PaneID, destinationTab TabID, destinationPane PaneID, axis SplitAxis) ([]Event, error) {
+	result, err := m.model.TransferPane(pane, destinationTab, destinationPane, axis, DefaultSplitRatio, m.bounds, m.resolveMetrics)
+	if err != nil {
+		return nil, err
+	}
+	events := []Event{{Kind: PaneTransferred, Pane: pane, Tab: destinationTab, SourceTab: result.SourceTab}}
+	if !result.SourceTabClosed {
+		events = append(events, Event{Kind: TabRevisionChanged, Tab: result.SourceTab, Revision: result.SourceRevision})
+	}
+	events = append(events, Event{Kind: TabRevisionChanged, Tab: destinationTab, Revision: result.DestinationRevision})
+	if result.SourceTabClosed {
+		events = append(events, Event{Kind: TabClosed, Tab: result.SourceTab})
+	}
+	if result.ActiveChanged {
+		events = append(events, Event{Kind: TabActivated, Tab: result.ActiveTab, Pane: result.ActiveFocused})
+	}
+	if result.FocusChanged {
+		events = append(events, Event{Kind: PaneFocused, Tab: result.ActiveTab, Pane: result.ActiveFocused})
+	}
+	var activeLayout Layout
+	if result.ActiveTab == result.SourceTab && !result.SourceTabClosed {
+		activeLayout = result.SourceLayout
+	}
+	if result.ActiveTab == result.DestinationTab {
+		activeLayout = result.DestinationLayout
+	}
+	if len(activeLayout.Panes) > 0 {
+		layoutEvents, applyErr := m.applyLayout(activeLayout)
+		if applyErr != nil {
+			return events, applyErr
+		}
+		for i := range layoutEvents {
+			layoutEvents[i].Tab = result.ActiveTab
+		}
+		events = append(events, layoutEvents...)
+	}
+	return events, nil
 }
