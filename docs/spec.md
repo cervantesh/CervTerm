@@ -88,6 +88,15 @@ This document is the executable contract for the MVP. Implementation must follow
 - Font zoom is pane-local: keyboard/wheel/reset target the focused pane, sibling panes retain their size/grid, and new splits inherit the source pane's zoom.
 - All active font sizes share one fixed two-page atlas; pane focus never clears atlas pages.
 
+### Font descriptors, fallback, shaping, and metrics
+
+- Unversioned/v1 configuration keeps `font.family`, `font.size`, and `font.ligatures` compatibility. Explicit v2 additionally supports ordered `font.descriptors`, `font.fallback`, bounded `font.rules`, OpenType `font.features`, and fixed-grid metric projection.
+- Descriptor selection is deterministic across family, collection selector, weight, style, stretch, and augment/fixed attribute mode. Normal, bold, italic, and bold-italic use real faces when available and only then use keyed synthetic modes.
+- Fallback is lazy and whole-cluster: authored rule, primary, ordered fallback, then embedded Go Mono. ASCII must not trigger fallback I/O; losing candidates release cache pins.
+- `line_height` and `cell_width` are bounded to 0.5–3.0; baseline/glyph offsets are bounded to -64..64 pixels. They change cell canvases and ink placement without content-dependent advances.
+- Font environments retain at most 64 contexts; the parsed cache retains at most 128 faces/256 MiB; each context retains at most 8,192 negative results. All font fields remain restart-scoped.
+- `--safe-fonts` restores embedded Go Mono, clears descriptors/fallback/rules/features, and restores natural 1/1/0/0/0 metrics.
+
 
 ### Visual theme
 

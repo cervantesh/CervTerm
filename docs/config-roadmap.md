@@ -84,7 +84,7 @@ Kitty uses a custom `kitty.conf` directive format with a very broad configuratio
 
 Ideas to adopt:
 
-- Rich font configuration over time: family, bold/italic faces, size, line height, cell width/height, baseline/glyph offset.
+- Rich font configuration is implemented for ordered descriptors, real/synthetic styles, lazy fallback/rules, OpenType features, line height, cell width, baseline and glyph offsets.
 - Scrollbar settings eventually: visible mode, width, opacity, colors.
 - Scrollback pager concept later.
 - Include/import support.
@@ -413,7 +413,7 @@ return config
 - Keybindings.
 - Mouse bindings.
 - Cursor shapes.
-- Font fallback.
+- Font fallback and rule-based whole-cluster selection are implemented in explicit v2.
 - Scrollbar.
 - Themes and imports.
 
@@ -423,7 +423,7 @@ return config
 - Visible tabs, local windows, and layout-only workspaces are planned.
 - Local/SSH/WSL/remote domains remain excluded.
 - Dynamic remote configuration and plugin marketplaces remain excluded.
-- Rich font descriptors/features are planned without renderer-backend selection.
+- Rich font descriptors/features/metrics are implemented without renderer-backend selection.
 
 ## Sources
 

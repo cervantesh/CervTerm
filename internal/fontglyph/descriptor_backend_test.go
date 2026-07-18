@@ -39,6 +39,13 @@ func TestDescriptorBackendResolvesRealAndSyntheticRequestedStyles(t *testing.T) 
 				t.Fatalf("style %d source = %q, want %q", request, got, canonicalFontCacheSource(wantSources[request]))
 			}
 			keys[key] = struct{}{}
+			diagnostic, diagnosticOK := DiagnosticStyleFace(backend, request)
+			if !diagnosticOK || diagnostic.Metadata.Family != "Test Mono" || diagnostic.Metadata.Subfamily == "" || diagnostic.Tier != fontdesc.SourceTierPrimary || diagnostic.Synthetic != fontdesc.SyntheticNone {
+				t.Fatalf("style %d diagnostic = %#v, %v", request, diagnostic, diagnosticOK)
+			}
+		}
+		if diagnostic, ok := DiagnosticContentFace(backend, fontdesc.RequestedFaceStyleNormal, "中"); ok {
+			t.Fatalf("descriptor-only content diagnostic fabricated coverage: %#v", diagnostic)
 		}
 		if len(keys) != 4 {
 			t.Fatalf("resolved style keys are not distinct: %v", keys)

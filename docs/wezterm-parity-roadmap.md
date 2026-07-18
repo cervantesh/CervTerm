@@ -112,6 +112,8 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 **Rollback:** optional fields default to the current palette.
 
 ## Phase 4 — Font Descriptors, Fallback, and Metrics
+
+**Status:** Complete. Slices 4.1–4.5 shipped bounded installation foundations, primary descriptors/styles, lazy fallback/rules, OpenType feature projection, and fixed-grid metrics through PRs #149–#153. Phase 4.6 closes diagnostics and qualification evidence in [the Phase 4 validation report](validation/phase-4-font-descriptors-metrics.md).
 **Scope:** fallback stack, face rules, weights/styles/stretch, line height, offsets, feature rules.
 
 **Work**
@@ -121,7 +123,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 - Add lazy ordered fallback and optional Unicode-range/symbol rules.
 - Add OpenType features, line-height/cell-width, baseline/glyph offsets while preserving the fixed grid.
 - Expand atlas/shaping cache keys and DPI/pane-zoom rebuild logic.
-- Diagnose chosen faces and fallbacks; verify installed package paths.
+- Diagnose configured descriptors, effective metrics, concrete path-free primary styles and representative Powerline/Nerd/CJK/emoji/rule-tier selections; arbitrary active-terminal selections and live-process counts remain explicitly unavailable in diagnostic mode.
 
 **Success:** JetBrainsMono Nerd Font selects the intended faces; real styles replace synthetic ones when available; zoom/DPI/fallback remain cache-safe; sibling pane zoom is unaffected.
 

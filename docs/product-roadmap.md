@@ -221,18 +221,15 @@ Deliverable:
 
 - Cursor and text remain aligned for common non-ASCII content.
 
-### Milestone 4: Font/render slice
+### Milestone 4: Font/render slice (completed)
 
-1. Choose font rasterization library.
-2. Add configurable font descriptor model.
-3. Load default system monospace font.
-4. Replace static basicfont atlas with dynamic atlas.
-5. Preserve renderer hot-path benchmarks.
-6. Add visual smoke tests where feasible.
-7. Replace the temporary emoji workaround with a real color glyph pipeline:
-   - font fallback and glyph IDs/clusters
-   - baseline/bearing-aware raster metrics
-   - RGBA atlas entries for color glyphs
+1. Use bounded OpenType/DirectWrite-capable font rasterization behind the existing renderer seam.
+2. Support deterministic descriptors, real/synthetic styles, lazy whole-cluster fallback/rules, OpenType features, and fixed-grid metrics.
+3. Resolve system/per-user fonts plus embedded Go Mono fallback without unbounded discovery or parsed caches.
+4. Share a dynamic, generation-keyed two-page atlas across pane zoom/DPI contexts.
+5. Preserve renderer/parser allocation invariants and fixed-grid advances.
+6. Qualify installed Windows packaging with JetBrainsMono Nerd Font, Powerline/Nerd symbols, CJK/emoji system fallbacks, and redacted doctor diagnostics.
+7. Keep renderer selection explicitly outside the font feature.
    - no external browser/cmd.exe rasterization in the steady-state renderer.
 
 Deliverable:
