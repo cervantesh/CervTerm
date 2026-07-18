@@ -32,6 +32,10 @@ type Config struct {
 type WindowConfig struct {
 	Width             int
 	Height            int
+	InitialRows       int
+	InitialCols       int
+	Decorations       string
+	Titlebar          string
 	PaddingX          int
 	PaddingY          int
 	PaddingLeft       int
@@ -138,8 +142,8 @@ type ShellConfig struct {
 func Defaults() Config {
 	return Config{
 		Window: WindowConfig{
-			Width: 1100, Height: 720, PaddingX: 6, PaddingY: 6,
-			PaddingLeft: 6, PaddingRight: 6, PaddingTop: 6, PaddingBottom: 6,
+			Width: 1100, Height: 720, InitialRows: 0, InitialCols: 0, Decorations: "system", Titlebar: "dark",
+			PaddingX: 6, PaddingY: 6, PaddingLeft: 6, PaddingRight: 6, PaddingTop: 6, PaddingBottom: 6,
 			DynamicTitle: true, Opacity: 1.0, TextOpacity: 1.0, BackgroundOpacity: 1.0, Blur: true,
 		},
 		Font: FontConfig{Family: "Go Mono", Size: 14, Ligatures: false, Features: map[string]int{}, LineHeight: 1, CellWidth: 1},
@@ -246,6 +250,17 @@ func (c Config) Validate() error {
 	var errs []error
 	if c.Window.Width < 100 || c.Window.Height < 100 {
 		errs = append(errs, errors.New("window width and height must be >= 100"))
+	}
+	if (c.Window.InitialRows == 0) != (c.Window.InitialCols == 0) {
+		errs = append(errs, errors.New("window.initial_rows and window.initial_cols must both be zero or both be set"))
+	} else if c.Window.InitialRows != 0 && (c.Window.InitialRows < 10 || c.Window.InitialRows > 1000 || c.Window.InitialCols < 10 || c.Window.InitialCols > 1000) {
+		errs = append(errs, errors.New("window.initial_rows and window.initial_cols must both be between 10 and 1000"))
+	}
+	if c.Window.Decorations != "system" && c.Window.Decorations != "none" {
+		errs = append(errs, fmt.Errorf("window.decorations %q must be system or none", c.Window.Decorations))
+	}
+	if c.Window.Titlebar != "system" && c.Window.Titlebar != "dark" {
+		errs = append(errs, fmt.Errorf("window.titlebar %q must be system or dark", c.Window.Titlebar))
 	}
 	if c.Window.PaddingX < 0 || c.Window.PaddingY < 0 {
 		errs = append(errs, errors.New("window padding aliases must be >= 0"))

@@ -11,6 +11,10 @@ func fullyDifferentConfig(base Config) Config {
 	value := base.Clone()
 	value.Window.Width++
 	value.Window.Height++
+	value.Window.InitialRows = 24
+	value.Window.InitialCols = 80
+	value.Window.Decorations = "none"
+	value.Window.Titlebar = "system"
 	value.Window.PaddingX++
 	value.Window.PaddingY++
 	value.Window.PaddingLeft++
@@ -109,8 +113,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 80 {
-		t.Fatalf("config leaf count = %d, want 80", len(changes))
+	if len(changes) != 84 {
+		t.Fatalf("config leaf count = %d, want 84", len(changes))
 	}
 }
 
