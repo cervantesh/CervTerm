@@ -13,6 +13,7 @@ import (
 	"cervterm/internal/frontend/gpu"
 	"cervterm/internal/input"
 	"cervterm/internal/metrics"
+	"cervterm/internal/modal"
 	termmux "cervterm/internal/mux"
 	"cervterm/internal/render"
 	"cervterm/internal/script"
@@ -70,10 +71,8 @@ type App struct {
 	backgroundResizeResults   chan backgroundResizeResult
 	atlas                     *glyphAtlas
 
-	// Last framebuffer size handed to the renderer; draw() calls r.Resize only when
-	// it changes, so a backend recreates its swapchain/drawable on real size changes
-	// (and once on the first frame — seeded to -1 in RunWithOptions) rather than
-	// every frame.
+	// Last framebuffer size sent to r.Resize; seeded to -1 so the first frame
+	// initializes the backend and later frames resize only on real changes.
 	lastFBW, lastFBH int
 
 	cols, rows       int
@@ -111,11 +110,8 @@ type App struct {
 	ligaturesActive  bool   // font.ligatures enabled AND the active shaper can substitute
 
 	rowHashes, prevHashes, prevPrevHashes []uint64
-	// Cursor rows of the last two rendered frames. The cursor is drawn outside
-	// the hash-based row damage, so it needs the same buffer-age-2 treatment as
-	// content: with a double-buffered back buffer alternating between the N-1 and
-	// N-2 images, clearing only the N-1 cursor row leaves a ghost on the older
-	// buffer. Marking both prior cursor rows damaged repaints the stale cell.
+	// Cursor rows need buffer-age-2 damage because the cursor bypasses row hashes;
+	// repaint both prior rows so alternating back buffers cannot retain a ghost.
 	lastCursorRow, prevCursorRow int
 	damage                       damageState
 
@@ -135,6 +131,7 @@ type App struct {
 
 	lterm               searchTerminal
 	search              searchController
+	modal               modal.Coordinator
 	selection           selectionState
 	mouseReport         mouseReportState
 	mouseCapturePane    termmux.PaneID
@@ -343,6 +340,9 @@ func (a *App) installCallbacks() {
 		a.requestRedraw()
 	})
 	a.window.SetCharCallback(func(_ *glfw.Window, char rune) {
+		if a.handleModalChar(char) {
+			return
+		}
 		if a.suppressNextChar {
 			a.suppressNextChar = false
 			return
@@ -363,6 +363,9 @@ func (a *App) installCallbacks() {
 	})
 
 	a.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
+		if a.handleModalMouseButton(button, action, mods) {
+			return
+		}
 		x, y := a.window.GetCursorPos()
 		if a.handleConfiguredMouseButton(button, action, mods, x, y) {
 			return
@@ -406,6 +409,9 @@ func (a *App) installCallbacks() {
 		}
 	})
 	a.window.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
+		if a.handleModalCursorPos(x, y) {
+			return
+		}
 		if a.mouseCapturePane != 0 {
 			a.clearDividerCursor()
 			a.sendMouseMove(x, y)
@@ -442,6 +448,9 @@ func (a *App) installCallbacks() {
 		a.requestRedraw()
 	})
 	a.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {
+		if a.handleModalScroll(xoff, yoff) {
+			return
+		}
 		x, y := a.window.GetCursorPos()
 		if a.handleConfiguredMouseWheel(yoff, x, y) {
 			return

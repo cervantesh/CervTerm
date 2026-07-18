@@ -187,6 +187,9 @@ func reloadChord(key glfw.Key, mods glfw.ModifierKey) bool {
 }
 
 func (a *App) handleKeyEvent(key glfw.Key, eventAction glfw.Action, mods glfw.ModifierKey) {
+	if a.handleModalKey(key, eventAction, mods) {
+		return
+	}
 	if eventAction != glfw.Press && eventAction != glfw.Repeat {
 		return
 	}
