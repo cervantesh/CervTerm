@@ -39,6 +39,14 @@ Font startup is a transaction: configuration canonicalizes into immutable descri
 
 Metric projection scales one integer cell width/height per context and shifts raster ink only after natural metrics are known. Rune, cluster, shaped-run, fallback and color paths are placed into that fixed canvas; logical cell advances remain content-independent. Pane zoom/DPI uses the same projected metrics for mux layout, hit testing and deferred PTY resize. Advanced font configuration is restart-scoped; live candidate evaluation performs no font I/O or active mutation.
 
+## Phase 5 appearance ownership and bounds
+
+Appearance configuration remains data owned by `internal/config`; composition/decoding of bounded background layers is isolated in `internal/background`; GLFW applies DPI-aware per-side padding, stable scrollbar gutter, opacity, presentation gating, and native startup requests. Background decode/compose work prepares candidate CPU/GPU resources off the active state, and main-thread adoption preserves the last-known-good surface on failure. Image dimensions, decoded bytes, layer count, cache entries/bytes, and asynchronous work are bounded.
+
+`render.max_fps` is a presentation gate layered over damage-driven redraw and vsync, not a scheduler or renderer choice. Scrollbar fade uses its separately bounded animation FPS and cannot change grid geometry when stable gutter is enabled. Initial rows/columns derive initial client geometry from terminal metrics; decorations/titlebar are platform-capability requests scoped to native window recreation.
+
+The architecture intentionally exposes no renderer selector. `internal/core`, `internal/vt`, `internal/render`, `internal/mux`, `internal/config`, and `internal/background` remain free of GLFW/OpenGL imports; only the build-tagged frontend projects these policies through the existing `gpu.Renderer` seam.
+
 ## Candidate configuration source graph
 
 `internal/config.BuildSourceGraph` is the candidate-only foundation for Phase 2 composition. It consumes one fresh caller-owned candidate Lua state, canonicalizes local Lua/Teal source identity (including filesystem aliases), evaluates one primary plus declarative includes exactly once in that state, and emits deterministic depth-first post-order nodes and dependency edges. A failed candidate state is discarded, and a state cannot be submitted for a second build. Depth, source-count, per-file byte, and aggregate-byte limits reject a candidate before it can affect active configuration.
