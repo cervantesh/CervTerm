@@ -74,6 +74,7 @@ return { keys = {
   { key = "q", mods = "ctrl+shift", action = cervterm.action.ActivateQuickSelect },
   { key = "l", mods = "ctrl+shift", action = cervterm.action.ActivateLaunchMenu },
   { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
+  { key = "up", mods = "ctrl+shift", action = cervterm.action.ScrollToPrompt(-1) },
   { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
   { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },
   { key = "r", mods = "alt+shift", action = cervterm.action.ResizePane("right", 3) },
@@ -85,7 +86,7 @@ return { keys = {
 } }
 ```
 
-Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ActivateLaunchMenu`, `ReloadConfig`, `ClosePane`, `ResetFontSize`, `NewTab`, `ActivateTabSwitcher`, and `NewWindow`. Constructors include `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `Zoom(delta)`, pane actions, tab actions, `CloseWindow(window_id)`, `FocusWindow(window_id)`, `MoveTabToWindow(window_id, tab_id, position)`, `MovePaneToWindow(window_id, pane_id, "columns"|"rows")`, and `Multiple({...})`. Window, tab, and pane IDs are stable process-local positive integers; missing or stale explicit targets fail without falling back to the focused window. `WithTarget(action, "origin")` is also available.
+Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ActivateLaunchMenu`, `ReloadConfig`, `ClosePane`, `ResetFontSize`, `NewTab`, `ActivateTabSwitcher`, and `NewWindow`. Constructors include `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `ScrollToPrompt(-1|1)`, `Zoom(delta)`, pane actions, tab actions, `CloseWindow(window_id)`, `FocusWindow(window_id)`, `MoveTabToWindow(window_id, tab_id, position)`, `MovePaneToWindow(window_id, pane_id, "columns"|"rows")`, and `Multiple({...})`. Window, tab, and pane IDs are stable process-local positive integers; missing or stale explicit targets fail without falling back to the focused window. `WithTarget(action, "origin")` is also available.
 
 Arguments are validated during config loading. Typed actions use registry press/repeat policy. Function callbacks preserve legacy behavior: they execute on press, consume repeat without executing, and run through the existing watchdog.
 

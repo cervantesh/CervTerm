@@ -18,6 +18,7 @@ const (
 	IDActivateQuickSelect       ID = "activate_quick_select"
 	IDActivateLaunchMenu        ID = "activate_launch_menu"
 	IDScroll                    ID = "scroll"
+	IDScrollToPrompt            ID = "scroll_to_prompt"
 	IDZoom                      ID = "zoom"
 	IDReloadConfig              ID = "reload_config"
 	IDSplitPane                 ID = "split_pane"
@@ -127,6 +128,17 @@ func (a Scroll) Validate() error {
 	}
 	if a.Unit == ScrollBuffer && a.Amount != -1 && a.Amount != 1 {
 		return errors.New("buffer scroll amount must be -1 or 1")
+	}
+	return nil
+}
+
+type ScrollToPrompt struct{ Delta int }
+
+func (ScrollToPrompt) ID() ID  { return IDScrollToPrompt }
+func (ScrollToPrompt) action() {}
+func (a ScrollToPrompt) Validate() error {
+	if a.Delta != -1 && a.Delta != 1 {
+		return errors.New("scroll-to-prompt delta must be -1 or 1")
 	}
 	return nil
 }
@@ -330,6 +342,8 @@ func actionIdentity(action Action) (ID, error) {
 		return IDActivateLaunchMenu, nil
 	case Scroll:
 		return IDScroll, nil
+	case ScrollToPrompt:
+		return IDScrollToPrompt, nil
 	case Zoom:
 		return IDZoom, nil
 	case ReloadConfig:

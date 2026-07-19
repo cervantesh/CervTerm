@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	termaction "cervterm/internal/action"
+	"cervterm/internal/core"
 	termmux "cervterm/internal/mux"
 )
 
@@ -192,5 +193,58 @@ func TestActionExecutorTopologyActionsTargetOriginAndPreserveFailure(t *testing.
 		if before[i] != after[i] {
 			t.Fatalf("topology identities changed after failure: before=%v after=%v", before, after)
 		}
+	}
+}
+
+func TestActionExecutorScrollsBetweenSemanticPrompts(t *testing.T) {
+	a := newMuxTestApp(t, 20, 5)
+	pane := a.focusedPane
+	for index := 0; index < 4; index++ {
+		feedTestPane(t, a, []byte("\x1b]133;A\x1b\\P\x1b]133;B\x1b\\cmd\x1b]133;C\x1b\\\r\nout\r\n\x1b]133;D;0\x1b\\"))
+	}
+	semantic, _ := a.mux.SemanticSnapshot(pane)
+	expected := -1
+	for index := len(semantic.Ranges) - 1; index >= 0; index-- {
+		if semantic.Ranges[index].Kind == core.SemanticPrompt && semantic.Ranges[index].Start.GlobalRow < semantic.ViewportTopGlobalRow {
+			expected = semantic.Ranges[index].Start.GlobalRow
+			break
+		}
+	}
+	if expected < 0 {
+		t.Fatal("missing previous prompt setup")
+	}
+	if err := executeFocusedAction(a, termaction.ScrollToPrompt{Delta: -1}); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := a.mux.PaneView(pane)
+	if first.DisplayOffset == 0 {
+		t.Fatal("previous prompt did not scroll")
+	}
+	firstSemantic, _ := a.mux.SemanticSnapshot(pane)
+	if firstSemantic.ViewportTopGlobalRow != expected {
+		t.Fatalf("top=%d expected=%d", firstSemantic.ViewportTopGlobalRow, expected)
+	}
+	if err := executeFocusedAction(a, termaction.ScrollToPrompt{Delta: -1}); err != nil {
+		t.Fatal(err)
+	}
+	second, _ := a.mux.PaneView(pane)
+	if second.DisplayOffset <= first.DisplayOffset {
+		t.Fatalf("offsets first=%d second=%d", first.DisplayOffset, second.DisplayOffset)
+	}
+	if err := executeFocusedAction(a, termaction.ScrollToPrompt{Delta: 1}); err != nil {
+		t.Fatal(err)
+	}
+	third, _ := a.mux.PaneView(pane)
+	if third.DisplayOffset >= second.DisplayOffset {
+		t.Fatalf("next prompt offset=%d previous=%d", third.DisplayOffset, second.DisplayOffset)
+	}
+}
+
+func TestActionExecutorPromptNavigationFailsWithoutMetadata(t *testing.T) {
+	a := newMuxTestApp(t, 20, 5)
+	err := executeFocusedAction(a, termaction.ScrollToPrompt{Delta: -1})
+	var execution *termaction.ExecutionError
+	if !errors.As(err, &execution) || execution.Class != termaction.ErrorMux {
+		t.Fatalf("error=%v", err)
 	}
 }

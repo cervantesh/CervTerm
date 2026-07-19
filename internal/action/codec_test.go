@@ -29,6 +29,7 @@ func TestCodecRoundTripsBuiltInActions(t *testing.T) {
 		focused(ReloadConfig{}),
 		focused(ClosePane{}),
 		focused(Scroll{Unit: ScrollPage, Amount: -1}),
+		focused(ScrollToPrompt{Delta: -1}),
 		focused(Zoom{Mode: ZoomDelta, Amount: 1.5}),
 		focused(Zoom{Mode: ZoomReset}),
 		focused(SplitPane{Axis: SplitColumns}),
