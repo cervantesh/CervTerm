@@ -32,6 +32,7 @@ type processServices struct {
 
 type nativeWindowHost interface {
 	MakeContextCurrent()
+	Focus()
 	ShouldClose() bool
 	Destroy()
 }
@@ -48,10 +49,53 @@ func (glfwEventPump) WaitEventsTimeout(timeout time.Duration) {
 	glfw.WaitEventsTimeout(timeout.Seconds())
 }
 
+// projectionResource is one independently owned part of a native projection.
+// Resources are recorded in acquisition order and closed in reverse order.
+type projectionResource interface {
+	Close() error
+}
+
+type projectionResourceFunc func() error
+
+func (close projectionResourceFunc) Close() error { return close() }
+
+// nativeProjectionBundle is provisional until windowController.createProjection
+// publishes it. A factory may return a partial bundle with an error; the
+// controller still rolls it back, preventing callbacks or native resources
+// from escaping failed candidate creation.
+type nativeProjectionBundle struct {
+	host      nativeWindowHost
+	handle    func([]termmux.Event) bool
+	resources []projectionResource
+	closed    bool
+}
+
+func (b *nativeProjectionBundle) close() error {
+	if b == nil || b.closed {
+		return nil
+	}
+	b.closed = true
+	var joined error
+	for i := len(b.resources) - 1; i >= 0; i-- {
+		if b.resources[i] != nil {
+			joined = errors.Join(joined, b.resources[i].Close())
+		}
+	}
+	if b.host != nil {
+		b.host.Destroy()
+	}
+	return joined
+}
+
+type nativeProjectionFactory interface {
+	Create(termmux.WindowID) (*nativeProjectionBundle, error)
+}
+
 type windowProjection struct {
 	id       termmux.WindowID
 	host     nativeWindowHost
 	handle   func([]termmux.Event) bool
+	bundle   *nativeProjectionBundle
 	teardown func() error
 	dirty    bool
 	closed   bool
@@ -63,6 +107,7 @@ type windowProjection struct {
 type windowController struct {
 	services processServices
 	pump     nativeEventPump
+	factory  nativeProjectionFactory
 	windows  map[termmux.WindowID]*windowProjection
 	pending  map[termmux.WindowID][]termmux.Event
 	order    []termmux.WindowID
@@ -76,6 +121,39 @@ func newWindowController(services processServices, pump nativeEventPump) *window
 }
 
 func (c *windowController) setServices(services processServices) { c.services = services }
+
+func (c *windowController) setProjectionFactory(factory nativeProjectionFactory) { c.factory = factory }
+
+// createProjection transactionally acquires a complete independent native
+// projection. Nothing is addressable through windows/order until every factory
+// stage succeeds. Partial candidates are always rolled back.
+func (c *windowController) createProjection(id termmux.WindowID) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
+	if id == 0 || c.factory == nil {
+		return errWindowProjectionMissing
+	}
+	if _, exists := c.windows[id]; exists {
+		return errWindowProjectionExists
+	}
+	bundle, err := c.factory.Create(id)
+	if err != nil {
+		if rollbackErr := bundle.close(); rollbackErr != nil {
+			return errors.Join(err, rollbackErr)
+		}
+		return err
+	}
+	if bundle == nil || bundle.host == nil || bundle.handle == nil {
+		rollbackErr := bundle.close()
+		return errors.Join(errWindowProjectionMissing, rollbackErr)
+	}
+	if err := c.attach(id, bundle.host, bundle.handle); err != nil {
+		return errors.Join(err, bundle.close())
+	}
+	c.windows[id].bundle = bundle
+	return nil
+}
 
 func (c *windowController) setTeardown(id termmux.WindowID, teardown func() error) error {
 	projection, ok := c.windows[id]
@@ -146,6 +224,7 @@ func (c *windowController) focus(id termmux.WindowID) error {
 	if !ok || projection.closed {
 		return errWindowProjectionMissing
 	}
+	projection.host.Focus()
 	c.active = id
 	return nil
 }
@@ -250,7 +329,11 @@ func (c *windowController) closeProjection(id termmux.WindowID) error {
 	if projection.teardown != nil {
 		teardownErr = projection.teardown()
 	}
-	projection.host.Destroy()
+	if projection.bundle != nil {
+		teardownErr = errors.Join(teardownErr, projection.bundle.close())
+	} else {
+		projection.host.Destroy()
+	}
 	projection.closed = true
 	delete(c.windows, id)
 	for i, candidate := range c.order {
