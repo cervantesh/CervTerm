@@ -29,6 +29,7 @@ type pane struct {
 	terminal       *core.Terminal
 	parser         vt.Parser
 	session        pty.Session
+	launch         FreshLaunch
 	snapshot       render.Snapshot
 	captureOptions render.CaptureOptions
 	geometry       PaneGeometry
@@ -78,6 +79,10 @@ func (p *pane) capture() {
 	p.title = p.snapshot.Title
 	p.cwd = p.snapshot.Cwd
 	p.bellCount = p.snapshot.BellCount
+}
+
+func (p *pane) setFreshLaunch(spec SpawnSpec) {
+	p.launch = FreshLaunch{TargetID: spec.TargetID, Program: spec.Options.ShellProgram, Args: append([]string(nil), spec.Options.ShellArgs...), CWD: spec.Options.WorkingDirectory}
 }
 
 func (p *pane) startReader(ctx context.Context, incoming chan<- ingressRecord, wake func(), readers *sync.WaitGroup) {

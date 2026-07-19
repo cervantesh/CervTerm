@@ -159,6 +159,7 @@ func (m *Mux) abortRestore(candidate *RestoreCandidate) error {
 
 func (m *Mux) provisionRestore(candidate *RestoreCandidate, specs []SpawnSpec) error {
 	for i, p := range candidate.panes {
+		p.setFreshLaunch(specs[i])
 		if err := m.sessions.reserve(p.id); err != nil {
 			return fmt.Errorf("reserve restore pane %d: %w", p.id, err)
 		}
@@ -300,7 +301,7 @@ func buildRestoreNode(model *Model, source layoutrestore.Node) (*node, []PaneID,
 		paneID := model.nextPaneID
 		model.nextPaneID++
 		model.allocated[paneID] = struct{}{}
-		spec := SpawnSpec{Options: pty.Options{ShellProgram: source.Launch.Program, ShellArgs: append([]string(nil), source.Launch.Args...), WorkingDirectory: source.Launch.CWD}}
+		spec := SpawnSpec{TargetID: source.Launch.TargetID, Options: pty.Options{ShellProgram: source.Launch.Program, ShellArgs: append([]string(nil), source.Launch.Args...), WorkingDirectory: source.Launch.CWD}}
 		return leafNode(paneID), []PaneID{paneID}, []SpawnSpec{spec}, nil
 	case "split":
 		if source.Launch != nil || source.First == nil || source.Second == nil {
