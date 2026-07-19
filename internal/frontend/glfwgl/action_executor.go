@@ -8,6 +8,7 @@ import (
 	"time"
 
 	termaction "cervterm/internal/action"
+	"cervterm/internal/core"
 	"cervterm/internal/input"
 	termmux "cervterm/internal/mux"
 	"cervterm/internal/pty"
@@ -96,6 +97,10 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		a.requestRedraw()
 	case termaction.Scroll:
 		if err := a.executeScrollAction(pane, command); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.ScrollToPrompt:
+		if err := a.executeScrollToPrompt(pane, command); err != nil {
 			return actionExecutionError(command, termaction.ErrorMux, err)
 		}
 	case termaction.Zoom:
@@ -291,6 +296,46 @@ func (a *App) executeScrollAction(pane termmux.PaneID, command termaction.Scroll
 		if pane == a.focusedPane && a.window != nil && a.cfg.Scrollbar.Enabled {
 			a.scrollbar.lastActivity = time.Now()
 		}
+		a.requestRedraw()
+	}
+	return nil
+}
+
+func (a *App) executeScrollToPrompt(pane termmux.PaneID, command termaction.ScrollToPrompt) error {
+	snapshot, ok := a.mux.SemanticSnapshot(pane)
+	if !ok {
+		return termaction.ErrTargetUnavailable
+	}
+	target := -1
+	if command.Delta < 0 {
+		reference := snapshot.ViewportTopGlobalRow
+		for index := len(snapshot.Ranges) - 1; index >= 0; index-- {
+			rangeValue := snapshot.Ranges[index]
+			if rangeValue.Kind == core.SemanticPrompt && rangeValue.Start.GlobalRow < reference {
+				target = rangeValue.Start.GlobalRow
+				break
+			}
+		}
+	} else {
+		for _, rangeValue := range snapshot.Ranges {
+			if rangeValue.Kind == core.SemanticPrompt && rangeValue.Start.GlobalRow > snapshot.ViewportTopGlobalRow {
+				target = rangeValue.Start.GlobalRow
+				break
+			}
+		}
+	}
+	if target < 0 {
+		return errors.New("semantic prompt is unavailable")
+	}
+	if !a.mux.SemanticSnapshotCurrent(snapshot) {
+		return errors.New("semantic prompt snapshot is stale")
+	}
+	moved, err := a.mux.ScrollViewportToGlobalRow(pane, target)
+	if err != nil {
+		return err
+	}
+	if moved {
+		a.recordPaneScroll(pane)
 		a.requestRedraw()
 	}
 	return nil
