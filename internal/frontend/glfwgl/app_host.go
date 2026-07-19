@@ -143,7 +143,7 @@ func (h paneHost) Selection() string {
 	if !ok {
 		return ""
 	}
-	return termsel.Text(view.Snapshot.Cells, view.Snapshot.Cols, view.Snapshot.Rows, termsel.Range{Start: state.selection.start, End: state.selection.end})
+	return termsel.TextWithWrapped(view.Snapshot.Cells, view.Snapshot.Wrapped, view.Snapshot.Cols, view.Snapshot.Rows, termsel.Range{Start: state.selection.start, End: state.selection.end})
 }
 
 func (h paneHost) Scroll(lines int) bool {

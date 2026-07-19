@@ -34,9 +34,9 @@ func (m *Mux) SemanticSnapshotCurrent(snapshot SemanticSnapshot) bool {
 		p.reflowGen == snapshot.ReflowGen && p.viewportGen == snapshot.ViewportGen
 }
 
-func (m *Mux) SemanticRangeText(snapshot SemanticSnapshot, target core.SemanticRange) (string, error) {
+func (m *Mux) ValidateSemanticRange(snapshot SemanticSnapshot, target core.SemanticRange) error {
 	if !m.SemanticSnapshotCurrent(snapshot) {
-		return "", ErrSemanticSnapshotStale
+		return ErrSemanticSnapshotStale
 	}
 	found := false
 	for _, candidate := range snapshot.Ranges {
@@ -46,22 +46,28 @@ func (m *Mux) SemanticRangeText(snapshot SemanticSnapshot, target core.SemanticR
 		}
 	}
 	if !found {
-		return "", ErrSemanticRangeUnavailable
+		return ErrSemanticRangeUnavailable
+	}
+	p, ok := m.sessions.lookup(snapshot.PaneID)
+	if !ok || !m.model.paneExists(snapshot.PaneID) {
+		return ErrPaneNotFound
+	}
+	currentRanges, _ := p.terminal.SemanticHistory()
+	for _, candidate := range currentRanges {
+		if candidate == target {
+			return nil
+		}
+	}
+	return ErrSemanticRangeUnavailable
+}
+
+func (m *Mux) SemanticRangeText(snapshot SemanticSnapshot, target core.SemanticRange) (string, error) {
+	if err := m.ValidateSemanticRange(snapshot, target); err != nil {
+		return "", err
 	}
 	p, ok := m.sessions.lookup(snapshot.PaneID)
 	if !ok || !m.model.paneExists(snapshot.PaneID) {
 		return "", ErrPaneNotFound
-	}
-	currentRanges, _ := p.terminal.SemanticHistory()
-	currentFound := false
-	for _, candidate := range currentRanges {
-		if candidate == target {
-			currentFound = true
-			break
-		}
-	}
-	if !currentFound {
-		return "", ErrSemanticRangeUnavailable
 	}
 	text, ok := p.terminal.SemanticRangeText(target)
 	if !ok {

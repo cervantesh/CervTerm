@@ -185,6 +185,7 @@ func DefaultRegistry() *Registry {
 			registration{descriptor: metadata(IDToggleStats, "Toggle statistics", CategoryView, TargetOptional, true, true, pressOnly), codec: simpleCodec(ToggleStats{})},
 			registration{descriptor: metadata(IDScroll, "Scroll", CategoryView, TargetPane, true, true, pressAndRepeat), codec: scrollCodec},
 			registration{descriptor: metadata(IDScrollToPrompt, "Scroll to prompt", CategoryView, TargetPane, true, false, pressAndRepeat), codec: scrollToPromptCodec},
+			registration{descriptor: metadata(IDSelectSemanticZone, "Select semantic zone", CategoryView, TargetPane, true, false, pressAndRepeat), codec: selectSemanticZoneCodec},
 			registration{descriptor: metadata(IDZoom, "Zoom", CategoryView, TargetPane, true, true, pressAndRepeat), codec: zoomCodec},
 			registration{descriptor: metadata(IDReloadConfig, "Reload configuration", CategoryConfig, TargetOptional, true, true, pressOnly), codec: simpleCodec(ReloadConfig{})},
 			registration{descriptor: metadata(IDSplitPane, "Split pane", CategoryPane, TargetPane, true, true, pressAndRepeat), codec: splitPaneCodec},
