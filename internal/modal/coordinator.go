@@ -20,6 +20,7 @@ const (
 	ModeQuickSelect
 	ModeLaunchMenu
 	ModeTabSwitcher
+	ModeWorkspaceSwitcher
 	ModeTabCloseConfirmation
 )
 

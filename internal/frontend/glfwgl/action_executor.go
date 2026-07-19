@@ -139,6 +139,29 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		if err := a.executeMovePaneToWindow(context, command); err != nil {
 			return actionExecutionError(command, termaction.ErrorTarget, err)
 		}
+	case termaction.CreateWorkspace:
+		if err := a.executeCreateWorkspace(command); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.SwitchWorkspace:
+		if err := a.executeSwitchWorkspace(command); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.RenameWorkspace:
+		if err := a.executeRenameWorkspace(command); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.MoveWindowToWorkspace:
+		if err := a.requireWindowTarget(command.WindowID); err != nil {
+			return actionExecutionError(command, termaction.ErrorTarget, err)
+		}
+		if err := a.executeMoveWindowToWorkspace(command); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.ActivateWorkspaceSwitcher:
+		if err := a.openWorkspaceSwitcher(); err != nil {
+			return actionExecutionError(command, termaction.ErrorAction, err)
+		}
 	case termaction.ActivateTab:
 		events, err := a.mux.ActivateTab(termmux.TabID(command.TabID))
 		a.handleMuxEvents(events)

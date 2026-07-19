@@ -10,37 +10,42 @@ import (
 type ID string
 
 const (
-	IDCopySelection          ID = "copy_selection"
-	IDPasteClipboard         ID = "paste_clipboard"
-	IDToggleSearch           ID = "toggle_search"
-	IDToggleStats            ID = "toggle_stats"
-	IDActivateCommandPalette ID = "activate_command_palette"
-	IDActivateQuickSelect    ID = "activate_quick_select"
-	IDActivateLaunchMenu     ID = "activate_launch_menu"
-	IDScroll                 ID = "scroll"
-	IDZoom                   ID = "zoom"
-	IDReloadConfig           ID = "reload_config"
-	IDSplitPane              ID = "split_pane"
-	IDFocusPane              ID = "focus_pane"
-	IDClosePane              ID = "close_pane"
-	IDMultiple               ID = "multiple"
-	IDCallback               ID = "callback"
-	IDResizePane             ID = "resize_pane"
-	IDSwapPane               ID = "swap_pane"
-	IDMovePane               ID = "move_pane"
-	IDNewTab                 ID = "new_tab"
-	IDActivateTab            ID = "activate_tab"
-	IDActivateTabRelative    ID = "activate_tab_relative"
-	IDMoveTab                ID = "move_tab"
-	IDRenameTab              ID = "rename_tab"
-	IDCloseTab               ID = "close_tab"
-	IDMovePaneToTab          ID = "move_pane_to_tab"
-	IDActivateTabSwitcher    ID = "activate_tab_switcher"
-	IDNewWindow              ID = "new_window"
-	IDCloseWindow            ID = "close_window"
-	IDFocusWindow            ID = "focus_window"
-	IDMoveTabToWindow        ID = "move_tab_to_window"
-	IDMovePaneToWindow       ID = "move_pane_to_window"
+	IDCopySelection             ID = "copy_selection"
+	IDPasteClipboard            ID = "paste_clipboard"
+	IDToggleSearch              ID = "toggle_search"
+	IDToggleStats               ID = "toggle_stats"
+	IDActivateCommandPalette    ID = "activate_command_palette"
+	IDActivateQuickSelect       ID = "activate_quick_select"
+	IDActivateLaunchMenu        ID = "activate_launch_menu"
+	IDScroll                    ID = "scroll"
+	IDZoom                      ID = "zoom"
+	IDReloadConfig              ID = "reload_config"
+	IDSplitPane                 ID = "split_pane"
+	IDFocusPane                 ID = "focus_pane"
+	IDClosePane                 ID = "close_pane"
+	IDMultiple                  ID = "multiple"
+	IDCallback                  ID = "callback"
+	IDResizePane                ID = "resize_pane"
+	IDSwapPane                  ID = "swap_pane"
+	IDMovePane                  ID = "move_pane"
+	IDNewTab                    ID = "new_tab"
+	IDActivateTab               ID = "activate_tab"
+	IDActivateTabRelative       ID = "activate_tab_relative"
+	IDMoveTab                   ID = "move_tab"
+	IDRenameTab                 ID = "rename_tab"
+	IDCloseTab                  ID = "close_tab"
+	IDMovePaneToTab             ID = "move_pane_to_tab"
+	IDActivateTabSwitcher       ID = "activate_tab_switcher"
+	IDNewWindow                 ID = "new_window"
+	IDCloseWindow               ID = "close_window"
+	IDFocusWindow               ID = "focus_window"
+	IDMoveTabToWindow           ID = "move_tab_to_window"
+	IDMovePaneToWindow          ID = "move_pane_to_window"
+	IDCreateWorkspace           ID = "create_workspace"
+	IDSwitchWorkspace           ID = "switch_workspace"
+	IDRenameWorkspace           ID = "rename_workspace"
+	IDMoveWindowToWorkspace     ID = "move_window_to_workspace"
+	IDActivateWorkspaceSwitcher ID = "activate_workspace_switcher"
 )
 
 var (
@@ -365,6 +370,16 @@ func actionIdentity(action Action) (ID, error) {
 		return IDMoveTabToWindow, nil
 	case MovePaneToWindow:
 		return IDMovePaneToWindow, nil
+	case CreateWorkspace:
+		return IDCreateWorkspace, nil
+	case SwitchWorkspace:
+		return IDSwitchWorkspace, nil
+	case RenameWorkspace:
+		return IDRenameWorkspace, nil
+	case MoveWindowToWorkspace:
+		return IDMoveWindowToWorkspace, nil
+	case ActivateWorkspaceSwitcher:
+		return IDActivateWorkspaceSwitcher, nil
 	case ClosePane:
 		return IDClosePane, nil
 	case Multiple:

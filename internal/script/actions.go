@@ -35,6 +35,7 @@ func installActionModule(state *lua.LState, module *lua.LTable) {
 	setActionConstant(state, actions, "NewTab", termaction.NewTab{})
 	setActionConstant(state, actions, "ActivateTabSwitcher", termaction.ActivateTabSwitcher{})
 	setActionConstant(state, actions, "NewWindow", termaction.NewWindow{})
+	setActionConstant(state, actions, "ActivateWorkspaceSwitcher", termaction.ActivateWorkspaceSwitcher{})
 
 	actions.RawSetString("ScrollLines", state.NewFunction(func(l *lua.LState) int {
 		pushLuaAction(l, termaction.Scroll{Unit: termaction.ScrollLine, Amount: checkLuaActionInt(l, 1)}, termaction.TargetFocused)
@@ -110,6 +111,22 @@ func installActionModule(state *lua.LState, module *lua.LTable) {
 	}))
 	actions.RawSetString("MovePaneToWindow", state.NewFunction(func(l *lua.LState) int {
 		pushLuaAction(l, termaction.MovePaneToWindow{WindowID: checkLuaWindowID(l, 1), PaneID: checkLuaTabID(l, 2), Axis: termaction.SplitAxis(l.CheckString(3))}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("CreateWorkspace", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.CreateWorkspace{Name: l.CheckString(1)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("SwitchWorkspace", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.SwitchWorkspace{WorkspaceID: checkLuaWorkspaceID(l, 1)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("RenameWorkspace", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.RenameWorkspace{WorkspaceID: checkLuaWorkspaceID(l, 1), Name: l.CheckString(2)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("MoveWindowToWorkspace", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.MoveWindowToWorkspace{WindowID: checkLuaWindowID(l, 1), WorkspaceID: checkLuaWorkspaceID(l, 2)}, termaction.TargetFocused)
 		return 1
 	}))
 	actions.RawSetString("Multiple", state.NewFunction(func(l *lua.LState) int {
@@ -206,5 +223,9 @@ func checkLuaTabID(state *lua.LState, index int) uint64 {
 }
 
 func checkLuaWindowID(state *lua.LState, index int) uint64 {
+	return checkLuaTabID(state, index)
+}
+
+func checkLuaWorkspaceID(state *lua.LState, index int) uint64 {
 	return checkLuaTabID(state, index)
 }
