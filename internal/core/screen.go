@@ -124,29 +124,30 @@ func (t *Terminal) physicalRows() ([][]Cell, []bool) {
 
 func (t *Terminal) snapshotScreen() *screenState {
 	return &screenState{
-		cols:               t.cols,
-		rows:               t.rows,
-		cells:              cloneCellRow(t.cells),
-		rowWrapped:         cloneBoolRow(t.rowWrapped),
-		scrollback:         cloneCellRow(t.scrollback),
-		scrollbackWrapped:  cloneBoolRow(t.scrollbackWrapped),
-		scrollbackStart:    t.scrollbackStart,
-		scrollbackRows:     t.scrollbackRows,
-		scrollbackCapacity: t.scrollbackCapacity,
-		displayOffset:      t.displayOffset,
-		cursorRow:          t.cursorRow,
-		cursorCol:          t.cursorCol,
-		wrapNext:           t.wrapNext,
-		savedCursorRow:     t.savedCursorRow,
-		savedCursorCol:     t.savedCursorCol,
-		savedWrapNext:      t.savedWrapNext,
-		hasSavedCursor:     t.hasSavedCursor,
-		scrollTop:          t.scrollTop,
-		scrollBottom:       t.scrollBottom,
-		charsets:           t.charsets,
-		activeCharset:      t.activeCharset,
-		hyperlinks:         t.hyperlinks.clone(),
-		semanticKind:       t.semanticKind,
+		cols:                    t.cols,
+		rows:                    t.rows,
+		cells:                   cloneCellRow(t.cells),
+		rowWrapped:              cloneBoolRow(t.rowWrapped),
+		scrollback:              cloneCellRow(t.scrollback),
+		scrollbackWrapped:       cloneBoolRow(t.scrollbackWrapped),
+		scrollbackStart:         t.scrollbackStart,
+		scrollbackRows:          t.scrollbackRows,
+		scrollbackCapacity:      t.scrollbackCapacity,
+		displayOffset:           t.displayOffset,
+		cursorRow:               t.cursorRow,
+		cursorCol:               t.cursorCol,
+		wrapNext:                t.wrapNext,
+		savedCursorRow:          t.savedCursorRow,
+		savedCursorCol:          t.savedCursorCol,
+		savedWrapNext:           t.savedWrapNext,
+		hasSavedCursor:          t.hasSavedCursor,
+		scrollTop:               t.scrollTop,
+		scrollBottom:            t.scrollBottom,
+		charsets:                t.charsets,
+		activeCharset:           t.activeCharset,
+		hyperlinks:              t.hyperlinks.clone(),
+		semanticKind:            t.semanticKind,
+		semanticBoundaryPending: t.semanticBoundaryPending,
 	}
 }
 
@@ -174,6 +175,7 @@ func (t *Terminal) restoreScreen(s *screenState) {
 	t.activeCharset = s.activeCharset
 	t.hyperlinks = s.hyperlinks.clone()
 	t.semanticKind = s.semanticKind
+	t.semanticBoundaryPending = s.semanticBoundaryPending
 	if t.scrollBottom <= t.scrollTop {
 		t.resetScrollRegion()
 	}

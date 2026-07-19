@@ -17,15 +17,15 @@ func TestSemanticKindPreservesCompactCellAndPrintedCluster(t *testing.T) {
 	cells := make([]Cell, 12)
 	term.CopyView(cells)
 	for _, index := range []int{0, 1, 2} {
-		if cells[index].SemanticKind != SemanticInput {
-			t.Fatalf("cell %d kind=%v", index, cells[index].SemanticKind)
+		if SemanticCellKind(cells[index]) != SemanticInput {
+			t.Fatalf("cell %d kind=%v", index, SemanticCellKind(cells[index]))
 		}
 	}
 	term.SetCursor(0, 0)
 	term.EraseChars(3)
 	term.CopyView(cells)
 	for _, cell := range cells[:3] {
-		if cell.SemanticKind != SemanticNone {
+		if SemanticCellKind(cell) != SemanticNone {
 			t.Fatal("erase retained semantic kind")
 		}
 	}
@@ -45,7 +45,7 @@ func TestSemanticKindSurvivesScrollbackReflowAndAlternateIsolation(t *testing.T)
 	found := false
 	for _, row := range rows {
 		for _, cell := range row {
-			if cell.Rune == 'P' && cell.SemanticKind == SemanticPrompt {
+			if cell.Rune == 'P' && SemanticCellKind(cell) == SemanticPrompt {
 				found = true
 			}
 		}

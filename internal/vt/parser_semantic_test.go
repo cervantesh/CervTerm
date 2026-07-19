@@ -18,8 +18,8 @@ func TestOSCSemanticMarkersBELSTAndChunks(t *testing.T) {
 	cells := copyCells(term)
 	want := []core.SemanticKind{core.SemanticPrompt, core.SemanticInput, core.SemanticOutput, core.SemanticNone}
 	for index, kind := range want {
-		if cells[index].SemanticKind != kind {
-			t.Fatalf("cell %d kind=%v want=%v", index, cells[index].SemanticKind, kind)
+		if core.SemanticCellKind(cells[index]) != kind {
+			t.Fatalf("cell %d kind=%v want=%v", index, core.SemanticCellKind(cells[index]), kind)
 		}
 	}
 }
@@ -28,7 +28,7 @@ func TestOSC633CommandPayloadIsNotStoredAndUnknownIsAtomic(t *testing.T) {
 	term := core.NewTerminal(8, 1)
 	var p Parser
 	p.Advance(term, []byte("\x1b]633;E;echo secret-token\x1b\\X"))
-	if term.SemanticKind() != core.SemanticInput || copyCells(term)[0].SemanticKind != core.SemanticInput {
+	if term.SemanticKind() != core.SemanticInput || core.SemanticCellKind(copyCells(term)[0]) != core.SemanticInput {
 		t.Fatal("E marker not applied")
 	}
 	p.Advance(term, []byte("\x1b]633;P;Cwd=/private/secret-token\x1b\\"))
