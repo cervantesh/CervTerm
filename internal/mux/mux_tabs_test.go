@@ -12,7 +12,7 @@ func tabMetrics() CellMetrics { return CellMetrics{CellWidth: 8, CellHeight: 16}
 
 func TestSpawnActivateRenameMoveAndCloseTabLifecycle(t *testing.T) {
 	m, first, _ := newTestMux(t)
-	factory := m.factory.(*fakeFactory)
+	factory := m.sessions.factory.(*fakeFactory)
 	tab, pane, events, err := m.SpawnTab(SpawnSpec{Options: pty.Options{ShellProgram: "tool", ShellArgs: []string{"a b"}}}, tabMetrics(), "Tools")
 	if err != nil {
 		t.Fatal(err)
@@ -53,18 +53,18 @@ func TestSpawnActivateRenameMoveAndCloseTabLifecycle(t *testing.T) {
 
 func TestSpawnTabFailureLeavesEveryIdentityAndOwnerUntouched(t *testing.T) {
 	m, _, _ := newTestMux(t)
-	factory := m.factory.(*fakeFactory)
+	factory := m.sessions.factory.(*fakeFactory)
 	candidate := newFakeSession()
 	factory.err = errors.New("spawn failed")
 	factory.sessionOnError = candidate
 	beforeTabs := m.Tabs()
 	beforeTabID, beforePaneID := m.model.nextTabID, m.model.nextPaneID
-	beforePanes := len(m.panes)
+	beforePanes := len(m.sessions.panes)
 	if _, _, events, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "bad"); err == nil || len(events) != 0 {
 		t.Fatalf("events=%#v err=%v", events, err)
 	}
-	if !reflect.DeepEqual(m.Tabs(), beforeTabs) || m.model.nextTabID != beforeTabID || m.model.nextPaneID != beforePaneID || len(m.panes) != beforePanes || candidate.closes() != 1 {
-		t.Fatalf("tabs=%#v ids=%d/%d panes=%d close=%d", m.Tabs(), m.model.nextTabID, m.model.nextPaneID, len(m.panes), candidate.closes())
+	if !reflect.DeepEqual(m.Tabs(), beforeTabs) || m.model.nextTabID != beforeTabID || m.model.nextPaneID != beforePaneID || len(m.sessions.panes) != beforePanes || candidate.closes() != 1 {
+		t.Fatalf("tabs=%#v ids=%d/%d panes=%d close=%d", m.Tabs(), m.model.nextTabID, m.model.nextPaneID, len(m.sessions.panes), candidate.closes())
 	}
 }
 
@@ -72,8 +72,8 @@ func TestCloseTabAggregatesErrorAfterAtomicDetachAndAddressesFinalEvent(t *testi
 	m, first, _ := newTestMux(t)
 	first.closeErr = errors.New("close failed")
 	events, err := m.CloseTab(1)
-	if err == nil || !m.model.Empty() || len(m.panes) != 0 || first.closes() != 1 {
-		t.Fatalf("err=%v empty=%v panes=%d closes=%d", err, m.model.Empty(), len(m.panes), first.closes())
+	if err == nil || !m.model.Empty() || len(m.sessions.panes) != 0 || first.closes() != 1 {
+		t.Fatalf("err=%v empty=%v panes=%d closes=%d", err, m.model.Empty(), len(m.sessions.panes), first.closes())
 	}
 	var failed, closed, window bool
 	for _, event := range events {
@@ -91,7 +91,7 @@ func TestCloseTabAggregatesErrorAfterAtomicDetachAndAddressesFinalEvent(t *testi
 
 func TestInactiveTabIngressDoesNotChangeActiveProjection(t *testing.T) {
 	m, _, wakes := newTestMux(t)
-	factory := m.factory.(*fakeFactory)
+	factory := m.sessions.factory.(*fakeFactory)
 	_, pane, _, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "background")
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestInactiveTabIngressDoesNotChangeActiveProjection(t *testing.T) {
 	if m.ActiveTab() != 1 || !reflect.DeepEqual(m.PaneIDs(), []PaneID{1}) {
 		t.Fatalf("active=%d panes=%v background=%d", m.ActiveTab(), m.PaneIDs(), pane)
 	}
-	view, ok := m.panes[pane]
+	view, ok := m.sessions.panes[pane]
 	if !ok || len(view.snapshot.Cells) == 0 || view.snapshot.Cells[0].Rune != 'b' {
 		t.Fatalf("background pane not advanced")
 	}

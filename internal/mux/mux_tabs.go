@@ -33,13 +33,17 @@ func (m *Mux) SpawnTab(spec SpawnSpec, metrics CellMetrics, title string) (TabID
 	if cols < MinPaneCols || rows < MinPaneRows {
 		return 0, 0, nil, ErrSplitTooSmall
 	}
+	if err := m.sessions.reserve(paneID); err != nil {
+		return 0, 0, nil, err
+	}
+	defer m.sessions.release(paneID)
 	pane := newPane(paneID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
 	pane.terminal.SetPaletteBase(m.paletteBase)
 	if m.options.SetClipboard != nil {
 		pane.parser.SetClipboard = func(text string) { m.options.SetClipboard(pane.id, text) }
 	}
 	ptyRows, ptyCols := terminalSize(PaneGeometry{Pane: paneID, Pixels: m.bounds, Cols: cols, Rows: rows})
-	session, spawnErr := m.factory.Spawn(ptyRows, ptyCols, spec.Options)
+	session, spawnErr := m.sessions.spawn(ptyRows, ptyCols, spec.Options)
 	if spawnErr != nil {
 		if session != nil {
 			_ = session.Close()
@@ -51,14 +55,26 @@ func (m *Mux) SpawnTab(spec SpawnSpec, metrics CellMetrics, title string) (TabID
 	pane.geometry = effectiveGeometry(PaneGeometry{Pane: paneID, Pixels: m.bounds, Cols: cols, Rows: rows})
 	pane.desiredSize = pty.Size{Rows: ptyRows, Cols: ptyCols}
 	pane.appliedSize = pane.desiredSize
-	if err := m.model.commitTab(tabID, paneID, title); err != nil {
+	if err := m.sessions.register(pane); err != nil {
 		_ = pane.close()
 		return 0, 0, nil, err
 	}
-	m.panes[paneID] = pane
+	if err := m.sessions.start(pane.id); err != nil {
+		detached := m.sessions.detach(pane.id)
+		if detached.owned {
+			_ = detached.pane.close()
+		}
+		return 0, 0, nil, err
+	}
+	if err := m.model.commitTab(tabID, paneID, title); err != nil {
+		detached := m.sessions.detach(pane.id)
+		if detached.owned {
+			_ = detached.pane.close()
+		}
+		return 0, 0, nil, err
+	}
 	m.paneMetrics[paneID] = metrics
 	pane.capture()
-	pane.startReader(m.ctx, m.incoming, m.options.Wake, &m.readers)
 	return tabID, paneID, []Event{{Kind: TabSpawned, Tab: tabID, Pane: paneID, Text: title, Revision: 1}, {Kind: TabActivated, Tab: tabID, Pane: paneID, Revision: 1}, {Kind: PaneStarted, Tab: tabID, Pane: paneID}, {Kind: PaneFocused, Tab: tabID, Pane: paneID}}, nil
 }
 
@@ -99,6 +115,15 @@ func (m *Mux) MoveTab(id TabID, position int) ([]Event, error) {
 
 // CloseTab atomically detaches ownership before closing each session once.
 func (m *Mux) CloseTab(id TabID) ([]Event, error) {
+	tab := m.model.tabByID(id)
+	if tab == nil {
+		return nil, ErrTabNotFound
+	}
+	for _, paneID := range paneIDs(tab.root) {
+		if _, owned := m.sessions.lookup(paneID); !owned {
+			return nil, invariantError("tab %d pane %d is not registry-owned", id, paneID)
+		}
+	}
 	detached, err := m.model.detachTab(id)
 	if err != nil {
 		return nil, err
@@ -106,15 +131,14 @@ func (m *Mux) CloseTab(id TabID) ([]Event, error) {
 	events := make([]Event, 0, len(detached.panes)+3)
 	var closeErrs []error
 	for _, paneID := range detached.panes {
-		p := m.panes[paneID]
-		delete(m.panes, paneID)
+		result := m.sessions.detach(paneID)
 		delete(m.paneMetrics, paneID)
-		m.closed[paneID] = struct{}{}
-		if p != nil {
-			if err := p.close(); err != nil {
-				closeErrs = append(closeErrs, fmt.Errorf("pane %d close: %w", paneID, err))
-				events = append(events, Event{Kind: PaneCloseFailed, Tab: id, Pane: paneID, Err: err})
-			}
+		if !result.owned {
+			return events, invariantError("tab %d pane %d lost registry ownership", id, paneID)
+		}
+		if err := result.pane.close(); err != nil {
+			closeErrs = append(closeErrs, fmt.Errorf("pane %d close: %w", paneID, err))
+			events = append(events, Event{Kind: PaneCloseFailed, Tab: id, Pane: paneID, Err: err})
 		}
 		events = append(events, Event{Kind: PaneClosed, Tab: id, Pane: paneID})
 	}

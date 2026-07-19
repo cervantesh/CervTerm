@@ -27,7 +27,7 @@ type QuickSelectSnapshot struct {
 // Non-positive limits select the package caps. It copies only the bounded
 // viewport suffix, never terminal history.
 func (m *Mux) QuickSelectSnapshot(id PaneID, rowLimit, cellLimit int) (QuickSelectSnapshot, bool) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return QuickSelectSnapshot{}, false
 	}
@@ -59,7 +59,7 @@ func (m *Mux) QuickSelectSnapshot(id PaneID, rowLimit, cellLimit int) (QuickSele
 // QuickSelectSnapshotCurrent reports whether a retained result is still safe to
 // act on. Focus, pane identity, geometry and every relevant generation must match.
 func (m *Mux) QuickSelectSnapshotCurrent(s QuickSelectSnapshot) bool {
-	p, ok := m.panes[s.PaneID]
+	p, ok := m.sessions.lookup(s.PaneID)
 	return ok && m.model.paneExists(s.PaneID) &&
 		m.model.FocusedPane() == s.FocusedPaneID && s.FocusedPaneID == s.PaneID &&
 		p.terminal.Cols() == s.Cols && p.terminal.Rows() >= s.Rows &&
