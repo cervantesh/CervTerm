@@ -57,6 +57,9 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Window.BackgroundOpacity != effective.Window.BackgroundOpacity, "window.background_opacity", ApplyLive)
 	changes = appendChange(changes, desired.Window.Blur != effective.Window.Blur, "window.blur", ApplyLive)
 
+	changes = appendChange(changes, desired.LayoutPersistence.Enabled != effective.LayoutPersistence.Enabled, "layout_persistence.enabled", ApplyRestart)
+	changes = appendChange(changes, desired.LayoutPersistence.Path != effective.LayoutPersistence.Path, "layout_persistence.path", ApplyRestart)
+
 	changes = appendChange(changes, desired.Font.Family != effective.Font.Family, "font.family", ApplyRestart)
 	changes = appendChange(changes, !slices.Equal(desired.Font.Descriptors, effective.Font.Descriptors), "font.descriptors", ApplyRestart)
 	changes = appendChange(changes, !slices.Equal(desired.Font.Fallback, effective.Font.Fallback), "font.fallback", ApplyRestart)

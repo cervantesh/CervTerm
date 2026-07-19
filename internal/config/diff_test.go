@@ -27,6 +27,8 @@ func fullyDifferentConfig(base Config) Config {
 	value.Window.TextOpacity = 0.7
 	value.Window.BackgroundOpacity = 0.8
 	value.Window.Blur = !value.Window.Blur
+	value.LayoutPersistence.Enabled = !value.LayoutPersistence.Enabled
+	value.LayoutPersistence.Path = "different-layout.json"
 	value.Font.Family += " Different"
 	value.Font.Descriptors = []fontdesc.Descriptor{{Family: "Different Font", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100, AttributeMode: fontdesc.AttributeModeAugment}}
 	value.Font.Fallback = []fontdesc.Descriptor{{Family: "Different Fallback"}}
@@ -124,8 +126,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 94 {
-		t.Fatalf("config leaf count = %d, want 94", len(changes))
+	if len(changes) != 96 {
+		t.Fatalf("config leaf count = %d, want 96", len(changes))
 	}
 }
 

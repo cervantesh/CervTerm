@@ -18,6 +18,10 @@
     "BackgroundOpacity": 1,
     "Blur": false
   },
+  "LayoutPersistence": {
+    "Enabled": false,
+    "Path": ""
+  },
   "Font": {
     "Family": "JetBrains Mono",
     "Size": 15.5,
