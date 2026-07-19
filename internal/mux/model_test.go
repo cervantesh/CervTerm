@@ -251,13 +251,13 @@ func TestCloseCollapseFinalEmptyAndNeverReuseIDs(t *testing.T) {
 
 func TestModelInvariantCheckerRejectsMalformedTree(t *testing.T) {
 	model := NewModel()
-	model.tabs[0].focused = 99
+	model.windows[0].tabs[0].focused = 99
 	if err := model.CheckInvariants(); !errors.Is(err, ErrInvariant) {
 		t.Fatalf("malformed focus error = %v, want invariant error", err)
 	}
 
 	model = NewModel()
-	model.tabs[0].root = branchNode(1, SplitColumns, DefaultSplitRatio, model.tabs[0].root, nil)
+	model.windows[0].tabs[0].root = branchNode(1, SplitColumns, DefaultSplitRatio, model.windows[0].tabs[0].root, nil)
 	model.nextSplitID = 2
 	if err := model.CheckInvariants(); !errors.Is(err, ErrInvariant) {
 		t.Fatalf("nil child error = %v, want invariant error", err)

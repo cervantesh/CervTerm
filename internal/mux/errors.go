@@ -20,6 +20,8 @@ var (
 	ErrInvalidResizeDelta  = errors.New("mux: resize delta must be positive")
 	ErrTopologyTooSmall    = errors.New("mux: topology mutation would create a pane below 2x2 cells")
 	ErrIDExhausted         = errors.New("mux: identifier space exhausted")
+	ErrWindowNotFound      = errors.New("mux: window not found")
+	ErrWindowLimitReached  = errors.New("mux: window limit reached")
 	ErrTabNotFound         = errors.New("mux: tab not found")
 	ErrTabLimitReached     = errors.New("mux: tab limit reached")
 	ErrInvalidTabPosition  = errors.New("mux: invalid tab position")
