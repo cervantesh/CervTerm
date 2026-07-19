@@ -70,25 +70,9 @@ type nativeProjectionBundle struct {
 	app       *App
 	handle    func([]termmux.Event) bool
 	bind      func(termmux.WindowID) error
+	unbind    func() error
 	resources []projectionResource
 	closed    bool
-}
-
-func (b *nativeProjectionBundle) close() error {
-	if b == nil || b.closed {
-		return nil
-	}
-	b.closed = true
-	var joined error
-	for i := len(b.resources) - 1; i >= 0; i-- {
-		if b.resources[i] != nil {
-			joined = errors.Join(joined, b.resources[i].Close())
-		}
-	}
-	if b.host != nil {
-		b.host.Destroy()
-	}
-	return joined
 }
 
 type nativeProjectionFactory interface {
@@ -116,19 +100,26 @@ type windowController struct {
 	factory          nativeProjectionFactory
 	candidateFactory nativeProjectionCandidateFactory
 	runtimeWindows   runtimeWindowLifecycle
+	restoreWindows   restoreWindowLifecycle
 	windows          map[termmux.WindowID]*windowProjection
 	pending          map[termmux.WindowID][]termmux.Event
 	order            []termmux.WindowID
 	active           termmux.WindowID
 	current          termmux.WindowID
 	inLoop           bool
+	restorePending   *restoreProjectionCandidate
 }
 
 func newWindowController(services processServices, pump nativeEventPump) *windowController {
-	return &windowController{services: services, pump: pump, windows: make(map[termmux.WindowID]*windowProjection), pending: make(map[termmux.WindowID][]termmux.Event)}
+	return &windowController{services: services, pump: pump, restoreWindows: services.mux, windows: make(map[termmux.WindowID]*windowProjection), pending: make(map[termmux.WindowID][]termmux.Event)}
 }
 
-func (c *windowController) setServices(services processServices) { c.services = services }
+func (c *windowController) setServices(services processServices) {
+	c.services = services
+	if services.mux != nil {
+		c.restoreWindows = services.mux
+	}
+}
 
 func (c *windowController) setProjectionFactory(factory nativeProjectionFactory) { c.factory = factory }
 

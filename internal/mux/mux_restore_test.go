@@ -133,6 +133,15 @@ func TestMuxRestoreCommitPublishesExactTopologySpawnsAndFinalEvents(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	windowIDs, err := m.RestoreWindowIDs(candidate)
+	if err != nil || !reflect.DeepEqual(windowIDs, []WindowID{2, 3}) {
+		t.Fatalf("restore windows=%v,%v", windowIDs, err)
+	}
+	windowIDs[0] = 99
+	windowIDs, _ = m.RestoreWindowIDs(candidate)
+	if !reflect.DeepEqual(windowIDs, []WindowID{2, 3}) {
+		t.Fatalf("restore windows alias=%v", windowIDs)
+	}
 	if m.model != beforeModel || !reflect.DeepEqual(m.model.Windows(), beforeWindows) || !reflect.DeepEqual(m.model.Workspaces(), beforeWorkspaces) || !reflect.DeepEqual(m.PaneIDs(), beforePanes) || m.bounds != beforeBounds || !reflect.DeepEqual(m.paneMetrics, beforeMetrics) || m.bootstrapped != beforeBootstrapped {
 		t.Fatal("Prepare published compatibility state")
 	}
