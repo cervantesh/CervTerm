@@ -62,6 +62,9 @@ func (c *windowController) createRuntimeProjection() (termmux.WindowID, error) {
 		return 0, rollback(err)
 	}
 	c.windows[view.ID].bundle = bundle
+	if err := c.focus(view.ID); err != nil {
+		return 0, errors.Join(err, c.closeProjection(view.ID), c.runtimeWindows.RollbackWindow(view.ID))
+	}
 	c.dispatch(events)
 	return view.ID, nil
 }

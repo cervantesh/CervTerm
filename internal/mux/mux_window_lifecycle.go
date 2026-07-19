@@ -225,3 +225,17 @@ func (m *Mux) RollbackWindow(id WindowID) error {
 	}
 	return errors.Join(closeErrs...)
 }
+
+func (m *Mux) Windows() []WindowView { return m.model.Windows() }
+
+func (m *Mux) WindowForPane(id PaneID) (WindowID, bool) {
+	tab := m.model.tabForPane(id)
+	if tab == nil {
+		return 0, false
+	}
+	w := m.model.windowForTab(tab.id)
+	if w == nil {
+		return 0, false
+	}
+	return w.id, true
+}

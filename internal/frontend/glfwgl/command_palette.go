@@ -75,6 +75,18 @@ func (a *App) commandPaletteSnapshot(hasPane bool) ([]modal.Entry, map[string]co
 			command = termaction.ActivateLaunchMenu{}
 		case termaction.IDNewTab:
 			command = termaction.NewTab{}
+		case termaction.IDNewWindow:
+			command = termaction.NewWindow{}
+		case termaction.IDCloseWindow:
+			if a.windowID == 0 {
+				continue
+			}
+			command = termaction.CloseWindow{WindowID: uint64(a.windowID)}
+		case termaction.IDFocusWindow:
+			if a.windowID == 0 {
+				continue
+			}
+			command = termaction.FocusWindow{WindowID: uint64(a.windowID)}
 		case termaction.IDActivateTabRelative:
 			command = termaction.ActivateTabRelative{Delta: 1}
 		case termaction.IDActivateTabSwitcher:

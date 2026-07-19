@@ -41,9 +41,11 @@ const (
 )
 
 type Context struct {
-	Source  Source
-	Origin  Ref
-	Focused Ref
+	Source        Source
+	Origin        Ref
+	Focused       Ref
+	OriginWindow  Ref
+	FocusedWindow Ref
 }
 
 func (c Context) Validate() error {
@@ -57,6 +59,12 @@ func (c Context) Validate() error {
 	}
 	if c.Focused != (Ref{}) && !c.Focused.Valid() {
 		return fmt.Errorf("action focused reference is invalid")
+	}
+	if c.OriginWindow != (Ref{}) && (!c.OriginWindow.Valid() || c.OriginWindow.Kind != RefWindow) {
+		return fmt.Errorf("action origin window reference is invalid")
+	}
+	if c.FocusedWindow != (Ref{}) && (!c.FocusedWindow.Valid() || c.FocusedWindow.Kind != RefWindow) {
+		return fmt.Errorf("action focused window reference is invalid")
 	}
 	return nil
 }

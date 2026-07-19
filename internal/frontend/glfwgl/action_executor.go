@@ -22,8 +22,14 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 	}
 	if multiple, ok := envelope.Action.(termaction.Multiple); ok {
 		for _, child := range multiple.Actions() {
-			context.Focused = a.focusedActionRef()
-			if err := a.executeAction(child, context); err != nil {
+			executor := a
+			if a.controller != nil {
+				if active := a.controller.activeProjectionApp(); active != nil {
+					executor = active
+				}
+			}
+			context = executor.refreshFocusedActionContext(context)
+			if err := executor.executeAction(child, context); err != nil {
 				return err
 			}
 		}
@@ -103,6 +109,35 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		a.handleMuxEvents(events)
 		if err != nil {
 			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.NewWindow:
+		if a.controller == nil {
+			return actionExecutionError(command, termaction.ErrorTarget, termaction.ErrTargetUnavailable)
+		}
+		if _, err := a.controller.createRuntimeProjection(); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.CloseWindow:
+		if err := a.requireWindowTarget(command.WindowID); err != nil {
+			return actionExecutionError(command, termaction.ErrorTarget, err)
+		}
+		if _, err := a.controller.closeRuntimeProjection(termmux.WindowID(command.WindowID)); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.FocusWindow:
+		if err := a.requireWindowTarget(command.WindowID); err != nil {
+			return actionExecutionError(command, termaction.ErrorTarget, err)
+		}
+		if err := a.controller.activateRuntimeProjection(termmux.WindowID(command.WindowID)); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
+	case termaction.MoveTabToWindow:
+		if err := a.executeMoveTabToWindow(context, command); err != nil {
+			return actionExecutionError(command, termaction.ErrorTarget, err)
+		}
+	case termaction.MovePaneToWindow:
+		if err := a.executeMovePaneToWindow(context, command); err != nil {
+			return actionExecutionError(command, termaction.ErrorTarget, err)
 		}
 	case termaction.ActivateTab:
 		events, err := a.mux.ActivateTab(termmux.TabID(command.TabID))
@@ -194,7 +229,8 @@ func (a *App) focusedActionRef() termaction.Ref {
 
 func (a *App) actionContext(source termaction.Source) termaction.Context {
 	focused := a.focusedActionRef()
-	return termaction.Context{Source: source, Origin: focused, Focused: focused}
+	window := a.windowActionRef()
+	return termaction.Context{Source: source, Origin: focused, Focused: focused, OriginWindow: window, FocusedWindow: window}
 }
 
 func (a *App) focusActionPane(pane termmux.PaneID) error {

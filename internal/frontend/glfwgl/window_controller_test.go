@@ -261,12 +261,13 @@ type fakeCandidateFactory struct {
 	prepare  error
 	bind     error
 	host     *fakeNativeWindow
+	app      *App
 	resource projectionResource
 }
 
 func (f *fakeCandidateFactory) Prepare() (*nativeProjectionBundle, termmux.SpawnSpec, termmux.PixelRect, termmux.CellMetrics, string, error) {
 	*f.log = append(*f.log, "prepare-native")
-	bundle := &nativeProjectionBundle{host: f.host, handle: func([]termmux.Event) bool { return true }}
+	bundle := &nativeProjectionBundle{host: f.host, app: f.app, handle: func([]termmux.Event) bool { return true }}
 	bundle.bind = func(id termmux.WindowID) error {
 		*f.log = append(*f.log, fmt.Sprintf("bind:%d", id))
 		return f.bind
@@ -358,7 +359,7 @@ func TestWindowControllerRuntimeCreatePublishActivateAndCloseOrdering(t *testing
 	if err != nil || !result.Empty {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
-	want := []string{"prepare-native", "create-runtime", "bind:2", "activate-runtime:2", "focus:two", "close-runtime:2", "current:two", "close-resource", "destroy:two"}
+	want := []string{"prepare-native", "create-runtime", "bind:2", "focus:two", "activate-runtime:2", "focus:two", "close-runtime:2", "current:two", "close-resource", "destroy:two"}
 	if !reflect.DeepEqual(log, want) {
 		t.Fatalf("log=%v want=%v", log, want)
 	}
