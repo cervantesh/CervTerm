@@ -1,13 +1,15 @@
 package mux
 
+// WindowID is a stable, process-local mux-window identity. Zero is invalid.
+type WindowID uint64
+
 // PaneID is a stable, process-local pane identity. Zero is never valid.
 type PaneID uint64
 
 // SplitID is a stable, process-local identity for one branch divider.
 type SplitID uint64
 
-// TabID is a stable, process-local tab identity. Phase 1 creates one implicit
-// tab while keeping the identity explicit for later phases.
+// TabID is a stable, process-local tab identity.
 type TabID uint64
 
 // SplitAxis describes the arrangement of a split's children.
@@ -45,7 +47,10 @@ func branchNode(split SplitID, axis SplitAxis, ratio SplitRatio, first, second *
 
 func (n *node) isLeaf() bool { return n != nil && n.pane != 0 }
 
-const MaxTabs = 256
+const (
+	MaxWindows = 32
+	MaxTabs    = 256
+)
 
 type tabState struct {
 	id       TabID
@@ -55,62 +60,122 @@ type tabState struct {
 	revision uint64
 }
 
-// Model owns pure identity, ordered tab topology, and focus state.
-type Model struct {
-	tabs            []tabState
-	active          TabID
-	nextTabID       TabID
-	nextPaneID      PaneID
-	nextSplitID     SplitID
-	allocated       map[PaneID]struct{}
-	allocatedSplits map[SplitID]struct{}
-	allocatedTabs   map[TabID]struct{}
+type windowState struct {
+	id       WindowID
+	title    string
+	tabs     []tabState
+	active   TabID
+	revision uint64
 }
 
-// NewModel creates one active tab containing one focused root leaf.
+// Model owns pure, ordered mux-window/tab topology, identity, and focus state.
+type Model struct {
+	windows          []windowState
+	activeWindow     WindowID
+	nextWindowID     WindowID
+	nextTabID        TabID
+	nextPaneID       PaneID
+	nextSplitID      SplitID
+	allocatedWindows map[WindowID]struct{}
+	allocated        map[PaneID]struct{}
+	allocatedSplits  map[SplitID]struct{}
+	allocatedTabs    map[TabID]struct{}
+}
+
+// NewModel creates WindowID 1 with the compatibility TabID 1 / PaneID 1.
 func NewModel() *Model {
-	pane, tab := PaneID(1), TabID(1)
+	pane, tab, window := PaneID(1), TabID(1), WindowID(1)
 	return &Model{
-		tabs: []tabState{{id: tab, root: leafNode(pane), focused: pane, revision: 1}}, active: tab,
-		nextTabID: 2, nextPaneID: 2, nextSplitID: 1,
-		allocated:       map[PaneID]struct{}{pane: {}},
+		windows:      []windowState{{id: window, tabs: []tabState{{id: tab, root: leafNode(pane), focused: pane, revision: 1}}, active: tab, revision: 1}},
+		activeWindow: window, nextWindowID: 2, nextTabID: 2, nextPaneID: 2, nextSplitID: 1,
+		allocatedWindows: map[WindowID]struct{}{window: {}}, allocated: map[PaneID]struct{}{pane: {}},
 		allocatedSplits: map[SplitID]struct{}{}, allocatedTabs: map[TabID]struct{}{tab: {}},
 	}
 }
 
-func (m *Model) activeTab() *tabState { return m.tabByID(m.active) }
+func (m *Model) activeWindowState() *windowState { return m.windowByID(m.activeWindow) }
+func (m *Model) activeTab() *tabState {
+	w := m.activeWindowState()
+	if w == nil {
+		return nil
+	}
+	return tabByID(w, w.active)
+}
+func (m *Model) windowByID(id WindowID) *windowState {
+	for i := range m.windows {
+		if m.windows[i].id == id {
+			return &m.windows[i]
+		}
+	}
+	return nil
+}
+func tabByID(w *windowState, id TabID) *tabState {
+	if w == nil {
+		return nil
+	}
+	for i := range w.tabs {
+		if w.tabs[i].id == id {
+			return &w.tabs[i]
+		}
+	}
+	return nil
+}
 func (m *Model) tabByID(id TabID) *tabState {
-	for i := range m.tabs {
-		if m.tabs[i].id == id {
-			return &m.tabs[i]
+	for i := range m.windows {
+		if t := tabByID(&m.windows[i], id); t != nil {
+			return t
+		}
+	}
+	return nil
+}
+func (m *Model) windowForTab(id TabID) *windowState {
+	for i := range m.windows {
+		if tabByID(&m.windows[i], id) != nil {
+			return &m.windows[i]
 		}
 	}
 	return nil
 }
 func (m *Model) tabForPane(id PaneID) *tabState {
-	for i := range m.tabs {
-		if findLeaf(m.tabs[i].root, id) != nil {
-			return &m.tabs[i]
+	for i := range m.windows {
+		for j := range m.windows[i].tabs {
+			if findLeaf(m.windows[i].tabs[j].root, id) != nil {
+				return &m.windows[i].tabs[j]
+			}
 		}
 	}
 	return nil
 }
 func (m *Model) tabForSplit(id SplitID) *tabState {
-	for i := range m.tabs {
-		if findSplit(m.tabs[i].root, id) != nil {
-			return &m.tabs[i]
+	for i := range m.windows {
+		for j := range m.windows[i].tabs {
+			if findSplit(m.windows[i].tabs[j].root, id) != nil {
+				return &m.windows[i].tabs[j]
+			}
 		}
 	}
 	return nil
 }
-func (m *Model) TabID() TabID { return m.active }
+func (m *Model) TabID() TabID {
+	if w := m.activeWindowState(); w != nil {
+		return w.active
+	}
+	return 0
+}
 func (m *Model) FocusedPane() PaneID {
 	if t := m.activeTab(); t != nil {
 		return t.focused
 	}
 	return 0
 }
-func (m *Model) Empty() bool { return len(m.tabs) == 0 }
+func (m *Model) Empty() bool {
+	for i := range m.windows {
+		if len(m.windows[i].tabs) != 0 {
+			return false
+		}
+	}
+	return true
+}
 func (m *Model) PaneIDs() []PaneID {
 	if t := m.activeTab(); t != nil {
 		return paneIDs(t.root)
@@ -363,131 +428,5 @@ func absInt(value int) int {
 	return value
 }
 
-// CloseResult describes a topology close transition. Closed is false for an
-// idempotent repeated close of an ID that this model previously allocated.
-type CloseResult struct {
-	Pane      PaneID
-	Focused   PaneID
-	Closed    bool
-	Empty     bool
-	Tab       TabID
-	TabClosed bool
-}
-
-// Close removes one leaf, collapses its parent split, and reports final-empty.
-// Re-closing a previously allocated pane is an idempotent no-op.
-func (m *Model) Close(pane PaneID) (CloseResult, error) {
-	if pane == 0 {
-		return CloseResult{}, ErrPaneNotFound
-	}
-	if _, known := m.allocated[pane]; !known {
-		return CloseResult{}, ErrPaneNotFound
-	}
-	tab := m.tabForPane(pane)
-	if tab == nil {
-		return CloseResult{Pane: pane, Focused: m.FocusedPane(), Empty: len(m.tabs) == 0}, nil
-	}
-	visualOrder := paneIDs(tab.root)
-	closedIndex := 0
-	for i, id := range visualOrder {
-		if id == pane {
-			closedIndex = i
-			break
-		}
-	}
-	newRoot, removed := removeLeaf(tab.root, pane)
-	if !removed {
-		return CloseResult{}, invariantError("active pane %d could not be removed", pane)
-	}
-	tab.root = newRoot
-	closedTab := tab.id
-	tabClosed := newRoot == nil
-	if tabClosed {
-		index := 0
-		for i := range m.tabs {
-			if m.tabs[i].id == closedTab {
-				index = i
-				m.tabs = append(m.tabs[:i], m.tabs[i+1:]...)
-				break
-			}
-		}
-		if len(m.tabs) == 0 {
-			m.active = 0
-		} else if m.active == closedTab {
-			if index >= len(m.tabs) {
-				index = len(m.tabs) - 1
-			}
-			m.active = m.tabs[index].id
-		}
-	} else if tab.focused == pane {
-		remaining := paneIDs(tab.root)
-		if closedIndex >= len(remaining) {
-			closedIndex = len(remaining) - 1
-		}
-		tab.focused = remaining[closedIndex]
-	}
-	if !tabClosed {
-		tab.revision++
-	}
-	return CloseResult{Pane: pane, Tab: closedTab, TabClosed: tabClosed, Focused: m.FocusedPane(), Closed: true, Empty: len(m.tabs) == 0}, nil
-}
-
 // CheckInvariants verifies ordered tab, ownership, tree, and monotonic ID state.
 func (m *Model) CheckInvariants() error { return checkModelInvariants(m) }
-
-func findLeaf(n *node, pane PaneID) *node {
-	if n == nil {
-		return nil
-	}
-	if n.isLeaf() {
-		if n.pane == pane {
-			return n
-		}
-		return nil
-	}
-	if found := findLeaf(n.first, pane); found != nil {
-		return found
-	}
-	return findLeaf(n.second, pane)
-
-}
-func findSplit(n *node, split SplitID) *node {
-	if n == nil || n.isLeaf() {
-		return nil
-	}
-	if n.split == split {
-		return n
-	}
-	if found := findSplit(n.first, split); found != nil {
-		return found
-	}
-	return findSplit(n.second, split)
-}
-
-func paneIDs(root *node) []PaneID {
-	var ids []PaneID
-	var visit func(*node)
-	visit = func(n *node) {
-		if n == nil {
-			return
-		}
-		if n.isLeaf() {
-			ids = append(ids, n.pane)
-			return
-		}
-		visit(n.first)
-		visit(n.second)
-	}
-	visit(root)
-	return ids
-}
-
-func firstPane(n *node) PaneID {
-	for n != nil && !n.isLeaf() {
-		n = n.first
-	}
-	if n == nil {
-		return 0
-	}
-	return n.pane
-}

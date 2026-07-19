@@ -20,7 +20,7 @@ func (m *Model) SetSplitRatioWithMetrics(split SplitID, ratio SplitRatio, bounds
 		return err
 	}
 	tab := m.tabForSplit(split)
-	if tab == nil || tab.id != m.active {
+	if tab == nil || tab != m.activeTab() {
 		return ErrSplitNotFound
 	}
 	candidate, found := replaceSplitRatio(tab.root, split, ratio)
@@ -105,4 +105,61 @@ func replaceSplitRatio(n *node, split SplitID, ratio SplitRatio) (*node, bool) {
 		return branchNode(n.split, n.axis, n.ratio, n.first, second), true
 	}
 	return n, false
+}
+
+func findLeaf(n *node, pane PaneID) *node {
+	if n == nil {
+		return nil
+	}
+	if n.isLeaf() {
+		if n.pane == pane {
+			return n
+		}
+		return nil
+	}
+	if found := findLeaf(n.first, pane); found != nil {
+		return found
+	}
+	return findLeaf(n.second, pane)
+}
+
+func findSplit(n *node, split SplitID) *node {
+	if n == nil || n.isLeaf() {
+		return nil
+	}
+	if n.split == split {
+		return n
+	}
+	if found := findSplit(n.first, split); found != nil {
+		return found
+	}
+	return findSplit(n.second, split)
+}
+
+func paneIDs(root *node) []PaneID {
+	var ids []PaneID
+	var visit func(*node)
+	visit = func(n *node) {
+		if n == nil {
+			return
+		}
+		if n.isLeaf() {
+			ids = append(ids, n.pane)
+			return
+		}
+		visit(n.first)
+		visit(n.second)
+	}
+	visit(root)
+	return ids
+}
+
+func firstPane(n *node) PaneID {
+	for n != nil && !n.isLeaf() {
+		n = n.first
+	}
+	if n == nil {
+		return 0
+	}
+	return n.pane
 }

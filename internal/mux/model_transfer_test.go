@@ -43,7 +43,7 @@ func TestTransferPaneCommitsBothTreesAndPreservesIdentity(t *testing.T) {
 	if got := m.tabForPane(pane); got == nil || got.id != 2 {
 		t.Fatalf("owner=%#v", got)
 	}
-	if m.tabByID(1).focused != 1 || m.tabByID(2).focused != pane || m.active != 1 {
+	if m.tabByID(1).focused != 1 || m.tabByID(2).focused != pane || m.TabID() != 1 {
 		t.Fatalf("tabs=%#v", m.Tabs())
 	}
 	if err := m.CheckInvariants(); err != nil {
@@ -66,7 +66,7 @@ func TestTransferFinalPaneRemovesSourceAndSelectsAdjacentTab(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.SourceTabClosed || m.tabByID(2) != nil || m.active != 3 || result.ActiveTab != 3 || !result.ActiveChanged {
+	if !result.SourceTabClosed || m.tabByID(2) != nil || m.TabID() != 3 || result.ActiveTab != 3 || !result.ActiveChanged {
 		t.Fatalf("result=%#v tabs=%#v", result, m.Tabs())
 	}
 	if got := m.tabForPane(2); got == nil || got.id != 3 {
