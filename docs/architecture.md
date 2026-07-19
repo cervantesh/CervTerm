@@ -106,3 +106,9 @@ GODEBUG=gctrace=1 go run ./cmd/cervterm
 MVP overlay shows bytes read, frames, malloc count, heap, GC count, and last GC pause. This is intentionally visible so GC/reuse discussions stay evidence-based.
 
 The current cross-subsystem delivery contract is [`docs/wezterm-parity-roadmap.md`](wezterm-parity-roadmap.md); reproducible measurements are recorded in [`docs/parity-baseline.md`](parity-baseline.md).
+
+## Windows, workspaces, and layout persistence
+
+The process-owned mux is `Workspace -> Window -> Tab -> Pane`, with globally stable runtime identities and singular pane/session registry ownership. The OS-thread window controller projects mux windows into independent native hosts and owns context, renderer, atlas, callbacks, visibility, focus, and teardown. Cross-window moves transfer topology without respawning or closing panes; workspace switching only changes native visibility/focus and never suspends sessions.
+
+Layout persistence is opt-in and layout-only. A detached mux export is adapted with native bounds and per-window appearance into the strict versioned `layoutstate` DTO, which structurally excludes environment maps, dedicated credential fields, runtime IDs, PTY/process state, terminal cells, scrollback, and renderer selection. Atomic store publication preserves the last usable file. Startup loads before GLFW side effects, normalizes against current monitors/config, prepares every hidden native projection, publishes config/Teal, provisions every fresh local session, then commits mux/controller ownership and final visibility together. Any failure aborts candidates and uses the unchanged fresh one-window path.
