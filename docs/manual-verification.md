@@ -123,3 +123,17 @@ Automated qualification is recorded at `docs/validation/phase-8-visible-tabs.md`
 - Move panes between nested tabs repeatedly and verify shell processes, scrollback, parser state and input ownership remain continuous with no extra spawn/close.
 
 macOS and Linux GUI tab-bar behavior remains manually unqualified; Linux headless CI covers model/config/frontend compilation and tests.
+
+## Phase 9 windows, workspaces, and persistence qualification
+
+Enable `layout_persistence`, use two monitors/DPI scales when available, and verify:
+
+- Create several native windows, tabs, nested splits, and named workspaces; move whole tabs and panes between windows and confirm the original shells, scrollback, parser state, zoom, and input ownership remain continuous.
+- Switch workspaces repeatedly. Inactive windows hide without stopping output; returning restores remembered window/tab/pane focus.
+- Move/resize windows across monitors, change split ratios/tab order/focus/CWD, then close CervTerm normally. Restart and verify bounds recovery, ordering/topology and scalar appearance while every pane starts a fresh local process.
+- Inspect the JSON state and confirm it contains no environment maps, dedicated credential fields, runtime IDs, PTY/process handles, terminal cells, scrollback, or renderer selection. Treat program arguments as visible trusted launch data.
+- Corrupt the file, use a future version, or select an unavailable saved scheme. Each case must keep state non-authoritative and open one usable fresh window without leaked hidden windows or processes.
+- Remove a monitor or make the saved CWD unavailable. Valid topology must remain while bounds recover to a current monitor and CWD uses the documented fallback.
+- Inject/induce a launch failure in one restored pane and confirm the entire candidate closes before the normal fresh-window fallback appears.
+
+Automated evidence is recorded at `docs/validation/phase-9-windows-workspaces-layout-persistence.md`. Windows GUI multi-monitor verification remains manual; Linux is headless-qualified and macOS/Linux GUI behavior is not claimed.

@@ -152,3 +152,12 @@ go run -tags glfw ./cmd/cervterm
 ### Tab bar
 
 `tab_bar.mode` is `multiple` (default), `always`, or `hidden`; `position` is `top` or `bottom`. Height, tab widths, and horizontal padding are bounded and reload live as one validated configuration. The retained bar reserves authoritative window geometry, keeps the active tab visible under overflow, and routes add/close/tab hits before terminal mouse input. The default one-tab window reserves no bar pixels.
+
+## Native windows, workspaces, and saved layouts
+
+- One process mux owns ordered named workspaces, native-window models, tabs, pane trees, and all local sessions/readers; native hosts are projections owned by the locked OS thread.
+- Window/tab/pane transfers preserve identity and session ownership and perform no implicit respawn. Workspace switches hide/show hosts without suspending sessions.
+- `layout_persistence.enabled` opts into the version 1 layout file; `layout_persistence.path` selects the file and otherwise uses the current-user config directory.
+- Saved state contains only fresh-session topology/launch intent, bounds, focus/order, semantic CWD, and scalar appearance. It cannot contain environment maps, dedicated credential fields, PTY/process state, terminal content, scrollback, runtime IDs, or renderer selection.
+- Restore creates fresh local sessions only. Complete native/mux preparation commits atomically; invalid or failed state falls back to one fresh window and remains non-authoritative.
+- An unavailable saved color-scheme name rejects restore rather than silently projecting an unresolved palette.
