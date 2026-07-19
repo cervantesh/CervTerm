@@ -48,7 +48,7 @@ This document is the executable contract for the MVP. Implementation must follow
 - Answers DA1/DA2 and DSR/CPR reports (`CSI c`, `CSI > c`, `CSI 5 n`, `CSI 6 n`, `CSI ? 6 n`).
 - Handles DECSET/DECRST bracketed paste mode: `CSI ?2004 h/l`.
 - Handles DECSET/DECRST alternate screen mode: `CSI ?1049 h/l`, preserving the primary screen and scrollback.
-- Handles DECOM origin mode, IRM insert mode, alternate screen variants `47`/`1047`/`1048`, DEC Special Graphics G0/G1 charsets, DECSCUSR cursor styles, mouse modes `1000`/`1002`/`1003`/`1004`/`1006`, OSC 4/10/11 palette set/query and OSC 104/110/111 reset, OSC 52 clipboard writes, OSC 7 working-directory URLs, and bounded pane-local OSC 8 hyperlink metadata. Parsing never opens a URI; opening requires a fresh explicit click or quick-select acceptance and centralized absolute HTTP(S) policy.
+- Handles DECOM origin mode, IRM insert mode, alternate screen variants `47`/`1047`/`1048`, DEC Special Graphics G0/G1 charsets, DECSCUSR cursor styles, mouse modes `1000`/`1002`/`1003`/`1004`/`1006`, OSC 4/10/11 palette set/query and OSC 104/110/111 reset, OSC 52 clipboard writes, OSC 7 working-directory URLs, bounded pane-local OSC 8 hyperlink metadata, and bounded OSC 133/633 prompt/input/output semantic metadata. Parsing never opens a URI; opening requires a fresh explicit click or quick-select acceptance and centralized absolute HTTP(S) policy.
 
 ### Input encoding
 

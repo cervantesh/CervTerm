@@ -35,6 +35,7 @@ func HashRows(dst []uint64, cells []core.Cell, cols int) {
 			hash = hashBool(hash, cell.Attr.Strikethrough)
 			hash = hashBool(hash, cell.Attr.Blink)
 			hash = hashUint32(hash, uint32(cell.HyperlinkID))
+			hash = hashUint32(hash, uint32(cell.SemanticKind))
 			hash = hashBool(hash, cell.WideContinuation)
 		}
 		dst[row] = hash

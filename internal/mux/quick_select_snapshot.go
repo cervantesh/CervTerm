@@ -11,17 +11,19 @@ const (
 // internal to CervTerm (the mux package itself is internal) and has no action or
 // configuration surface.
 type QuickSelectSnapshot struct {
-	PaneID          PaneID
-	FocusedPaneID   PaneID
-	GlobalRowOrigin int
-	Cols            int
-	Rows            int
-	Cells           []core.Cell
-	Wrapped         []bool
-	Hyperlinks      []core.Hyperlink
-	ContentGen      uint64
-	ReflowGen       uint64
-	ViewportGen     uint64
+	PaneID                 PaneID
+	FocusedPaneID          PaneID
+	GlobalRowOrigin        int
+	Cols                   int
+	Rows                   int
+	Cells                  []core.Cell
+	Wrapped                []bool
+	Hyperlinks             []core.Hyperlink
+	SemanticZones          []core.SemanticZone
+	SemanticZonesTruncated bool
+	ContentGen             uint64
+	ReflowGen              uint64
+	ViewportGen            uint64
 }
 
 // QuickSelectSnapshot returns at most the requested visible rows and cells.
@@ -46,6 +48,7 @@ func (m *Mux) QuickSelectSnapshot(id PaneID, rowLimit, cellLimit int) (QuickSele
 	p.terminal.CopyViewRows(cells, first, rows)
 	cells = cloneDetachedCells(cells)
 	hyperlinks := p.terminal.ProjectHyperlinks(cells, nil)
+	semanticZones, semanticZonesTruncated := core.ProjectSemanticZones(cells, nil)
 	wrapped := make([]bool, rows)
 	for row := range wrapped {
 		wrapped[row], _ = p.terminal.LineWrapped(first + row)
@@ -54,6 +57,7 @@ func (m *Mux) QuickSelectSnapshot(id PaneID, rowLimit, cellLimit int) (QuickSele
 		PaneID: p.id, FocusedPaneID: m.model.FocusedPane(),
 		GlobalRowOrigin: p.terminal.ViewportTopGlobalRow() + first,
 		Cols:            cols, Rows: rows, Cells: cells, Wrapped: wrapped, Hyperlinks: hyperlinks,
+		SemanticZones: semanticZones, SemanticZonesTruncated: semanticZonesTruncated,
 		ContentGen: p.contentGen, ReflowGen: p.reflowGen, ViewportGen: p.viewportGen,
 	}, true
 }
@@ -83,6 +87,7 @@ func cloneDetachedCells(src []core.Cell) []core.Cell {
 		out[i] = core.NewCellWithCombining(cell.Rune, cell.Attr, marks...)
 		out[i].WideContinuation = cell.WideContinuation
 		out[i].HyperlinkID = cell.HyperlinkID
+		out[i].SemanticKind = cell.SemanticKind
 	}
 	return out
 }
