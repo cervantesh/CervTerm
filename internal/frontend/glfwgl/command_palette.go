@@ -91,6 +91,8 @@ func (a *App) commandPaletteSnapshot(hasPane bool) ([]modal.Entry, map[string]co
 			command = termaction.ActivateTabRelative{Delta: 1}
 		case termaction.IDActivateTabSwitcher:
 			command = termaction.ActivateTabSwitcher{}
+		case termaction.IDActivateWorkspaceSwitcher:
+			command = termaction.ActivateWorkspaceSwitcher{}
 		default:
 			continue
 		}

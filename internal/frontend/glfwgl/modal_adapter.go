@@ -96,7 +96,7 @@ func (a *App) applyModalIntents(intents []modal.Intent) {
 	for _, intent := range intents {
 		switch intent.Kind {
 		case modal.IntentAccept:
-			if a.modal.Mode() != modal.ModeCommandPalette && a.modal.Mode() != modal.ModeQuickSelect && a.modal.Mode() != modal.ModeLaunchMenu && a.modal.Mode() != modal.ModeTabSwitcher && a.modal.Mode() != modal.ModeTabCloseConfirmation {
+			if a.modal.Mode() != modal.ModeCommandPalette && a.modal.Mode() != modal.ModeQuickSelect && a.modal.Mode() != modal.ModeLaunchMenu && a.modal.Mode() != modal.ModeTabSwitcher && a.modal.Mode() != modal.ModeWorkspaceSwitcher && a.modal.Mode() != modal.ModeTabCloseConfirmation {
 				continue
 			}
 			var err error
@@ -107,6 +107,8 @@ func (a *App) applyModalIntents(intents []modal.Intent) {
 				err = a.acceptLaunchMenu(intent.Entry, termmux.PaneID(intent.Pane))
 			case modal.ModeTabSwitcher:
 				err = a.acceptCommandPalette(intent.Entry, termmux.PaneID(intent.Pane))
+			case modal.ModeWorkspaceSwitcher:
+				err = a.acceptWorkspaceSwitcher(intent.Entry)
 			case modal.ModeTabCloseConfirmation:
 				err = a.acceptTabClose(intent.Entry)
 			default:

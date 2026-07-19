@@ -75,48 +75,49 @@ type App struct {
 
 	lastFBW, lastFBH int
 
-	cols, rows       int
-	cellW            float32
-	cellH            float32
-	insets           FramebufferInsets
-	drawOriginX      float32
-	drawOriginY      float32
-	uiScale          float32
-	tabBar           tabBarLayout
-	tabBarPressed    tabHit
-	tabBarFirst      int
-	tabBarHeight     int
-	tabClose         tabCloseConfirmation
-	tabActivity      map[termmux.TabID]bool
-	contentScaleX    float32
-	contentScaleY    float32
-	status           statusState
-	overlays         overlayRender
-	scriptRT         *script.Runtime
-	scriptBundle     *script.CandidateBundle
-	scriptActivation *script.CandidateActivation
-	legacyTransition *config.LegacyTealTransition
-	scriptGeneration uint64
-	commandPalette   map[string]commandPaletteActivation
-	quickSelect      quickSelectActivation
-	notice           string
-	noticeUntil      time.Time
-	suppressNextChar bool
-	lastStats        time.Time
-	blinkStart       time.Time
-	showStats        bool
-	statsSpec        script.Spec
-	statsSpecOK      bool
-	zoom             zoomBindings
-	actionBindings   []keyActionBinding
-	keyTable         keyTableState
-	link             linkState
-	hud              hudCache
-	fps              float64
-	fpsFrames        uint64
-	fpsTime          time.Time
-	skippedGlyph     []bool // reused per-row scratch buffer to avoid per-frame allocs
-	ligaturesActive  bool   // font.ligatures enabled AND the active shaper can substitute
+	cols, rows        int
+	cellW             float32
+	cellH             float32
+	insets            FramebufferInsets
+	drawOriginX       float32
+	drawOriginY       float32
+	uiScale           float32
+	tabBar            tabBarLayout
+	tabBarPressed     tabHit
+	tabBarFirst       int
+	tabBarHeight      int
+	tabClose          tabCloseConfirmation
+	tabActivity       map[termmux.TabID]bool
+	contentScaleX     float32
+	contentScaleY     float32
+	status            statusState
+	overlays          overlayRender
+	scriptRT          *script.Runtime
+	scriptBundle      *script.CandidateBundle
+	scriptActivation  *script.CandidateActivation
+	legacyTransition  *config.LegacyTealTransition
+	scriptGeneration  uint64
+	commandPalette    map[string]commandPaletteActivation
+	workspaceSwitcher map[string]workspaceSwitcherActivation
+	quickSelect       quickSelectActivation
+	notice            string
+	noticeUntil       time.Time
+	suppressNextChar  bool
+	lastStats         time.Time
+	blinkStart        time.Time
+	showStats         bool
+	statsSpec         script.Spec
+	statsSpecOK       bool
+	zoom              zoomBindings
+	actionBindings    []keyActionBinding
+	keyTable          keyTableState
+	link              linkState
+	hud               hudCache
+	fps               float64
+	fpsFrames         uint64
+	fpsTime           time.Time
+	skippedGlyph      []bool // reused per-row scratch buffer to avoid per-frame allocs
+	ligaturesActive   bool   // font.ligatures enabled AND the active shaper can substitute
 
 	rowHashes, prevHashes, prevPrevHashes []uint64
 	lastCursorRow, prevCursorRow          int
