@@ -91,7 +91,7 @@ func (t *Terminal) blank() Cell {
 func isBlankRow(row []Cell) bool {
 	blankAttr := Attr{FG: DefaultColor(), BG: DefaultColor()}
 	for _, cell := range row {
-		if (cell.Rune != 0 && cell.Rune != ' ') || cell.HasCombining() || cell.Attr != blankAttr || cell.WideContinuation {
+		if (cell.Rune != 0 && cell.Rune != ' ') || cell.HasCombining() || cell.Attr != blankAttr || cell.HyperlinkID != 0 || cell.WideContinuation {
 			return false
 		}
 	}
@@ -145,6 +145,7 @@ func (t *Terminal) snapshotScreen() *screenState {
 		scrollBottom:       t.scrollBottom,
 		charsets:           t.charsets,
 		activeCharset:      t.activeCharset,
+		hyperlinks:         t.hyperlinks.clone(),
 	}
 }
 
@@ -170,6 +171,7 @@ func (t *Terminal) restoreScreen(s *screenState) {
 	t.scrollBottom = min(s.scrollBottom, max(0, t.rows-1))
 	t.charsets = s.charsets
 	t.activeCharset = s.activeCharset
+	t.hyperlinks = s.hyperlinks.clone()
 	if t.scrollBottom <= t.scrollTop {
 		t.resetScrollRegion()
 	}
@@ -205,7 +207,7 @@ func cloneBoolRow(row []bool) []bool {
 }
 
 func isBlankCell(cell Cell) bool {
-	return cell.WideContinuation || cell.Rune == 0 || cell.Rune == ' '
+	return cell.HyperlinkID == 0 && (cell.WideContinuation || cell.Rune == 0 || cell.Rune == ' ')
 }
 
 func writeCellText(b *strings.Builder, cell Cell) {
