@@ -61,6 +61,7 @@ type App struct {
 	blurWarnedStatus       BlurStatus
 
 	window                    *glfw.Window
+	controller                *windowController
 	r                         gpu.Renderer
 	backgroundSurface         gpu.BackgroundSurface
 	backgroundSurfaceWidth    int
@@ -209,11 +210,7 @@ func (a *App) runWindow() error {
 		return err
 	}
 	defer glfw.Terminate()
-	defer func() {
-		if a.mux != nil {
-			_ = a.mux.Shutdown()
-		}
-	}()
+	defer a.shutdownProcessServices()
 	a.wakeReady.Store(true)
 	defer a.wakeReady.Store(false)
 	defer a.discardConfigReloadWorkers()
@@ -227,6 +224,10 @@ func (a *App) runWindow() error {
 		return err
 	}
 	a.window = w
+	if err := a.attachInitialWindowController(w); err != nil {
+		return err
+	}
+	defer a.closeInitialWindowController()
 	defer a.closeDividerCursors()
 	a.transparentFramebuffer = w.GetAttrib(glfw.TransparentFramebuffer) == glfw.True
 	a.blurProvider = newBlurProvider(w)
@@ -237,7 +238,9 @@ func (a *App) runWindow() error {
 	}()
 	a.configureNativeWindow(w)
 	a.applyWindowAppearance()
-	w.MakeContextCurrent()
+	if err := a.controller.activate(initialWindowID); err != nil {
+		return err
+	}
 	swapInterval := 1
 	if !a.cfg.Render.VSync {
 		swapInterval = 0
@@ -289,8 +292,6 @@ func (a *App) runWindow() error {
 		return err
 	}
 	a.initMux()
-	// Every fallible window/renderer/font resource now exists. Publish staged v2
-	// Teal immediately before the remaining in-memory activation and PTY spawn.
 	if watchHashesChanged(a.configWatchHashes) {
 		return fmt.Errorf("configuration sources changed during frontend preparation; reload the newest generation")
 	}
@@ -300,7 +301,7 @@ func (a *App) runWindow() error {
 		}
 	}
 	if a.scriptActivation != nil {
-		a.scriptRT = a.scriptActivation.Commit()
+		a.installScriptRuntime(a.scriptActivation.Commit())
 		a.scriptActivation = nil
 		a.initActionBindings()
 	}
@@ -308,13 +309,10 @@ func (a *App) runWindow() error {
 		a.legacyTransition.Commit()
 		a.legacyTransition = nil
 	}
+	a.syncProcessServices()
 	a.installCallbacks()
-	// Spawn the PTY now that cellW/cellH are final, sized to the real initial
-	// grid so no startup resize repaints the shell and duplicates its banner.
 	a.spawnInitialPTY(w)
 
-	// Paint the first frame before any event arrives, and dispatch any term
-	// events produced by pre-loop parser feeds (the no-PTY startup banner).
 	a.needsRedraw = true
 
 	return a.runLoop(w)
@@ -325,8 +323,6 @@ func (a *App) installCallbacks() {
 		a.rebuildForContentScale(scaleX, scaleY)
 		a.requestRedraw()
 	})
-	// A framebuffer size change with the same cols/rows (padding remainder,
-	// DPI move) still needs a repaint that resizeToWindow would miss.
 	a.window.SetFramebufferSizeCallback(func(_ *glfw.Window, _, _ int) {
 		a.requestRedraw()
 	})
@@ -475,6 +471,7 @@ func (a *App) installCallbacks() {
 		}
 	})
 	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
+		a.recordNativeFocus(focused)
 		if !focused {
 			a.keyTable.cancel()
 			a.finishDividerDrag()
@@ -482,9 +479,6 @@ func (a *App) installCallbacks() {
 			a.cancelMouseCapture()
 			a.mouseBindingCapture = mouseBindingCapture{}
 		}
-		// The script focus event is independent of the terminal's focus-report
-		// mode. The callback runs on the loop thread (not inside a handler), so
-		// firing inline cannot re-enter Lua dispatch.
 		a.fireScriptEvent(func() error { return a.scriptRT.FireFocus(a.hostForFocused(), focused) })
 		_, view, ok := a.focusedView()
 		enabled := ok && view.FocusEvents
