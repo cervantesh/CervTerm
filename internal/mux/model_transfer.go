@@ -33,7 +33,8 @@ func (m *Model) TransferPane(pane PaneID, destinationTab TabID, destinationPane 
 	if source == nil {
 		return result, ErrPaneNotFound
 	}
-	destination := m.tabByID(destinationTab)
+	destinationWindow := m.activeWindowState()
+	destination := tabByID(destinationWindow, destinationTab)
 	if destination == nil {
 		return result, ErrTabNotFound
 	}
@@ -90,41 +91,58 @@ func (m *Model) TransferPane(pane PaneID, destinationTab TabID, destinationPane 
 		return result, err
 	}
 
-	previousTabs := append([]tabState(nil), m.tabs...)
-	previousActive, previousFocus := m.active, m.FocusedPane()
+	previousWindows := cloneWindowStates(m.windows)
+	previousActive, previousFocus := m.TabID(), m.FocusedPane()
 	sourceID := source.id
+	sourceWindow := m.windowForTab(sourceID)
 	sourceIndex := -1
-	for i := range m.tabs {
-		if m.tabs[i].id == sourceID {
+	for i := range sourceWindow.tabs {
+		if sourceWindow.tabs[i].id == sourceID {
 			sourceIndex = i
 			break
 		}
 	}
 	source.root, source.focused, source.revision = sourceRoot, sourceFocus, source.revision+1
 	destination.root, destination.focused, destination.revision = destinationRoot, pane, destination.revision+1
+	sourceWindow.revision++
+	if destinationWindow != sourceWindow {
+		destinationWindow.revision++
+	}
 	m.allocatedSplits[newSplit] = struct{}{}
 	m.nextSplitID++
 	if sourceRoot == nil {
-		m.tabs = append(m.tabs[:sourceIndex], m.tabs[sourceIndex+1:]...)
-		if m.active == sourceID {
-			if sourceIndex >= len(m.tabs) {
-				sourceIndex = len(m.tabs) - 1
+		sourceWindow.tabs = append(sourceWindow.tabs[:sourceIndex], sourceWindow.tabs[sourceIndex+1:]...)
+		if sourceWindow.active == sourceID {
+			if len(sourceWindow.tabs) == 0 {
+				sourceWindow.active = 0
+			} else {
+				if sourceIndex >= len(sourceWindow.tabs) {
+					sourceIndex = len(sourceWindow.tabs) - 1
+				}
+				sourceWindow.active = sourceWindow.tabs[sourceIndex].id
 			}
-			m.active = m.tabs[sourceIndex].id
 		}
 	}
 	if err := m.CheckInvariants(); err != nil {
-		m.tabs, m.active, m.nextSplitID = previousTabs, previousActive, newSplit
+		m.windows, m.nextSplitID = previousWindows, newSplit
 		delete(m.allocatedSplits, newSplit)
 		return result, err
 	}
 
 	finalDestination := m.tabByID(destinationTab)
-	result = TransferResult{Pane: pane, SourceTab: sourceID, DestinationTab: destinationTab, SourceFocused: sourceFocus, DestinationFocused: pane, SourceTabClosed: sourceRoot == nil, ActiveTab: m.active, ActiveFocused: m.FocusedPane(), ActiveChanged: m.active != previousActive, FocusChanged: m.active != previousActive || m.FocusedPane() != previousFocus, DestinationRevision: finalDestination.revision, SourceLayout: sourceLayout, DestinationLayout: destinationLayout}
+	result = TransferResult{Pane: pane, SourceTab: sourceID, DestinationTab: destinationTab, SourceFocused: sourceFocus, DestinationFocused: pane, SourceTabClosed: sourceRoot == nil, ActiveTab: m.TabID(), ActiveFocused: m.FocusedPane(), ActiveChanged: m.TabID() != previousActive, FocusChanged: m.TabID() != previousActive || m.FocusedPane() != previousFocus, DestinationRevision: finalDestination.revision, SourceLayout: sourceLayout, DestinationLayout: destinationLayout}
 	if finalSource := m.tabByID(sourceID); finalSource != nil {
 		result.SourceRevision = finalSource.revision
 	}
 	return result, nil
+}
+
+func cloneWindowStates(windows []windowState) []windowState {
+	out := append([]windowState(nil), windows...)
+	for i := range out {
+		out[i].tabs = append([]tabState(nil), windows[i].tabs...)
+	}
+	return out
 }
 
 func validateTransferLayout(layout Layout) error {

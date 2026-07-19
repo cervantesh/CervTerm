@@ -10,17 +10,28 @@ type TabView struct {
 	Revision uint64
 }
 
+func tabView(t *tabState, active TabID) TabView {
+	return TabView{ID: t.id, Title: t.title, Focused: t.focused, Panes: append([]PaneID(nil), paneIDs(t.root)...), Active: t.id == active, Revision: t.revision}
+}
+
 func (m *Model) Tabs() []TabView {
-	out := make([]TabView, len(m.tabs))
-	for i := range m.tabs {
-		t := &m.tabs[i]
-		out[i] = TabView{ID: t.id, Title: t.title, Focused: t.focused, Panes: append([]PaneID(nil), paneIDs(t.root)...), Active: t.id == m.active, Revision: t.revision}
+	w := m.activeWindowState()
+	if w == nil {
+		return nil
+	}
+	out := make([]TabView, len(w.tabs))
+	for i := range w.tabs {
+		out[i] = tabView(&w.tabs[i], w.active)
 	}
 	return out
 }
 
 func (m *Model) prepareTab() (TabID, PaneID, error) {
-	if len(m.tabs) >= MaxTabs {
+	w := m.activeWindowState()
+	if w == nil {
+		return 0, 0, ErrEmptyModel
+	}
+	if len(w.tabs) >= MaxTabs {
 		return 0, 0, ErrTabLimitReached
 	}
 	if m.nextTabID == 0 || m.nextPaneID == 0 {
@@ -37,16 +48,19 @@ func (m *Model) commitTab(tab TabID, pane PaneID, title string) error {
 	if tab != predictedTab || pane != predictedPane {
 		return invariantError("tab commit IDs changed: predicted %d/%d, got %d/%d", predictedTab, predictedPane, tab, pane)
 	}
-	previousActive := m.active
-	m.tabs = append(m.tabs, tabState{id: tab, title: title, root: leafNode(pane), focused: pane, revision: 1})
-	m.active = tab
+	w := m.activeWindowState()
+	previousActive := w.active
+	w.tabs = append(w.tabs, tabState{id: tab, title: title, root: leafNode(pane), focused: pane, revision: 1})
+	w.active = tab
+	w.revision++
 	m.allocatedTabs[tab] = struct{}{}
 	m.allocated[pane] = struct{}{}
 	m.nextTabID++
 	m.nextPaneID++
 	if err := m.CheckInvariants(); err != nil {
-		m.tabs = m.tabs[:len(m.tabs)-1]
-		m.active = previousActive
+		w.tabs = w.tabs[:len(w.tabs)-1]
+		w.active = previousActive
+		w.revision--
 		delete(m.allocatedTabs, tab)
 		delete(m.allocated, pane)
 		m.nextTabID, m.nextPaneID = tab, pane
@@ -56,30 +70,34 @@ func (m *Model) commitTab(tab TabID, pane PaneID, title string) error {
 }
 
 func (m *Model) ActivateTab(id TabID) error {
-	if m.tabByID(id) == nil {
+	w := m.activeWindowState()
+	if tabByID(w, id) == nil {
 		return ErrTabNotFound
 	}
-	m.active = id
+	w.active = id
 	return nil
 }
 
 func (m *Model) RenameTab(id TabID, title string) error {
-	t := m.tabByID(id)
+	w := m.activeWindowState()
+	t := tabByID(w, id)
 	if t == nil {
 		return ErrTabNotFound
 	}
 	t.title = title
 	t.revision++
+	w.revision++
 	return nil
 }
 
 func (m *Model) MoveTab(id TabID, position int) error {
-	if position < 0 || position >= len(m.tabs) {
+	w := m.activeWindowState()
+	if w == nil || position < 0 || position >= len(w.tabs) {
 		return ErrInvalidTabPosition
 	}
 	from := -1
-	for i := range m.tabs {
-		if m.tabs[i].id == id {
+	for i := range w.tabs {
+		if w.tabs[i].id == id {
 			from = i
 			break
 		}
@@ -90,14 +108,15 @@ func (m *Model) MoveTab(id TabID, position int) error {
 	if from == position {
 		return nil
 	}
-	t := m.tabs[from]
-	m.tabs = append(m.tabs[:from], m.tabs[from+1:]...)
-	m.tabs = append(m.tabs, tabState{})
-	copy(m.tabs[position+1:], m.tabs[position:])
-	m.tabs[position] = t
-	for i := range m.tabs {
-		m.tabs[i].revision++
+	t := w.tabs[from]
+	w.tabs = append(w.tabs[:from], w.tabs[from+1:]...)
+	w.tabs = append(w.tabs, tabState{})
+	copy(w.tabs[position+1:], w.tabs[position:])
+	w.tabs[position] = t
+	for i := range w.tabs {
+		w.tabs[i].revision++
 	}
+	w.revision++
 	return nil
 }
 
@@ -109,9 +128,13 @@ type detachedTab struct {
 }
 
 func (m *Model) detachTab(id TabID) (detachedTab, error) {
+	w := m.activeWindowState()
+	if w == nil {
+		return detachedTab{}, ErrTabNotFound
+	}
 	index := -1
-	for i := range m.tabs {
-		if m.tabs[i].id == id {
+	for i := range w.tabs {
+		if w.tabs[i].id == id {
 			index = i
 			break
 		}
@@ -119,19 +142,20 @@ func (m *Model) detachTab(id TabID) (detachedTab, error) {
 	if index < 0 {
 		return detachedTab{}, ErrTabNotFound
 	}
-	t := m.tabs[index]
+	t := w.tabs[index]
 	d := detachedTab{id: id, panes: append([]PaneID(nil), paneIDs(t.root)...)}
-	m.tabs = append(m.tabs[:index], m.tabs[index+1:]...)
-	if len(m.tabs) == 0 {
-		m.active = 0
-	} else if m.active == id {
-		if index >= len(m.tabs) {
-			index = len(m.tabs) - 1
+	w.tabs = append(w.tabs[:index], w.tabs[index+1:]...)
+	if len(w.tabs) == 0 {
+		w.active = 0
+	} else if w.active == id {
+		if index >= len(w.tabs) {
+			index = len(w.tabs) - 1
 		}
-		m.active = m.tabs[index].id
+		w.active = w.tabs[index].id
 	}
-	d.active = m.active
-	if active := m.activeTab(); active != nil {
+	w.revision++
+	d.active = w.active
+	if active := tabByID(w, w.active); active != nil {
 		d.focused = active.focused
 	}
 	return d, m.CheckInvariants()
