@@ -66,6 +66,7 @@ func (close projectionResourceFunc) Close() error { return close() }
 type nativeProjectionBundle struct {
 	host      nativeWindowHost
 	handle    func([]termmux.Event) bool
+	bind      func(termmux.WindowID) error
 	resources []projectionResource
 	closed    bool
 }
@@ -105,15 +106,17 @@ type windowProjection struct {
 // deliberately independent of GLFW concrete window types so lifecycle and
 // routing order are testable without a native display.
 type windowController struct {
-	services processServices
-	pump     nativeEventPump
-	factory  nativeProjectionFactory
-	windows  map[termmux.WindowID]*windowProjection
-	pending  map[termmux.WindowID][]termmux.Event
-	order    []termmux.WindowID
-	active   termmux.WindowID
-	current  termmux.WindowID
-	inLoop   bool
+	services         processServices
+	pump             nativeEventPump
+	factory          nativeProjectionFactory
+	candidateFactory nativeProjectionCandidateFactory
+	runtimeWindows   runtimeWindowLifecycle
+	windows          map[termmux.WindowID]*windowProjection
+	pending          map[termmux.WindowID][]termmux.Event
+	order            []termmux.WindowID
+	active           termmux.WindowID
+	current          termmux.WindowID
+	inLoop           bool
 }
 
 func newWindowController(services processServices, pump nativeEventPump) *windowController {
@@ -398,6 +401,9 @@ func (a *App) recordNativeFocus(focused bool) {
 func (a *App) syncProcessServices() {
 	if a.controller != nil {
 		a.controller.setServices(processServices{mux: a.mux, scriptRuntime: a.scriptRT, runtimeScopes: &a.runtimeScopes})
+		if a.mux != nil {
+			a.controller.setRuntimeWindows(a.mux)
+		}
 	}
 }
 

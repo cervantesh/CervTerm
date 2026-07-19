@@ -96,3 +96,26 @@ func TestMuxCloseFinalWindowReportsProcessEmptiness(t *testing.T) {
 		t.Fatalf("events=%#v", events)
 	}
 }
+
+func TestMuxRollbackWindowReusesUnpublishedIDs(t *testing.T) {
+	m, _, _ := newTestMux(t)
+	bounds, metrics := windowTestGeometry()
+	beforeWindow, beforeTab, beforePane := m.model.nextWindowID, m.model.nextTabID, m.model.nextPaneID
+	view, _, err := m.CreateWindow(SpawnSpec{}, bounds, metrics, "candidate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.RollbackWindow(view.ID); err != nil {
+		t.Fatal(err)
+	}
+	if m.model.nextWindowID != beforeWindow || m.model.nextTabID != beforeTab || m.model.nextPaneID != beforePane || m.sessions.count() != 1 {
+		t.Fatalf("rollback ids=%d/%d/%d count=%d", m.model.nextWindowID, m.model.nextTabID, m.model.nextPaneID, m.sessions.count())
+	}
+	reused, _, err := m.CreateWindow(SpawnSpec{}, bounds, metrics, "reused")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reused.ID != view.ID || reused.Tabs[0].ID != beforeTab || reused.Tabs[0].Focused != beforePane {
+		t.Fatalf("reused=%#v", reused)
+	}
+}
