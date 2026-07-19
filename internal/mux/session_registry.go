@@ -121,27 +121,49 @@ func (r *localSessionRegistry) register(p *pane) error {
 	return nil
 }
 
-// start begins a reader while holding the registry lock across WaitGroup.Add.
-// Once a pane is registered this operation is mechanically infallible unless
-// shutdown has begun.
-func (r *localSessionRegistry) start(id PaneID) error {
+// prepareStarts atomically reserves reader WaitGroup slots without launching any goroutine.
+func (r *localSessionRegistry) prepareStarts(ids []PaneID) (func(), error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.shuttingDown {
-		return ErrShuttingDown
+		return nil, ErrShuttingDown
 	}
-	p := r.panes[id]
-	if p == nil {
-		return invariantError("pane %d is not registry-owned", id)
+	panes := make([]*pane, len(ids))
+	seen := make(map[PaneID]struct{}, len(ids))
+	for i, id := range ids {
+		if _, duplicate := seen[id]; duplicate {
+			return nil, invariantError("pane %d reader requested twice", id)
+		}
+		seen[id] = struct{}{}
+		p := r.panes[id]
+		if p == nil {
+			return nil, invariantError("pane %d is not registry-owned", id)
+		}
+		if p.session == nil {
+			return nil, ErrPaneNotRunning
+		}
+		if _, started := r.started[id]; started {
+			return nil, invariantError("pane %d reader is already started", id)
+		}
+		panes[i] = p
 	}
-	if p.session == nil {
-		return ErrPaneNotRunning
+	for _, p := range panes {
+		r.started[p.id] = struct{}{}
 	}
-	if _, started := r.started[id]; started {
-		return invariantError("pane %d reader is already started", id)
+	r.readers.Add(len(panes))
+	return func() {
+		for _, p := range panes {
+			p.launchReader(r.ctx, r.incoming, r.wake, &r.readers)
+		}
+	}, nil
+}
+
+func (r *localSessionRegistry) start(id PaneID) error {
+	launch, err := r.prepareStarts([]PaneID{id})
+	if err != nil {
+		return err
 	}
-	r.started[id] = struct{}{}
-	p.startReader(r.ctx, r.incoming, r.wake, &r.readers)
+	launch()
 	return nil
 }
 
@@ -156,6 +178,12 @@ func (r *localSessionRegistry) count() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.panes)
+}
+
+func (r *localSessionRegistry) activeCounts() (panes, reserved, started int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.panes), len(r.reserved), len(r.started)
 }
 
 func (r *localSessionRegistry) forEach(fn func(PaneID, *pane)) {

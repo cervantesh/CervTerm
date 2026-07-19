@@ -44,6 +44,7 @@ type Mux struct {
 	paneMetrics  map[PaneID]CellMetrics
 	paletteBase  core.PaletteBase
 	windowFault  func(string) error // package-private deterministic failure injection
+	pending      *RestoreCandidate
 }
 
 func New(factory SessionFactory, options Options) *Mux {
@@ -133,6 +134,9 @@ func (m *Mux) Layout() (Layout, error) {
 }
 
 func (m *Mux) PaneView(id PaneID) (PaneView, bool) {
+	if m.restorePanePending(id) {
+		return PaneView{}, false
+	}
 	p, ok := m.sessions.lookup(id)
 	if !ok {
 		return PaneView{}, false
