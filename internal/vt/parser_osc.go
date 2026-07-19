@@ -51,6 +51,8 @@ func (p *Parser) dispatchOSC(t *core.Terminal) {
 		if cwd, ok := parseOSC7Cwd(rest); ok {
 			t.SetCwd(cwd)
 		}
+	case "8":
+		p.dispatchOSC8(t, rest)
 	case "10":
 		p.dispatchOSCDefaultColor(t, rest, true)
 	case "11":
@@ -68,6 +70,54 @@ func (p *Parser) dispatchOSC(t *core.Terminal) {
 			t.ResetPaletteBG()
 		}
 	}
+}
+
+func (p *Parser) dispatchOSC8(t *core.Terminal, rest string) {
+	params, uri, ok := strings.Cut(rest, ";")
+	if !ok {
+		return
+	}
+	if uri == "" {
+		t.CloseHyperlink()
+		return
+	}
+	if len(params) > core.MaxHyperlinkParamsBytes || len(uri) > core.MaxHyperlinkURIBytes || !validOSC8Text(uri) {
+		return
+	}
+	// This slice stores metadata only. Scheme allowlisting belongs to the explicit
+	// user-activation policy at the frontend side-effect boundary.
+	parsed, err := url.Parse(uri)
+	if err != nil || parsed.Scheme == "" {
+		return
+	}
+	explicitID := ""
+	if params != "" {
+		for _, part := range strings.Split(params, ":") {
+			key, value, found := strings.Cut(part, "=")
+			if !found || key == "" || value == "" || !validOSC8Text(key) || !validOSC8Text(value) {
+				return
+			}
+			if key == "id" {
+				if explicitID != "" {
+					return
+				}
+				explicitID = value
+			}
+		}
+	}
+	t.OpenHyperlink(uri, explicitID)
+}
+
+func validOSC8Text(value string) bool {
+	if !utf8.ValidString(value) {
+		return false
+	}
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func parseOSC7Cwd(payload string) (string, bool) {
