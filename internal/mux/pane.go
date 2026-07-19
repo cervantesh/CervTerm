@@ -92,13 +92,13 @@ func (p *pane) startReader(ctx context.Context, incoming chan<- ingressRecord, w
 		for {
 			n, err := reader.Read(buf)
 			if n > 0 {
-				record := ingressRecord{pane: p.id, data: append([]byte(nil), buf[:n]...)}
+				record := ingressRecord{pane: p.id, owner: p, data: append([]byte(nil), buf[:n]...)}
 				if !enqueueIngress(ctx, p.done, incoming, record, wake) {
 					return
 				}
 			}
 			if err != nil {
-				enqueueIngress(ctx, p.done, incoming, ingressRecord{pane: p.id, err: err}, wake)
+				enqueueIngress(ctx, p.done, incoming, ingressRecord{pane: p.id, owner: p, err: err}, wake)
 				return
 			}
 		}

@@ -43,6 +43,7 @@ type Mux struct {
 	bounds       PixelRect
 	paneMetrics  map[PaneID]CellMetrics
 	paletteBase  core.PaletteBase
+	windowFault  func(string) error // package-private deterministic failure injection
 }
 
 func New(factory SessionFactory, options Options) *Mux {
@@ -320,7 +321,7 @@ func (m *Mux) Drain(limit int) []Event {
 		select {
 		case record := <-m.sessions.incoming:
 			p, ok := m.sessions.lookup(record.pane)
-			if !ok || p.state == PaneStateClosed || p.state == PaneStateClosing {
+			if !ok || p != record.owner || p.state == PaneStateClosed || p.state == PaneStateClosing {
 				continue
 			}
 			if len(record.data) > 0 {
