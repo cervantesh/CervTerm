@@ -32,6 +32,10 @@ local config: cervterm.Config = {
     background_opacity = 1.0,
     blur = true,
   },
+  layout_persistence = {
+    enabled = false,
+    path = "",
+  },
   font = {
     family = "Go Mono",
     descriptors = {

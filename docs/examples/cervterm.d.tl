@@ -41,6 +41,11 @@ local record cervterm
     blur: boolean
   end
 
+  record LayoutPersistenceConfig
+    enabled: boolean
+    path: string
+  end
+
   record FontDescriptor
     family: string
     collection_face: string | nil
@@ -291,6 +296,11 @@ local record cervterm
     blur: boolean | Unset
   end
 
+  record LayoutPersistenceDocument
+    enabled: boolean | Unset
+    path: string | Unset
+  end
+
   record FontDocument
     family: string | Unset
     descriptors: {FontDescriptor} | Unset
@@ -469,6 +479,7 @@ local record cervterm
   record PartialConfig
     color_scheme: string | Unset
     window: WindowDocument | Unset
+    layout_persistence: LayoutPersistenceDocument | Unset
     font: FontDocument | Unset
     colors: ColorsDocument | Unset
     background: BackgroundDocument | Unset | nil
@@ -498,6 +509,7 @@ local record cervterm
     color_scheme: string | Unset
     color_schemes: {string:ColorScheme} | nil
     window: WindowDocument | Unset
+    layout_persistence: LayoutPersistenceDocument | Unset
     font: FontDocument | Unset
     colors: ColorsDocument | Unset
     background: BackgroundDocument | Unset | nil

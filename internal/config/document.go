@@ -187,6 +187,9 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "background_opacity", kind: KindNumber, apply: ApplyLive, runtimeOverride: true},
 		{name: "blur", kind: KindBoolean, apply: ApplyLive, runtimeOverride: true},
 	}},
+	{name: "layout_persistence", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
+		{name: "enabled", kind: KindBoolean}, {name: "path", kind: KindString, sensitive: true},
+	}},
 	{name: "font", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
 		{name: "family", kind: KindString}, {name: "descriptors", kind: KindDescriptorList}, {name: "fallback", kind: KindDescriptorList}, {name: "rules", kind: KindFontRuleList},
 		{name: "size", kind: KindNumber}, {name: "ligatures", kind: KindBoolean}, {name: "features", kind: KindFeatureMap},
@@ -254,7 +257,8 @@ var unavailableV2Fields = map[string]ValueKind{
 
 func isV2OnlyPath(path string) bool {
 	switch path {
-	case "window.padding_left", "window.padding_right", "window.padding_top", "window.padding_bottom",
+	case "layout_persistence", "layout_persistence.enabled", "layout_persistence.path",
+		"window.padding_left", "window.padding_right", "window.padding_top", "window.padding_bottom",
 		"window.text_opacity", "window.background_opacity",
 		"window.initial_rows", "window.initial_cols", "window.decorations", "window.titlebar",
 		"background.layers", "quick_select.rules", "launch_menu",
@@ -327,6 +331,9 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 	if err != nil {
 		return Document{}, err
 	}
+	if version == 1 && root.RawGetString("layout_persistence") != lua.LNil {
+		return Document{}, documentError(source, "layout_persistence", "requires config_version = 2")
+	}
 	if unsetPath := findUnsetPath(root, rootSchema, ""); unsetPath != "" {
 		if version == 1 {
 			return Document{}, documentError(source, unsetPath, "cervterm.config.unset requires config_version = 2")
@@ -352,6 +359,9 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 		delete(document.Present, "window.initial_cols")
 		delete(document.Present, "window.decorations")
 		delete(document.Present, "window.titlebar")
+		delete(document.Present, "layout_persistence")
+		delete(document.Present, "layout_persistence.enabled")
+		delete(document.Present, "layout_persistence.path")
 		delete(document.Present, "background.layers")
 		delete(document.Present, "scrollbar.mode")
 		delete(document.Present, "scrollbar.stable_gutter")
