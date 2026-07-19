@@ -23,7 +23,11 @@ func (a *App) handleModalKey(key glfw.Key, eventAction glfw.Action, _ glfw.Modif
 	case glfw.KeyEscape:
 		a.applyModalIntents(a.modal.Close())
 	case glfw.KeyEnter, glfw.KeyKPEnter:
-		a.applyModalIntents(a.modal.Accept())
+		intents := a.modal.Accept()
+		if eventAction == glfw.Press && a.modal.Mode() == modal.ModeQuickSelect && len(intents) != 0 {
+			a.quickSelect.userActivation = true
+		}
+		a.applyModalIntents(intents)
 	case glfw.KeyBackspace:
 		a.modal.Backspace()
 	case glfw.KeyUp:
