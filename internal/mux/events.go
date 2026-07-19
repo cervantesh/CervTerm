@@ -50,7 +50,8 @@ type Event struct {
 }
 
 type ingressRecord struct {
-	pane PaneID
-	data []byte
-	err  error
+	pane  PaneID
+	owner *pane
+	data  []byte
+	err   error
 }

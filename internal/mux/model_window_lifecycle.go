@@ -45,39 +45,76 @@ func (m *Model) windowView(w *windowState) WindowView {
 	return WindowView{ID: w.id, Title: w.title, Tabs: tabs, Active: w.id == m.activeWindow, Revision: w.revision}
 }
 
-func (m *Model) CreateWindow(title string) (WindowView, error) {
+// WindowCreateToken is a non-published reservation proposal. Preparing and
+// aborting a token do not mutate the model; only CommitWindow consumes IDs.
+type WindowCreateToken struct {
+	window WindowID
+	tab    TabID
+	pane   PaneID
+	title  string
+}
+
+func (t WindowCreateToken) WindowID() WindowID { return t.window }
+func (t WindowCreateToken) TabID() TabID       { return t.tab }
+func (t WindowCreateToken) PaneID() PaneID     { return t.pane }
+
+func (m *Model) PrepareWindow(title string) (WindowCreateToken, error) {
 	if err := m.CheckInvariants(); err != nil {
-		return WindowView{}, err
+		return WindowCreateToken{}, err
+	}
+	if len(m.windows) >= MaxWindows {
+		return WindowCreateToken{}, ErrWindowLimitReached
+	}
+	if m.nextWindowID == 0 || m.nextTabID == 0 || m.nextPaneID == 0 {
+		return WindowCreateToken{}, ErrIDExhausted
+	}
+	return WindowCreateToken{window: m.nextWindowID, tab: m.nextTabID, pane: m.nextPaneID, title: title}, nil
+}
+
+func (m *Model) CommitWindow(token WindowCreateToken) (WindowView, error) {
+	if token.window == 0 || token.tab == 0 || token.pane == 0 {
+		return WindowView{}, invariantError("invalid window create token")
+	}
+	if token.window != m.nextWindowID || token.tab != m.nextTabID || token.pane != m.nextPaneID {
+		return WindowView{}, invariantError("stale window create token")
 	}
 	if len(m.windows) >= MaxWindows {
 		return WindowView{}, ErrWindowLimitReached
 	}
-	if m.nextWindowID == 0 || m.nextTabID == 0 || m.nextPaneID == 0 {
-		return WindowView{}, ErrIDExhausted
-	}
-	window, tab, pane := m.nextWindowID, m.nextTabID, m.nextPaneID
 	previousActive := m.activeWindow
 	m.windows = append(m.windows, windowState{
-		id: window, title: title, active: tab, revision: 1,
-		tabs: []tabState{{id: tab, root: leafNode(pane), focused: pane, revision: 1}},
+		id: token.window, title: token.title, active: token.tab, revision: 1,
+		tabs: []tabState{{id: token.tab, root: leafNode(token.pane), focused: token.pane, revision: 1}},
 	})
-	m.activeWindow = window
-	m.allocatedWindows[window] = struct{}{}
-	m.allocatedTabs[tab] = struct{}{}
-	m.allocated[pane] = struct{}{}
+	m.activeWindow = token.window
+	m.allocatedWindows[token.window] = struct{}{}
+	m.allocatedTabs[token.tab] = struct{}{}
+	m.allocated[token.pane] = struct{}{}
 	m.nextWindowID++
 	m.nextTabID++
 	m.nextPaneID++
 	if err := m.CheckInvariants(); err != nil {
 		m.windows = m.windows[:len(m.windows)-1]
 		m.activeWindow = previousActive
-		delete(m.allocatedWindows, window)
-		delete(m.allocatedTabs, tab)
-		delete(m.allocated, pane)
-		m.nextWindowID, m.nextTabID, m.nextPaneID = window, tab, pane
+		delete(m.allocatedWindows, token.window)
+		delete(m.allocatedTabs, token.tab)
+		delete(m.allocated, token.pane)
+		m.nextWindowID, m.nextTabID, m.nextPaneID = token.window, token.tab, token.pane
 		return WindowView{}, err
 	}
 	return m.windowView(&m.windows[len(m.windows)-1]), nil
+}
+
+// AbortWindow documents abandonment of an unpublished proposal. It is
+// intentionally a no-op so the model remains byte-identical.
+func (m *Model) AbortWindow(WindowCreateToken) {}
+
+func (m *Model) CreateWindow(title string) (WindowView, error) {
+	token, err := m.PrepareWindow(title)
+	if err != nil {
+		return WindowView{}, err
+	}
+	return m.CommitWindow(token)
 }
 
 func (m *Model) ActivateWindow(id WindowID) error {
