@@ -58,7 +58,7 @@ func (c *windowController) createRuntimeProjection() (termmux.WindowID, error) {
 			return 0, rollback(err)
 		}
 	}
-	if err := c.attach(view.ID, bundle.host, bundle.handle); err != nil {
+	if err := c.attachApp(view.ID, bundle.host, bundle.app, bundle.handle); err != nil {
 		return 0, rollback(err)
 	}
 	c.windows[view.ID].bundle = bundle

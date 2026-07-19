@@ -17,7 +17,7 @@ import (
 func (a *App) requestRedraw() {
 	a.needsRedraw = true
 	if a.controller != nil {
-		a.controller.markDamage(initialWindowID)
+		a.controller.markDamage(a.windowID)
 	}
 }
 
