@@ -190,7 +190,7 @@ func (a *App) activateLoadedConfig(loaded script.VersionedSource, watchBefore co
 	a.runtimeOverrideRecords = append([]config.RuntimeOverrideRecord(nil), runtimeRecords...)
 	a.pendingConfig = config.PendingConfigChanges(a.desiredCfg, a.cfg)
 	a.scriptBundle = candidate
-	a.scriptRT = candidateRT
+	a.installScriptRuntime(candidateRT)
 	a.scriptGeneration++
 	candidate, candidateRT = nil, nil
 	if legacyTransition != nil {
