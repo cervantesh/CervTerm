@@ -76,12 +76,22 @@ func (c *windowController) closeRuntimeProjection(id termmux.WindowID) (termmux.
 	if c.runtimeWindows == nil {
 		return termmux.CloseWindowResult{}, errWindowProjectionMissing
 	}
+	finalProjection := len(c.windows) == 1
+	if finalProjection && c.persistLayout != nil {
+		if err := c.persistLayout(); err != nil {
+			logControllerError(err)
+		}
+	}
 	result, events, runtimeErr := c.runtimeWindows.CloseWindow(id)
 	c.dispatch(events)
 	if !result.Closed {
 		return result, runtimeErr
 	}
-	return result, errors.Join(runtimeErr, c.closeProjection(id))
+	closeErr := c.closeProjection(id)
+	if !finalProjection && c.persistLayout != nil {
+		closeErr = errors.Join(closeErr, c.persistLayout())
+	}
+	return result, errors.Join(runtimeErr, closeErr)
 }
 
 func (c *windowController) activateRuntimeProjection(id termmux.WindowID) error {
