@@ -53,6 +53,8 @@ func (p *Parser) dispatchOSC(t *core.Terminal) {
 		}
 	case "8":
 		p.dispatchOSC8(t, rest)
+	case "133", "633":
+		p.dispatchOSCSemantic(t, code, rest)
 	case "10":
 		p.dispatchOSCDefaultColor(t, rest, true)
 	case "11":
@@ -118,6 +120,37 @@ func validOSC8Text(value string) bool {
 		}
 	}
 	return true
+}
+
+const maxSemanticOSCBytes = 1024
+
+func (p *Parser) dispatchOSCSemantic(t *core.Terminal, code, rest string) {
+	if rest == "" || len(rest) > maxSemanticOSCBytes || !validOSC8Text(rest) {
+		return
+	}
+	marker, _, _ := strings.Cut(rest, ";")
+	if len(marker) != 1 {
+		return
+	}
+	var kind core.SemanticKind
+	switch marker {
+	case "A":
+		kind = core.SemanticPrompt
+	case "B":
+		kind = core.SemanticInput
+	case "C":
+		kind = core.SemanticOutput
+	case "D":
+		kind = core.SemanticNone
+	case "E":
+		if code != "633" {
+			return
+		}
+		kind = core.SemanticInput
+	default:
+		return
+	}
+	t.SetSemanticKind(kind)
 }
 
 func parseOSC7Cwd(payload string) (string, bool) {
