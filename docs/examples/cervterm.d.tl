@@ -252,6 +252,7 @@ local record cervterm
     ScrollLines: function(integer): Action
     ScrollPage: function(integer): Action
     ScrollBuffer: function(integer): Action
+    ScrollToPrompt: function(integer): Action
     Zoom: function(number): Action
     SplitPane: function(string): Action
     FocusPane: function(string): Action

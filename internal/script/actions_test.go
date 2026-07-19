@@ -23,6 +23,7 @@ return {
     { key = "r", action = cervterm.action.ResizePane("right", 3) },
     { key = "s", action = cervterm.action.SwapPane("left") },
     { key = "v", action = cervterm.action.MovePane("down") },
+	    { key = "n", action = cervterm.action.ScrollToPrompt(-1) }
   },
 }`)
 	_, runtime, err := Load(path, config.Defaults())
@@ -31,7 +32,7 @@ return {
 	}
 	defer runtime.Close()
 	bindings := runtime.Bindings()
-	if len(bindings) != 8 {
+	if len(bindings) != 9 {
 		t.Fatalf("bindings = %#v", bindings)
 	}
 	if _, ok := bindings[0].Action.Action.(termaction.CopySelection); !ok || bindings[0].Label != "Copy selected text" {
@@ -61,6 +62,9 @@ return {
 	if move, ok := bindings[7].Action.Action.(termaction.MovePane); !ok || move.Direction != termaction.FocusDown {
 		t.Fatalf("move binding = %#v", bindings[7])
 	}
+	if prompt, ok := bindings[8].Action.Action.(termaction.ScrollToPrompt); !ok || prompt.Delta != -1 {
+		t.Fatalf("prompt binding = %#v", bindings[8])
+	}
 	descriptor, err := termaction.DefaultRegistry().Describe(callback)
 	if err != nil || !descriptor.Discoverable || descriptor.Label != "Legacy callback" {
 		t.Fatalf("callback descriptor = %#v, %v", descriptor, err)
@@ -87,6 +91,7 @@ func TestTypedActionConstructorsRejectInvalidArguments(t *testing.T) {
 		{name: "zero scroll", action: `cervterm.action.ScrollPage(0)`, want: "must not be zero"},
 		{name: "fractional scroll", action: `cervterm.action.ScrollPage(1.9)`, want: "integer"},
 		{name: "overflow scroll", action: `cervterm.action.ScrollPage(1e100)`, want: "integer"},
+		{name: "bad prompt delta", action: `cervterm.action.ScrollToPrompt(2)`, want: "-1 or 1"},
 		{name: "bad split", action: `cervterm.action.SplitPane("diagonal")`, want: "split axis"},
 		{name: "bad focus", action: `cervterm.action.FocusPane("next")`, want: "focus direction"},
 		{name: "bad resize direction", action: `cervterm.action.ResizePane("next", 1)`, want: "direction"},
