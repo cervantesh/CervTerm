@@ -78,6 +78,7 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 	}
 	defer m.sessions.release(geometry.Pane)
 	p := newPane(geometry.Pane, geometry.Cols, geometry.Rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	p.setFreshLaunch(spec)
 	p.terminal.SetPaletteBase(m.paletteBase)
 	p.geometry = geometry
 	if m.options.SetClipboard != nil {
@@ -192,6 +193,7 @@ func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID,
 	}
 	defer m.sessions.release(predictedID)
 	newPane := newPane(predictedID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	newPane.setFreshLaunch(spec)
 	newPane.terminal.SetPaletteBase(m.paletteBase)
 	if m.options.SetClipboard != nil {
 		newPane.parser.SetClipboard = func(text string) { m.options.SetClipboard(newPane.id, text) }

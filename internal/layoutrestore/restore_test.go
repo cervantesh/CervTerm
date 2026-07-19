@@ -52,12 +52,12 @@ func TestLaunchResolution(t *testing.T) {
 		saved layoutstate.Launch
 		want  ResolvedLaunch
 	}{
-		{"target", layoutstate.Launch{TargetID: "dev", Program: "old", Args: []string{"old"}, CWD: "/saved"}, ResolvedLaunch{"target", []string{"one", "two"}, "/saved", SourceCurrentTarget}},
-		{"missing fallback", layoutstate.Launch{TargetID: "gone", Program: "fallback", Args: []string{"x"}, CWD: "/saved"}, ResolvedLaunch{"fallback", []string{"x"}, "/saved", SourcePersistedFallback}},
-		{"missing default", layoutstate.Launch{TargetID: "gone", CWD: "/saved"}, ResolvedLaunch{"shell", []string{"-l"}, "/saved", SourceDefaultShell}},
-		{"empty default", layoutstate.Launch{}, ResolvedLaunch{"shell", []string{"-l"}, "/default", SourceDefaultShell}},
-		{"bad target cwd", layoutstate.Launch{TargetID: "dev", CWD: "/bad"}, ResolvedLaunch{"target", []string{"one", "two"}, "/target", SourceCurrentTarget}},
-		{"bad persisted cwd", layoutstate.Launch{Program: "fallback", CWD: "/bad"}, ResolvedLaunch{"fallback", nil, "/default", SourcePersistedFallback}},
+		{"target", layoutstate.Launch{TargetID: "dev", Program: "old", Args: []string{"old"}, CWD: "/saved"}, ResolvedLaunch{"target", []string{"one", "two"}, "/saved", SourceCurrentTarget, "dev"}},
+		{"missing fallback", layoutstate.Launch{TargetID: "gone", Program: "fallback", Args: []string{"x"}, CWD: "/saved"}, ResolvedLaunch{"fallback", []string{"x"}, "/saved", SourcePersistedFallback, ""}},
+		{"missing default", layoutstate.Launch{TargetID: "gone", CWD: "/saved"}, ResolvedLaunch{"shell", []string{"-l"}, "/saved", SourceDefaultShell, ""}},
+		{"empty default", layoutstate.Launch{}, ResolvedLaunch{"shell", []string{"-l"}, "/default", SourceDefaultShell, ""}},
+		{"bad target cwd", layoutstate.Launch{TargetID: "dev", CWD: "/bad"}, ResolvedLaunch{"target", []string{"one", "two"}, "/target", SourceCurrentTarget, "dev"}},
+		{"bad persisted cwd", layoutstate.Launch{Program: "fallback", CWD: "/bad"}, ResolvedLaunch{"fallback", nil, "/default", SourcePersistedFallback, ""}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

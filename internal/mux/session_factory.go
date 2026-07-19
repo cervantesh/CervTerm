@@ -19,5 +19,6 @@ func LocalSessionFactory() SessionFactory { return localSessionFactory{} }
 // SpawnSpec describes one pane process. Topology and rendering concerns are
 // intentionally absent.
 type SpawnSpec struct {
-	Options pty.Options
+	TargetID string
+	Options  pty.Options
 }
