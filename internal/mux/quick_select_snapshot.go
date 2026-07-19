@@ -18,6 +18,7 @@ type QuickSelectSnapshot struct {
 	Rows            int
 	Cells           []core.Cell
 	Wrapped         []bool
+	Hyperlinks      []core.Hyperlink
 	ContentGen      uint64
 	ReflowGen       uint64
 	ViewportGen     uint64
@@ -44,6 +45,7 @@ func (m *Mux) QuickSelectSnapshot(id PaneID, rowLimit, cellLimit int) (QuickSele
 	cells := make([]core.Cell, rows*cols)
 	p.terminal.CopyViewRows(cells, first, rows)
 	cells = cloneDetachedCells(cells)
+	hyperlinks := p.terminal.ProjectHyperlinks(cells, nil)
 	wrapped := make([]bool, rows)
 	for row := range wrapped {
 		wrapped[row], _ = p.terminal.LineWrapped(first + row)
@@ -51,7 +53,7 @@ func (m *Mux) QuickSelectSnapshot(id PaneID, rowLimit, cellLimit int) (QuickSele
 	return QuickSelectSnapshot{
 		PaneID: p.id, FocusedPaneID: m.model.FocusedPane(),
 		GlobalRowOrigin: p.terminal.ViewportTopGlobalRow() + first,
-		Cols:            cols, Rows: rows, Cells: cells, Wrapped: wrapped,
+		Cols:            cols, Rows: rows, Cells: cells, Wrapped: wrapped, Hyperlinks: hyperlinks,
 		ContentGen: p.contentGen, ReflowGen: p.reflowGen, ViewportGen: p.viewportGen,
 	}, true
 }
@@ -80,6 +82,7 @@ func cloneDetachedCells(src []core.Cell) []core.Cell {
 		marks := cell.CloneCombining()
 		out[i] = core.NewCellWithCombining(cell.Rune, cell.Attr, marks...)
 		out[i].WideContinuation = cell.WideContinuation
+		out[i].HyperlinkID = cell.HyperlinkID
 	}
 	return out
 }

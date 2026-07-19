@@ -19,6 +19,7 @@ type Snapshot struct {
 	BellCount            int
 	PaletteOverrides     core.PaletteOverrides
 	Cells                []core.Cell
+	Hyperlinks           []core.Hyperlink
 }
 
 type CaptureOptions struct {
@@ -55,4 +56,5 @@ func CaptureWithOptions(dst *Snapshot, term *core.Terminal, opts CaptureOptions)
 	dst.BellCount = term.BellCount()
 	dst.PaletteOverrides = term.PaletteOverrides()
 	term.CopyView(dst.Cells)
+	dst.Hyperlinks = term.ProjectHyperlinks(dst.Cells, dst.Hyperlinks)
 }
