@@ -14,7 +14,12 @@ import (
 // requestRedraw marks the next frame dirty. Main-thread only: the PTY reader
 // goroutine must never call this — it wakes the loop with glfw.PostEmptyEvent
 // and lets drainIncoming set the flag.
-func (a *App) requestRedraw() { a.needsRedraw = true }
+func (a *App) requestRedraw() {
+	a.needsRedraw = true
+	if a.controller != nil {
+		a.controller.markDamage(initialWindowID)
+	}
+}
 
 // wakeMainLoop nudges the event wait from the reader goroutine. PostEmptyEvent
 // is the only GLFW call safe from a non-main thread, and only while GLFW is
@@ -39,8 +44,10 @@ func (a *App) runLoop(w *glfw.Window) error {
 // dispatch moved out of draw() into processTermEvents, so it is called here too
 // to keep bells/titles firing with identical observable behavior.
 func (a *App) runContinuousLoop(w *glfw.Window) error {
-	for !w.ShouldClose() {
-		glfw.PollEvents()
+	for !a.controller.shouldClose(initialWindowID) {
+		if err := a.controller.pollEvents(); err != nil {
+			return err
+		}
 		consumed := a.drainIncoming()
 		a.processTermEvents(consumed)
 		a.applyPendingZoom()
@@ -56,8 +63,13 @@ func (a *App) runContinuousLoop(w *glfw.Window) error {
 		if wait := a.presentation.wait(now, a.cfg.Render.MaxFPS); wait > 0 {
 			time.Sleep(wait)
 		}
-		a.draw()
-		a.r.EndFrame()
+		if err := a.controller.withCurrent(initialWindowID, func() {
+			a.draw()
+			a.r.EndFrame()
+		}); err != nil {
+			return err
+		}
+		a.controller.clearDamage(initialWindowID)
 		a.presentation.record(time.Now())
 		a.meter.AddFrame()
 	}
@@ -68,8 +80,10 @@ func (a *App) runContinuousLoop(w *glfw.Window) error {
 // PostEmptyEvent wake, or the next time-driven deadline (nextWakeTimeout), then
 // draws only when shouldRedraw reports damage.
 func (a *App) runOnDemandLoop(w *glfw.Window) error {
-	for !w.ShouldClose() {
-		glfw.WaitEventsTimeout(a.nextWakeTimeout(time.Now()).Seconds())
+	for !a.controller.shouldClose(initialWindowID) {
+		if err := a.controller.waitEvents(a.nextWakeTimeout(time.Now())); err != nil {
+			return err
+		}
 		consumed := a.drainIncoming()
 		a.processTermEvents(consumed)
 		a.applyPendingZoom()
@@ -83,8 +97,13 @@ func (a *App) runOnDemandLoop(w *glfw.Window) error {
 		a.pollConfigReload(now)
 		a.applyPendingConfigReload()
 		if a.shouldRedraw(now) {
-			a.draw()
-			a.r.EndFrame()
+			if err := a.controller.withCurrent(initialWindowID, func() {
+				a.draw()
+				a.r.EndFrame()
+			}); err != nil {
+				return err
+			}
+			a.controller.clearDamage(initialWindowID)
 			a.presentation.record(time.Now())
 			a.meter.AddFrame()
 			a.needsRedraw = false
@@ -95,8 +114,8 @@ func (a *App) runOnDemandLoop(w *glfw.Window) error {
 
 // drainIncoming advances pane-addressed mux ingress on the main thread.
 func (a *App) drainIncoming() bool {
-	events := a.mux.Drain(256)
-	return a.handleMuxEvents(events)
+	events := a.drainMuxEvents(256)
+	return a.dispatchMuxEvents(events)
 }
 
 // processTermEvents drains synthetic events produced by main-thread Host calls.
@@ -107,7 +126,7 @@ func (a *App) processTermEvents(_ bool) {
 	}
 	events := a.pendingMuxEvents
 	a.pendingMuxEvents = nil
-	a.handleMuxEvents(events)
+	a.dispatchMuxEvents(events)
 }
 
 // redrawWanted reports whether visible state currently demands a presentation.
@@ -211,7 +230,7 @@ func (a *App) spawnInitialPTY(w *glfw.Window) {
 		WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env,
 	}}, eventsRect, a.muxMetrics())
 	a.focusedPane = pane
-	a.handleMuxEvents(events)
+	a.dispatchMuxEvents(events)
 	a.syncFocusedProjection()
 	a.markResizeEvent(a.cols, a.rows)
 	if err != nil {
@@ -265,7 +284,7 @@ func (a *App) resizeGridToWindow() bool {
 		a.Notify("resize: " + err.Error())
 		return false
 	}
-	changed := a.handleMuxEvents(events)
+	changed := a.dispatchMuxEvents(events)
 	if a.syncFocusedProjection() {
 		a.markResizeEvent(a.cols, a.rows)
 	}
@@ -287,7 +306,7 @@ func (a *App) resizePTYToGridWithRetry(reportFailure, scheduleRetry bool) bool {
 	for _, id := range a.mux.PaneIDs() {
 		events, err := a.mux.ApplyResize(id)
 		if err == nil || reportFailure {
-			a.handleMuxEvents(events)
+			a.dispatchMuxEvents(events)
 		}
 		if err != nil {
 			succeeded = false
