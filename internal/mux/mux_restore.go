@@ -20,6 +20,7 @@ type RestoreCandidate struct {
 	owner       *Mux
 	model       *Model
 	panes       []*pane
+	windows     []WindowID
 	paneMetrics map[PaneID]CellMetrics
 	paneWindows map[PaneID]WindowID
 	paneTabs    map[PaneID]TabID
@@ -111,6 +112,14 @@ func (m *Mux) CommitRestore(candidate *RestoreCandidate) ([]Event, error) {
 	)
 	launchReaders()
 	return events, nil
+}
+
+// RestoreWindowIDs returns the candidate's ordered workspace/window traversal mapping.
+func (m *Mux) RestoreWindowIDs(candidate *RestoreCandidate) ([]WindowID, error) {
+	if candidate == nil || candidate.owner != m || m.pending != candidate || candidate.aborted || candidate.committed {
+		return nil, ErrInvalidRestore
+	}
+	return append([]WindowID(nil), candidate.windows...), nil
 }
 
 // AbortRestore idempotently tears down an unpublished restore transaction.
@@ -226,6 +235,7 @@ func buildRestoreCandidate(m *Mux, snapshot layoutrestore.Snapshot, geometries [
 			windowID := model.nextWindowID
 			model.nextWindowID++
 			window := windowState{id: windowID, workspace: workspaceID, title: sourceWindow.Title, revision: 1}
+			candidate.windows = append(candidate.windows, windowID)
 			model.allocatedWindows[windowID] = struct{}{}
 			workspace.windows = append(workspace.windows, windowID)
 			if windowIndex == sourceWorkspace.ActiveWindow {
