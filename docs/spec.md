@@ -75,6 +75,7 @@ This document is the executable contract for the MVP. Implementation must follow
 - Mouse drag selects terminal cells in the current viewport.
 - Ctrl+C copies selected text to the clipboard; when no selection exists it remains available for terminal interrupt input.
 - Typed `ScrollToPrompt(-1|1)` navigates bounded OSC 133/633 prompt history relative to the viewport top with generation-checked pane-local targeting.
+- Typed `CopySemanticZone("input"|"output")` copies at most one MiB from the current semantic command cycle, preserving hard newlines while removing soft-wrap-only row breaks; copied text is never executed.
 
 ### Native panes
 
