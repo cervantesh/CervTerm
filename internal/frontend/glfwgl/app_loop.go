@@ -30,86 +30,130 @@ func (a *App) wakeMainLoop() {
 	}
 }
 
-// runLoop dispatches to the configured render loop. "continuous" reproduces the
-// historical poll-and-always-draw loop for benchmarking; the default
-// "on_demand" loop blocks in the OS event wait and draws only on damage.
-func (a *App) runLoop(w *glfw.Window) error {
-	if a.cfg.Render.Redraw == "continuous" {
-		return a.runContinuousLoop(w)
-	}
-	return a.runOnDemandLoop(w)
+// runLoop owns the process-wide OS-thread scheduler. GLFW is pumped once, mux
+// ingress is drained once, and process timers/reload are ticked once per cycle.
+// Projection-local state and presentation remain independent.
+func (a *App) runLoop(_ *glfw.Window) error {
+	return a.runProcessLoop(a.cfg.Render.Redraw == "continuous")
 }
 
-// runContinuousLoop is the pre-on-demand loop: poll, drain, always draw. Event
-// dispatch moved out of draw() into processTermEvents, so it is called here too
-// to keep bells/titles firing with identical observable behavior.
-func (a *App) runContinuousLoop(w *glfw.Window) error {
-	for !a.controller.shouldClose(initialWindowID) {
-		if err := a.controller.pollEvents(); err != nil {
+func (a *App) runContinuousLoop(_ *glfw.Window) error { return a.runProcessLoop(true) }
+
+func (a *App) runOnDemandLoop(_ *glfw.Window) error { return a.runProcessLoop(false) }
+
+type projectionCycleScheduler interface {
+	projectionIDs() []termmux.WindowID
+	shouldClose(termmux.WindowID) bool
+	closeRuntimeProjection(termmux.WindowID) (termmux.CloseWindowResult, error)
+}
+
+func runProjectionCycle(s projectionCycleScheduler, frame func(termmux.WindowID) error) error {
+	for _, id := range s.projectionIDs() {
+		if s.shouldClose(id) {
+			if _, err := s.closeRuntimeProjection(id); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := frame(id); err != nil {
 			return err
 		}
-		consumed := a.drainIncoming()
-		a.processTermEvents(consumed)
-		a.applyPendingZoom()
-		a.applyPendingDividerResize()
-		a.resizeToWindow()
-		a.fireDueTimers(time.Now())
-		a.fireLifecycleEvents()
-		a.syncStatusSegments()
-		a.syncOverlays()
-		now := time.Now()
-		a.pollConfigReload(now)
-		a.applyPendingConfigReload()
-		if wait := a.presentation.wait(now, a.cfg.Render.MaxFPS); wait > 0 {
-			time.Sleep(wait)
-		}
-		if err := a.controller.withCurrent(initialWindowID, func() {
-			a.draw()
-			a.r.EndFrame()
-		}); err != nil {
-			return err
-		}
-		a.controller.clearDamage(initialWindowID)
-		a.presentation.record(time.Now())
-		a.meter.AddFrame()
 	}
 	return nil
 }
 
-// runOnDemandLoop blocks in glfw.WaitEventsTimeout until an OS event, a
-// PostEmptyEvent wake, or the next time-driven deadline (nextWakeTimeout), then
-// draws only when shouldRedraw reports damage.
-func (a *App) runOnDemandLoop(w *glfw.Window) error {
-	for !a.controller.shouldClose(initialWindowID) {
-		if err := a.controller.waitEvents(a.nextWakeTimeout(time.Now())); err != nil {
+func (a *App) runProcessLoop(continuous bool) error {
+	for a.controller.projectionCount() > 0 {
+		now := time.Now()
+		if continuous {
+			if err := a.controller.pollEvents(); err != nil {
+				return err
+			}
+		} else if err := a.controller.waitEvents(a.processNextWakeTimeout(now)); err != nil {
 			return err
 		}
-		consumed := a.drainIncoming()
-		a.processTermEvents(consumed)
-		a.applyPendingZoom()
-		a.applyPendingDividerResize()
-		a.resizeToWindow()
-		a.fireDueTimers(time.Now())
-		a.fireLifecycleEvents()
-		a.syncStatusSegments()
-		a.syncOverlays()
-		now := time.Now()
-		a.pollConfigReload(now)
-		a.applyPendingConfigReload()
-		if a.shouldRedraw(now) {
-			if err := a.controller.withCurrent(initialWindowID, func() {
-				a.draw()
-				a.r.EndFrame()
+
+		events := a.controller.drainMux(256)
+		a.controller.dispatch(events)
+		now = time.Now()
+		if activeID := a.controller.active; activeID != 0 {
+			if err := a.controller.withCurrent(activeID, func() {
+				if active := a.controller.activeProjectionApp(); active != nil {
+					active.fireDueTimers(now)
+				}
 			}); err != nil {
 				return err
 			}
-			a.controller.clearDamage(initialWindowID)
-			a.presentation.record(time.Now())
-			a.meter.AddFrame()
-			a.needsRedraw = false
+		}
+		if a.controller.projectionApp(a.windowID) != nil {
+			if err := a.controller.withCurrent(a.windowID, func() { a.pollConfigReload(now); a.applyPendingConfigReload() }); err != nil {
+				return err
+			}
+		}
+		if err := a.controller.syncSharedProjectionState(a); err != nil {
+			return err
+		}
+
+		if err := runProjectionCycle(a.controller, func(id termmux.WindowID) error {
+			projection := a.controller.projectionApp(id)
+			if projection == nil {
+				return nil
+			}
+			drew := false
+			if err := a.controller.withCurrent(id, func() {
+				projection.tickProjection()
+				now = time.Now()
+				if !continuous && !projection.shouldRedraw(now) {
+					return
+				}
+				if continuous {
+					if wait := projection.presentation.wait(now, projection.cfg.Render.MaxFPS); wait > 0 {
+						time.Sleep(wait)
+					}
+				}
+				projection.draw()
+				projection.r.EndFrame()
+				drew = true
+			}); err != nil {
+				return err
+			}
+			if drew {
+				a.controller.clearDamage(id)
+				projection.presentation.record(time.Now())
+				projection.meter.AddFrame()
+				projection.needsRedraw = false
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func (a *App) tickProjection() {
+	a.processTermEvents(false)
+	a.applyPendingZoom()
+	a.applyPendingDividerResize()
+	a.resizeToWindow()
+	a.fireLifecycleEvents()
+	a.syncStatusSegments()
+	a.syncOverlays()
+}
+
+func (a *App) processNextWakeTimeout(now time.Time) time.Duration {
+	wake := maxWake
+	for _, id := range a.controller.projectionIDs() {
+		projection := a.controller.projectionApp(id)
+		if projection == nil {
+			continue
+		}
+		candidate := projection.nextWakeTimeout(now)
+		if candidate > 0 && candidate < wake {
+			wake = candidate
+		}
+	}
+	return wake
 }
 
 // drainIncoming advances pane-addressed mux ingress on the main thread.
@@ -126,6 +170,11 @@ func (a *App) processTermEvents(_ bool) {
 	}
 	events := a.pendingMuxEvents
 	a.pendingMuxEvents = nil
+	for i := range events {
+		if events[i].Window == 0 {
+			events[i].Window = a.windowID
+		}
+	}
 	a.dispatchMuxEvents(events)
 }
 
