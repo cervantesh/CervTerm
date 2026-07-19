@@ -49,6 +49,10 @@ func installActionModule(state *lua.LState, module *lua.LTable) {
 		pushLuaAction(l, termaction.Scroll{Unit: termaction.ScrollBuffer, Amount: checkLuaActionInt(l, 1)}, termaction.TargetFocused)
 		return 1
 	}))
+	actions.RawSetString("ScrollToPrompt", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.ScrollToPrompt{Delta: checkLuaActionInt(l, 1)}, termaction.TargetFocused)
+		return 1
+	}))
 	actions.RawSetString("Zoom", state.NewFunction(func(l *lua.LState) int {
 		pushLuaAction(l, termaction.Zoom{Mode: termaction.ZoomDelta, Amount: float64(l.CheckNumber(1))}, termaction.TargetFocused)
 		return 1

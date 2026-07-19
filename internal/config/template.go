@@ -213,6 +213,7 @@ return {
   --   { key = "q", mods = "ctrl+shift", action = cervterm.action.ActivateQuickSelect },
   --   { key = "l", mods = "ctrl+shift", action = cervterm.action.ActivateLaunchMenu },
   --   { key = "k", mods = "ctrl", action = cervterm.action.ScrollPage(1) },
+  --   { key = "up", mods = "ctrl+shift", action = cervterm.action.ScrollToPrompt(-1) },
   --   { key = "equal", mods = "ctrl", action = cervterm.action.Zoom(1) },
   --   { key = "d", mods = "alt+shift", action = cervterm.action.SplitPane("columns") },
   --   { key = "r", mods = "alt+shift", action = cervterm.action.ResizePane("right", 3) },

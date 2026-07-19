@@ -93,6 +93,9 @@ type scrollArgs struct {
 	Unit   ScrollUnit `json:"unit"`
 	Amount int        `json:"amount"`
 }
+type scrollToPromptArgs struct {
+	Delta int `json:"delta"`
+}
 type zoomArgs struct {
 	Mode   ZoomMode `json:"mode"`
 	Amount float64  `json:"amount"`

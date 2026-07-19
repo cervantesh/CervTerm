@@ -15,6 +15,7 @@ func TestActionsValidate(t *testing.T) {
 	valid := []Action{
 		CopySelection{}, PasteClipboard{}, ToggleSearch{}, ToggleStats{}, ActivateCommandPalette{}, ActivateQuickSelect{}, ActivateLaunchMenu{}, ReloadConfig{}, ClosePane{},
 		Scroll{Unit: ScrollLine, Amount: 1}, Scroll{Unit: ScrollPage, Amount: -2}, Scroll{Unit: ScrollBuffer, Amount: 1},
+		ScrollToPrompt{Delta: -1}, ScrollToPrompt{Delta: 1},
 		Zoom{Mode: ZoomDelta, Amount: -1}, Zoom{Mode: ZoomReset},
 		SplitPane{Axis: SplitColumns}, SplitPane{Axis: SplitRows},
 		FocusPane{Direction: FocusLeft}, FocusPane{Direction: FocusRight}, FocusPane{Direction: FocusUp}, FocusPane{Direction: FocusDown},
@@ -39,6 +40,7 @@ func TestActionValidationErrors(t *testing.T) {
 		{name: "scroll unit", action: Scroll{Unit: "pixel", Amount: 1}, want: "unit"},
 		{name: "scroll zero", action: Scroll{Unit: ScrollLine}, want: "zero"},
 		{name: "buffer amount", action: Scroll{Unit: ScrollBuffer, Amount: 2}, want: "-1 or 1"},
+		{name: "prompt delta", action: ScrollToPrompt{Delta: 2}, want: "-1 or 1"},
 		{name: "zoom mode", action: Zoom{Mode: "absolute", Amount: 1}, want: "mode"},
 		{name: "zoom zero delta", action: Zoom{Mode: ZoomDelta}, want: "must not be zero"},
 		{name: "zoom reset amount", action: Zoom{Mode: ZoomReset, Amount: 1}, want: "must be zero"},

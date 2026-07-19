@@ -8,6 +8,8 @@ type SemanticSnapshot struct {
 	HistoryTruncated                   bool
 	ViewportTopGlobalRow               int
 	TotalRows                          int
+	CursorGlobalRow                    int
+	Rows                               int
 	ContentGen, ReflowGen, ViewportGen uint64
 }
 
@@ -20,6 +22,7 @@ func (m *Mux) SemanticSnapshot(id PaneID) (SemanticSnapshot, bool) {
 	return SemanticSnapshot{
 		PaneID: id, FocusedPaneID: m.model.FocusedPane(), Ranges: ranges, HistoryTruncated: truncated,
 		ViewportTopGlobalRow: p.terminal.ViewportTopGlobalRow(), TotalRows: p.terminal.ScrollbackLines() + p.terminal.Rows(),
+		CursorGlobalRow: p.terminal.ScrollbackLines() + p.terminal.CursorRow(), Rows: p.terminal.Rows(),
 		ContentGen: p.contentGen, ReflowGen: p.reflowGen, ViewportGen: p.viewportGen,
 	}, true
 }
@@ -27,6 +30,6 @@ func (m *Mux) SemanticSnapshot(id PaneID) (SemanticSnapshot, bool) {
 func (m *Mux) SemanticSnapshotCurrent(snapshot SemanticSnapshot) bool {
 	p, ok := m.sessions.lookup(snapshot.PaneID)
 	return ok && m.model.paneExists(snapshot.PaneID) && m.model.FocusedPane() == snapshot.FocusedPaneID &&
-		snapshot.FocusedPaneID == snapshot.PaneID && p.contentGen == snapshot.ContentGen &&
+		p.contentGen == snapshot.ContentGen &&
 		p.reflowGen == snapshot.ReflowGen && p.viewportGen == snapshot.ViewportGen
 }

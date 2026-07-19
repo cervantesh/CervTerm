@@ -14,6 +14,19 @@ func (m *Mux) ScrollViewport(id PaneID, lines int) (bool, error) {
 	return moved, nil
 }
 
+func (m *Mux) ScrollViewportToGlobalRow(id PaneID, globalRow int) (bool, error) {
+	p, ok := m.sessions.lookup(id)
+	if !ok || !m.model.paneExists(id) {
+		return false, ErrPaneNotFound
+	}
+	moved := p.terminal.ScrollViewportToGlobalRow(globalRow)
+	if moved {
+		p.viewportGen++
+		p.capture()
+	}
+	return moved, nil
+}
+
 // SetScrollbackCapacity applies a live history-capacity change to every active pane.
 // Mux remains the owner of pane terminals; frontends never reach into pane state.
 func (m *Mux) SetScrollbackCapacity(capacity int) {

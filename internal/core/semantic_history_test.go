@@ -83,3 +83,19 @@ func TestSemanticHistoryRejectsSingleRowBeyondCellBudget(t *testing.T) {
 		t.Fatalf("ranges=%d truncated=%v", len(ranges), truncated)
 	}
 }
+
+func TestScrollViewportToGlobalRowUsesCanonicalPhysicalCoordinates(t *testing.T) {
+	term := NewTerminalWithHistory(4, 2, 8)
+	for i := 0; i < 6; i++ {
+		term.appendScrollbackLine(make([]Cell, 4), false)
+	}
+	if !term.ScrollViewportToGlobalRow(2) || term.ViewportTopGlobalRow() != 2 {
+		t.Fatalf("top=%d offset=%d", term.ViewportTopGlobalRow(), term.DisplayOffset())
+	}
+	if !term.ScrollViewportToGlobalRow(99) || term.DisplayOffset() != 0 {
+		t.Fatalf("bottom offset=%d", term.DisplayOffset())
+	}
+	if !term.ScrollViewportToGlobalRow(-1) || term.ViewportTopGlobalRow() != 0 {
+		t.Fatalf("oldest top=%d", term.ViewportTopGlobalRow())
+	}
+}
