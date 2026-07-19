@@ -76,6 +76,7 @@ func (t *Terminal) Reset() {
 	t.SetCwd("")
 	t.CloseHyperlink()
 	t.hyperlinks.reset()
+	t.semanticBoundaryPending = false
 	t.semanticKind = SemanticNone
 }
 
@@ -191,9 +192,10 @@ func (t *Terminal) PutRune(r rune) {
 	for col := eraseStart; col < eraseEnd; col++ {
 		t.cells[t.cursorRow*t.cols+col] = eraseBlank
 	}
-	t.cells[idx] = Cell{Rune: r, Attr: t.attr, HyperlinkID: t.hyperlinks.current, SemanticKind: t.semanticKind}
+	semantic := t.consumeSemanticCell()
+	t.cells[idx] = Cell{Rune: r, Attr: t.attr, HyperlinkID: t.hyperlinks.current, SemanticKind: semantic}
 	if width == 2 && t.cursorCol+1 < t.cols {
-		t.cells[idx+1] = Cell{Attr: t.attr, HyperlinkID: t.hyperlinks.current, SemanticKind: t.semanticKind, WideContinuation: true}
+		t.cells[idx+1] = Cell{Attr: t.attr, HyperlinkID: t.hyperlinks.current, SemanticKind: semantic &^ semanticBoundaryMask, WideContinuation: true}
 	}
 
 	t.repairWideCells(t.cursorRow, eraseBlank)
@@ -225,6 +227,7 @@ func (t *Terminal) addCombiningRune(r rune) {
 }
 
 func (t *Terminal) NewLine() {
+	t.stampBlankSemanticRow()
 	t.wrapNext = false
 	if t.cursorRow == t.scrollBottom {
 		t.scrollUpRegion(t.scrollTop, t.scrollBottom, 1)
@@ -282,6 +285,9 @@ func (t *Terminal) SetCursor(row, col int) {
 	}
 	if col >= t.cols {
 		col = t.cols - 1
+	}
+	if row != t.cursorRow {
+		t.stampBlankSemanticRow()
 	}
 	t.cursorRow, t.cursorCol = row, col
 	t.wrapNext = false
@@ -437,6 +443,7 @@ func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearO
 		t.alternateScreen = true
 		t.hyperlinks.reset()
 		t.semanticKind = SemanticNone
+		t.semanticBoundaryPending = false
 		t.cells = make([]Cell, t.cols*t.rows)
 		t.rowWrapped = make([]bool, t.rows)
 		t.scrollback = nil
