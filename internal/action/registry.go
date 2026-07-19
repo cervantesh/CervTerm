@@ -19,6 +19,7 @@ const (
 	CategorySequence  Category = "sequence"
 	CategoryScript    Category = "script"
 	CategoryTab       Category = "tab"
+	CategoryWindow    Category = "window"
 )
 
 type TargetRequirement string
@@ -197,6 +198,11 @@ func DefaultRegistry() *Registry {
 			registration{descriptor: metadata(IDCloseTab, "Close tab", CategoryTab, TargetOptional, true, true, pressOnly), codec: closeTabCodec},
 			registration{descriptor: metadata(IDMovePaneToTab, "Move pane to tab", CategoryTab, TargetPane, true, true, pressOnly), codec: movePaneToTabCodec},
 			registration{descriptor: metadata(IDActivateTabSwitcher, "Activate tab switcher", CategoryTab, TargetOptional, true, true, pressOnly), codec: simpleCodec(ActivateTabSwitcher{})},
+			registration{descriptor: metadata(IDNewWindow, "New window", CategoryWindow, TargetOptional, true, true, pressOnly), codec: simpleCodec(NewWindow{})},
+			registration{descriptor: metadata(IDCloseWindow, "Close window", CategoryWindow, TargetOptional, true, true, pressOnly), codec: closeWindowCodec},
+			registration{descriptor: metadata(IDFocusWindow, "Focus window", CategoryWindow, TargetOptional, true, true, pressOnly), codec: focusWindowCodec},
+			registration{descriptor: metadata(IDMoveTabToWindow, "Move tab to window", CategoryWindow, TargetOptional, true, false, pressOnly), codec: moveTabToWindowCodec},
+			registration{descriptor: metadata(IDMovePaneToWindow, "Move pane to window", CategoryWindow, TargetOptional, true, false, pressOnly), codec: movePaneToWindowCodec},
 			registration{descriptor: metadata(IDMultiple, "Run multiple actions", CategorySequence, TargetOptional, true, true, callbackPolicy), codec: multipleCodec},
 			registration{descriptor: metadata(IDCallback, "Lua callback", CategoryScript, TargetPane, false, false, callbackPolicy)},
 		)

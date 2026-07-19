@@ -242,6 +242,7 @@ local record cervterm
     ResetFontSize: Action
     NewTab: Action
     ActivateTabSwitcher: Action
+    NewWindow: Action
     ScrollLines: function(integer): Action
     ScrollPage: function(integer): Action
     ScrollBuffer: function(integer): Action
@@ -257,6 +258,10 @@ local record cervterm
     RenameTab: function(integer, string): Action
     CloseTab: function(integer): Action
     MovePaneToTab: function(integer, string): Action
+    CloseWindow: function(integer): Action
+    FocusWindow: function(integer): Action
+    MoveTabToWindow: function(integer, integer, integer): Action
+    MovePaneToWindow: function(integer, integer, string): Action
     Multiple: function({Action}): Action
     WithTarget: function(Action, string): Action
   end
