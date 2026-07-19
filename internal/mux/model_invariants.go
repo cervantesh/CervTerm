@@ -1,20 +1,61 @@
 package mux
 
 func checkModelInvariants(m *Model) error {
-	if m == nil || m.allocatedWindows == nil || m.allocated == nil || m.allocatedSplits == nil || m.allocatedTabs == nil {
+	if m == nil || m.allocatedWorkspaces == nil || m.allocatedWindows == nil || m.allocated == nil || m.allocatedSplits == nil || m.allocatedTabs == nil {
 		return invariantError("allocation ownership sets are nil")
+	}
+	if len(m.workspaces) == 0 || len(m.workspaces) > MaxWorkspaces {
+		return invariantError("workspace count %d is outside 1..%d", len(m.workspaces), MaxWorkspaces)
+	}
+	seenWorkspaceIDs := make(map[WorkspaceID]struct{}, len(m.workspaces))
+	seenWorkspaceNames := make(map[string]struct{}, len(m.workspaces))
+	workspaceWindows := make(map[WindowID]WorkspaceID, len(m.windows))
+	activeWorkspaceCount := 0
+	for i := range m.workspaces {
+		ws := &m.workspaces[i]
+		name, err := normalizeWorkspaceName(ws.name)
+		if err != nil || name != ws.name || ws.id == 0 || ws.revision == 0 {
+			return invariantError("workspace %d has invalid identity, name, or revision", ws.id)
+		}
+		if _, ok := seenWorkspaceIDs[ws.id]; ok {
+			return invariantError("workspace %d appears more than once", ws.id)
+		}
+		if _, ok := seenWorkspaceNames[ws.name]; ok {
+			return invariantError("workspace name %q appears more than once", ws.name)
+		}
+		if _, ok := m.allocatedWorkspaces[ws.id]; !ok {
+			return invariantError("workspace %d was never allocated", ws.id)
+		}
+		if m.nextWorkspaceID != 0 && ws.id >= m.nextWorkspaceID {
+			return invariantError("workspace %d is not below next ID %d", ws.id, m.nextWorkspaceID)
+		}
+		seenWorkspaceIDs[ws.id], seenWorkspaceNames[ws.name] = struct{}{}, struct{}{}
+		if ws.id == m.activeWorkspace {
+			activeWorkspaceCount++
+		}
+		activeSeen := 0
+		for _, window := range ws.windows {
+			if owner, ok := workspaceWindows[window]; ok {
+				return invariantError("window %d belongs to workspaces %d and %d", window, owner, ws.id)
+			}
+			workspaceWindows[window] = ws.id
+			if window == ws.active {
+				activeSeen++
+			}
+		}
+		if (len(ws.windows) == 0 && ws.active != 0) || (len(ws.windows) > 0 && activeSeen != 1) {
+			return invariantError("workspace %d has invalid remembered active window %d", ws.id, ws.active)
+		}
+	}
+	if activeWorkspaceCount != 1 {
+		return invariantError("expected one active workspace, found %d", activeWorkspaceCount)
+	}
+	activeWS := m.workspaceByID(m.activeWorkspace)
+	if activeWS == nil || m.activeWindow != activeWS.active {
+		return invariantError("active window %d does not match workspace %d remembered window %d", m.activeWindow, m.activeWorkspace, activeWS.active)
 	}
 	if len(m.windows) > MaxWindows {
 		return invariantError("window count %d exceeds maximum %d", len(m.windows), MaxWindows)
-	}
-	if len(m.windows) == 0 {
-		if m.activeWindow != 0 {
-			return invariantError("empty model has active window %d", m.activeWindow)
-		}
-		return nil
-	}
-	if m.activeWindow == 0 {
-		return invariantError("non-empty model has zero active window")
 	}
 	seenWindows := make(map[WindowID]struct{}, len(m.windows))
 	seenTabs := make(map[TabID]WindowID)
@@ -31,6 +72,10 @@ func checkModelInvariants(m *Model) error {
 			return invariantError("window %d appears more than once", w.id)
 		}
 		seenWindows[w.id] = struct{}{}
+		owner, owned := workspaceWindows[w.id]
+		if !owned || owner != w.workspace {
+			return invariantError("window %d workspace ownership mismatch: field=%d owner=%d", w.id, w.workspace, owner)
+		}
 		if _, ok := m.allocatedWindows[w.id]; !ok {
 			return invariantError("window %d was never allocated", w.id)
 		}
@@ -135,8 +180,15 @@ func checkModelInvariants(m *Model) error {
 			return invariantError("window %d expected one active tab, found %d", w.id, activeTabs)
 		}
 	}
-	if activeWindows != 1 {
-		return invariantError("expected one active window, found %d", activeWindows)
+	expectedActive := 0
+	if m.activeWindow != 0 {
+		expectedActive = 1
+	}
+	if activeWindows != expectedActive {
+		return invariantError("expected %d active window, found %d", expectedActive, activeWindows)
+	}
+	if len(seenWindows) != len(workspaceWindows) {
+		return invariantError("workspace membership does not exactly cover windows")
 	}
 	return nil
 }

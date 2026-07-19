@@ -99,6 +99,9 @@ func (a *App) runProcessLoop(continuous bool) error {
 			if projection == nil {
 				return nil
 			}
+			if !a.controller.projectionVisible(id) {
+				return nil
+			}
 			drew := false
 			if err := a.controller.withCurrent(id, func() {
 				projection.tickProjection()
@@ -145,7 +148,7 @@ func (a *App) processNextWakeTimeout(now time.Time) time.Duration {
 	wake := maxWake
 	for _, id := range a.controller.projectionIDs() {
 		projection := a.controller.projectionApp(id)
-		if projection == nil {
+		if projection == nil || !a.controller.projectionVisible(id) {
 			continue
 		}
 		candidate := projection.nextWakeTimeout(now)

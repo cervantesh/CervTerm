@@ -33,6 +33,8 @@ type processServices struct {
 type nativeWindowHost interface {
 	MakeContextCurrent()
 	Focus()
+	Show()
+	Hide()
 	ShouldClose() bool
 	Destroy()
 }
@@ -101,6 +103,7 @@ type windowProjection struct {
 	bundle   *nativeProjectionBundle
 	teardown func() error
 	dirty    bool
+	visible  bool
 	closed   bool
 }
 
@@ -203,7 +206,7 @@ func (c *windowController) attachApp(id termmux.WindowID, host nativeWindowHost,
 	if _, exists := c.windows[id]; exists {
 		return errWindowProjectionExists
 	}
-	c.windows[id] = &windowProjection{id: id, host: host, app: app, handle: handle, dirty: true}
+	c.windows[id] = &windowProjection{id: id, host: host, app: app, handle: handle, dirty: true, visible: true}
 	c.order = append(c.order, id)
 	if c.active == 0 {
 		c.active = id
@@ -318,6 +321,10 @@ func (c *windowController) dispatch(events []termmux.Event) bool {
 	if !c.inLoop {
 		return false
 	}
+	if c.services.mux != nil {
+		events = c.services.mux.ResolveEventAddresses(events)
+	}
+	c.applyWorkspaceProjection(events)
 	batches := make(map[termmux.WindowID][]termmux.Event)
 	for id, pending := range c.pending {
 		if _, ok := c.windows[id]; ok {

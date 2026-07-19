@@ -10,20 +10,25 @@ import (
 type modelTransferSnapshot struct {
 	windows                       []windowState
 	active                        WindowID
+	workspaces                    []workspaceState
+	activeWorkspace               WorkspaceID
+	nextWorkspace                 WorkspaceID
 	nextWindow, nextTab, nextPane uint64
 	nextSplit                     SplitID
 	allocatedWindows              map[WindowID]struct{}
 	allocatedTabs                 map[TabID]struct{}
 	allocatedPanes                map[PaneID]struct{}
 	allocatedSplits               map[SplitID]struct{}
+	allocatedWorkspaces           map[WorkspaceID]struct{}
 }
 
 func snapshotTransferModel(m *Model) modelTransferSnapshot {
 	return modelTransferSnapshot{
-		windows: cloneWindowStates(m.windows), active: m.activeWindow,
+		windows: cloneWindowStates(m.windows), active: m.activeWindow, workspaces: cloneWorkspaceStates(m.workspaces), activeWorkspace: m.activeWorkspace, nextWorkspace: m.nextWorkspaceID,
 		nextWindow: uint64(m.nextWindowID), nextTab: uint64(m.nextTabID), nextPane: uint64(m.nextPaneID), nextSplit: m.nextSplitID,
 		allocatedWindows: cloneSet(m.allocatedWindows), allocatedTabs: cloneSet(m.allocatedTabs),
 		allocatedPanes: cloneSet(m.allocated), allocatedSplits: cloneSet(m.allocatedSplits),
+		allocatedWorkspaces: cloneSet(m.allocatedWorkspaces),
 	}
 }
 

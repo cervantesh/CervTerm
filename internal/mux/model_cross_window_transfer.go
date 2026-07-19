@@ -104,6 +104,7 @@ func (m *Model) TransferPaneBetweenWindows(req PaneTransferRequest) (WindowTrans
 
 	beforeWindow, beforeTab, beforeFocus := m.activeIdentity()
 	previous := cloneWindowStates(m.windows)
+	previousWorkspaces := cloneWorkspaceStates(m.workspaces)
 	previousActive, previousNext := m.activeWindow, m.nextSplitID
 	sourceID, destinationID := source.id, destination.id
 	sourceIndex := tabIndex(sourceWindow, sourceID)
@@ -125,8 +126,9 @@ func (m *Model) TransferPaneBetweenWindows(req PaneTransferRequest) (WindowTrans
 			destinationWindow.active = destinationID
 		}
 	}
+	m.reconcileActiveWorkspaceWindow()
 	if err := m.CheckInvariants(); err != nil {
-		m.windows, m.activeWindow, m.nextSplitID = previous, previousActive, previousNext
+		m.windows, m.activeWindow, m.nextSplitID, m.workspaces = previous, previousActive, previousNext, previousWorkspaces
 		delete(m.allocatedSplits, newSplit)
 		return result, err
 	}
@@ -180,6 +182,7 @@ func (m *Model) TransferTabBetweenWindows(req TabTransferRequest) (WindowTransfe
 
 	beforeWindow, beforeTab, beforeFocus := m.activeIdentity()
 	previous := cloneWindowStates(m.windows)
+	previousWorkspaces := cloneWorkspaceStates(m.workspaces)
 	previousActive := m.activeWindow
 	moved.revision++
 	for i := range sourceWindow.tabs {
@@ -197,8 +200,9 @@ func (m *Model) TransferTabBetweenWindows(req TabTransferRequest) (WindowTransfe
 	sourceWindow.revision++
 	destinationWindow.revision++
 	m.activeWindow = destinationWindow.id
+	m.reconcileActiveWorkspaceWindow()
 	if err := m.CheckInvariants(); err != nil {
-		m.windows, m.activeWindow = previous, previousActive
+		m.windows, m.activeWindow, m.workspaces = previous, previousActive, previousWorkspaces
 		return result, err
 	}
 	result = m.windowTransferResult(0, moved.id, moved.id, sourceWindow, destinationWindow, false, sourceLayout, destinationLayout)

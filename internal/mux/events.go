@@ -31,22 +31,28 @@ const (
 	WindowActivated
 	WindowRenamed
 	WindowClosed
+	WorkspaceCreated
+	WorkspaceActivated
+	WorkspaceRenamed
+	WindowWorkspaceChanged
 )
 
 // Event contains values only; it never exposes a mutable terminal, parser, PTY,
 // renderer, or toolkit object.
 type Event struct {
-	Kind         EventKind
-	Window       WindowID
-	SourceWindow WindowID
-	Pane         PaneID
-	Tab          TabID
-	SourceTab    TabID
-	Data         []byte
-	Text         string
-	Geometry     PaneGeometry
-	Err          error
-	Revision     uint64
+	Kind            EventKind
+	Window          WindowID
+	SourceWindow    WindowID
+	Pane            PaneID
+	Workspace       WorkspaceID
+	SourceWorkspace WorkspaceID
+	Tab             TabID
+	SourceTab       TabID
+	Data            []byte
+	Text            string
+	Geometry        PaneGeometry
+	Err             error
+	Revision        uint64
 }
 
 type ingressRecord struct {

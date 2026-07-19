@@ -3,6 +3,8 @@ package mux
 // WindowID is a stable, process-local mux-window identity. Zero is invalid.
 type WindowID uint64
 
+// WorkspaceID is declared in workspace.go.
+
 // PaneID is a stable, process-local pane identity. Zero is never valid.
 type PaneID uint64
 
@@ -61,32 +63,39 @@ type tabState struct {
 }
 
 type windowState struct {
-	id       WindowID
-	title    string
-	tabs     []tabState
-	active   TabID
-	revision uint64
+	id        WindowID
+	workspace WorkspaceID
+	title     string
+	tabs      []tabState
+	active    TabID
+	revision  uint64
 }
 
 // Model owns pure, ordered mux-window/tab topology, identity, and focus state.
 type Model struct {
-	windows          []windowState
-	activeWindow     WindowID
-	nextWindowID     WindowID
-	nextTabID        TabID
-	nextPaneID       PaneID
-	nextSplitID      SplitID
-	allocatedWindows map[WindowID]struct{}
-	allocated        map[PaneID]struct{}
-	allocatedSplits  map[SplitID]struct{}
-	allocatedTabs    map[TabID]struct{}
+	workspaces          []workspaceState
+	activeWorkspace     WorkspaceID
+	nextWorkspaceID     WorkspaceID
+	allocatedWorkspaces map[WorkspaceID]struct{}
+	windows             []windowState
+	activeWindow        WindowID
+	nextWindowID        WindowID
+	nextTabID           TabID
+	nextPaneID          PaneID
+	nextSplitID         SplitID
+	allocatedWindows    map[WindowID]struct{}
+	allocated           map[PaneID]struct{}
+	allocatedSplits     map[SplitID]struct{}
+	allocatedTabs       map[TabID]struct{}
 }
 
-// NewModel creates WindowID 1 with the compatibility TabID 1 / PaneID 1.
+// NewModel creates the mandatory default workspace and WindowID 1 with the compatibility TabID 1 / PaneID 1.
 func NewModel() *Model {
-	pane, tab, window := PaneID(1), TabID(1), WindowID(1)
+	pane, tab, window, workspace := PaneID(1), TabID(1), WindowID(1), WorkspaceID(1)
 	return &Model{
-		windows:      []windowState{{id: window, tabs: []tabState{{id: tab, root: leafNode(pane), focused: pane, revision: 1}}, active: tab, revision: 1}},
+		workspaces:      []workspaceState{{id: workspace, name: DefaultWorkspaceName, windows: []WindowID{window}, active: window, revision: 1}},
+		activeWorkspace: workspace, nextWorkspaceID: 2, allocatedWorkspaces: map[WorkspaceID]struct{}{workspace: {}},
+		windows:      []windowState{{id: window, workspace: workspace, tabs: []tabState{{id: tab, root: leafNode(pane), focused: pane, revision: 1}}, active: tab, revision: 1}},
 		activeWindow: window, nextWindowID: 2, nextTabID: 2, nextPaneID: 2, nextSplitID: 1,
 		allocatedWindows: map[WindowID]struct{}{window: {}}, allocated: map[PaneID]struct{}{pane: {}},
 		allocatedSplits: map[SplitID]struct{}{}, allocatedTabs: map[TabID]struct{}{tab: {}},
