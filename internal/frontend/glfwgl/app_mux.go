@@ -114,7 +114,7 @@ func (a *App) focusPane(id termmux.PaneID) bool {
 	return true
 }
 
-func (a *App) handleMuxEvents(events []termmux.Event) bool {
+func (a *App) applyMuxEvents(events []termmux.Event) bool {
 	consumed := false
 	for _, event := range events {
 		host := paneHost{app: a, pane: event.Pane}
