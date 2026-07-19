@@ -38,6 +38,7 @@ func (m *Mux) SpawnTab(spec SpawnSpec, metrics CellMetrics, title string) (TabID
 	}
 	defer m.sessions.release(paneID)
 	pane := newPane(paneID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	pane.setFreshLaunch(spec)
 	pane.terminal.SetPaletteBase(m.paletteBase)
 	if m.options.SetClipboard != nil {
 		pane.parser.SetClipboard = func(text string) { m.options.SetClipboard(pane.id, text) }

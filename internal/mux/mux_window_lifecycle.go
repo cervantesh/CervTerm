@@ -52,6 +52,7 @@ func (m *Mux) CreateWindow(spec SpawnSpec, content PixelRect, metrics CellMetric
 	}
 
 	p = newPane(paneID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	p.setFreshLaunch(spec)
 	p.terminal.SetPaletteBase(m.paletteBase)
 	p.geometry = effectiveGeometry(PaneGeometry{Pane: paneID, Pixels: content, Cols: cols, Rows: rows})
 	if m.options.SetClipboard != nil {

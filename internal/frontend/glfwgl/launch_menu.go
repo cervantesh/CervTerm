@@ -41,7 +41,7 @@ func (a *App) acceptLaunchMenu(entry modal.Entry, pane termmux.PaneID) error {
 	if selected == nil {
 		return fmt.Errorf("launch target %q is no longer available", entry.ID)
 	}
-	_, events, err := a.mux.SpawnSplit(pane, termmux.SplitColumns, termmux.SpawnSpec{Options: pty.Options{ShellProgram: selected.program, ShellArgs: selected.args, WorkingDirectory: selected.cwd, Env: selected.env}})
+	_, events, err := a.mux.SpawnSplit(pane, termmux.SplitColumns, termmux.SpawnSpec{TargetID: selected.id, Options: pty.Options{ShellProgram: selected.program, ShellArgs: selected.args, WorkingDirectory: selected.cwd, Env: selected.env}})
 	if err != nil {
 		return err
 	}

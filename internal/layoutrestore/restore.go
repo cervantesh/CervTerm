@@ -52,10 +52,11 @@ const (
 
 // ResolvedLaunch is a complete, environment-free launch decision.
 type ResolvedLaunch struct {
-	Program string
-	Args    []string
-	CWD     string
-	Source  LaunchSource
+	Program  string
+	Args     []string
+	CWD      string
+	Source   LaunchSource
+	TargetID string
 }
 
 type Node struct {
@@ -232,7 +233,11 @@ func resolveLaunch(saved layoutstate.Launch, options Options) (ResolvedLaunch, e
 	if chosen.Program == "" {
 		return ResolvedLaunch{}, fmt.Errorf("program: final program is empty")
 	}
-	return ResolvedLaunch{Program: chosen.Program, Args: cloneStrings(chosen.Args), CWD: chosen.CWD, Source: source}, nil
+	targetID := ""
+	if source == SourceCurrentTarget {
+		targetID = saved.TargetID
+	}
+	return ResolvedLaunch{TargetID: targetID, Program: chosen.Program, Args: cloneStrings(chosen.Args), CWD: chosen.CWD, Source: source}, nil
 }
 
 func findTarget(targets []Target, id string) (Target, bool) {
