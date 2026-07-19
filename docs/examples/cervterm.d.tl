@@ -243,6 +243,7 @@ local record cervterm
     NewTab: Action
     ActivateTabSwitcher: Action
     NewWindow: Action
+    ActivateWorkspaceSwitcher: Action
     ScrollLines: function(integer): Action
     ScrollPage: function(integer): Action
     ScrollBuffer: function(integer): Action
@@ -262,6 +263,10 @@ local record cervterm
     FocusWindow: function(integer): Action
     MoveTabToWindow: function(integer, integer, integer): Action
     MovePaneToWindow: function(integer, integer, string): Action
+    CreateWorkspace: function(string): Action
+    SwitchWorkspace: function(integer): Action
+    RenameWorkspace: function(integer, string): Action
+    MoveWindowToWorkspace: function(integer, integer): Action
     Multiple: function({Action}): Action
     WithTarget: function(Action, string): Action
   end

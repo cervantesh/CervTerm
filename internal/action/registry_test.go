@@ -80,8 +80,8 @@ func TestRegistryRejectsInvalidDescriptors(t *testing.T) {
 
 func TestDefaultRegistryContract(t *testing.T) {
 	wantIDs := []ID{
-		IDActivateCommandPalette, IDActivateLaunchMenu, IDActivateQuickSelect, IDActivateTab, IDActivateTabRelative, IDActivateTabSwitcher, IDCallback, IDClosePane, IDCloseTab, IDCloseWindow, IDCopySelection,
-		IDFocusPane, IDFocusWindow, IDMovePane, IDMovePaneToTab, IDMovePaneToWindow, IDMoveTab, IDMoveTabToWindow, IDMultiple, IDNewTab, IDNewWindow, IDPasteClipboard, IDReloadConfig, IDRenameTab, IDResizePane, IDScroll, IDSplitPane, IDSwapPane, IDToggleSearch, IDToggleStats, IDZoom,
+		IDActivateCommandPalette, IDActivateLaunchMenu, IDActivateQuickSelect, IDActivateTab, IDActivateTabRelative, IDActivateTabSwitcher, IDActivateWorkspaceSwitcher, IDCallback, IDClosePane, IDCloseTab, IDCloseWindow, IDCopySelection, IDCreateWorkspace,
+		IDFocusPane, IDFocusWindow, IDMovePane, IDMovePaneToTab, IDMovePaneToWindow, IDMoveTab, IDMoveTabToWindow, IDMoveWindowToWorkspace, IDMultiple, IDNewTab, IDNewWindow, IDPasteClipboard, IDReloadConfig, IDRenameTab, IDRenameWorkspace, IDResizePane, IDScroll, IDSplitPane, IDSwapPane, IDSwitchWorkspace, IDToggleSearch, IDToggleStats, IDZoom,
 	}
 	descriptors := DefaultRegistry().Descriptors()
 	gotIDs := make([]ID, len(descriptors))
