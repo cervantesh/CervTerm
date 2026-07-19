@@ -11,6 +11,7 @@ type ID string
 
 const (
 	IDCopySelection             ID = "copy_selection"
+	IDCopySemanticZone          ID = "copy_semantic_zone"
 	IDPasteClipboard            ID = "paste_clipboard"
 	IDToggleSearch              ID = "toggle_search"
 	IDToggleStats               ID = "toggle_stats"
@@ -101,6 +102,24 @@ func (ClosePane) action()              {}
 func (ActivateCommandPalette) action() {}
 func (ActivateQuickSelect) action()    {}
 func (ActivateLaunchMenu) action()     {}
+
+type SemanticZone string
+
+const (
+	SemanticZoneInput  SemanticZone = "input"
+	SemanticZoneOutput SemanticZone = "output"
+)
+
+type CopySemanticZone struct{ Zone SemanticZone }
+
+func (CopySemanticZone) ID() ID  { return IDCopySemanticZone }
+func (CopySemanticZone) action() {}
+func (a CopySemanticZone) Validate() error {
+	if a.Zone != SemanticZoneInput && a.Zone != SemanticZoneOutput {
+		return fmt.Errorf("semantic zone %q must be input or output", a.Zone)
+	}
+	return nil
+}
 
 type ScrollUnit string
 
@@ -326,6 +345,8 @@ func (a Callback) Validate() error {
 // This rejects pointers (including typed nil pointers) before method calls.
 func actionIdentity(action Action) (ID, error) {
 	switch action.(type) {
+	case CopySemanticZone:
+		return IDCopySemanticZone, nil
 	case CopySelection:
 		return IDCopySelection, nil
 	case PasteClipboard:

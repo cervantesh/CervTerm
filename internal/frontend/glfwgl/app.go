@@ -115,6 +115,7 @@ type App struct {
 	keyTable          keyTableState
 	link              linkState
 	linkLauncher      urlLauncher
+	clipboardSetter   func(string)
 	hud               hudCache
 	fps               float64
 	fpsFrames         uint64

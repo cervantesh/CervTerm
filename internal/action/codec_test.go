@@ -20,6 +20,7 @@ func TestCodecRoundTripsBuiltInActions(t *testing.T) {
 	}
 	tests := []Envelope{
 		focused(CopySelection{}),
+		focused(CopySemanticZone{Zone: SemanticZoneOutput}),
 		focused(PasteClipboard{}),
 		focused(ToggleSearch{}),
 		focused(ToggleStats{}),

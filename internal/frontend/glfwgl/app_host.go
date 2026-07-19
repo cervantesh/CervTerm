@@ -55,6 +55,10 @@ func (a *App) Notify(msg string) {
 }
 
 func (a *App) SetClipboard(text string) {
+	if a.clipboardSetter != nil {
+		a.clipboardSetter(text)
+		return
+	}
 	if a.window != nil {
 		a.window.SetClipboardString(text)
 	}

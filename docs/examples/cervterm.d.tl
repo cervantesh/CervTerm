@@ -249,6 +249,7 @@ local record cervterm
     ActivateTabSwitcher: Action
     NewWindow: Action
     ActivateWorkspaceSwitcher: Action
+    CopySemanticZone: function(string): Action
     ScrollLines: function(integer): Action
     ScrollPage: function(integer): Action
     ScrollBuffer: function(integer): Action
