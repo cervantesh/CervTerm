@@ -3,8 +3,8 @@
 package glfwgl
 
 import (
+	"cervterm/internal/linkpolicy"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"cervterm/internal/modal"
@@ -13,10 +13,10 @@ import (
 )
 
 type quickSelectActivation struct {
-	snapshot     termmux.QuickSelectSnapshot
-	candidates   map[string]quickselect.Candidate
-	openURL      func(string) error
-	setClipboard func(string)
+	snapshot       termmux.QuickSelectSnapshot
+	candidates     map[string]quickselect.Candidate
+	userActivation bool
+	setClipboard   func(string)
 }
 
 func (a *App) openQuickSelect(pane termmux.PaneID) error {
@@ -40,13 +40,15 @@ func (a *App) openQuickSelect(pane termmux.PaneID) error {
 	if !a.modal.Open(modal.ModeQuickSelect, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
 		return fmt.Errorf("quick select could not open")
 	}
-	a.quickSelect = quickSelectActivation{snapshot: snapshot, candidates: byLabel, openURL: a.quickSelect.openURL, setClipboard: a.quickSelect.setClipboard}
+	a.quickSelect = quickSelectActivation{snapshot: snapshot, candidates: byLabel, setClipboard: a.quickSelect.setClipboard}
 	a.requestRedraw()
 	return nil
 }
 
 func (a *App) acceptQuickSelect(entry modal.Entry, pane termmux.PaneID) error {
 	activation := a.quickSelect
+	explicitActivation := a.quickSelect.userActivation
+	a.quickSelect.userActivation = false
 	candidate, ok := activation.candidates[entry.ID]
 	if !ok || pane != activation.snapshot.PaneID {
 		return fmt.Errorf("quick select candidate is unavailable")
@@ -63,16 +65,15 @@ func (a *App) acceptQuickSelect(entry modal.Entry, pane termmux.PaneID) error {
 			a.SetClipboard(candidate.Text)
 		}
 	case quickselect.ActionOpen:
-		parsed, err := url.Parse(candidate.Text)
-		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-			return fmt.Errorf("quick select URL must be absolute http or https")
+		decision := linkpolicy.Evaluate(candidate.Text, linkpolicy.Activation{Explicit: explicitActivation, Fresh: true})
+		if !decision.Allowed() {
+			return fmt.Errorf("quick select URL must be absolute http or https (%s)", decision.Denial)
 		}
-		opener := openURL
-		if a.quickSelect.openURL != nil {
-			opener = a.quickSelect.openURL
+		if a.linkLauncher == nil {
+			return fmt.Errorf("link launcher unavailable")
 		}
-		if err := opener(candidate.Text); err != nil {
-			return fmt.Errorf("open quick select URL: %w", err)
+		if err := a.linkLauncher.Launch(decision.URI); err != nil {
+			return fmt.Errorf("no se pudo abrir %s", decision.SafeLabel)
 		}
 	default:
 		return fmt.Errorf("quick select action %q is invalid", candidate.Action)
@@ -91,6 +92,7 @@ func (a *App) handleQuickSelectChar(char rune) bool {
 	for _, entry := range state.Entries {
 		label := strings.ToLower(entry.ID)
 		if label == prefix {
+			a.quickSelect.userActivation = true
 			a.applyModalIntents([]modal.Intent{{Kind: modal.IntentAccept, Entry: entry, Pane: state.OpeningPane}})
 			return true
 		}

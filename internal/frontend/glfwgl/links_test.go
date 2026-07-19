@@ -90,3 +90,79 @@ func TestLinkAt(t *testing.T) {
 		t.Fatalf("different row should not hit")
 	}
 }
+
+type recordingURLLauncher struct {
+	opened []string
+	err    error
+}
+
+func (r *recordingURLLauncher) Launch(uri string) error {
+	r.opened = append(r.opened, uri)
+	return r.err
+}
+
+func TestDetectSnapshotLinksUsesOSC8IdentityAndPrecedence(t *testing.T) {
+	cells, cols, rows := cellsFromRows("https://plain.test")
+	for index := range cells {
+		cells[index].HyperlinkID = 7
+	}
+	links := detectSnapshotLinks(cells, []core.Hyperlink{{ID: 7, URI: "https://target.test/path"}}, cols, rows)
+	if len(links) != 1 || !links[0].explicit || links[0].url != "https://target.test/path" || links[0].startCol != 0 || links[0].endCol != cols-1 {
+		t.Fatalf("links=%#v", links)
+	}
+}
+
+func TestOSC8ActivationRequiresFreshClickAndSafeScheme(t *testing.T) {
+	a := newMuxTestApp(t, 80, 24)
+	launcher := &recordingURLLauncher{}
+	a.linkLauncher = launcher
+	feedTestPane(t, a, []byte("\x1b]8;;HTTPS://EXAMPLE.TEST/path?secret=x\x1b\\go\x1b]8;;\x1b\\"))
+	a.syncFocusedProjection()
+	a.refreshLinks()
+	if len(launcher.opened) != 0 {
+		t.Fatal("terminal output opened link automatically")
+	}
+	a.captureLinkPress(termsel.Point{Row: 0, Col: 0})
+	if !a.handleLinkClick(termsel.Point{Row: 0, Col: 0}) || len(launcher.opened) != 1 || launcher.opened[0] != "https://example.test/path?secret=x" {
+		t.Fatalf("opened=%#v", launcher.opened)
+	}
+	feedTestPane(t, a, []byte("\r\x1b[2K\x1b]8;;file:///etc/passwd\x1b\\x\x1b]8;;\x1b\\"))
+	a.syncFocusedProjection()
+	a.refreshLinks()
+	a.captureLinkPress(termsel.Point{Row: 0, Col: 0})
+	if !a.handleLinkClick(termsel.Point{Row: 0, Col: 0}) || len(launcher.opened) != 1 {
+		t.Fatalf("unsafe opened=%#v", launcher.opened)
+	}
+}
+
+func TestOSC8ActivationRejectsStaleRegion(t *testing.T) {
+	a := newMuxTestApp(t, 80, 24)
+	launcher := &recordingURLLauncher{}
+	a.linkLauncher = launcher
+	feedTestPane(t, a, []byte("\x1b]8;;https://old.test\x1b\\old\x1b]8;;\x1b\\"))
+	a.syncFocusedProjection()
+	a.refreshLinks()
+	a.captureLinkPress(termsel.Point{Row: 0, Col: 0})
+	feedTestPane(t, a, []byte("\r\x1b[2Knew"))
+	a.syncFocusedProjection()
+	if !a.handleLinkClick(termsel.Point{Row: 0, Col: 0}) || len(launcher.opened) != 0 {
+		t.Fatalf("stale opened=%#v", launcher.opened)
+	}
+}
+
+func TestOSC8ActivationRejectsSameURIIdentitySwapAfterPress(t *testing.T) {
+	a := newMuxTestApp(t, 80, 24)
+	launcher := &recordingURLLauncher{}
+	a.linkLauncher = launcher
+	point := termsel.Point{Row: 0, Col: 0}
+	feedTestPane(t, a, []byte("\x1b]8;id=one;https://same.test\x1b\\same\x1b]8;;\x1b\\"))
+	a.syncFocusedProjection()
+	a.refreshLinks()
+	a.captureLinkPress(point)
+	feedTestPane(t, a, []byte("\r\x1b[2K\x1b]8;id=two;https://same.test\x1b\\same\x1b]8;;\x1b\\"))
+	a.syncFocusedProjection()
+	a.refreshLinks()
+	if !a.handleLinkClick(point) || len(launcher.opened) != 0 {
+		t.Fatalf("opened=%#v", launcher.opened)
+	}
+}

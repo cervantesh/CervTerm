@@ -114,6 +114,7 @@ type App struct {
 	actionBindings    []keyActionBinding
 	keyTable          keyTableState
 	link              linkState
+	linkLauncher      urlLauncher
 	hud               hudCache
 	fps               float64
 	fpsFrames         uint64
@@ -178,6 +179,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 		pendingPaneScroll:      make(map[termmux.PaneID]int),
 		pendingPaneResize:      make(map[termmux.PaneID]termmux.PaneGeometry),
 	}
+	app.linkLauncher = platformURLLauncher{}
 	app.configScope = app.runtimeScopes.NewScope()
 	app.configWatch = newConfigWatchState(watchPaths...)
 	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {
@@ -377,6 +379,7 @@ func (a *App) installCallbacks() {
 		}
 		point := a.pointFromPixels(float32(x), float32(y))
 		if action == glfw.Press {
+			a.captureLinkPress(point)
 			a.selection.dragging = true
 			a.selection.active = false
 			a.selection.start = point

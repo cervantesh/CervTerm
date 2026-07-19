@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"runtime"
 
+	"cervterm/internal/linkpolicy"
+	termmux "cervterm/internal/mux"
 	termsel "cervterm/internal/selection"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -20,13 +22,14 @@ type linkState struct {
 	hover       linkRegion
 	hoverActive bool
 	handCursor  *glfw.Cursor
+	press       linkPress
 }
 
 // refreshLinks re-detects URLs from the freshly captured snapshot. Called from
 // draw() on the main thread. If the hovered link no longer exists (content
 // scrolled or changed), hover is dropped and the cursor restored.
 func (a *App) refreshLinks() {
-	a.link.links = detectLinks(a.snap.Cells, a.snap.Cols, a.snap.Rows)
+	a.link.links = detectSnapshotLinks(a.snap.Cells, a.snap.Hyperlinks, a.snap.Cols, a.snap.Rows)
 	if a.link.hoverActive {
 		if _, ok := linkAt(a.link.links, termsel.Point{Row: a.link.hover.row, Col: a.link.hover.startCol}); !ok {
 			a.link.hoverActive = false
@@ -80,17 +83,61 @@ func (a *App) ensureHandCursor() *glfw.Cursor {
 	return a.link.handCursor
 }
 
-// handleLinkClick opens the URL under a plain (non-drag) left click. Returns
-// true when a link was opened so the caller can skip other click handling.
-func (a *App) handleLinkClick(p termsel.Point) bool {
-	l, ok := linkAt(a.link.links, p)
+type linkPress struct {
+	active bool
+	pane   termmux.PaneID
+	target linkRegion
+}
+
+func (a *App) captureLinkPress(p termsel.Point) {
+	a.link.press = linkPress{}
+	cached, ok := linkAt(a.link.links, p)
 	if !ok {
+		return
+	}
+	fresh, ok := a.freshLinkAt(p)
+	if !ok || fresh != cached {
+		return
+	}
+	a.link.press = linkPress{active: true, pane: a.focusedPane, target: fresh}
+}
+
+// handleLinkClick is the only hyperlink activation entry point. The caller invokes it
+// for a plain pointer release; this method re-resolves the current pane snapshot before
+// policy evaluation so terminal output cannot activate or race a stale hovered target.
+func (a *App) handleLinkClick(p termsel.Point) bool {
+	press := a.link.press
+	a.link.press = linkPress{}
+	if !press.active {
 		return false
 	}
-	if err := openURL(l.url); err != nil {
-		a.Notify("no se pudo abrir el link: " + err.Error())
+	fresh, ok := a.freshLinkAt(p)
+	if !ok || press.pane != a.focusedPane || fresh != press.target {
+		a.Notify("enlace cambiado; inténtalo de nuevo")
+		a.clearHover()
+		return true
+	}
+	decision := linkpolicy.Evaluate(fresh.url, linkpolicy.Activation{Explicit: true, Fresh: true})
+	if !decision.Allowed() {
+		a.Notify("enlace bloqueado (" + decision.SafeLabel + "): " + string(decision.Denial))
+		return true
+	}
+	if a.linkLauncher == nil || a.linkLauncher.Launch(decision.URI) != nil {
+		a.Notify("no se pudo abrir " + decision.SafeLabel)
 	}
 	return true
+}
+
+func (a *App) freshLinkAt(p termsel.Point) (linkRegion, bool) {
+	if a.mux == nil || a.focusedPane == 0 {
+		return linkRegion{}, false
+	}
+	view, ok := a.mux.PaneView(a.focusedPane)
+	if !ok {
+		return linkRegion{}, false
+	}
+	links := detectSnapshotLinks(view.Snapshot.Cells, view.Snapshot.Hyperlinks, view.Snapshot.Cols, view.Snapshot.Rows)
+	return linkAt(links, p)
 }
 
 // drawLinkUnderline underlines the hovered link's cells. Called in draw() after
@@ -110,10 +157,13 @@ func (a *App) drawLinkUnderline(c color.RGBA) {
 	a.fillRect(x, y, w, thickness, c)
 }
 
-// openURL launches the OS default handler for a URL. On Windows this goes
-// through url.dll's FileProtocolHandler, which avoids the shell-quoting pitfalls
-// of "cmd /c start".
-func openURL(url string) error {
+type urlLauncher interface{ Launch(string) error }
+
+type platformURLLauncher struct{}
+
+// Launch runs only after the centralized policy accepted a fresh explicit user gesture.
+// It must remain on the GLFW-owned OS thread.
+func (platformURLLauncher) Launch(url string) error {
 	switch runtime.GOOS {
 	case "windows":
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
