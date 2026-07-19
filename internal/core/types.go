@@ -28,6 +28,7 @@ type Cell struct {
 	combining        *[]rune
 	Rune             rune
 	Attr             Attr
+	HyperlinkID      HyperlinkID
 	WideContinuation bool
 }
 
@@ -113,6 +114,7 @@ type screenState struct {
 	scrollBottom       int
 	charsets           [2]Charset
 	activeCharset      int
+	hyperlinks         hyperlinkState
 }
 
 type Terminal struct {
@@ -139,6 +141,7 @@ type Terminal struct {
 	cwd                string
 	cwdSeq             int
 	bellCount          int
+	hyperlinks         hyperlinkState
 	bracketedPaste     bool
 	alternateScreen    bool
 	primaryScreen      *screenState
