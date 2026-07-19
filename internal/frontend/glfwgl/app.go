@@ -229,14 +229,14 @@ func (a *App) runWindow() error {
 		return err
 	}
 	defer a.closeInitialWindowController()
-	defer a.closeDividerCursors()
-	a.transparentFramebuffer = w.GetAttrib(glfw.TransparentFramebuffer) == glfw.True
-	a.blurProvider = newBlurProvider(w)
+	projectionAdopted := false
 	defer func() {
-		if err := a.blurProvider.Close(); err != nil {
-			log.Printf("close blur provider %q: %v", a.blurProvider.Name(), err)
+		if !projectionAdopted {
+			a.closeUnadoptedProjectionResources()
 		}
 	}()
+	a.transparentFramebuffer = w.GetAttrib(glfw.TransparentFramebuffer) == glfw.True
+	a.blurProvider = newBlurProvider(w)
 	a.configureNativeWindow(w)
 	a.applyWindowAppearance()
 	if err := a.controller.activate(initialWindowID); err != nil {
@@ -251,16 +251,9 @@ func (a *App) runWindow() error {
 		return err
 	}
 	a.r = newGLRenderer(w)
-	rendererAdopted := false
-	defer func() {
-		if !rendererAdopted && a.r != nil {
-			a.r.Destroy()
-		}
-	}()
 	if err := a.prepareInitialBackgroundSurface(); err != nil {
 		return err
 	}
-	defer a.closeBackgroundSurface()
 	a.lastFBW, a.lastFBH = -1, -1
 	sx, sy := w.GetContentScale()
 	a.applyScale(sx, sy)
@@ -279,13 +272,6 @@ func (a *App) runWindow() error {
 		return err
 	}
 	a.atlas = atlas
-	rendererAdopted = true
-	defer func() {
-		if a.atlas != nil {
-			a.closeBackgroundSurface()
-			a.atlas.close()
-		}
-	}()
 	a.ligaturesActive = atlas.supportsLigatures(a.cfg.Font.Ligatures)
 	a.cellW = float32(atlas.cellW)
 	a.cellH = float32(atlas.cellH)
@@ -314,6 +300,10 @@ func (a *App) runWindow() error {
 	a.installCallbacks()
 	a.spawnInitialPTY(w)
 
+	if err := a.adoptInitialProjection(w); err != nil {
+		return err
+	}
+	projectionAdopted = true
 	a.needsRedraw = true
 
 	return a.runLoop(w)
