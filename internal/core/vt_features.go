@@ -11,6 +11,7 @@ func (t *Terminal) NextLine() {
 
 func (t *Terminal) ReverseIndex() {
 	t.wrapNext = false
+	t.stampBlankSemanticRow()
 	if t.cursorRow == t.scrollTop {
 		t.scrollDownRegion(t.scrollTop, t.scrollBottom, 1)
 		return
