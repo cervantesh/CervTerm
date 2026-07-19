@@ -187,3 +187,20 @@ func collectSplitIDs(n *node, out *[]SplitID) {
 	collectSplitIDs(n.first, out)
 	collectSplitIDs(n.second, out)
 }
+
+// rollbackClosedWindow releases a never-published newest window proposal.
+// It is valid only immediately after CloseWindow detached that exact candidate.
+func (m *Model) rollbackClosedWindow(result CloseWindowResult) error {
+	if !result.Closed || len(result.Tabs) != 1 || len(result.Panes) != 1 || len(result.Splits) != 0 {
+		return invariantError("window %d is not a rollback candidate", result.Window)
+	}
+	tab, pane := result.Tabs[0], result.Panes[0]
+	if WindowID(m.nextWindowID-1) != result.Window || TabID(m.nextTabID-1) != tab || PaneID(m.nextPaneID-1) != pane {
+		return invariantError("window %d rollback is not newest", result.Window)
+	}
+	delete(m.allocatedWindows, result.Window)
+	delete(m.allocatedTabs, tab)
+	delete(m.allocated, pane)
+	m.nextWindowID, m.nextTabID, m.nextPaneID = result.Window, tab, pane
+	return m.CheckInvariants()
+}
