@@ -1,12 +1,9 @@
 package mux
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
-	"math"
-	"sync"
 
 	"cervterm/internal/core"
 	"cervterm/internal/pty"
@@ -39,15 +36,9 @@ type PaneView struct {
 }
 
 type Mux struct {
-	factory      SessionFactory
+	sessions     *localSessionRegistry
 	options      Options
 	model        *Model
-	panes        map[PaneID]*pane
-	closed       map[PaneID]struct{}
-	incoming     chan ingressRecord
-	ctx          context.Context
-	cancel       context.CancelFunc
-	readers      sync.WaitGroup
 	bootstrapped bool
 	bounds       PixelRect
 	paneMetrics  map[PaneID]CellMetrics
@@ -61,18 +52,10 @@ func New(factory SessionFactory, options Options) *Mux {
 	if options.IngressCapacity <= 0 {
 		options.IngressCapacity = 256
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	sessions := newLocalSessionRegistry(factory, options.IngressCapacity, options.Wake)
 	return &Mux{
-		factory:     factory,
-		options:     options,
-		model:       NewModel(),
-		panes:       make(map[PaneID]*pane),
-		closed:      make(map[PaneID]struct{}),
-		paneMetrics: make(map[PaneID]CellMetrics),
-		paletteBase: core.DefaultPaletteBase(),
-		incoming:    make(chan ingressRecord, options.IngressCapacity),
-		ctx:         ctx,
-		cancel:      cancel,
+		sessions: sessions, options: options, model: NewModel(),
+		paneMetrics: make(map[PaneID]CellMetrics), paletteBase: core.DefaultPaletteBase(),
 	}
 }
 
@@ -88,19 +71,25 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 		return 0, 0, nil, invariantError("bootstrap layout has %d panes", len(layout.Panes))
 	}
 	geometry := effectiveGeometry(layout.Panes[0])
+	if err := m.sessions.reserve(geometry.Pane); err != nil {
+		return 0, 0, nil, err
+	}
+	defer m.sessions.release(geometry.Pane)
 	p := newPane(geometry.Pane, geometry.Cols, geometry.Rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
 	p.terminal.SetPaletteBase(m.paletteBase)
 	p.geometry = geometry
 	if m.options.SetClipboard != nil {
 		p.parser.SetClipboard = func(text string) { m.options.SetClipboard(p.id, text) }
 	}
-	m.panes[p.id] = p
+	if err := m.sessions.register(p); err != nil {
+		return 0, 0, nil, err
+	}
 	m.bounds = content
 	m.paneMetrics[p.id] = metrics
 	m.bootstrapped = true
 
 	rows, cols := terminalSize(geometry)
-	session, spawnErr := m.factory.Spawn(rows, cols, spec.Options)
+	session, spawnErr := m.sessions.spawn(rows, cols, spec.Options)
 	if spawnErr != nil {
 		if session != nil {
 			_ = session.Close()
@@ -121,7 +110,9 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 	p.desiredSize = pty.Size{Rows: rows, Cols: cols}
 	p.appliedSize = p.desiredSize
 	p.capture()
-	p.startReader(m.ctx, m.incoming, m.options.Wake, &m.readers)
+	if err := m.sessions.start(p.id); err != nil {
+		return 0, 0, nil, err
+	}
 	return m.model.TabID(), p.id, []Event{
 		{Kind: PaneStarted, Pane: p.id},
 		{Kind: PaneFocused, Pane: p.id},
@@ -141,7 +132,7 @@ func (m *Mux) Layout() (Layout, error) {
 }
 
 func (m *Mux) PaneView(id PaneID) (PaneView, bool) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok {
 		return PaneView{}, false
 	}
@@ -191,13 +182,17 @@ func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID,
 	}
 
 	predictedID := m.model.nextPaneID
+	if err := m.sessions.reserve(predictedID); err != nil {
+		return 0, nil, err
+	}
+	defer m.sessions.release(predictedID)
 	newPane := newPane(predictedID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
 	newPane.terminal.SetPaletteBase(m.paletteBase)
 	if m.options.SetClipboard != nil {
 		newPane.parser.SetClipboard = func(text string) { m.options.SetClipboard(newPane.id, text) }
 	}
 	ptyRows, ptyCols := terminalSize(PaneGeometry{Pane: predictedID, Pixels: newRect, Cols: cols, Rows: rows})
-	session, spawnErr := m.factory.Spawn(ptyRows, ptyCols, spec.Options)
+	session, spawnErr := m.sessions.spawn(ptyRows, ptyCols, spec.Options)
 	if spawnErr != nil {
 		if session != nil {
 			_ = session.Close()
@@ -215,20 +210,36 @@ func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID,
 		}
 		return m.resolveMetrics(id)
 	}
-	createdID, err := m.model.SplitWithMetrics(target, axis, m.bounds, resolveSplitMetrics)
-	if err != nil {
+	if err := m.sessions.register(newPane); err != nil {
 		_ = newPane.close()
 		return 0, nil, err
 	}
+	if err := m.sessions.start(newPane.id); err != nil {
+		detached := m.sessions.detach(newPane.id)
+		if detached.owned {
+			_ = detached.pane.close()
+		}
+		return 0, nil, err
+	}
+	createdID, err := m.model.SplitWithMetrics(target, axis, m.bounds, resolveSplitMetrics)
+	if err != nil {
+		detached := m.sessions.detach(newPane.id)
+		if detached.owned {
+			_ = detached.pane.close()
+		}
+		return 0, nil, err
+	}
 	if createdID != predictedID {
-		_ = newPane.close()
+		_, _ = m.model.Close(createdID)
+		detached := m.sessions.detach(newPane.id)
+		if detached.owned {
+			_ = detached.pane.close()
+		}
 		return 0, nil, invariantError("model allocated pane %d after predicting %d", createdID, predictedID)
 	}
-	m.panes[createdID] = newPane
 	m.paneMetrics[createdID] = targetMetrics
 	resizeEvents, resizeErr := m.resizeBoundsAndApply(m.bounds)
 	newPane.capture()
-	newPane.startReader(m.ctx, m.incoming, m.options.Wake, &m.readers)
 	events := []Event{{Kind: PaneStarted, Pane: createdID}, {Kind: PaneFocused, Pane: createdID}}
 	events = append(events, resizeEvents...)
 	return createdID, events, resizeErr
@@ -275,7 +286,7 @@ func (m *Mux) FocusNext(reverse bool) ([]Event, error) {
 }
 
 func (m *Mux) Write(id PaneID, data []byte) ([]Event, error) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return nil, ErrPaneNotFound
 	}
@@ -293,7 +304,7 @@ func (m *Mux) Write(id PaneID, data []byte) ([]Event, error) {
 }
 
 func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return nil, ErrPaneNotFound
 	}
@@ -307,8 +318,8 @@ func (m *Mux) Drain(limit int) []Event {
 	var events []Event
 	for count := 0; limit <= 0 || count < limit; count++ {
 		select {
-		case record := <-m.incoming:
-			p, ok := m.panes[record.pane]
+		case record := <-m.sessions.incoming:
+			p, ok := m.sessions.lookup(record.pane)
 			if !ok || p.state == PaneStateClosed || p.state == PaneStateClosing {
 				continue
 			}
@@ -360,7 +371,7 @@ func (m *Mux) advancePane(p *pane, data []byte) []Event {
 }
 
 func (m *Mux) SearchUpward(id PaneID, query string, hasPrev bool, prevRow int) (row, col int, ok bool, err error) {
-	p, exists := m.panes[id]
+	p, exists := m.sessions.lookup(id)
 	if !exists || !m.model.paneExists(id) {
 		return 0, 0, false, ErrPaneNotFound
 	}
@@ -389,7 +400,7 @@ func scrollGlobalRowIntoView(t *core.Terminal, row int) {
 }
 
 func (m *Mux) GlobalRowToViewport(id PaneID, row int) (int, bool) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return 0, false
 	}
@@ -397,7 +408,7 @@ func (m *Mux) GlobalRowToViewport(id PaneID, row int) (int, bool) {
 }
 
 func (m *Mux) SetTitle(id PaneID, title string) (bool, error) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return false, ErrPaneNotFound
 	}
@@ -410,7 +421,7 @@ func (m *Mux) SetTitle(id PaneID, title string) (bool, error) {
 }
 
 func (m *Mux) Line(id PaneID, row int) (string, bool) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) || row < 0 || row >= p.terminal.Rows() {
 		return "", false
 	}
@@ -422,7 +433,7 @@ func (m *Mux) Line(id PaneID, row int) (string, bool) {
 }
 
 func (m *Mux) LineWrapped(id PaneID, row int) (bool, bool) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return false, false
 	}
@@ -430,67 +441,43 @@ func (m *Mux) LineWrapped(id PaneID, row int) (bool, bool) {
 }
 
 func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok {
-		if _, wasClosed := m.closed[id]; wasClosed {
+		if m.sessions.wasClosed(id) {
 			return nil, nil
 		}
 		return nil, ErrPaneNotFound
 	}
-	closeErr := p.close()
 	result, modelErr := m.model.Close(id)
-	delete(m.panes, id)
+	if modelErr != nil || !result.Closed {
+		return nil, modelErr
+	}
+	detached := m.sessions.detach(id)
+	if !detached.owned || detached.pane != p {
+		return nil, invariantError("pane %d model detached without registry ownership", id)
+	}
 	delete(m.paneMetrics, id)
-	m.closed[id] = struct{}{}
+	closeErr := detached.pane.close()
 	var events []Event
 	if closeErr != nil {
 		events = append(events, Event{Kind: PaneCloseFailed, Tab: result.Tab, Pane: id, Err: closeErr})
 	}
+	events = append(events, Event{Kind: PaneClosed, Tab: result.Tab, Pane: id})
+	if result.TabClosed {
+		events = append(events, Event{Kind: TabClosed, Tab: result.Tab})
+	}
+	if result.Focused != 0 {
+		events = append(events, Event{Kind: PaneFocused, Tab: m.model.TabID(), Pane: result.Focused})
+	}
 	var resizeErr error
-	if result.Closed {
-		events = append(events, Event{Kind: PaneClosed, Tab: result.Tab, Pane: id})
-		if result.TabClosed {
-			events = append(events, Event{Kind: TabClosed, Tab: result.Tab})
-		}
-		if result.Focused != 0 {
-			events = append(events, Event{Kind: PaneFocused, Tab: m.model.TabID(), Pane: result.Focused})
-		}
-		if result.Empty {
-			events = append(events, Event{Kind: WindowTabsEmpty, Tab: result.Tab}, Event{Kind: TabEmpty, Tab: result.Tab})
-		} else {
-			var resizeEvents []Event
-			resizeEvents, resizeErr = m.resizeBoundsAndApply(m.bounds)
-			events = append(events, resizeEvents...)
-		}
+	if result.Empty {
+		events = append(events, Event{Kind: WindowTabsEmpty, Tab: result.Tab}, Event{Kind: TabEmpty, Tab: result.Tab})
+	} else {
+		var resizeEvents []Event
+		resizeEvents, resizeErr = m.resizeBoundsAndApply(m.bounds)
+		events = append(events, resizeEvents...)
 	}
-	return events, errors.Join(closeErr, modelErr, resizeErr)
+	return events, errors.Join(closeErr, resizeErr)
 }
 
-func (m *Mux) Shutdown() error {
-	m.cancel()
-	var closeErrors []error
-	for _, p := range m.panes {
-		if err := p.close(); err != nil {
-			closeErrors = append(closeErrors, fmt.Errorf("pane %d close: %w", p.id, err))
-		}
-	}
-	m.readers.Wait()
-	return errors.Join(closeErrors...)
-}
-
-func effectiveGeometry(geometry PaneGeometry) PaneGeometry {
-	geometry.Cols = max(2, geometry.Cols)
-	geometry.Rows = max(1, geometry.Rows)
-	return geometry
-}
-
-func terminalSize(geometry PaneGeometry) (rows, cols uint16) {
-	return clampUint16(max(1, geometry.Rows)), clampUint16(max(2, geometry.Cols))
-}
-
-func clampUint16(value int) uint16 {
-	if value > math.MaxUint16 {
-		return math.MaxUint16
-	}
-	return uint16(value)
-}
+func (m *Mux) Shutdown() error { return m.sessions.shutdownRegistry() }

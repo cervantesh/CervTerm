@@ -134,6 +134,15 @@ func newTestMux(t *testing.T) (*Mux, *fakeSession, chan struct{}) {
 	return m, factory.sessions[0], wakes
 }
 
+func lookupPaneForTest(t *testing.T, registry *localSessionRegistry, id PaneID) *pane {
+	t.Helper()
+	p, ok := registry.lookup(id)
+	if !ok {
+		t.Fatalf("pane %d is not registry-owned", id)
+	}
+	return p
+}
+
 func awaitWake(t *testing.T, wakes <-chan struct{}) {
 	t.Helper()
 	select {
@@ -178,7 +187,7 @@ func TestMuxWriteResizeOrderingAndRetryState(t *testing.T) {
 
 	session.resizeErr = errors.New("resize failed")
 	session.onResize = func(size pty.Size) {
-		pane := m.panes[1]
+		pane := lookupPaneForTest(t, m.sessions, 1)
 		if pane.terminal.Cols() != int(size.Cols) || pane.terminal.Rows() != int(size.Rows) {
 			t.Errorf("PTY resize ran before terminal resize: terminal=%dx%d pty=%dx%d", pane.terminal.Cols(), pane.terminal.Rows(), size.Cols, size.Rows)
 		}
@@ -218,7 +227,7 @@ func TestMuxSetScrollbackCapacityAppliesToAllPanes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range m.PaneIDs() {
-		if got := m.panes[id].terminal.ScrollbackCapacity(); got != 7 {
+		if got := lookupPaneForTest(t, m.sessions, id).terminal.ScrollbackCapacity(); got != 7 {
 			t.Fatalf("pane %d scrollback capacity = %d, want 7", id, got)
 		}
 	}
@@ -233,14 +242,14 @@ func TestMuxSetHideCursorWhenScrolledAppliesToActiveAndFuturePanes(t *testing.T)
 	}
 
 	m.SetHideCursorWhenScrolled(false)
-	if m.panes[1].captureOptions.HideCursorWhenScrolled {
+	if lookupPaneForTest(t, m.sessions, 1).captureOptions.HideCursorWhenScrolled {
 		t.Fatal("active pane retained hidden-cursor policy")
 	}
 	newID, _, err := m.Split(1, SplitColumns, SpawnSpec{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.panes[newID].captureOptions.HideCursorWhenScrolled {
+	if lookupPaneForTest(t, m.sessions, newID).captureOptions.HideCursorWhenScrolled {
 		t.Fatal("future pane did not inherit live cursor policy")
 	}
 }
@@ -604,7 +613,7 @@ func TestMuxPaletteBaseQueriesAndPaneLocalOverrides(t *testing.T) {
 	base.FG = core.RGB{R: 0x12, G: 0x34, B: 0x56}
 	base.Indexed[7] = core.RGB{R: 0x65, G: 0x43, B: 0x21}
 	m.SetPaletteBase(base)
-	if got := m.panes[1].terminal.PaletteBase(); got != base {
+	if got := lookupPaneForTest(t, m.sessions, 1).terminal.PaletteBase(); got != base {
 		t.Fatalf("existing pane base = %#v, want %#v", got, base)
 	}
 	if err := session.feed([]byte("\x1b]4;7;?\a\x1b]10;?\x1b\\")); err != nil {
@@ -619,20 +628,20 @@ func TestMuxPaletteBaseQueriesAndPaneLocalOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := m.panes[second].terminal.PaletteBase(); got != base {
+	if got := lookupPaneForTest(t, m.sessions, second).terminal.PaletteBase(); got != base {
 		t.Fatalf("new pane base = %#v, want %#v", got, base)
 	}
-	m.panes[1].terminal.SetPaletteIndex(7, core.RGB{R: 1, G: 2, B: 3})
-	if m.panes[second].terminal.PaletteOverrides().HasIndexed(7) {
+	lookupPaneForTest(t, m.sessions, 1).terminal.SetPaletteIndex(7, core.RGB{R: 1, G: 2, B: 3})
+	if lookupPaneForTest(t, m.sessions, second).terminal.PaletteOverrides().HasIndexed(7) {
 		t.Fatal("OSC indexed override leaked to sibling pane")
 	}
 	newBase := base
 	newBase.Indexed[7] = core.RGB{R: 9, G: 8, B: 7}
 	m.SetPaletteBase(newBase)
-	if got := m.panes[1].terminal.EffectivePaletteIndex(7); got != (core.RGB{R: 1, G: 2, B: 3}) {
+	if got := lookupPaneForTest(t, m.sessions, 1).terminal.EffectivePaletteIndex(7); got != (core.RGB{R: 1, G: 2, B: 3}) {
 		t.Fatalf("base reload replaced pane override: %#v", got)
 	}
-	if got := m.panes[second].terminal.EffectivePaletteIndex(7); got != newBase.Indexed[7] {
+	if got := lookupPaneForTest(t, m.sessions, second).terminal.EffectivePaletteIndex(7); got != newBase.Indexed[7] {
 		t.Fatalf("sibling did not receive reloaded base: %#v", got)
 	}
 }

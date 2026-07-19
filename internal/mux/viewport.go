@@ -2,7 +2,7 @@ package mux
 
 // ScrollViewport moves one pane's viewport and refreshes its immutable snapshot.
 func (m *Mux) ScrollViewport(id PaneID, lines int) (bool, error) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return false, ErrPaneNotFound
 	}
@@ -20,7 +20,7 @@ func (m *Mux) SetScrollbackCapacity(capacity int) {
 	capacityCopy := capacity
 	m.options.ScrollbackCapacity = &capacityCopy
 	for _, id := range m.model.PaneIDs() {
-		p, ok := m.panes[id]
+		p, ok := m.sessions.lookup(id)
 		if !ok {
 			continue
 		}
@@ -39,7 +39,7 @@ func (m *Mux) SetHideCursorWhenScrolled(hide bool) {
 	hideCopy := hide
 	m.options.HideCursorWhenScrolled = &hideCopy
 	for _, id := range m.model.PaneIDs() {
-		p, ok := m.panes[id]
+		p, ok := m.sessions.lookup(id)
 		if !ok {
 			continue
 		}

@@ -5,7 +5,7 @@ import "cervterm/internal/core"
 // SetPaletteBase updates the configured palette beneath every pane-local OSC override.
 func (m *Mux) SetPaletteBase(base core.PaletteBase) {
 	m.paletteBase = base
-	for _, pane := range m.panes {
+	m.sessions.forEach(func(_ PaneID, pane *pane) {
 		pane.terminal.SetPaletteBase(base)
-	}
+	})
 }

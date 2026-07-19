@@ -21,7 +21,7 @@ func transferEventKinds(events []Event) []EventKind {
 
 func TestMuxTransferPanePreservesSessionAndDefersPTYResize(t *testing.T) {
 	m, _, wakes := newTestMux(t)
-	factory := m.factory.(*fakeFactory)
+	factory := m.sessions.factory.(*fakeFactory)
 	if _, _, _, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "two"); err != nil {
 		t.Fatal(err)
 	}
@@ -32,17 +32,17 @@ func TestMuxTransferPanePreservesSessionAndDefersPTYResize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owned := m.panes[pane]
+	owned := m.sessions.panes[pane]
 	session := factory.sessions[2]
 	sessionsBefore := len(factory.sessions)
 	resizeBefore := []int{fakeResizeCount(factory.sessions[0]), fakeResizeCount(factory.sessions[1]), fakeResizeCount(factory.sessions[2])}
-	destinationGeometry := m.panes[2].geometry
+	destinationGeometry := m.sessions.panes[2].geometry
 	events, err := m.TransferPane(pane, 2, 2, SplitRows)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.panes[pane] != owned || owned.session != session || len(factory.sessions) != sessionsBefore || session.closes() != 0 {
-		t.Fatalf("identity changed pane=%p/%p session=%p/%p count=%d closes=%d", m.panes[pane], owned, owned.session, session, len(factory.sessions), session.closes())
+	if m.sessions.panes[pane] != owned || owned.session != session || len(factory.sessions) != sessionsBefore || session.closes() != 0 {
+		t.Fatalf("identity changed pane=%p/%p session=%p/%p count=%d closes=%d", m.sessions.panes[pane], owned, owned.session, session, len(factory.sessions), session.closes())
 	}
 	for i, s := range factory.sessions {
 		if got := fakeResizeCount(s); got != resizeBefore[i] {
@@ -59,15 +59,15 @@ func TestMuxTransferPanePreservesSessionAndDefersPTYResize(t *testing.T) {
 	if owner := m.model.tabForPane(pane); owner == nil || owner.id != 2 {
 		t.Fatalf("owner=%#v", owner)
 	}
-	if m.panes[2].geometry != destinationGeometry {
-		t.Fatalf("inactive destination geometry changed: %#v -> %#v", destinationGeometry, m.panes[2].geometry)
+	if m.sessions.panes[2].geometry != destinationGeometry {
+		t.Fatalf("inactive destination geometry changed: %#v -> %#v", destinationGeometry, m.sessions.panes[2].geometry)
 	}
 	activateEvents, err := m.ActivateTab(2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(activateEvents) < 4 || m.panes[2].geometry == destinationGeometry {
-		t.Fatalf("activation did not apply deferred geometry: events=%#v geometry=%#v", activateEvents, m.panes[2].geometry)
+	if len(activateEvents) < 4 || m.sessions.panes[2].geometry == destinationGeometry {
+		t.Fatalf("activation did not apply deferred geometry: events=%#v geometry=%#v", activateEvents, m.sessions.panes[2].geometry)
 	}
 	for i, s := range factory.sessions {
 		if got := fakeResizeCount(s); got != resizeBefore[i] {
@@ -86,7 +86,7 @@ func TestMuxTransferPanePreservesSessionAndDefersPTYResize(t *testing.T) {
 
 func TestMuxTransferFinalActiveSourceEmitsNoCloseOrEmpty(t *testing.T) {
 	m, first, _ := newTestMux(t)
-	factory := m.factory.(*fakeFactory)
+	factory := m.sessions.factory.(*fakeFactory)
 	if _, _, _, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "two"); err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestMuxTransferFinalActiveSourceEmitsNoCloseOrEmpty(t *testing.T) {
 
 func TestMuxTransferFailureLeavesViewsSessionsAndCountersUntouched(t *testing.T) {
 	m, _, _ := newTestMux(t)
-	factory := m.factory.(*fakeFactory)
+	factory := m.sessions.factory.(*fakeFactory)
 	if _, _, _, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "two"); err != nil {
 		t.Fatal(err)
 	}
@@ -130,13 +130,13 @@ func TestMuxTransferFailureLeavesViewsSessionsAndCountersUntouched(t *testing.T)
 	beforeTabs := m.Tabs()
 	beforeSplit := m.model.nextSplitID
 	beforeSessions := len(factory.sessions)
-	beforePane := m.panes[pane]
+	beforePane := m.sessions.panes[pane]
 	m.bounds = PixelRect{Width: 16, Height: 16}
 	events, err := m.TransferPane(pane, 2, 2, SplitColumns)
 	if !errors.Is(err, ErrTopologyTooSmall) || len(events) != 0 {
 		t.Fatalf("events=%#v err=%v", events, err)
 	}
-	if !reflect.DeepEqual(m.Tabs(), beforeTabs) || m.model.nextSplitID != beforeSplit || len(factory.sessions) != beforeSessions || m.panes[pane] != beforePane {
-		t.Fatalf("tabs=%#v split=%d sessions=%d pane=%p", m.Tabs(), m.model.nextSplitID, len(factory.sessions), m.panes[pane])
+	if !reflect.DeepEqual(m.Tabs(), beforeTabs) || m.model.nextSplitID != beforeSplit || len(factory.sessions) != beforeSessions || m.sessions.panes[pane] != beforePane {
+		t.Fatalf("tabs=%#v split=%d sessions=%d pane=%p", m.Tabs(), m.model.nextSplitID, len(factory.sessions), m.sessions.panes[pane])
 	}
 }

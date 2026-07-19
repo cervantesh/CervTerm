@@ -27,6 +27,7 @@ var (
 	ErrInvalidTabPosition  = errors.New("mux: invalid tab position")
 	ErrSameTabTransfer     = errors.New("mux: pane transfer requires different tabs")
 	ErrInvariant           = errors.New("mux: invariant violation")
+	ErrShuttingDown        = errors.New("mux: shutting down")
 )
 
 func invariantError(format string, args ...any) error {

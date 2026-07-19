@@ -3,6 +3,7 @@ package mux
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	"cervterm/internal/pty"
 )
@@ -62,7 +63,7 @@ func (m *Mux) ResizeBounds(content PixelRect) ([]Event, error) {
 // geometry, terminal grids, snapshots, and desired PTY sizes for the full layout.
 // Sessions are not notified until ApplyResize is called.
 func (m *Mux) ResizePaneGrid(id PaneID, metrics CellMetrics) ([]Event, error) {
-	if !m.model.paneExists(id) || m.panes[id] == nil {
+	if _, ok := m.sessions.lookup(id); !m.model.paneExists(id) || !ok {
 		return nil, ErrPaneNotFound
 	}
 	if err := validateCellMetrics(metrics); err != nil {
@@ -95,7 +96,7 @@ func (m *Mux) applyLayout(layout Layout) ([]Event, error) {
 	events := make([]Event, 0, len(layout.Panes)*2)
 	for _, geometry := range layout.Panes {
 		geometry = effectiveGeometry(geometry)
-		p := m.panes[geometry.Pane]
+		p, _ := m.sessions.lookup(geometry.Pane)
 		if p == nil {
 			return events, invariantError("layout references unattached pane %d", geometry.Pane)
 		}
@@ -132,7 +133,7 @@ func (m *Mux) applyDesiredResizes() ([]Event, error) {
 
 // ApplyResize notifies one pane session of the latest desired grid size.
 func (m *Mux) ApplyResize(id PaneID) ([]Event, error) {
-	p, ok := m.panes[id]
+	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return nil, ErrPaneNotFound
 	}
@@ -150,4 +151,21 @@ func (m *Mux) ApplyResize(id PaneID) ([]Event, error) {
 	p.appliedSize = p.desiredSize
 	p.resizeErr = nil
 	return nil, nil
+}
+
+func effectiveGeometry(geometry PaneGeometry) PaneGeometry {
+	geometry.Cols = max(2, geometry.Cols)
+	geometry.Rows = max(1, geometry.Rows)
+	return geometry
+}
+
+func terminalSize(geometry PaneGeometry) (rows, cols uint16) {
+	return clampUint16(max(1, geometry.Rows)), clampUint16(max(2, geometry.Cols))
+}
+
+func clampUint16(value int) uint16 {
+	if value > math.MaxUint16 {
+		return math.MaxUint16
+	}
+	return uint16(value)
 }
