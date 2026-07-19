@@ -128,6 +128,9 @@ func Prepare(plan layoutstate.Plan, options Options) (Blueprint, error) {
 			if savedWindow.ActiveTab < 0 || savedWindow.ActiveTab >= len(savedWindow.Tabs) {
 				return Blueprint{}, fmt.Errorf("%s.active_tab: index out of range", windowPath)
 			}
+			if savedWindow.Appearance.ColorScheme != "" && savedWindow.Appearance.ColorScheme != options.Appearance.ColorScheme {
+				return Blueprint{}, fmt.Errorf("%s.appearance.color_scheme: %q is not the currently resolved scheme", windowPath, savedWindow.Appearance.ColorScheme)
+			}
 			window := Window{Title: savedWindow.Title, Bounds: bounds, ActiveTab: savedWindow.ActiveTab, Appearance: mergeAppearance(options.Appearance, savedWindow.Appearance), Tabs: make([]Tab, len(savedWindow.Tabs))}
 			for ti, savedTab := range savedWindow.Tabs {
 				tabPath := fmt.Sprintf("%s.tabs[%d]", windowPath, ti)

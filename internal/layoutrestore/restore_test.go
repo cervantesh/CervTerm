@@ -91,7 +91,7 @@ func TestBoundsAppearanceStructureAndCloning(t *testing.T) {
 	plan := testPlan(t, layoutstate.Launch{TargetID: "dev"}, layoutstate.Launch{Program: "fallback", Args: []string{"a"}})
 	doc := plan.Snapshot()
 	doc.Workspaces[0].Windows[0].Bounds = layoutstate.Bounds{X: 99999, Y: 99999, Width: 900, Height: 700}
-	doc.Workspaces[0].Windows[0].Appearance = layoutstate.Appearance{ColorScheme: "saved", BackgroundOpacity: &bg, Blur: &blur, FontSize: &size}
+	doc.Workspaces[0].Windows[0].Appearance = layoutstate.Appearance{ColorScheme: "current", BackgroundOpacity: &bg, Blur: &blur, FontSize: &size}
 	plan, _ = layoutstate.NewPlan(doc)
 	options := testOptions()
 	blueprint, err := Prepare(plan, options)
@@ -106,7 +106,7 @@ func TestBoundsAppearanceStructureAndCloning(t *testing.T) {
 	if window.Bounds.Outcome != windowbounds.FallbackOffscreen || window.Bounds.ScaleX != 1.5 {
 		t.Fatalf("bounds: %#v", window.Bounds)
 	}
-	if window.Appearance != (BlueprintAppearance{ColorScheme: "saved", BackgroundOpacity: .4, TextOpacity: .9, Blur: true, FontSize: 18}) {
+	if window.Appearance != (BlueprintAppearance{ColorScheme: "current", BackgroundOpacity: .4, TextOpacity: .9, Blur: true, FontSize: 18}) {
 		t.Fatalf("appearance: %#v", window.Appearance)
 	}
 	if window.Tabs[0].FocusedLeaf != 1 || window.Tabs[0].Root.Axis != "columns" || window.Tabs[0].Root.Ratio != 5000 {
@@ -141,6 +141,19 @@ func TestPrepareRejectsActiveEmptyWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := Prepare(plan, testOptions()); err == nil || !strings.Contains(err.Error(), "no usable window") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestPrepareRejectsUnresolvedPersistedColorScheme(t *testing.T) {
+	plan := testPlan(t)
+	document := plan.Snapshot()
+	document.Workspaces[0].Windows[0].Appearance.ColorScheme = "unavailable"
+	plan, err := layoutstate.NewPlan(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Prepare(plan, testOptions()); err == nil || !strings.Contains(err.Error(), "not the currently resolved scheme") {
 		t.Fatalf("err=%v", err)
 	}
 }

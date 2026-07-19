@@ -249,39 +249,13 @@ func formatPendingConfigChanges(changes []config.ConfigChange, limit int) string
 	return strings.Join(parts, ", ")
 }
 
-type preparedLiveConfig struct {
-	next                  config.Config
-	preparedContexts      map[atlasFontKey]*atlasFontContext
-	contextInstall        *atlasPreparedContextInstall
-	backgroundSurface     gpu.BackgroundSurface
-	backgroundWidth       int
-	backgroundHeight      int
-	backgroundBytes       uint64
-	backgroundDPI         float64
-	backgroundWatchPaths  []string
-	backgroundWatchHashes map[string][32]byte
-	rasterChanged         bool
-	backgroundChanged     bool
-	committed             bool
-}
-
-func (p *preparedLiveConfig) Close() {
-	if p == nil || p.committed {
-		return
-	}
-	closePreparedRasterContexts(p.preparedContexts)
-	p.preparedContexts = nil
-	if p.backgroundSurface != nil {
-		_ = p.backgroundSurface.Close()
-		p.backgroundSurface = nil
-	}
-}
-
-func (a *App) prepareLiveConfig(next config.Config) (*preparedLiveConfig, error) {
-	return a.prepareLiveConfigWithProvenance(next, a.composedProvenance)
-}
-
 func (a *App) prepareLiveConfigWithProvenance(next config.Config, provenance []config.ProvenanceRecord) (*preparedLiveConfig, error) {
+	var projectionBase *config.Config
+	if a.restoreAppearance != nil {
+		base := next.Clone()
+		projectionBase = &base
+	}
+	next = a.configWithRestoreAppearance(next)
 	if err := next.Validate(); err != nil {
 		return nil, err
 	}
@@ -292,7 +266,7 @@ func (a *App) prepareLiveConfigWithProvenance(next config.Config, provenance []c
 	liveNext.Window.BackgroundOpacity = next.Window.BackgroundOpacity
 	newRaster := effectiveTextRasterFor(liveNext)
 	backgroundChanged := a.cfg.Colors.Background != next.Colors.Background || a.cfg.Window.BackgroundOpacity != next.Window.BackgroundOpacity || !reflect.DeepEqual(a.cfg.Background.Layers, next.Background.Layers)
-	prepared := &preparedLiveConfig{next: next, rasterChanged: a.atlas != nil && oldRaster != newRaster, backgroundChanged: backgroundChanged}
+	prepared := &preparedLiveConfig{next: next, projectionBase: projectionBase, rasterChanged: a.atlas != nil && oldRaster != newRaster, backgroundChanged: backgroundChanged}
 	if prepared.rasterChanged {
 		contexts, err := a.prepareRasterContexts(newRaster)
 		if err != nil {
@@ -392,6 +366,10 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 		}
 	}
 	next := prepared.next
+	if prepared.projectionBase != nil {
+		base := prepared.projectionBase.Clone()
+		a.projectionBaseConfig = &base
+	}
 	oldScrollbar := a.cfg.Scrollbar
 	oldTabBarHeight := a.effectiveTabBarHeight()
 	oldTabBarPosition := a.cfg.TabBar.Position

@@ -133,7 +133,7 @@ func (c *windowController) syncSharedProjectionState(owner *App) error {
 		if err := c.withCurrent(id, func() {
 			child.scriptRT = owner.scriptRT
 			child.scriptGeneration = owner.scriptGeneration
-			child.cfg = owner.cfg.Clone()
+			child.cfg = child.configWithRestoreAppearance(owner.projectionBase())
 			child.desiredCfg = owner.desiredCfg.Clone()
 			child.composedCfg = owner.composedCfg.Clone()
 			child.composedProvenance = append(child.composedProvenance[:0], owner.composedProvenance...)

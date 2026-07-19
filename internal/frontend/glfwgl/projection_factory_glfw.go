@@ -27,19 +27,25 @@ func (f *glfwProjectionFactory) Prepare() (bundle *nativeProjectionBundle, spec 
 	if f == nil || f.owner == nil || f.owner.controller == nil || f.owner.mux == nil {
 		return nil, spec, content, metrics, "", errWindowProjectionMissing
 	}
-	owner := f.owner
-	child := newProjectionApp(owner)
+	child := newProjectionApp(f.owner)
+	return f.prepareProjection(child, child.cfg.Window.Width, child.cfg.Window.Height, 0, 0, false, true)
+}
+
+func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, y int, position, initialGrid bool) (bundle *nativeProjectionBundle, spec termmux.SpawnSpec, content termmux.PixelRect, metrics termmux.CellMetrics, title string, err error) {
 	bundle = &nativeProjectionBundle{app: child}
 	fail := func(cause error) (*nativeProjectionBundle, termmux.SpawnSpec, termmux.PixelRect, termmux.CellMetrics, string, error) {
 		return bundle, spec, content, metrics, "", cause
 	}
 
-	owner.applyNativeWindowCreationHints()
-	window, createErr := glfw.CreateWindow(child.cfg.Window.Width, child.cfg.Window.Height, "CervTerm", nil, nil)
+	child.applyNativeWindowCreationHints()
+	window, createErr := glfw.CreateWindow(width, height, "CervTerm", nil, nil)
 	if createErr != nil {
 		return fail(createErr)
 	}
 	bundle.host, child.window = window, window
+	if position {
+		window.SetPos(x, y)
+	}
 	window.MakeContextCurrent()
 	if initErr := gl.Init(); initErr != nil {
 		return fail(initErr)
@@ -99,8 +105,10 @@ func (f *glfwProjectionFactory) Prepare() (bundle *nativeProjectionBundle, spec 
 	}))
 	child.ligaturesActive = atlas.supportsLigatures(child.cfg.Font.Ligatures)
 	child.cellW, child.cellH = float32(atlas.cellW), float32(atlas.cellH)
-	if gridErr := child.applyInitialGridWindowPlan(window, sx, sy); gridErr != nil {
-		return fail(gridErr)
+	if initialGrid {
+		if gridErr := child.applyInitialGridWindowPlan(window, sx, sy); gridErr != nil {
+			return fail(gridErr)
+		}
 	}
 	child.lastFBW, child.lastFBH = -1, -1
 	fbW, fbH := window.GetFramebufferSize()
@@ -123,11 +131,15 @@ func (f *glfwProjectionFactory) Prepare() (bundle *nativeProjectionBundle, spec 
 		child.needsRedraw = true
 		return nil
 	}
+	bundle.unbind = func() error {
+		child.windowID = 0
+		return nil
+	}
 	return bundle, spec, content, metrics, title, nil
 }
 
 func newProjectionApp(owner *App) *App {
-	cfg := owner.cfg.Clone()
+	cfg := owner.projectionBase()
 	child := &App{
 		cfg: cfg, desiredCfg: owner.desiredCfg.Clone(), composedCfg: owner.composedCfg.Clone(),
 		safeFonts: owner.safeFonts, composedProvenance: append([]config.ProvenanceRecord(nil), owner.composedProvenance...),
