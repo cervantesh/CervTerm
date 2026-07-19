@@ -75,7 +75,7 @@ func (m *Mux) SpawnTab(spec SpawnSpec, metrics CellMetrics, title string) (TabID
 	}
 	m.paneMetrics[paneID] = metrics
 	pane.capture()
-	return tabID, paneID, []Event{{Kind: TabSpawned, Tab: tabID, Pane: paneID, Text: title, Revision: 1}, {Kind: TabActivated, Tab: tabID, Pane: paneID, Revision: 1}, {Kind: PaneStarted, Tab: tabID, Pane: paneID}, {Kind: PaneFocused, Tab: tabID, Pane: paneID}}, nil
+	return tabID, paneID, m.ResolveEventAddresses([]Event{{Kind: TabSpawned, Tab: tabID, Pane: paneID, Text: title, Revision: 1}, {Kind: TabActivated, Tab: tabID, Pane: paneID, Revision: 1}, {Kind: PaneStarted, Tab: tabID, Pane: paneID}, {Kind: PaneFocused, Tab: tabID, Pane: paneID}}), nil
 }
 
 func (m *Mux) ActivateTab(id TabID) ([]Event, error) {
@@ -96,21 +96,21 @@ func (m *Mux) ActivateTab(id TabID) ([]Event, error) {
 	for i := range layoutEvents {
 		layoutEvents[i].Tab = id
 	}
-	return append(events, layoutEvents...), err
+	return m.ResolveEventAddresses(append(events, layoutEvents...)), err
 }
 func (m *Mux) RenameTab(id TabID, title string) ([]Event, error) {
 	if err := m.model.RenameTab(id, title); err != nil {
 		return nil, err
 	}
 	revision := m.model.tabByID(id).revision
-	return []Event{{Kind: TabRenamed, Tab: id, Text: title, Revision: revision}, {Kind: TabRevisionChanged, Tab: id, Revision: revision}}, nil
+	return m.ResolveEventAddresses([]Event{{Kind: TabRenamed, Tab: id, Text: title, Revision: revision}, {Kind: TabRevisionChanged, Tab: id, Revision: revision}}), nil
 }
 func (m *Mux) MoveTab(id TabID, position int) ([]Event, error) {
 	if err := m.model.MoveTab(id, position); err != nil {
 		return nil, err
 	}
 	revision := m.model.tabByID(id).revision
-	return []Event{{Kind: TabMoved, Tab: id, Data: []byte(fmt.Sprintf("%d", position)), Revision: revision}, {Kind: TabRevisionChanged, Tab: id, Revision: revision}}, nil
+	return m.ResolveEventAddresses([]Event{{Kind: TabMoved, Tab: id, Data: []byte(fmt.Sprintf("%d", position)), Revision: revision}, {Kind: TabRevisionChanged, Tab: id, Revision: revision}}), nil
 }
 
 // CloseTab atomically detaches ownership before closing each session once.
@@ -124,6 +124,8 @@ func (m *Mux) CloseTab(id TabID) ([]Event, error) {
 			return nil, invariantError("tab %d pane %d is not registry-owned", id, paneID)
 		}
 	}
+	window, _ := m.WindowForTab(id)
+	workspace, _ := m.WorkspaceForWindow(window)
 	detached, err := m.model.detachTab(id)
 	if err != nil {
 		return nil, err
@@ -148,7 +150,15 @@ func (m *Mux) CloseTab(id TabID) ([]Event, error) {
 	} else {
 		events = append(events, Event{Kind: TabActivated, Tab: detached.active, Pane: detached.focused}, Event{Kind: PaneFocused, Tab: detached.active, Pane: detached.focused})
 	}
-	return events, errors.Join(closeErrs...)
+	for i := range events {
+		if events[i].Window == 0 {
+			events[i].Window = window
+		}
+		if events[i].Workspace == 0 {
+			events[i].Workspace = workspace
+		}
+	}
+	return m.ResolveEventAddresses(events), errors.Join(closeErrs...)
 }
 
 // TransferPane atomically changes tree ownership without spawning, closing, or resizing a PTY.
@@ -181,14 +191,14 @@ func (m *Mux) TransferPane(pane PaneID, destinationTab TabID, destinationPane Pa
 	if len(activeLayout.Panes) > 0 {
 		layoutEvents, applyErr := m.applyLayout(activeLayout)
 		if applyErr != nil {
-			return events, applyErr
+			return m.ResolveEventAddresses(events), applyErr
 		}
 		for i := range layoutEvents {
 			layoutEvents[i].Tab = result.ActiveTab
 		}
 		events = append(events, layoutEvents...)
 	}
-	return events, nil
+	return m.ResolveEventAddresses(events), nil
 }
 
 func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {

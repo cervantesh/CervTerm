@@ -2,24 +2,29 @@ package mux
 
 // WindowView is a detached immutable projection of mux-owned window state.
 type WindowView struct {
-	ID       WindowID
-	Title    string
-	Tabs     []TabView
-	Active   bool
-	Revision uint64
+	ID        WindowID
+	Workspace WorkspaceID
+	Title     string
+	Tabs      []TabView
+	Active    bool
+	Revision  uint64
 }
 
 // CloseWindowResult reports detached ownership without creating or closing sessions.
 type CloseWindowResult struct {
-	Window      WindowID
-	Tabs        []TabID
-	Panes       []PaneID
-	Splits      []SplitID
-	Active      WindowID
-	ActiveTab   TabID
-	FocusedPane PaneID
-	Closed      bool
-	Empty       bool
+	Window           WindowID
+	Workspace        WorkspaceID
+	Tabs             []TabID
+	Panes            []PaneID
+	Splits           []SplitID
+	Active           WindowID
+	ActiveWorkspace  WorkspaceID
+	ActiveTab        TabID
+	FocusedPane      PaneID
+	Closed           bool
+	ActiveChanged    bool
+	WorkspaceChanged bool
+	Empty            bool
 }
 
 func (m *Model) Windows() []WindowView {
@@ -42,16 +47,17 @@ func (m *Model) windowView(w *windowState) WindowView {
 	for i := range w.tabs {
 		tabs[i] = tabView(&w.tabs[i], w.active)
 	}
-	return WindowView{ID: w.id, Title: w.title, Tabs: tabs, Active: w.id == m.activeWindow, Revision: w.revision}
+	return WindowView{ID: w.id, Workspace: w.workspace, Title: w.title, Tabs: tabs, Active: w.id == m.activeWindow, Revision: w.revision}
 }
 
 // WindowCreateToken is a non-published reservation proposal. Preparing and
 // aborting a token do not mutate the model; only CommitWindow consumes IDs.
 type WindowCreateToken struct {
-	window WindowID
-	tab    TabID
-	pane   PaneID
-	title  string
+	window    WindowID
+	workspace WorkspaceID
+	tab       TabID
+	pane      PaneID
+	title     string
 }
 
 func (t WindowCreateToken) WindowID() WindowID { return t.window }
@@ -68,7 +74,7 @@ func (m *Model) PrepareWindow(title string) (WindowCreateToken, error) {
 	if m.nextWindowID == 0 || m.nextTabID == 0 || m.nextPaneID == 0 {
 		return WindowCreateToken{}, ErrIDExhausted
 	}
-	return WindowCreateToken{window: m.nextWindowID, tab: m.nextTabID, pane: m.nextPaneID, title: title}, nil
+	return WindowCreateToken{window: m.nextWindowID, workspace: m.activeWorkspace, tab: m.nextTabID, pane: m.nextPaneID, title: title}, nil
 }
 
 func (m *Model) CommitWindow(token WindowCreateToken) (WindowView, error) {
@@ -82,10 +88,19 @@ func (m *Model) CommitWindow(token WindowCreateToken) (WindowView, error) {
 		return WindowView{}, ErrWindowLimitReached
 	}
 	previousActive := m.activeWindow
+	ws := m.workspaceByID(token.workspace)
+	if ws == nil || ws.id != m.activeWorkspace {
+		return WindowView{}, invariantError("window token workspace %d is not active", token.workspace)
+	}
+	previousWorkspace := *ws
+	previousWorkspace.windows = append([]WindowID(nil), ws.windows...)
 	m.windows = append(m.windows, windowState{
-		id: token.window, title: token.title, active: token.tab, revision: 1,
+		id: token.window, workspace: ws.id, title: token.title, active: token.tab, revision: 1,
 		tabs: []tabState{{id: token.tab, root: leafNode(token.pane), focused: token.pane, revision: 1}},
 	})
+	ws.windows = append(ws.windows, token.window)
+	ws.active = token.window
+	ws.revision++
 	m.activeWindow = token.window
 	m.allocatedWindows[token.window] = struct{}{}
 	m.allocatedTabs[token.tab] = struct{}{}
@@ -95,6 +110,7 @@ func (m *Model) CommitWindow(token WindowCreateToken) (WindowView, error) {
 	m.nextPaneID++
 	if err := m.CheckInvariants(); err != nil {
 		m.windows = m.windows[:len(m.windows)-1]
+		*ws = previousWorkspace
 		m.activeWindow = previousActive
 		delete(m.allocatedWindows, token.window)
 		delete(m.allocatedTabs, token.tab)
@@ -118,9 +134,18 @@ func (m *Model) CreateWindow(title string) (WindowView, error) {
 }
 
 func (m *Model) ActivateWindow(id WindowID) error {
-	if m.windowByID(id) == nil {
+	w := m.windowByID(id)
+	if w == nil {
 		return ErrWindowNotFound
 	}
+	if w.workspace != m.activeWorkspace {
+		return ErrWindowNotFound
+	}
+	ws := m.workspaceByID(w.workspace)
+	if ws.active != id {
+		ws.revision++
+	}
+	ws.active = id
 	m.activeWindow = id
 	return nil
 }
@@ -150,30 +175,72 @@ func (m *Model) CloseWindow(id WindowID) (CloseWindowResult, error) {
 		}
 	}
 	if index < 0 {
-		return CloseWindowResult{Window: id, Active: m.activeWindow, ActiveTab: m.TabID(), FocusedPane: m.FocusedPane(), Empty: len(m.windows) == 0}, nil
+		return CloseWindowResult{Window: id, ActiveWorkspace: m.activeWorkspace, Active: m.activeWindow, ActiveTab: m.TabID(), FocusedPane: m.FocusedPane(), Empty: len(m.windows) == 0}, nil
 	}
 	previousWindows := cloneWindowStates(m.windows)
 	previousActive := m.activeWindow
+	previousActiveWorkspace := m.activeWorkspace
+	previousWorkspaces := cloneWorkspaceStates(m.workspaces)
 	w := &m.windows[index]
-	result := CloseWindowResult{Window: id, Closed: true}
+	ws := m.workspaceByID(w.workspace)
+	if ws == nil {
+		return CloseWindowResult{}, invariantError("window %d has missing workspace %d", id, w.workspace)
+	}
+	workspaceIndex := -1
+	for i, candidate := range ws.windows {
+		if candidate == id {
+			workspaceIndex = i
+			break
+		}
+	}
+	if workspaceIndex < 0 {
+		return CloseWindowResult{}, invariantError("workspace %d does not own window %d", ws.id, id)
+	}
+	result := CloseWindowResult{Window: id, Workspace: w.workspace, Closed: true}
 	for i := range w.tabs {
 		result.Tabs = append(result.Tabs, w.tabs[i].id)
 		result.Panes = append(result.Panes, paneIDs(w.tabs[i].root)...)
 		collectSplitIDs(w.tabs[i].root, &result.Splits)
 	}
 	m.windows = append(m.windows[:index], m.windows[index+1:]...)
-	if len(m.windows) == 0 {
-		m.activeWindow = 0
-	} else if m.activeWindow == id {
-		if index >= len(m.windows) {
-			index = len(m.windows) - 1
+	ws.windows = append(ws.windows[:workspaceIndex], ws.windows[workspaceIndex+1:]...)
+	if ws.active == id {
+		ws.active = 0
+		if len(ws.windows) > 0 {
+			if workspaceIndex >= len(ws.windows) {
+				workspaceIndex = len(ws.windows) - 1
+			}
+			ws.active = ws.windows[workspaceIndex]
 		}
-		m.activeWindow = m.windows[index].id
 	}
+	ws.revision++
+	if m.activeWorkspace == ws.id {
+		m.activeWindow = ws.active
+	}
+	if m.activeWorkspace == ws.id && ws.active == 0 && len(m.windows) > 0 {
+		start := 0
+		for i := range m.workspaces {
+			if m.workspaces[i].id == ws.id {
+				start = i + 1
+				break
+			}
+		}
+		for offset := 0; offset < len(m.workspaces); offset++ {
+			candidate := &m.workspaces[(start+offset)%len(m.workspaces)]
+			if len(candidate.windows) > 0 {
+				candidate.revision++
+				m.activeWorkspace, m.activeWindow = candidate.id, candidate.active
+				break
+			}
+		}
+	}
+	result.ActiveWorkspace = m.activeWorkspace
+	result.WorkspaceChanged = previousActiveWorkspace != m.activeWorkspace
 	result.Active, result.ActiveTab, result.FocusedPane = m.activeWindow, m.TabID(), m.FocusedPane()
+	result.ActiveChanged = previousActive != m.activeWindow
 	result.Empty = len(m.windows) == 0
 	if err := m.CheckInvariants(); err != nil {
-		m.windows, m.activeWindow = previousWindows, previousActive
+		m.windows, m.activeWindow, m.activeWorkspace, m.workspaces = previousWindows, previousActive, previousActiveWorkspace, previousWorkspaces
 		return CloseWindowResult{}, err
 	}
 	return result, nil

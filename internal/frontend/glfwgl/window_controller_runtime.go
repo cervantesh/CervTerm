@@ -78,6 +78,9 @@ func (c *windowController) closeRuntimeProjection(id termmux.WindowID) (termmux.
 	}
 	result, events, runtimeErr := c.runtimeWindows.CloseWindow(id)
 	c.dispatch(events)
+	if !result.Closed {
+		return result, runtimeErr
+	}
 	return result, errors.Join(runtimeErr, c.closeProjection(id))
 }
 

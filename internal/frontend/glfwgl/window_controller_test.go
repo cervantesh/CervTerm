@@ -21,6 +21,8 @@ type fakeNativeWindow struct {
 
 func (w *fakeNativeWindow) MakeContextCurrent() { *w.log = append(*w.log, "current:"+w.id) }
 func (w *fakeNativeWindow) Focus()              { *w.log = append(*w.log, "focus:"+w.id) }
+func (w *fakeNativeWindow) Show()               { *w.log = append(*w.log, "show:"+w.id) }
+func (w *fakeNativeWindow) Hide()               { *w.log = append(*w.log, "hide:"+w.id) }
 func (w *fakeNativeWindow) ShouldClose() bool   { return w.close }
 func (w *fakeNativeWindow) Destroy()            { w.destroyed++; *w.log = append(*w.log, "destroy:"+w.id) }
 
@@ -279,11 +281,12 @@ func (f *fakeCandidateFactory) Prepare() (*nativeProjectionBundle, termmux.Spawn
 }
 
 type fakeRuntimeWindows struct {
-	log       *[]string
-	createErr error
-	closeErr  error
-	closed    int
-	next      termmux.WindowID
+	log           *[]string
+	createErr     error
+	closeErr      error
+	closeRejected bool
+	closed        int
+	next          termmux.WindowID
 }
 
 func (f *fakeRuntimeWindows) CreateWindow(termmux.SpawnSpec, termmux.PixelRect, termmux.CellMetrics, string) (termmux.WindowView, []termmux.Event, error) {
@@ -305,6 +308,9 @@ func (f *fakeRuntimeWindows) ActivateWindow(id termmux.WindowID) ([]termmux.Even
 func (f *fakeRuntimeWindows) CloseWindow(id termmux.WindowID) (termmux.CloseWindowResult, []termmux.Event, error) {
 	f.closed++
 	*f.log = append(*f.log, fmt.Sprintf("close-runtime:%d", id))
+	if f.closeRejected {
+		return termmux.CloseWindowResult{}, nil, f.closeErr
+	}
 	return termmux.CloseWindowResult{Closed: true, Empty: true}, []termmux.Event{{Kind: termmux.WindowClosed, Window: id}}, f.closeErr
 }
 
@@ -365,5 +371,23 @@ func TestWindowControllerRuntimeCreatePublishActivateAndCloseOrdering(t *testing
 	}
 	if host.destroyed != 1 || len(c.windows) != 0 {
 		t.Fatalf("destroyed=%d windows=%d", host.destroyed, len(c.windows))
+	}
+}
+
+func TestCloseRuntimeProjectionPreservesNativeOnDetachFailure(t *testing.T) {
+	var log []string
+	host := &fakeNativeWindow{id: "two", log: &log}
+	c := newWindowController(processServices{}, fakeNativePump{log: &log})
+	if err := c.attach(2, host, func([]termmux.Event) bool { return true }); err != nil {
+		t.Fatal(err)
+	}
+	runtimeErr := errors.New("detach failed")
+	c.setRuntimeWindows(&fakeRuntimeWindows{log: &log, closeErr: runtimeErr, closeRejected: true})
+	if err := c.startLoop(); err != nil {
+		t.Fatal(err)
+	}
+	result, err := c.closeRuntimeProjection(2)
+	if !errors.Is(err, runtimeErr) || result.Closed || c.windows[2] == nil || host.destroyed != 0 {
+		t.Fatalf("result=%#v err=%v projection=%#v destroyed=%d", result, err, c.windows[2], host.destroyed)
 	}
 }

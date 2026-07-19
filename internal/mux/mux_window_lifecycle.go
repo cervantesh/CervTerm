@@ -107,13 +107,13 @@ func (m *Mux) CreateWindow(spec SpawnSpec, content PixelRect, metrics CellMetric
 	m.paneMetrics[paneID] = metrics
 	p.capture()
 	events := []Event{
-		{Kind: WindowCreated, Window: view.ID, Tab: token.TabID(), Pane: paneID, Text: title, Revision: view.Revision},
-		{Kind: WindowActivated, Window: view.ID, Tab: token.TabID(), Pane: paneID, Revision: view.Revision},
-		{Kind: TabSpawned, Window: view.ID, Tab: token.TabID(), Pane: paneID, Revision: 1},
-		{Kind: TabActivated, Window: view.ID, Tab: token.TabID(), Pane: paneID, Revision: 1},
-		{Kind: PaneStarted, Window: view.ID, Tab: token.TabID(), Pane: paneID},
-		{Kind: PaneFocused, Window: view.ID, Tab: token.TabID(), Pane: paneID},
-		{Kind: PaneGeometryChanged, Window: view.ID, Tab: token.TabID(), Pane: paneID, Geometry: p.geometry},
+		{Kind: WindowCreated, Workspace: view.Workspace, Window: view.ID, Tab: token.TabID(), Pane: paneID, Text: title, Revision: view.Revision},
+		{Kind: WindowActivated, Workspace: view.Workspace, Window: view.ID, Tab: token.TabID(), Pane: paneID, Revision: view.Revision},
+		{Kind: TabSpawned, Workspace: view.Workspace, Window: view.ID, Tab: token.TabID(), Pane: paneID, Revision: 1},
+		{Kind: TabActivated, Workspace: view.Workspace, Window: view.ID, Tab: token.TabID(), Pane: paneID, Revision: 1},
+		{Kind: PaneStarted, Workspace: view.Workspace, Window: view.ID, Tab: token.TabID(), Pane: paneID},
+		{Kind: PaneFocused, Workspace: view.Workspace, Window: view.ID, Tab: token.TabID(), Pane: paneID},
+		{Kind: PaneGeometryChanged, Workspace: view.Workspace, Window: view.ID, Tab: token.TabID(), Pane: paneID, Geometry: p.geometry},
 	}
 	return view, events, nil
 }
@@ -123,7 +123,7 @@ func (m *Mux) ActivateWindow(id WindowID) ([]Event, error) {
 		return nil, err
 	}
 	view := m.model.ActiveWindow()
-	return []Event{{Kind: WindowActivated, Window: id, Tab: m.model.TabID(), Pane: m.model.FocusedPane(), Revision: view.Revision}, {Kind: TabActivated, Window: id, Tab: m.model.TabID(), Pane: m.model.FocusedPane()}, {Kind: PaneFocused, Window: id, Tab: m.model.TabID(), Pane: m.model.FocusedPane()}}, nil
+	return []Event{{Kind: WindowActivated, Workspace: view.Workspace, Window: id, Tab: m.model.TabID(), Pane: m.model.FocusedPane(), Revision: view.Revision}, {Kind: TabActivated, Workspace: view.Workspace, Window: id, Tab: m.model.TabID(), Pane: m.model.FocusedPane()}, {Kind: PaneFocused, Workspace: view.Workspace, Window: id, Tab: m.model.TabID(), Pane: m.model.FocusedPane()}}, nil
 }
 
 // CloseWindow publishes detachment first, then closes each detached session at
@@ -140,6 +140,10 @@ func (m *Mux) CloseWindow(id WindowID) (CloseWindowResult, []Event, error) {
 			}
 		}
 	}
+	workspace := WorkspaceID(0)
+	if view != nil {
+		workspace = view.workspace
+	}
 	result, err := m.model.CloseWindow(id)
 	if err != nil || !result.Closed {
 		return result, nil, err
@@ -155,16 +159,24 @@ func (m *Mux) CloseWindow(id WindowID) (CloseWindowResult, []Event, error) {
 		tabID, _ := tabForPaneInResult(view, paneID)
 		if closeErr := detached.pane.close(); closeErr != nil {
 			closeErrs = append(closeErrs, fmt.Errorf("pane %d close: %w", paneID, closeErr))
-			events = append(events, Event{Kind: PaneCloseFailed, Window: id, Tab: tabID, Pane: paneID, Err: closeErr})
+			events = append(events, Event{Kind: PaneCloseFailed, Workspace: workspace, Window: id, Tab: tabID, Pane: paneID, Err: closeErr})
 		}
-		events = append(events, Event{Kind: PaneClosed, Window: id, Tab: tabID, Pane: paneID})
+		events = append(events, Event{Kind: PaneClosed, Workspace: workspace, Window: id, Tab: tabID, Pane: paneID})
 	}
 	for _, tabID := range result.Tabs {
-		events = append(events, Event{Kind: TabClosed, Window: id, Tab: tabID})
+		events = append(events, Event{Kind: TabClosed, Workspace: workspace, Window: id, Tab: tabID})
 	}
-	events = append(events, Event{Kind: WindowClosed, Window: id})
-	if !result.Empty && result.Active != 0 {
-		events = append(events, Event{Kind: WindowActivated, Window: result.Active, SourceWindow: id, Tab: result.ActiveTab, Pane: result.FocusedPane}, Event{Kind: TabActivated, Window: result.Active, SourceWindow: id, Tab: result.ActiveTab, Pane: result.FocusedPane}, Event{Kind: PaneFocused, Window: result.Active, SourceWindow: id, Tab: result.ActiveTab, Pane: result.FocusedPane})
+	events = append(events, Event{Kind: WindowClosed, Workspace: workspace, Window: id})
+	if result.WorkspaceChanged {
+		activeWorkspace := m.model.ActiveWorkspace()
+		events = append(events, Event{Kind: WorkspaceActivated, Workspace: result.ActiveWorkspace, SourceWorkspace: workspace, Window: result.Active, Revision: activeWorkspace.Revision})
+	}
+	if result.ActiveChanged && !result.Empty && result.Active != 0 {
+		sourceWorkspace := WorkspaceID(0)
+		if result.WorkspaceChanged {
+			sourceWorkspace = workspace
+		}
+		events = append(events, Event{Kind: WindowActivated, Workspace: result.ActiveWorkspace, SourceWorkspace: sourceWorkspace, Window: result.Active, SourceWindow: id, Tab: result.ActiveTab, Pane: result.FocusedPane}, Event{Kind: TabActivated, Workspace: result.ActiveWorkspace, SourceWorkspace: sourceWorkspace, Window: result.Active, SourceWindow: id, Tab: result.ActiveTab, Pane: result.FocusedPane}, Event{Kind: PaneFocused, Workspace: result.ActiveWorkspace, SourceWorkspace: sourceWorkspace, Window: result.Active, SourceWindow: id, Tab: result.ActiveTab, Pane: result.FocusedPane})
 	}
 	return result, events, errors.Join(closeErrs...)
 }
@@ -238,4 +250,20 @@ func (m *Mux) WindowForPane(id PaneID) (WindowID, bool) {
 		return 0, false
 	}
 	return w.id, true
+}
+
+func (m *Mux) WindowForTab(id TabID) (WindowID, bool) {
+	w := m.model.windowForTab(id)
+	if w == nil {
+		return 0, false
+	}
+	return w.id, true
+}
+
+func (m *Mux) WorkspaceForWindow(id WindowID) (WorkspaceID, bool) {
+	w := m.model.windowByID(id)
+	if w == nil {
+		return 0, false
+	}
+	return w.workspace, true
 }
