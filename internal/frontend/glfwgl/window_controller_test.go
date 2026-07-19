@@ -4,6 +4,7 @@ package glfwgl
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ type fakeNativeWindow struct {
 }
 
 func (w *fakeNativeWindow) MakeContextCurrent() { *w.log = append(*w.log, "current:"+w.id) }
+func (w *fakeNativeWindow) Focus()              { *w.log = append(*w.log, "focus:"+w.id) }
 func (w *fakeNativeWindow) ShouldClose() bool   { return w.close }
 func (w *fakeNativeWindow) Destroy()            { w.destroyed++; *w.log = append(*w.log, "destroy:"+w.id) }
 
@@ -66,7 +68,7 @@ func TestWindowControllerSerializesContextEventsFrameAndClose(t *testing.T) {
 	if err := c.closeProjection(1); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"poll", "wait:25ms", "current:two", "frame:two", "current:one", "resources:one", "destroy:one"}
+	want := []string{"poll", "wait:25ms", "current:two", "frame:two", "focus:two", "current:one", "resources:one", "destroy:one"}
 	if !reflect.DeepEqual(log, want) || w1.destroyed != 1 {
 		t.Fatalf("log=%v destroyed=%d", log, w1.destroyed)
 	}
@@ -143,5 +145,113 @@ func TestWindowControllerRetainsEventsUntilProjectionAttaches(t *testing.T) {
 	}
 	if !c.dispatch(nil) || len(got) != 1 || got[0].Kind != event.Kind {
 		t.Fatalf("got=%#v pending=%#v", got, c.pending)
+	}
+}
+
+type fakeProjectionFactory struct {
+	log       *[]string
+	failStage int
+	created   map[termmux.WindowID]*fakeNativeWindow
+	stages    []string
+}
+
+func (f *fakeProjectionFactory) Create(id termmux.WindowID) (*nativeProjectionBundle, error) {
+	host := &fakeNativeWindow{id: fmt.Sprintf("%d", id), log: f.log}
+	bundle := &nativeProjectionBundle{host: host, handle: func([]termmux.Event) bool { return true }}
+	f.created[id] = host
+	for i, stage := range f.stages {
+		if i == f.failStage {
+			return bundle, fmt.Errorf("injected %s failure", stage)
+		}
+		name := stage
+		*f.log = append(*f.log, "open:"+name)
+		bundle.resources = append(bundle.resources, projectionResourceFunc(func() error {
+			*f.log = append(*f.log, "close:"+name)
+			return nil
+		}))
+	}
+	return bundle, nil
+}
+
+func projectionStages() []string {
+	return []string{"model", "native", "config", "callback", "context", "renderer", "atlas", "font", "background", "blur", "pty", "session"}
+}
+
+func TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication(t *testing.T) {
+	for fail, stage := range projectionStages() {
+		t.Run(stage, func(t *testing.T) {
+			var log []string
+			factory := &fakeProjectionFactory{log: &log, failStage: fail, created: make(map[termmux.WindowID]*fakeNativeWindow), stages: projectionStages()}
+			c := newWindowController(processServices{}, fakeNativePump{log: &log})
+			c.setProjectionFactory(factory)
+			if err := c.startLoop(); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.createProjection(2); err == nil {
+				t.Fatal("expected injected failure")
+			}
+			if len(c.windows) != 0 || len(c.order) != 0 || c.active != 0 || c.current != 0 {
+				t.Fatalf("failed candidate published: windows=%v order=%v", c.windows, c.order)
+			}
+			want := make([]string, 0, fail*2+1)
+			for _, opened := range projectionStages()[:fail] {
+				want = append(want, "open:"+opened)
+			}
+			for i := fail - 1; i >= 0; i-- {
+				want = append(want, "close:"+projectionStages()[i])
+			}
+			want = append(want, "destroy:2")
+			if !reflect.DeepEqual(log, want) {
+				t.Fatalf("log=%v want=%v", log, want)
+			}
+		})
+	}
+}
+
+func TestWindowControllerCreateFocusCloseLoopsOwnIndependentBundles(t *testing.T) {
+	var log []string
+	factory := &fakeProjectionFactory{log: &log, failStage: -1, created: make(map[termmux.WindowID]*fakeNativeWindow), stages: projectionStages()}
+	c := newWindowController(processServices{}, fakeNativePump{log: &log})
+	c.setProjectionFactory(factory)
+	if err := c.startLoop(); err != nil {
+		t.Fatal(err)
+	}
+	for id := termmux.WindowID(1); id <= 3; id++ {
+		if err := c.createProjection(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.focus(2); err != nil {
+		t.Fatal(err)
+	}
+	c.clearDamage(1)
+	c.clearDamage(2)
+	c.clearDamage(3)
+	event := termmux.Event{Kind: termmux.PaneOutput, Window: 2}
+	if !c.dispatch([]termmux.Event{event}) || c.windows[1].dirty || !c.windows[2].dirty || c.windows[3].dirty {
+		t.Fatalf("addressed damage leaked: one=%v two=%v three=%v", c.windows[1].dirty, c.windows[2].dirty, c.windows[3].dirty)
+	}
+	if err := c.closeProjection(2); err != nil {
+		t.Fatal(err)
+	}
+	if factory.created[1].destroyed != 0 || factory.created[2].destroyed != 1 || factory.created[3].destroyed != 0 {
+		t.Fatalf("sibling close leakage: %#v", factory.created)
+	}
+	if c.active != 1 || len(c.windows) != 2 {
+		t.Fatalf("fallback active=%d windows=%d", c.active, len(c.windows))
+	}
+	if err := c.closeProjection(1); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.closeProjection(3); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.windows) != 0 || len(c.order) != 0 || c.active != 0 || c.current != 0 {
+		t.Fatalf("controller not empty: windows=%v order=%v active=%d current=%d", c.windows, c.order, c.active, c.current)
+	}
+	wantLast := []string{"current:3", "close:session", "close:pty", "close:blur", "close:background", "close:font", "close:atlas", "close:renderer", "close:context", "close:callback", "close:config", "close:native", "close:model", "destroy:3"}
+	last := log[len(log)-len(wantLast):]
+	if !reflect.DeepEqual(last, wantLast) {
+		t.Fatalf("final close order=%v want=%v", last, wantLast)
 	}
 }
