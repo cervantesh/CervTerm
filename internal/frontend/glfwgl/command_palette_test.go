@@ -34,6 +34,26 @@ func TestCommandPaletteSnapshotIsBoundedDiscoverableAndSorted(t *testing.T) {
 	}
 }
 
+func TestCommandPaletteDiscoversSafeWindowActionsOnly(t *testing.T) {
+	a := newRunningMuxTestApp(t)
+	a.windowID = 1
+	entries, _ := a.commandPaletteSnapshot(true)
+	found := map[string]bool{}
+	for _, entry := range entries {
+		found[entry.ID] = true
+	}
+	for _, id := range []termaction.ID{termaction.IDNewWindow, termaction.IDCloseWindow, termaction.IDFocusWindow} {
+		if !found["action:"+string(id)] {
+			t.Fatalf("safe window action %s missing", id)
+		}
+	}
+	for _, id := range []termaction.ID{termaction.IDMoveTabToWindow, termaction.IDMovePaneToWindow} {
+		if found["action:"+string(id)] {
+			t.Fatalf("parameterized window action %s exposed", id)
+		}
+	}
+}
+
 func TestCommandPaletteOpensAndSuccessfulActionCloses(t *testing.T) {
 	a := newRunningMuxTestApp(t)
 	if err := a.openCommandPalette(); err != nil {

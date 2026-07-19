@@ -34,6 +34,7 @@ func installActionModule(state *lua.LState, module *lua.LTable) {
 	setActionConstant(state, actions, "ResetFontSize", termaction.Zoom{Mode: termaction.ZoomReset})
 	setActionConstant(state, actions, "NewTab", termaction.NewTab{})
 	setActionConstant(state, actions, "ActivateTabSwitcher", termaction.ActivateTabSwitcher{})
+	setActionConstant(state, actions, "NewWindow", termaction.NewWindow{})
 
 	actions.RawSetString("ScrollLines", state.NewFunction(func(l *lua.LState) int {
 		pushLuaAction(l, termaction.Scroll{Unit: termaction.ScrollLine, Amount: checkLuaActionInt(l, 1)}, termaction.TargetFocused)
@@ -93,6 +94,22 @@ func installActionModule(state *lua.LState, module *lua.LTable) {
 	}))
 	actions.RawSetString("MovePaneToTab", state.NewFunction(func(l *lua.LState) int {
 		pushLuaAction(l, termaction.MovePaneToTab{TabID: checkLuaTabID(l, 1), Axis: termaction.SplitAxis(l.CheckString(2))}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("CloseWindow", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.CloseWindow{WindowID: checkLuaWindowID(l, 1)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("FocusWindow", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.FocusWindow{WindowID: checkLuaWindowID(l, 1)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("MoveTabToWindow", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.MoveTabToWindow{WindowID: checkLuaWindowID(l, 1), TabID: checkLuaTabID(l, 2), Position: checkLuaActionInt(l, 3)}, termaction.TargetFocused)
+		return 1
+	}))
+	actions.RawSetString("MovePaneToWindow", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.MovePaneToWindow{WindowID: checkLuaWindowID(l, 1), PaneID: checkLuaTabID(l, 2), Axis: termaction.SplitAxis(l.CheckString(3))}, termaction.TargetFocused)
 		return 1
 	}))
 	actions.RawSetString("Multiple", state.NewFunction(func(l *lua.LState) int {
@@ -186,4 +203,8 @@ func checkLuaTabID(state *lua.LState, index int) uint64 {
 		state.ArgError(index, fmt.Sprintf("positive safe integer in [1, %d] expected", maxSafeInteger))
 	}
 	return uint64(value)
+}
+
+func checkLuaWindowID(state *lua.LState, index int) uint64 {
+	return checkLuaTabID(state, index)
 }

@@ -36,6 +36,11 @@ const (
 	IDCloseTab               ID = "close_tab"
 	IDMovePaneToTab          ID = "move_pane_to_tab"
 	IDActivateTabSwitcher    ID = "activate_tab_switcher"
+	IDNewWindow              ID = "new_window"
+	IDCloseWindow            ID = "close_window"
+	IDFocusWindow            ID = "focus_window"
+	IDMoveTabToWindow        ID = "move_tab_to_window"
+	IDMovePaneToWindow       ID = "move_pane_to_window"
 )
 
 var (
@@ -350,6 +355,16 @@ func actionIdentity(action Action) (ID, error) {
 		return IDMovePaneToTab, nil
 	case ActivateTabSwitcher:
 		return IDActivateTabSwitcher, nil
+	case NewWindow:
+		return IDNewWindow, nil
+	case CloseWindow:
+		return IDCloseWindow, nil
+	case FocusWindow:
+		return IDFocusWindow, nil
+	case MoveTabToWindow:
+		return IDMoveTabToWindow, nil
+	case MovePaneToWindow:
+		return IDMovePaneToWindow, nil
 	case ClosePane:
 		return IDClosePane, nil
 	case Multiple:
