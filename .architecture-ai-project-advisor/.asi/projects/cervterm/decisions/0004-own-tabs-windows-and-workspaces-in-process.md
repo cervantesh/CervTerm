@@ -1,7 +1,7 @@
 # ADR: Own tabs, windows, and workspaces in process
 
 ## Status
-Proposed
+Accepted
 
 ## Date
 2026-07-16
@@ -27,3 +27,7 @@ Ownership diagram, lifecycle table, move/close failure behavior, OS-thread model
 
 ## Reversal Signals
 The window toolkit cannot support multiple windows under one serialized owner, or pane movement cannot preserve lifecycle safely.
+
+## Acceptance Evidence
+
+Implemented and validated across Phases 8–9 through PR #202: process-owned mux window/tab/workspace identity, singular session registry ownership, OS-thread native projection controller, transactional cross-window moves, fake-host failure rollback, and one-window compatibility. See `docs/validation/phase-8-visible-tabs.md` and `docs/validation/phase-9-windows-workspaces-layout-persistence.md`.

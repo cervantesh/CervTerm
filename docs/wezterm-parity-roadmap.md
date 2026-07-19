@@ -206,18 +206,22 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 9 — Multiple Windows and Local Workspaces
 **Scope:** multiple native windows in one process, named local workspaces, layout-only persistence.
 
+**Status:** complete on `main` through PR #202.
+
 **Work**
 - Complete ADR-0004 and accept ADR-0007.
 - Add process-level window controller; each native window projects one mux window.
 - Support new/close/focus window and moving tabs/panes between windows.
 - Add named workspace membership/switching/renaming.
 - Persist versioned window bounds, tab order, split ratios, cwd/launch descriptors, and appearance overrides only.
-- Restore by spawning new local sessions; never serialize processes, PTY handles, credentials, or scrollback by default.
+- Restore by spawning new local sessions; never serialize processes, PTY handles, environment maps, dedicated credential fields, or scrollback by default.
 - Keep native/OpenGL calls on the OS thread.
 
 **Success:** windows have independent focus/chrome; moves preserve pane identity/session ownership; corrupt/old layouts fail safely; restore never claims live-session continuity.
 
-**Tests:** model invariants, fake host/session lifecycle, persistence migrations/corruption, monitor/DPI bounds recovery, OS-thread assertions.
+**Tests:** model invariants, fake host/session lifecycle, version rejection/migration policy/corruption, monitor/DPI bounds recovery, OS-thread assertions.
+
+**Evidence:** process mux/native controller, typed window/workspace actions and switcher, versioned codec/store/bounds recovery, transactional fresh-session restore, lifecycle save integration, and `docs/validation/phase-9-windows-workspaces-layout-persistence.md`.
 
 **Rollback:** disable restore and fall back to one fresh window; persisted file is non-authoritative.
 
