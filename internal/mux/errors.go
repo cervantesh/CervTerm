@@ -26,6 +26,7 @@ var (
 	ErrTabLimitReached     = errors.New("mux: tab limit reached")
 	ErrInvalidTabPosition  = errors.New("mux: invalid tab position")
 	ErrSameTabTransfer     = errors.New("mux: pane transfer requires different tabs")
+	ErrSameWindowTransfer  = errors.New("mux: tab transfer requires different windows")
 	ErrInvariant           = errors.New("mux: invariant violation")
 	ErrShuttingDown        = errors.New("mux: shutting down")
 )
