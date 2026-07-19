@@ -202,6 +202,21 @@ func (r *localSessionRegistry) detach(id PaneID) detachResult {
 	return detachResult{pane: p, owned: true}
 }
 
+// abort detaches an unpublished pane without recording its proposed identity
+// as closed. Stale reader ingress is rejected by owner identity in Mux.Drain.
+func (r *localSessionRegistry) abort(id PaneID, expected *pane) detachResult {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, owned := r.panes[id]
+	if !owned || p != expected {
+		return detachResult{}
+	}
+	delete(r.panes, id)
+	delete(r.started, id)
+	delete(r.reserved, id)
+	return detachResult{pane: p, owned: true}
+}
+
 func (r *localSessionRegistry) shutdownRegistry() error {
 	r.mu.Lock()
 	if r.shuttingDown {
