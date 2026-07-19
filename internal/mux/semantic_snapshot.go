@@ -33,3 +33,39 @@ func (m *Mux) SemanticSnapshotCurrent(snapshot SemanticSnapshot) bool {
 		p.contentGen == snapshot.ContentGen &&
 		p.reflowGen == snapshot.ReflowGen && p.viewportGen == snapshot.ViewportGen
 }
+
+func (m *Mux) SemanticRangeText(snapshot SemanticSnapshot, target core.SemanticRange) (string, error) {
+	if !m.SemanticSnapshotCurrent(snapshot) {
+		return "", ErrSemanticSnapshotStale
+	}
+	found := false
+	for _, candidate := range snapshot.Ranges {
+		if candidate == target {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return "", ErrSemanticRangeUnavailable
+	}
+	p, ok := m.sessions.lookup(snapshot.PaneID)
+	if !ok || !m.model.paneExists(snapshot.PaneID) {
+		return "", ErrPaneNotFound
+	}
+	currentRanges, _ := p.terminal.SemanticHistory()
+	currentFound := false
+	for _, candidate := range currentRanges {
+		if candidate == target {
+			currentFound = true
+			break
+		}
+	}
+	if !currentFound {
+		return "", ErrSemanticRangeUnavailable
+	}
+	text, ok := p.terminal.SemanticRangeText(target)
+	if !ok {
+		return "", ErrSemanticRangeUnavailable
+	}
+	return text, nil
+}

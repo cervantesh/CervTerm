@@ -209,6 +209,7 @@ return {
   -- keys = {
   --   -- Typed actions are validated while loading and share built-in behavior:
   --   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
+  --   { key = "o", mods = "ctrl+shift", action = cervterm.action.CopySemanticZone("output") },
   --   { key = "p", mods = "ctrl+shift", action = cervterm.action.ActivateCommandPalette },
   --   { key = "q", mods = "ctrl+shift", action = cervterm.action.ActivateQuickSelect },
   --   { key = "l", mods = "ctrl+shift", action = cervterm.action.ActivateLaunchMenu },
