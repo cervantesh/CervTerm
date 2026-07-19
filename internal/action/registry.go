@@ -176,6 +176,7 @@ func DefaultRegistry() *Registry {
 	defaultRegistryOnce.Do(func() {
 		defaultRegistry = mustRegistry(
 			registration{descriptor: metadata(IDCopySelection, "Copy selection", CategoryClipboard, TargetPane, true, true, pressAndRepeat), codec: simpleCodec(CopySelection{})},
+			registration{descriptor: metadata(IDCopySemanticZone, "Copy semantic zone", CategoryClipboard, TargetPane, true, false, pressAndRepeat), codec: copySemanticZoneCodec},
 			registration{descriptor: metadata(IDPasteClipboard, "Paste clipboard", CategoryClipboard, TargetPane, true, true, pressAndRepeat), codec: simpleCodec(PasteClipboard{})},
 			registration{descriptor: metadata(IDToggleSearch, "Toggle search", CategorySearch, TargetPane, true, true, pressAndRepeat), codec: simpleCodec(ToggleSearch{})},
 			registration{descriptor: metadata(IDActivateCommandPalette, "Activate command palette", CategoryCommand, TargetOptional, true, true, pressOnly), codec: simpleCodec(ActivateCommandPalette{})},

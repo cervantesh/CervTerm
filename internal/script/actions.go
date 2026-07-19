@@ -37,6 +37,10 @@ func installActionModule(state *lua.LState, module *lua.LTable) {
 	setActionConstant(state, actions, "NewWindow", termaction.NewWindow{})
 	setActionConstant(state, actions, "ActivateWorkspaceSwitcher", termaction.ActivateWorkspaceSwitcher{})
 
+	actions.RawSetString("CopySemanticZone", state.NewFunction(func(l *lua.LState) int {
+		pushLuaAction(l, termaction.CopySemanticZone{Zone: termaction.SemanticZone(l.CheckString(1))}, termaction.TargetFocused)
+		return 1
+	}))
 	actions.RawSetString("ScrollLines", state.NewFunction(func(l *lua.LState) int {
 		pushLuaAction(l, termaction.Scroll{Unit: termaction.ScrollLine, Amount: checkLuaActionInt(l, 1)}, termaction.TargetFocused)
 		return 1

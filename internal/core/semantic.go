@@ -85,6 +85,18 @@ func (t *Terminal) semanticPhysicalRow(global int) []Cell {
 	return t.cells[row*t.cols : (row+1)*t.cols]
 }
 
+func (t *Terminal) semanticPhysicalRowWrapped(global int) bool {
+	if global < 0 || global >= t.scrollbackRows+t.rows {
+		return false
+	}
+	if global < t.scrollbackRows {
+		source := (t.scrollbackStart + global) % t.scrollbackCapacity
+		return len(t.scrollbackWrapped) == t.scrollbackCapacity && t.scrollbackWrapped[source]
+	}
+	row := global - t.scrollbackRows
+	return row >= 0 && row < len(t.rowWrapped) && t.rowWrapped[row]
+}
+
 func (t *Terminal) SemanticHistory() (ranges []SemanticRange, truncated bool) {
 	totalRows := t.scrollbackRows + t.rows
 	if totalRows == 0 || t.cols <= 0 {
@@ -148,5 +160,6 @@ func (t *Terminal) stampBlankSemanticRow() {
 			return
 		}
 	}
+	row[0].Rune = 0 // metadata-only blank-line sentinel; never rendered or copied as text
 	row[0].SemanticKind = t.consumeSemanticCell()
 }

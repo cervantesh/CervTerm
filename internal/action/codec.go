@@ -96,6 +96,9 @@ type scrollArgs struct {
 type scrollToPromptArgs struct {
 	Delta int `json:"delta"`
 }
+type copySemanticZoneArgs struct {
+	Zone SemanticZone `json:"zone"`
+}
 type zoomArgs struct {
 	Mode   ZoomMode `json:"mode"`
 	Amount float64  `json:"amount"`

@@ -14,6 +14,7 @@ func focused(action Action) Envelope {
 func TestActionsValidate(t *testing.T) {
 	valid := []Action{
 		CopySelection{}, PasteClipboard{}, ToggleSearch{}, ToggleStats{}, ActivateCommandPalette{}, ActivateQuickSelect{}, ActivateLaunchMenu{}, ReloadConfig{}, ClosePane{},
+		CopySemanticZone{Zone: SemanticZoneInput}, CopySemanticZone{Zone: SemanticZoneOutput},
 		Scroll{Unit: ScrollLine, Amount: 1}, Scroll{Unit: ScrollPage, Amount: -2}, Scroll{Unit: ScrollBuffer, Amount: 1},
 		ScrollToPrompt{Delta: -1}, ScrollToPrompt{Delta: 1},
 		Zoom{Mode: ZoomDelta, Amount: -1}, Zoom{Mode: ZoomReset},
@@ -37,6 +38,7 @@ func TestActionValidationErrors(t *testing.T) {
 		action Action
 		want   string
 	}{
+		{name: "semantic zone", action: CopySemanticZone{Zone: "prompt"}, want: "input or output"},
 		{name: "scroll unit", action: Scroll{Unit: "pixel", Amount: 1}, want: "unit"},
 		{name: "scroll zero", action: Scroll{Unit: ScrollLine}, want: "zero"},
 		{name: "buffer amount", action: Scroll{Unit: ScrollBuffer, Amount: 2}, want: "-1 or 1"},

@@ -70,6 +70,7 @@ return { keys = {
       term:notify("legacy callback still supported")
     end },
   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
+  { key = "o", mods = "ctrl+shift", action = cervterm.action.CopySemanticZone("output") },
   { key = "p", mods = "ctrl+shift", action = cervterm.action.ActivateCommandPalette },
   { key = "q", mods = "ctrl+shift", action = cervterm.action.ActivateQuickSelect },
   { key = "l", mods = "ctrl+shift", action = cervterm.action.ActivateLaunchMenu },
@@ -86,7 +87,7 @@ return { keys = {
 } }
 ```
 
-Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ActivateLaunchMenu`, `ReloadConfig`, `ClosePane`, `ResetFontSize`, `NewTab`, `ActivateTabSwitcher`, and `NewWindow`. Constructors include `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `ScrollToPrompt(-1|1)`, `Zoom(delta)`, pane actions, tab actions, `CloseWindow(window_id)`, `FocusWindow(window_id)`, `MoveTabToWindow(window_id, tab_id, position)`, `MovePaneToWindow(window_id, pane_id, "columns"|"rows")`, and `Multiple({...})`. Window, tab, and pane IDs are stable process-local positive integers; missing or stale explicit targets fail without falling back to the focused window. `WithTarget(action, "origin")` is also available.
+Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ActivateLaunchMenu`, `ReloadConfig`, `ClosePane`, `ResetFontSize`, `NewTab`, `ActivateTabSwitcher`, and `NewWindow`. Constructors include `CopySemanticZone("input"|"output")`, `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `ScrollToPrompt(-1|1)`, `Zoom(delta)`, pane actions, tab actions, `CloseWindow(window_id)`, `FocusWindow(window_id)`, `MoveTabToWindow(window_id, tab_id, position)`, `MovePaneToWindow(window_id, pane_id, "columns"|"rows")`, and `Multiple({...})`. Window, tab, and pane IDs are stable process-local positive integers; missing or stale explicit targets fail without falling back to the focused window. `WithTarget(action, "origin")` is also available.
 
 Arguments are validated during config loading. Typed actions use registry press/repeat policy. Function callbacks preserve legacy behavior: they execute on press, consume repeat without executing, and run through the existing watchdog.
 
