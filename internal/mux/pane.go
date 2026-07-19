@@ -84,8 +84,13 @@ func (p *pane) startReader(ctx context.Context, incoming chan<- ingressRecord, w
 	if p.session == nil {
 		return
 	}
-	reader := p.session.Reader()
 	readers.Add(1)
+	p.launchReader(ctx, incoming, wake, readers)
+}
+
+// launchReader starts a reader whose WaitGroup slot has already been reserved.
+func (p *pane) launchReader(ctx context.Context, incoming chan<- ingressRecord, wake func(), readers *sync.WaitGroup) {
+	reader := p.session.Reader()
 	go func() {
 		defer readers.Done()
 		buf := make([]byte, 32*1024)

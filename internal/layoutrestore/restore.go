@@ -104,6 +104,9 @@ func Prepare(plan layoutstate.Plan, options Options) (Blueprint, error) {
 	if _, err := layoutstate.NewPlan(document); err != nil {
 		return Blueprint{}, fmt.Errorf("layoutrestore: plan: %w", err)
 	}
+	if document.ActiveWorkspace < 0 || document.ActiveWorkspace >= len(document.Workspaces) || len(document.Workspaces[document.ActiveWorkspace].Windows) == 0 {
+		return Blueprint{}, fmt.Errorf("layoutrestore: active workspace has no usable window")
+	}
 	options = cloneOptions(options)
 	if err := validateTargets(options.Targets); err != nil {
 		return Blueprint{}, err

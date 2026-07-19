@@ -131,3 +131,16 @@ func TestPublicLaunchTypesHaveNoEnv(t *testing.T) {
 		}
 	}
 }
+
+func TestPrepareRejectsActiveEmptyWorkspace(t *testing.T) {
+	document := testPlan(t).Snapshot()
+	document.Workspaces = append([]layoutstate.Workspace{{Name: "empty", ActiveWindow: -1, Windows: []layoutstate.Window{}}}, document.Workspaces...)
+	document.ActiveWorkspace = 0
+	plan, err := layoutstate.NewPlan(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Prepare(plan, testOptions()); err == nil || !strings.Contains(err.Error(), "no usable window") {
+		t.Fatalf("err=%v", err)
+	}
+}

@@ -34,6 +34,10 @@ var (
 	ErrSameWindowTransfer    = errors.New("mux: tab transfer requires different windows")
 	ErrInvariant             = errors.New("mux: invariant violation")
 	ErrShuttingDown          = errors.New("mux: shutting down")
+	ErrRestorePending        = errors.New("mux: restore candidate already pending")
+	ErrRestorePrecondition   = errors.New("mux: restore requires pristine startup state")
+	ErrInvalidRestore        = errors.New("mux: invalid restore candidate")
+	ErrRestoreCommitted      = errors.New("mux: restore candidate already committed")
 )
 
 func invariantError(format string, args ...any) error {
