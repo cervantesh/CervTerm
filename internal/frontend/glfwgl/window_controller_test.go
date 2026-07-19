@@ -13,10 +13,12 @@ import (
 )
 
 type fakeNativeWindow struct {
-	id        string
-	log       *[]string
-	close     bool
-	destroyed int
+	id            string
+	log           *[]string
+	close         bool
+	destroyed     int
+	x, y          int
+	width, height int
 }
 
 func (w *fakeNativeWindow) MakeContextCurrent() { *w.log = append(*w.log, "current:"+w.id) }
@@ -25,6 +27,17 @@ func (w *fakeNativeWindow) Show()               { *w.log = append(*w.log, "show:
 func (w *fakeNativeWindow) Hide()               { *w.log = append(*w.log, "hide:"+w.id) }
 func (w *fakeNativeWindow) ShouldClose() bool   { return w.close }
 func (w *fakeNativeWindow) Destroy()            { w.destroyed++; *w.log = append(*w.log, "destroy:"+w.id) }
+func (w *fakeNativeWindow) GetPos() (int, int)  { return w.x, w.y }
+func (w *fakeNativeWindow) GetSize() (int, int) {
+	width, height := w.width, w.height
+	if width <= 0 {
+		width = 800
+	}
+	if height <= 0 {
+		height = 480
+	}
+	return width, height
+}
 
 type fakeNativePump struct{ log *[]string }
 

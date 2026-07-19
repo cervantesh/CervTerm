@@ -37,6 +37,8 @@ type nativeWindowHost interface {
 	Hide()
 	ShouldClose() bool
 	Destroy()
+	GetPos() (int, int)
+	GetSize() (int, int)
 }
 
 type nativeEventPump interface {
@@ -101,6 +103,7 @@ type windowController struct {
 	candidateFactory nativeProjectionCandidateFactory
 	runtimeWindows   runtimeWindowLifecycle
 	restoreWindows   restoreWindowLifecycle
+	persistLayout    func() error
 	windows          map[termmux.WindowID]*windowProjection
 	pending          map[termmux.WindowID][]termmux.Event
 	order            []termmux.WindowID
@@ -345,6 +348,9 @@ func (c *windowController) dispatch(events []termmux.Event) bool {
 			projection.dirty, consumed = true, true
 		}
 	}
+	if c.persistLayout != nil && layoutPersistenceEvent(events) {
+		logControllerError(c.persistLayout())
+	}
 	return consumed
 }
 
@@ -450,6 +456,12 @@ func (a *App) syncProcessServices() {
 			a.controller.setRuntimeWindows(a.mux)
 		}
 		a.controller.setCandidateProjectionFactory(&glfwProjectionFactory{owner: a})
+		if a.cfg.LayoutPersistence.Enabled {
+			c := a.controller
+			c.persistLayout = a.persistCurrentLayout
+		} else {
+			a.controller.persistLayout = nil
+		}
 	}
 }
 
