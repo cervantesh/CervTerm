@@ -22,6 +22,7 @@ type fakeRestoreProjectionFactory struct {
 	failAt     int
 	bindAt     int
 	hosts      []*fakeNativeWindow
+	apps       []*App
 	geometries []termmux.RestoreWindowGeometry
 	bindings   map[int]termmux.WindowID
 }
@@ -30,7 +31,9 @@ func (f *fakeRestoreProjectionFactory) PrepareRestore(index int) (*nativeProject
 	*f.log = append(*f.log, fmt.Sprintf("prepare:%d", index))
 	host := &fakeNativeWindow{id: fmt.Sprintf("restore-%d", index), log: f.log}
 	f.hosts = append(f.hosts, host)
-	bundle := &nativeProjectionBundle{host: host, handle: func([]termmux.Event) bool { return true }}
+	app := &App{}
+	f.apps = append(f.apps, app)
+	bundle := &nativeProjectionBundle{host: host, app: app, handle: func([]termmux.Event) bool { return true }}
 	bundle.bind = func(id termmux.WindowID) error {
 		*f.log = append(*f.log, fmt.Sprintf("bind:%d:%d", index, id))
 		if f.bindings == nil {
@@ -370,5 +373,72 @@ func TestWindowControllerRestoreStartupWithRealMuxPublishesWorkspaceVisibilityAn
 		if err := controller.closeProjection(id); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var log []string
+		factory := &fakeRestoreProjectionFactory{log: &log, failAt: -1, bindAt: -1}
+		windows := &fakeRestoreWindows{log: &log}
+		controller := newRestoreProjectionController(t, &log)
+		controller.setRestoreWindows(windows)
+		err := controller.restoreStartupProjectionsBeforeMux(twoWindowRestoreBlueprint(t), factory, func() error { log = append(log, "config-commit"); return nil })
+		if err != nil {
+			t.Fatal(err)
+		}
+		commitIndex, prepareIndex := -1, -1
+		for index, entry := range log {
+			if entry == "config-commit" {
+				commitIndex = index
+			}
+			if entry == "mux-prepare" {
+				prepareIndex = index
+			}
+		}
+		if commitIndex < 0 || prepareIndex < 0 || commitIndex >= prepareIndex {
+			t.Fatalf("ordering log=%v", log)
+		}
+		ids := append([]termmux.WindowID(nil), controller.order...)
+		for _, id := range ids {
+			_ = controller.closeProjection(id)
+		}
+	})
+	t.Run("failure", func(t *testing.T) {
+		var log []string
+		factory := &fakeRestoreProjectionFactory{log: &log, failAt: -1, bindAt: -1}
+		windows := &fakeRestoreWindows{log: &log}
+		controller := newRestoreProjectionController(t, &log)
+		controller.setRestoreWindows(windows)
+		hookErr := errors.New("config commit")
+		err := controller.restoreStartupProjectionsBeforeMux(twoWindowRestoreBlueprint(t), factory, func() error { return hookErr })
+		if !errors.Is(err, hookErr) || !errors.Is(err, errRestoreBeforeMuxHook) {
+			t.Fatalf("err=%v", err)
+		}
+		assertRestoreProjectionPristine(t, controller, factory.hosts)
+		if windows.candidate != nil || windows.aborts != 0 {
+			t.Fatalf("mux touched candidate=%p aborts=%d", windows.candidate, windows.aborts)
+		}
+	})
+}
+
+func TestWindowControllerSyncsPendingRestoreAppsAfterRuntimeCommit(t *testing.T) {
+	var log []string
+	factory := &fakeRestoreProjectionFactory{log: &log, failAt: -1, bindAt: -1}
+	controller := newRestoreProjectionController(t, &log)
+	candidate, err := controller.prepareRestoreProjections(factory, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := factory.apps[0]
+	owner.scriptGeneration = 7
+	if err := controller.syncPendingRestoreApps(owner); err != nil {
+		t.Fatal(err)
+	}
+	if factory.apps[1].scriptGeneration != 7 {
+		t.Fatalf("secondary generation=%d", factory.apps[1].scriptGeneration)
+	}
+	if err := controller.abortRestoreProjections(candidate, nil); err != nil {
+		t.Fatal(err)
 	}
 }

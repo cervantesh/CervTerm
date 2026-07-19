@@ -11,6 +11,7 @@ import (
 )
 
 var errRestoreProjectionTransaction = errors.New("invalid restore projection transaction")
+var errRestoreBeforeMuxHook = errors.New("restore before-mux hook failed")
 
 // nativeRestoreProjectionFactory prepares one hidden native projection in
 // persisted workspace/window traversal order.
@@ -30,6 +31,10 @@ func (c *windowController) setRestoreWindows(windows restoreWindowLifecycle) {
 }
 
 func (c *windowController) restoreStartupProjections(blueprint layoutrestore.Blueprint, factory nativeRestoreProjectionFactory) error {
+	return c.restoreStartupProjectionsBeforeMux(blueprint, factory, nil)
+}
+
+func (c *windowController) restoreStartupProjectionsBeforeMux(blueprint layoutrestore.Blueprint, factory nativeRestoreProjectionFactory, beforeMux func() error) error {
 	if c.restoreWindows == nil {
 		return errRestoreProjectionTransaction
 	}
@@ -41,6 +46,11 @@ func (c *windowController) restoreStartupProjections(blueprint layoutrestore.Blu
 	projection, err := c.prepareRestoreProjections(factory, count)
 	if err != nil {
 		return err
+	}
+	if beforeMux != nil {
+		if err := beforeMux(); err != nil {
+			return errors.Join(errRestoreBeforeMuxHook, err, c.abortRestoreProjections(projection, nil))
+		}
 	}
 	geometries, err := c.restoreGeometries(projection)
 	if err != nil {
@@ -76,6 +86,22 @@ type restoreProjectionCandidate struct {
 	published  bool
 	committed  bool
 	aborted    bool
+}
+
+func (c *windowController) syncPendingRestoreApps(owner *App) error {
+	if owner == nil || c.restorePending == nil || !c.validRestoreProjectionCandidate(c.restorePending, false) {
+		return errRestoreProjectionTransaction
+	}
+	for _, bundle := range c.restorePending.bundles {
+		child := bundle.app
+		if child == nil || child == owner {
+			continue
+		}
+		child.scriptRT = owner.scriptRT
+		child.scriptGeneration = owner.scriptGeneration
+		child.initActionBindings()
+	}
+	return nil
 }
 
 func (c *windowController) prepareRestoreProjections(factory nativeRestoreProjectionFactory, count int) (*restoreProjectionCandidate, error) {

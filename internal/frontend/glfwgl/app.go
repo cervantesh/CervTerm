@@ -3,7 +3,6 @@
 package glfwgl
 
 import (
-	"fmt"
 	"log"
 	"runtime"
 	"sync/atomic"
@@ -29,6 +28,8 @@ type App struct {
 	chrome                 chromeColors
 	desiredCfg             config.Config
 	composedCfg            config.Config
+	restoreAppearance      *projectionAppearance
+	projectionBaseConfig   *config.Config
 	safeFonts              bool
 	composedProvenance     []config.ProvenanceRecord
 	runtimeScopes          config.RuntimeScopes
@@ -43,6 +44,7 @@ type App struct {
 	candidateOptions       script.CandidateOptions
 	configWatch            configWatchState
 	configWatchHashes      map[string][32]byte
+	startupConfigCommitted bool
 	reloadPending          bool
 	tealPublicationOptions config.TealPublicationOptions
 	mux                    *termmux.Mux
@@ -208,6 +210,11 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 }
 
 func (a *App) runWindow() error {
+	restorePlan, restoreFound, restoreLoadErr := loadConfiguredRestorePlan(a.cfg)
+	if restoreLoadErr != nil {
+		log.Printf("layout restore ignored: %v", restoreLoadErr)
+		restoreFound = false
+	}
 	if err := glfw.Init(); err != nil {
 		return err
 	}
@@ -221,6 +228,18 @@ func (a *App) runWindow() error {
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	glfw.WindowHint(glfw.Resizable, glfw.True)
 	a.applyNativeWindowCreationHints()
+	if restoreFound {
+		monitors, monitorErr := currentGLFWMonitors()
+		if monitorErr != nil {
+			log.Printf("layout restore ignored: %v", monitorErr)
+		} else if blueprint, prepareErr := prepareConfiguredRestore(a.cfg, restorePlan, monitors); prepareErr != nil {
+			log.Printf("layout restore ignored: %v", prepareErr)
+		} else if handled, restoreErr := a.tryRunRestoredWindow(blueprint); handled {
+			return restoreErr
+		} else if restoreErr != nil {
+			log.Printf("layout restore failed; starting a fresh window: %v", restoreErr)
+		}
+	}
 	w, err := glfw.CreateWindow(a.cfg.Window.Width, a.cfg.Window.Height, "CervTerm", nil, nil)
 	if err != nil {
 		return err
@@ -280,22 +299,8 @@ func (a *App) runWindow() error {
 		return err
 	}
 	a.initMux()
-	if watchHashesChanged(a.configWatchHashes) {
-		return fmt.Errorf("configuration sources changed during frontend preparation; reload the newest generation")
-	}
-	if a.scriptBundle != nil {
-		if _, err := a.scriptBundle.PublishTeal(a.tealPublicationOptions); err != nil {
-			return err
-		}
-	}
-	if a.scriptActivation != nil {
-		a.installScriptRuntime(a.scriptActivation.Commit())
-		a.scriptActivation = nil
-		a.initActionBindings()
-	}
-	if a.legacyTransition != nil {
-		a.legacyTransition.Commit()
-		a.legacyTransition = nil
+	if err := a.commitStartupConfiguration(); err != nil {
+		return err
 	}
 	a.syncProcessServices()
 	a.installCallbacks()
