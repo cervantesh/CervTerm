@@ -71,6 +71,7 @@ return { keys = {
     end },
   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
   { key = "o", mods = "ctrl+shift", action = cervterm.action.CopySemanticZone("output") },
+  { key = "i", mods = "ctrl+shift", action = cervterm.action.SelectSemanticZone("input") },
   { key = "p", mods = "ctrl+shift", action = cervterm.action.ActivateCommandPalette },
   { key = "q", mods = "ctrl+shift", action = cervterm.action.ActivateQuickSelect },
   { key = "l", mods = "ctrl+shift", action = cervterm.action.ActivateLaunchMenu },
@@ -87,7 +88,9 @@ return { keys = {
 } }
 ```
 
-Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ActivateLaunchMenu`, `ReloadConfig`, `ClosePane`, `ResetFontSize`, `NewTab`, `ActivateTabSwitcher`, and `NewWindow`. Constructors include `CopySemanticZone("input"|"output")`, `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `ScrollToPrompt(-1|1)`, `Zoom(delta)`, pane actions, tab actions, `CloseWindow(window_id)`, `FocusWindow(window_id)`, `MoveTabToWindow(window_id, tab_id, position)`, `MovePaneToWindow(window_id, pane_id, "columns"|"rows")`, and `Multiple({...})`. Window, tab, and pane IDs are stable process-local positive integers; missing or stale explicit targets fail without falling back to the focused window. `WithTarget(action, "origin")` is also available.
+Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ActivateLaunchMenu`, `ReloadConfig`, `ClosePane`, `ResetFontSize`, `NewTab`, `ActivateTabSwitcher`, and `NewWindow`. Constructors include `CopySemanticZone("input"|"output")`, `SelectSemanticZone("input"|"output")`, `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `ScrollToPrompt(-1|1)`, `Zoom(delta)`, pane actions, tab actions, `CloseWindow(window_id)`, `FocusWindow(window_id)`, `MoveTabToWindow(window_id, tab_id, position)`, `MovePaneToWindow(window_id, pane_id, "columns"|"rows")`, and `Multiple({...})`. Window, tab, and pane IDs are stable process-local positive integers; missing or stale explicit targets fail without falling back to the focused window. `WithTarget(action, "origin")` is also available.
+
+`SelectSemanticZone` targets the input or output belonging to the current prompt cycle, scrolls it into the addressed pane, and creates a pane-local viewport selection. The complete range must fit in one viewport; otherwise the action fails before changing either scrolling or the existing selection. Bottom-clamped ranges are accepted when fully visible. Copying that selection preserves hard line breaks and suppresses soft-wrap-only breaks, matching `CopySemanticZone`.
 
 Arguments are validated during config loading. Typed actions use registry press/repeat policy. Function callbacks preserve legacy behavior: they execute on press, consume repeat without executing, and run through the existing watchdog.
 

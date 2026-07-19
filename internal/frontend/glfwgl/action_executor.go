@@ -66,6 +66,10 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		if err := a.executeCopySemanticZone(pane, command); err != nil {
 			return actionExecutionError(command, termaction.ErrorMux, err)
 		}
+	case termaction.SelectSemanticZone:
+		if err := a.executeSelectSemanticZone(pane, command); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
 	case termaction.PasteClipboard:
 		view, _ := a.mux.PaneView(pane)
 		a.writePaneInputBytes(pane, input.EncodePaste(a.Clipboard(), view.BracketedPaste))

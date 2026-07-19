@@ -77,3 +77,14 @@ func TestTextSkipsWideContinuationAndPreservesCombining(t *testing.T) {
 		t.Fatalf("unicode selection mismatch: %q", got)
 	}
 }
+
+func TestTextWithWrappedSuppressesOnlySoftRowBreaks(t *testing.T) {
+	snap := snapshotFromLines(4, "abcd", "ef", "gh")
+	rangeValue := Range{Start: Point{0, 0}, End: Point{2, 1}}
+	if got := TextWithWrapped(snap.Cells, []bool{true, false, false}, snap.Cols, snap.Rows, rangeValue); got != "abcdef\ngh" {
+		t.Fatalf("text=%q", got)
+	}
+	if got := Text(snap.Cells, snap.Cols, snap.Rows, rangeValue); got != "abcd\nef\ngh" {
+		t.Fatalf("legacy text=%q", got)
+	}
+}
