@@ -129,6 +129,22 @@ func (c *windowController) setServices(services processServices) { c.services = 
 
 func (c *windowController) setProjectionFactory(factory nativeProjectionFactory) { c.factory = factory }
 
+func (c *windowController) setCandidateProjectionFactory(factory nativeProjectionCandidateFactory) {
+	c.setCandidateFactory(factory)
+}
+
+func (c *windowController) adoptProjectionBundle(id termmux.WindowID, bundle *nativeProjectionBundle) error {
+	projection, ok := c.windows[id]
+	if !ok || projection.closed || bundle == nil || bundle.host != projection.host || bundle.app != projection.app {
+		return errWindowProjectionMissing
+	}
+	if projection.bundle != nil {
+		return errWindowProjectionExists
+	}
+	projection.bundle = bundle
+	return nil
+}
+
 // createProjection transactionally acquires a complete independent native
 // projection. Nothing is addressable through windows/order until every factory
 // stage succeeds. Partial candidates are always rolled back.
@@ -237,6 +253,25 @@ func (c *windowController) focus(id termmux.WindowID) error {
 	c.active = id
 	return nil
 }
+
+func (c *windowController) projectionIDs() []termmux.WindowID {
+	ids := make([]termmux.WindowID, 0, len(c.order))
+	for _, id := range c.order {
+		if projection := c.windows[id]; projection != nil && !projection.closed {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func (c *windowController) projectionApp(id termmux.WindowID) *App {
+	if projection := c.windows[id]; projection != nil && !projection.closed {
+		return projection.app
+	}
+	return nil
+}
+
+func (c *windowController) projectionCount() int { return len(c.windows) }
 
 func (c *windowController) shouldClose(id termmux.WindowID) bool {
 	projection, ok := c.windows[id]
@@ -371,6 +406,7 @@ func (a *App) attachInitialWindowController(window *glfw.Window) error {
 		return err
 	}
 	a.windowID = initialWindowID
+	a.controller.setCandidateProjectionFactory(&glfwProjectionFactory{owner: a})
 	return a.controller.startLoop()
 }
 
@@ -378,9 +414,11 @@ func (a *App) closeInitialWindowController() {
 	if a.controller == nil {
 		return
 	}
-	if err := a.controller.closeProjection(initialWindowID); err != nil {
-		logControllerError(err)
+	var joined error
+	for _, id := range a.controller.projectionIDs() {
+		joined = errors.Join(joined, a.controller.closeProjection(id))
 	}
+	logControllerError(joined)
 	a.controller.stopLoop()
 }
 
@@ -401,7 +439,9 @@ func (a *App) dispatchMuxEvents(events []termmux.Event) bool {
 
 func (a *App) recordNativeFocus(focused bool) {
 	if focused && a.controller != nil {
-		_ = a.controller.activateRuntimeProjection(a.windowID)
+		if err := a.controller.recordRuntimeFocus(a.windowID); err != nil {
+			logControllerError(err)
+		}
 	}
 }
 
@@ -411,6 +451,7 @@ func (a *App) syncProcessServices() {
 		if a.mux != nil {
 			a.controller.setRuntimeWindows(a.mux)
 		}
+		a.controller.setCandidateProjectionFactory(&glfwProjectionFactory{owner: a})
 	}
 }
 

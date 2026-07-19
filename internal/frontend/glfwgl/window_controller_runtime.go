@@ -93,3 +93,55 @@ func (c *windowController) activateRuntimeProjection(id termmux.WindowID) error 
 	c.dispatch(events)
 	return nil
 }
+
+// recordRuntimeFocus mirrors a native focus callback into the exact mux window.
+// It deliberately does not call host.Focus: the native callback is already the
+// result of that transition, and focusing again would re-enter the callback.
+func (c *windowController) recordRuntimeFocus(id termmux.WindowID) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
+	projection, ok := c.windows[id]
+	if !ok || projection.closed || c.runtimeWindows == nil {
+		return errWindowProjectionMissing
+	}
+	events, err := c.runtimeWindows.ActivateWindow(id)
+	if err != nil {
+		return err
+	}
+	c.active = id
+	c.dispatch(events)
+	return nil
+}
+
+func (c *windowController) activeProjectionApp() *App {
+	return c.projectionApp(c.active)
+}
+
+func (c *windowController) syncSharedProjectionState(owner *App) error {
+	for _, id := range c.projectionIDs() {
+		child := c.projectionApp(id)
+		if child == nil || child == owner || child.scriptGeneration == owner.scriptGeneration {
+			continue
+		}
+		if err := c.withCurrent(id, func() {
+			child.scriptRT = owner.scriptRT
+			child.scriptGeneration = owner.scriptGeneration
+			child.cfg = owner.cfg.Clone()
+			child.desiredCfg = owner.desiredCfg.Clone()
+			child.composedCfg = owner.composedCfg.Clone()
+			child.composedProvenance = append(child.composedProvenance[:0], owner.composedProvenance...)
+			child.initZoomHotkeys()
+			child.initActionBindings()
+			child.closeBackgroundSurface()
+			if err := child.prepareInitialBackgroundSurface(); err != nil {
+				child.Notify("config reload: " + err.Error())
+			}
+			child.applyWindowAppearance()
+			child.requestRedraw()
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
