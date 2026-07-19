@@ -76,6 +76,7 @@ func (t *Terminal) Reset() {
 	t.SetCwd("")
 	t.CloseHyperlink()
 	t.hyperlinks.reset()
+	t.semanticKind = SemanticNone
 }
 
 func (t *Terminal) ClearLine(row int) {
@@ -190,9 +191,9 @@ func (t *Terminal) PutRune(r rune) {
 	for col := eraseStart; col < eraseEnd; col++ {
 		t.cells[t.cursorRow*t.cols+col] = eraseBlank
 	}
-	t.cells[idx] = Cell{Rune: r, Attr: t.attr, HyperlinkID: t.hyperlinks.current}
+	t.cells[idx] = Cell{Rune: r, Attr: t.attr, HyperlinkID: t.hyperlinks.current, SemanticKind: t.semanticKind}
 	if width == 2 && t.cursorCol+1 < t.cols {
-		t.cells[idx+1] = Cell{Attr: t.attr, HyperlinkID: t.hyperlinks.current, WideContinuation: true}
+		t.cells[idx+1] = Cell{Attr: t.attr, HyperlinkID: t.hyperlinks.current, SemanticKind: t.semanticKind, WideContinuation: true}
 	}
 
 	t.repairWideCells(t.cursorRow, eraseBlank)
@@ -435,6 +436,7 @@ func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearO
 		t.primaryScreen = t.snapshotScreen()
 		t.alternateScreen = true
 		t.hyperlinks.reset()
+		t.semanticKind = SemanticNone
 		t.cells = make([]Cell, t.cols*t.rows)
 		t.rowWrapped = make([]bool, t.rows)
 		t.scrollback = nil

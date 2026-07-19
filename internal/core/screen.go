@@ -91,7 +91,7 @@ func (t *Terminal) blank() Cell {
 func isBlankRow(row []Cell) bool {
 	blankAttr := Attr{FG: DefaultColor(), BG: DefaultColor()}
 	for _, cell := range row {
-		if (cell.Rune != 0 && cell.Rune != ' ') || cell.HasCombining() || cell.Attr != blankAttr || cell.HyperlinkID != 0 || cell.WideContinuation {
+		if (cell.Rune != 0 && cell.Rune != ' ') || cell.HasCombining() || cell.Attr != blankAttr || cell.HyperlinkID != 0 || cell.SemanticKind != SemanticNone || cell.WideContinuation {
 			return false
 		}
 	}
@@ -146,6 +146,7 @@ func (t *Terminal) snapshotScreen() *screenState {
 		charsets:           t.charsets,
 		activeCharset:      t.activeCharset,
 		hyperlinks:         t.hyperlinks.clone(),
+		semanticKind:       t.semanticKind,
 	}
 }
 
@@ -172,6 +173,7 @@ func (t *Terminal) restoreScreen(s *screenState) {
 	t.charsets = s.charsets
 	t.activeCharset = s.activeCharset
 	t.hyperlinks = s.hyperlinks.clone()
+	t.semanticKind = s.semanticKind
 	if t.scrollBottom <= t.scrollTop {
 		t.resetScrollRegion()
 	}
@@ -207,7 +209,7 @@ func cloneBoolRow(row []bool) []bool {
 }
 
 func isBlankCell(cell Cell) bool {
-	return cell.HyperlinkID == 0 && (cell.WideContinuation || cell.Rune == 0 || cell.Rune == ' ')
+	return cell.HyperlinkID == 0 && cell.SemanticKind == SemanticNone && (cell.WideContinuation || cell.Rune == 0 || cell.Rune == ' ')
 }
 
 func writeCellText(b *strings.Builder, cell Cell) {

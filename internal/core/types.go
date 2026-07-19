@@ -30,6 +30,7 @@ type Cell struct {
 	Attr             Attr
 	HyperlinkID      HyperlinkID
 	WideContinuation bool
+	SemanticKind     SemanticKind
 }
 
 // Combining returns the cell's stacked zero-width marks, or nil. The backing
@@ -115,6 +116,7 @@ type screenState struct {
 	charsets           [2]Charset
 	activeCharset      int
 	hyperlinks         hyperlinkState
+	semanticKind       SemanticKind
 }
 
 type Terminal struct {
@@ -142,6 +144,7 @@ type Terminal struct {
 	cwdSeq             int
 	bellCount          int
 	hyperlinks         hyperlinkState
+	semanticKind       SemanticKind
 	bracketedPaste     bool
 	alternateScreen    bool
 	primaryScreen      *screenState

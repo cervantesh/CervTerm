@@ -8,18 +8,20 @@ import "cervterm/internal/core"
 // this into GPU buffers, text layouts, or remote protocols without depending on
 // PTY, parser, GLFW, or OpenGL internals.
 type Snapshot struct {
-	Cols, Rows           int
-	HistoryRows          int
-	DisplayOffset        int
-	CursorRow, CursorCol int
-	CursorVisible        bool
-	CursorStyle          core.CursorStyle
-	Title                string
-	Cwd                  string
-	BellCount            int
-	PaletteOverrides     core.PaletteOverrides
-	Cells                []core.Cell
-	Hyperlinks           []core.Hyperlink
+	Cols, Rows             int
+	HistoryRows            int
+	DisplayOffset          int
+	CursorRow, CursorCol   int
+	CursorVisible          bool
+	CursorStyle            core.CursorStyle
+	Title                  string
+	Cwd                    string
+	BellCount              int
+	PaletteOverrides       core.PaletteOverrides
+	Cells                  []core.Cell
+	Hyperlinks             []core.Hyperlink
+	SemanticZones          []core.SemanticZone
+	SemanticZonesTruncated bool
 }
 
 type CaptureOptions struct {
@@ -57,4 +59,5 @@ func CaptureWithOptions(dst *Snapshot, term *core.Terminal, opts CaptureOptions)
 	dst.PaletteOverrides = term.PaletteOverrides()
 	term.CopyView(dst.Cells)
 	dst.Hyperlinks = term.ProjectHyperlinks(dst.Cells, dst.Hyperlinks)
+	dst.SemanticZones, dst.SemanticZonesTruncated = core.ProjectSemanticZones(dst.Cells, dst.SemanticZones)
 }
