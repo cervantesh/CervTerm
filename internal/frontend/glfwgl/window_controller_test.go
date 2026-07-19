@@ -255,3 +255,114 @@ func TestWindowControllerCreateFocusCloseLoopsOwnIndependentBundles(t *testing.T
 		t.Fatalf("final close order=%v want=%v", last, wantLast)
 	}
 }
+
+type fakeCandidateFactory struct {
+	log      *[]string
+	prepare  error
+	bind     error
+	host     *fakeNativeWindow
+	resource projectionResource
+}
+
+func (f *fakeCandidateFactory) Prepare() (*nativeProjectionBundle, termmux.SpawnSpec, termmux.PixelRect, termmux.CellMetrics, string, error) {
+	*f.log = append(*f.log, "prepare-native")
+	bundle := &nativeProjectionBundle{host: f.host, handle: func([]termmux.Event) bool { return true }}
+	bundle.bind = func(id termmux.WindowID) error {
+		*f.log = append(*f.log, fmt.Sprintf("bind:%d", id))
+		return f.bind
+	}
+	if f.resource != nil {
+		bundle.resources = append(bundle.resources, f.resource)
+	}
+	return bundle, termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "candidate", f.prepare
+}
+
+type fakeRuntimeWindows struct {
+	log       *[]string
+	createErr error
+	closeErr  error
+	closed    int
+	next      termmux.WindowID
+}
+
+func (f *fakeRuntimeWindows) CreateWindow(termmux.SpawnSpec, termmux.PixelRect, termmux.CellMetrics, string) (termmux.WindowView, []termmux.Event, error) {
+	*f.log = append(*f.log, "create-runtime")
+	if f.createErr != nil {
+		return termmux.WindowView{}, nil, f.createErr
+	}
+	if f.next == 0 {
+		f.next = 2
+	}
+	return termmux.WindowView{ID: f.next}, []termmux.Event{{Kind: termmux.WindowCreated, Window: f.next}}, nil
+}
+
+func (f *fakeRuntimeWindows) ActivateWindow(id termmux.WindowID) ([]termmux.Event, error) {
+	*f.log = append(*f.log, fmt.Sprintf("activate-runtime:%d", id))
+	return []termmux.Event{{Kind: termmux.WindowActivated, Window: id}}, nil
+}
+
+func (f *fakeRuntimeWindows) CloseWindow(id termmux.WindowID) (termmux.CloseWindowResult, []termmux.Event, error) {
+	f.closed++
+	*f.log = append(*f.log, fmt.Sprintf("close-runtime:%d", id))
+	return termmux.CloseWindowResult{Closed: true, Empty: true}, []termmux.Event{{Kind: termmux.WindowClosed, Window: id}}, f.closeErr
+}
+
+func (f *fakeRuntimeWindows) RollbackWindow(id termmux.WindowID) error {
+	f.closed++
+	*f.log = append(*f.log, fmt.Sprintf("rollback-runtime:%d", id))
+	return f.closeErr
+}
+
+func TestWindowControllerRuntimeCreateRollsBackMuxBeforeNativeOnBindFailure(t *testing.T) {
+	var log []string
+	host := &fakeNativeWindow{id: "two", log: &log}
+	factory := &fakeCandidateFactory{log: &log, bind: errors.New("bind"), host: host, resource: projectionResourceFunc(func() error { log = append(log, "close-resource"); return nil })}
+	runtimeWindows := &fakeRuntimeWindows{log: &log}
+	c := newWindowController(processServices{}, fakeNativePump{log: &log})
+	c.setCandidateFactory(factory)
+	c.setRuntimeWindows(runtimeWindows)
+	if err := c.startLoop(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.createRuntimeProjection(); !errors.Is(err, factory.bind) {
+		t.Fatalf("err=%v", err)
+	}
+	want := []string{"prepare-native", "create-runtime", "bind:2", "rollback-runtime:2", "close-resource", "destroy:two"}
+	if !reflect.DeepEqual(log, want) {
+		t.Fatalf("log=%v want=%v", log, want)
+	}
+	if runtimeWindows.closed != 1 || host.destroyed != 1 || len(c.windows) != 0 {
+		t.Fatalf("closed=%d destroyed=%d windows=%d", runtimeWindows.closed, host.destroyed, len(c.windows))
+	}
+}
+
+func TestWindowControllerRuntimeCreatePublishActivateAndCloseOrdering(t *testing.T) {
+	var log []string
+	host := &fakeNativeWindow{id: "two", log: &log}
+	factory := &fakeCandidateFactory{log: &log, host: host, resource: projectionResourceFunc(func() error { log = append(log, "close-resource"); return nil })}
+	runtimeWindows := &fakeRuntimeWindows{log: &log}
+	c := newWindowController(processServices{}, fakeNativePump{log: &log})
+	c.setCandidateFactory(factory)
+	c.setRuntimeWindows(runtimeWindows)
+	if err := c.startLoop(); err != nil {
+		t.Fatal(err)
+	}
+	id, err := c.createRuntimeProjection()
+	if err != nil || id != 2 || c.windows[id] == nil {
+		t.Fatalf("id=%d err=%v windows=%v", id, err, c.windows)
+	}
+	if err := c.activateRuntimeProjection(id); err != nil {
+		t.Fatal(err)
+	}
+	result, err := c.closeRuntimeProjection(id)
+	if err != nil || !result.Empty {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+	want := []string{"prepare-native", "create-runtime", "bind:2", "activate-runtime:2", "focus:two", "close-runtime:2", "current:two", "close-resource", "destroy:two"}
+	if !reflect.DeepEqual(log, want) {
+		t.Fatalf("log=%v want=%v", log, want)
+	}
+	if host.destroyed != 1 || len(c.windows) != 0 {
+		t.Fatalf("destroyed=%d windows=%d", host.destroyed, len(c.windows))
+	}
+}

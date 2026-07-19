@@ -187,3 +187,41 @@ func (m *Mux) windowLifecycleFailure(stage string) error {
 	}
 	return nil
 }
+
+// RollbackWindow aborts a newest runtime window that was never published to a frontend.
+// Unlike CloseWindow it does not tombstone the proposed IDs, so a later candidate may reuse them.
+func (m *Mux) RollbackWindow(id WindowID) error {
+	w := m.model.windowByID(id)
+	if w == nil {
+		return ErrWindowNotFound
+	}
+	panes := make(map[PaneID]*pane)
+	for i := range w.tabs {
+		for _, paneID := range paneIDs(w.tabs[i].root) {
+			p, ok := m.sessions.lookup(paneID)
+			if !ok {
+				return invariantError("window %d pane %d is not registry-owned", id, paneID)
+			}
+			panes[paneID] = p
+		}
+	}
+	result, err := m.model.CloseWindow(id)
+	if err != nil {
+		return err
+	}
+	var closeErrs []error
+	for paneID, p := range panes {
+		detached := m.sessions.abort(paneID, p)
+		if !detached.owned {
+			return invariantError("window %d pane %d rollback lost ownership", id, paneID)
+		}
+		delete(m.paneMetrics, paneID)
+		if closeErr := detached.pane.close(); closeErr != nil {
+			closeErrs = append(closeErrs, closeErr)
+		}
+	}
+	if err := m.model.rollbackClosedWindow(result); err != nil {
+		return errors.Join(err, errors.Join(closeErrs...))
+	}
+	return errors.Join(closeErrs...)
+}
