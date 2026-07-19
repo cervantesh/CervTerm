@@ -65,6 +65,7 @@ func (close projectionResourceFunc) Close() error { return close() }
 // from escaping failed candidate creation.
 type nativeProjectionBundle struct {
 	host      nativeWindowHost
+	app       *App
 	handle    func([]termmux.Event) bool
 	bind      func(termmux.WindowID) error
 	resources []projectionResource
@@ -95,6 +96,7 @@ type nativeProjectionFactory interface {
 type windowProjection struct {
 	id       termmux.WindowID
 	host     nativeWindowHost
+	app      *App
 	handle   func([]termmux.Event) bool
 	bundle   *nativeProjectionBundle
 	teardown func() error
@@ -151,7 +153,7 @@ func (c *windowController) createProjection(id termmux.WindowID) error {
 		rollbackErr := bundle.close()
 		return errors.Join(errWindowProjectionMissing, rollbackErr)
 	}
-	if err := c.attach(id, bundle.host, bundle.handle); err != nil {
+	if err := c.attachApp(id, bundle.host, bundle.app, bundle.handle); err != nil {
 		return errors.Join(err, bundle.close())
 	}
 	c.windows[id].bundle = bundle
@@ -175,13 +177,17 @@ func (c *windowController) drainMux(limit int) []termmux.Event {
 }
 
 func (c *windowController) attach(id termmux.WindowID, host nativeWindowHost, handle func([]termmux.Event) bool) error {
+	return c.attachApp(id, host, nil, handle)
+}
+
+func (c *windowController) attachApp(id termmux.WindowID, host nativeWindowHost, app *App, handle func([]termmux.Event) bool) error {
 	if id == 0 || host == nil || handle == nil {
 		return errWindowProjectionMissing
 	}
 	if _, exists := c.windows[id]; exists {
 		return errWindowProjectionExists
 	}
-	c.windows[id] = &windowProjection{id: id, host: host, handle: handle, dirty: true}
+	c.windows[id] = &windowProjection{id: id, host: host, app: app, handle: handle, dirty: true}
 	c.order = append(c.order, id)
 	if c.active == 0 {
 		c.active = id
@@ -361,9 +367,10 @@ const initialWindowID termmux.WindowID = 1
 
 func (a *App) attachInitialWindowController(window *glfw.Window) error {
 	a.controller = newWindowController(processServices{scriptRuntime: a.scriptRT, runtimeScopes: &a.runtimeScopes}, glfwEventPump{})
-	if err := a.controller.attach(initialWindowID, window, a.applyMuxEvents); err != nil {
+	if err := a.controller.attachApp(initialWindowID, window, a, a.applyMuxEvents); err != nil {
 		return err
 	}
+	a.windowID = initialWindowID
 	return a.controller.startLoop()
 }
 
@@ -394,7 +401,7 @@ func (a *App) dispatchMuxEvents(events []termmux.Event) bool {
 
 func (a *App) recordNativeFocus(focused bool) {
 	if focused && a.controller != nil {
-		_ = a.controller.focus(initialWindowID)
+		_ = a.controller.activateRuntimeProjection(a.windowID)
 	}
 }
 

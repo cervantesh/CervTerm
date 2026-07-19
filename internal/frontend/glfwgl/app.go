@@ -61,6 +61,7 @@ type App struct {
 	blurWarnedStatus       BlurStatus
 
 	window                    *glfw.Window
+	windowID                  termmux.WindowID
 	controller                *windowController
 	r                         gpu.Renderer
 	backgroundSurface         gpu.BackgroundSurface
