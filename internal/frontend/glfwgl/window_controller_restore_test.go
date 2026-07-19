@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
 
+	"cervterm/internal/config"
 	"cervterm/internal/layoutrestore"
 	"cervterm/internal/layoutstate"
 	termmux "cervterm/internal/mux"
@@ -31,7 +33,7 @@ func (f *fakeRestoreProjectionFactory) PrepareRestore(index int) (*nativeProject
 	*f.log = append(*f.log, fmt.Sprintf("prepare:%d", index))
 	host := &fakeNativeWindow{id: fmt.Sprintf("restore-%d", index), log: f.log}
 	f.hosts = append(f.hosts, host)
-	app := &App{}
+	app := &App{cfg: config.Defaults()}
 	f.apps = append(f.apps, app)
 	bundle := &nativeProjectionBundle{host: host, app: app, handle: func([]termmux.Event) bool { return true }}
 	bundle.bind = func(id termmux.WindowID) error {
@@ -355,6 +357,28 @@ func TestWindowControllerRestoreStartupWithRealMuxPublishesWorkspaceVisibilityAn
 	views := m.Windows()
 	if len(views) != 2 || views[0].ID != 2 || views[1].ID != 3 || !views[0].Active || views[1].Active {
 		t.Fatalf("mux windows=%#v", views)
+	}
+	plan, err := controller.currentLayoutPlan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := plan.Snapshot()
+	if len(document.Workspaces) != 1 || len(document.Workspaces[0].Windows) != 2 || document.Workspaces[0].Windows[0].Bounds.Width != 800 || document.Workspaces[0].Windows[1].Tabs[0].Root.Launch.Program != "shell" {
+		t.Fatalf("layout document=%#v", document)
+	}
+	path := filepath.Join(t.TempDir(), "layout.json")
+	owner := &App{cfg: config.Defaults(), controller: controller}
+	owner.cfg.LayoutPersistence.Enabled, owner.cfg.LayoutPersistence.Path = true, path
+	if err := owner.persistCurrentLayout(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := layoutstate.NewStore(layoutstate.StoreOptions{Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, found, err := store.Load()
+	if err != nil || !found || len(loaded.Snapshot().Workspaces[0].Windows) != 2 {
+		t.Fatalf("saved found=%v err=%v doc=%#v", found, err, loaded.Snapshot())
 	}
 	showCount, focusCount := 0, 0
 	for _, entry := range log {
