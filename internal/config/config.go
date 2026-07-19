@@ -17,20 +17,21 @@ const (
 )
 
 type Config struct {
-	Window      WindowConfig
-	Font        FontConfig
-	ColorScheme string `json:",omitempty"`
-	Colors      ColorsConfig
-	Background  BackgroundConfig
-	Scrolling   ScrollingConfig
-	Scrollbar   ScrollbarConfig
-	Cursor      CursorConfig
-	Clipboard   ClipboardConfig
-	Render      RenderConfig
-	Shell       ShellConfig
-	QuickSelect QuickSelectConfig
-	TabBar      TabBarConfig
-	LaunchMenu  []LaunchTarget
+	Window            WindowConfig
+	LayoutPersistence LayoutPersistenceConfig
+	Font              FontConfig
+	ColorScheme       string `json:",omitempty"`
+	Colors            ColorsConfig
+	Background        BackgroundConfig
+	Scrolling         ScrollingConfig
+	Scrollbar         ScrollbarConfig
+	Cursor            CursorConfig
+	Clipboard         ClipboardConfig
+	Render            RenderConfig
+	Shell             ShellConfig
+	QuickSelect       QuickSelectConfig
+	TabBar            TabBarConfig
+	LaunchMenu        []LaunchTarget
 }
 
 type WindowConfig struct {
@@ -297,6 +298,9 @@ func (c Config) Validate() error {
 		errs = append(errs, quickSelectErr)
 	}
 	if err := validateLaunchMenu(c.LaunchMenu); err != nil {
+		errs = append(errs, err)
+	}
+	if err := validateLayoutPersistencePath(c.LayoutPersistence.Path); err != nil {
 		errs = append(errs, err)
 	}
 	if c.Window.Width < 100 || c.Window.Height < 100 {

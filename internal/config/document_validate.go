@@ -80,9 +80,7 @@ func validateStrictValue(source, path string, value lua.LValue, schema fieldSche
 		}
 		return validateStrictTable(source, path, table, schema, false, nil, allowUnset)
 	case KindString:
-		if _, ok := value.(lua.LString); !ok {
-			return typeError(source, path, KindString, value)
-		}
+		return validateDocumentStringField(source, path, value)
 	case KindBoolean:
 		if _, ok := value.(lua.LBool); !ok {
 			return typeError(source, path, KindBoolean, value)

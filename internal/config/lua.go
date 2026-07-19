@@ -77,6 +77,10 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Window.BackgroundOpacity = numberField(tbl, "background_opacity", cfg.Window.BackgroundOpacity)
 		cfg.Window.Blur = boolField(tbl, "blur", cfg.Window.Blur)
 	}
+	if tbl := tableField(root, "layout_persistence"); tbl != nil {
+		cfg.LayoutPersistence.Enabled = boolField(tbl, "enabled", cfg.LayoutPersistence.Enabled)
+		cfg.LayoutPersistence.Path = stringField(tbl, "path", cfg.LayoutPersistence.Path)
+	}
 	if tbl := tableField(root, "font"); tbl != nil {
 		cfg.Font.Family = stringField(tbl, "family", cfg.Font.Family)
 		cfg.Font.Size = numberField(tbl, "size", cfg.Font.Size)
