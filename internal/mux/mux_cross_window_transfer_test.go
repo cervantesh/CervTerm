@@ -65,7 +65,7 @@ func TestMuxCrossWindowPaneTransferPreservesRegistrySessionAndIngress(t *testing
 	if owner == nil || owner.id != 2 {
 		t.Fatalf("owner=%#v", owner)
 	}
-	if len(events) == 0 || events[0].Window != 2 || events[0].SourceWindow != 1 {
+	if len(events) == 0 || events[0].Window != 2 || events[0].SourceWindow != 1 || events[0].Workspace != 1 || events[0].SourceWorkspace != 1 {
 		t.Fatalf("events=%#v", events)
 	}
 	if err := session.feed([]byte("cross")); err != nil {

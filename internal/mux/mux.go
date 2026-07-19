@@ -243,14 +243,14 @@ func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID,
 	newPane.capture()
 	events := []Event{{Kind: PaneStarted, Pane: createdID}, {Kind: PaneFocused, Pane: createdID}}
 	events = append(events, resizeEvents...)
-	return createdID, events, resizeErr
+	return createdID, m.ResolveEventAddresses(events), resizeErr
 }
 
 func (m *Mux) FocusPane(id PaneID) ([]Event, error) {
 	if err := m.model.Focus(id); err != nil {
 		return nil, err
 	}
-	return []Event{{Kind: PaneFocused, Pane: id}}, nil
+	return m.ResolveEventAddresses([]Event{{Kind: PaneFocused, Pane: id}}), nil
 }
 
 func (m *Mux) FocusDirection(direction Direction) ([]Event, error) {
@@ -258,7 +258,7 @@ func (m *Mux) FocusDirection(direction Direction) ([]Event, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []Event{{Kind: PaneFocused, Pane: id}}, nil
+	return m.ResolveEventAddresses([]Event{{Kind: PaneFocused, Pane: id}}), nil
 }
 
 func (m *Mux) FocusNext(reverse bool) ([]Event, error) {
@@ -274,7 +274,7 @@ func (m *Mux) FocusNext(reverse bool) ([]Event, error) {
 				if err := m.model.Focus(previous); err != nil {
 					return nil, err
 				}
-				return []Event{{Kind: PaneFocused, Pane: previous}}, nil
+				return m.ResolveEventAddresses([]Event{{Kind: PaneFocused, Pane: previous}}), nil
 			}
 		}
 		return nil, invariantError("focused pane %d is not active", focused)
@@ -283,7 +283,7 @@ func (m *Mux) FocusNext(reverse bool) ([]Event, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []Event{{Kind: PaneFocused, Pane: id}}, nil
+	return m.ResolveEventAddresses([]Event{{Kind: PaneFocused, Pane: id}}), nil
 }
 
 func (m *Mux) Write(id PaneID, data []byte) ([]Event, error) {
@@ -299,7 +299,7 @@ func (m *Mux) Write(id PaneID, data []byte) ([]Event, error) {
 		err = io.ErrShortWrite
 	}
 	if err != nil {
-		return []Event{{Kind: PaneWriteFailed, Pane: id, Err: err}}, err
+		return m.ResolveEventAddresses([]Event{{Kind: PaneWriteFailed, Pane: id, Err: err}}), err
 	}
 	return nil, nil
 }
@@ -344,10 +344,10 @@ func (m *Mux) Drain(limit int) []Event {
 				}
 			}
 		default:
-			return events
+			return m.ResolveEventAddresses(events)
 		}
 	}
-	return events
+	return m.ResolveEventAddresses(events)
 }
 
 func (m *Mux) advancePane(p *pane, data []byte) []Event {
@@ -368,7 +368,7 @@ func (m *Mux) advancePane(p *pane, data []byte) []Event {
 	for bell := oldBell; bell < p.bellCount; bell++ {
 		events = append(events, Event{Kind: PaneBell, Pane: p.id})
 	}
-	return events
+	return m.ResolveEventAddresses(events)
 }
 
 func (m *Mux) SearchUpward(id PaneID, query string, hasPrev bool, prevRow int) (row, col int, ok bool, err error) {
@@ -449,6 +449,8 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 		}
 		return nil, ErrPaneNotFound
 	}
+	window, _ := m.WindowForPane(id)
+	workspace, _ := m.WorkspaceForWindow(window)
 	result, modelErr := m.model.Close(id)
 	if modelErr != nil || !result.Closed {
 		return nil, modelErr
@@ -478,7 +480,15 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 		resizeEvents, resizeErr = m.resizeBoundsAndApply(m.bounds)
 		events = append(events, resizeEvents...)
 	}
-	return events, errors.Join(closeErr, resizeErr)
+	for i := range events {
+		if events[i].Window == 0 {
+			events[i].Window = window
+		}
+		if events[i].Workspace == 0 {
+			events[i].Workspace = workspace
+		}
+	}
+	return m.ResolveEventAddresses(events), errors.Join(closeErr, resizeErr)
 }
 
 func (m *Mux) Shutdown() error { return m.sessions.shutdownRegistry() }

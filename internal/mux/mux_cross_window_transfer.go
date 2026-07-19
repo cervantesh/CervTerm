@@ -32,7 +32,7 @@ func (m *Mux) TransferPaneBetweenWindows(req PaneTransferRequest) ([]Event, erro
 	if result.FocusChanged {
 		events = append(events, Event{Kind: PaneFocused, Window: result.ActiveWindow, SourceWindow: result.SourceWindow, Tab: result.ActiveTab, SourceTab: result.SourceTab, Pane: result.ActiveFocused})
 	}
-	return events, nil
+	return m.ResolveEventAddresses(events), nil
 }
 
 // TransferTabBetweenWindows moves an existing tabState as a whole. It allocates
@@ -61,7 +61,7 @@ func (m *Mux) TransferTabBetweenWindows(req TabTransferRequest) ([]Event, error)
 	if result.FocusChanged {
 		events = append(events, Event{Kind: PaneFocused, Window: result.ActiveWindow, SourceWindow: result.SourceWindow, Tab: result.ActiveTab, SourceTab: result.SourceTab, Pane: result.ActiveFocused})
 	}
-	return events, nil
+	return m.ResolveEventAddresses(events), nil
 }
 
 func (m *Mux) validateTransferRuntime(resolve CellMetricsResolver) error {
