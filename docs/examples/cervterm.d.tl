@@ -173,6 +173,10 @@ local record cervterm
     osc52: string
   end
 
+  record IMEConfig
+    enabled: boolean
+  end
+
   record BellConfig
     mode: string
     focus: string
@@ -410,6 +414,10 @@ local record cervterm
     osc52: string | Unset
   end
 
+  record IMEDocument
+    enabled: boolean | Unset
+  end
+
   record BellDocument
     mode: string | Unset
     focus: string | Unset
@@ -517,6 +525,7 @@ local record cervterm
     tab_bar: TabBarDocument | Unset
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
+    ime: IMEDocument | Unset
     bell: BellDocument | Unset
     notification: NotificationDocument | Unset
     render: RenderDocument | Unset
@@ -549,6 +558,7 @@ local record cervterm
     tab_bar: TabBarDocument | Unset
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
+    ime: IMEDocument | Unset
     bell: BellDocument | Unset
     notification: NotificationDocument | Unset
     render: RenderDocument | Unset

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -33,6 +34,8 @@ func TestRunDoctorPrintsActionableSections(t *testing.T) {
 		"environment:",
 		"text-gamma: 1.15",
 		"text-darken: 0.00",
+		"ime-enabled: false",
+		"ime-activation: unavailable",
 		"background-formats: png,jpeg,gif-static",
 		"background-budget: cpu=134217728 gpu=134217728",
 		"background-surface-capability: runtime-probed",
@@ -188,6 +191,27 @@ func TestSyntheticModeFormatting(t *testing.T) {
 	for mode, want := range cases {
 		if got := formatSyntheticMode(mode); got != want {
 			t.Fatalf("formatSyntheticMode(%d)=%q, want %q", mode, got, want)
+		}
+	}
+}
+
+func TestDoctorReportsConfiguredIMEIntentAndPlatformCapability(t *testing.T) {
+	path := t.TempDir() + "/cervterm.lua"
+	if err := os.WriteFile(path, []byte(`return {config_version=2,ime={enabled=true}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := captureStdout(t, func() {
+		if code := runDoctor(doctorOptions{ConfigPath: path, LogPath: "-"}); code != 0 {
+			t.Fatalf("runDoctor exit code=%d", code)
+		}
+	})
+	capability := "ime-platform-capability: unsupported"
+	if runtime.GOOS == "windows" {
+		capability = "ime-platform-capability: windows-native-opt-in"
+	}
+	for _, want := range []string{"ime-enabled: true", capability, "ime-activation: unavailable (no active frontend in diagnostic mode)"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("doctor output missing %q\n%s", want, output)
 		}
 	}
 }
