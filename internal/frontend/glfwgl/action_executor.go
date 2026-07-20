@@ -80,7 +80,9 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		if a.search.active {
 			a.search.close()
 		} else {
-			a.search.open()
+			if !a.search.open() {
+				return actionExecutionError(command, termaction.ErrorAction, errTextTargetExhausted)
+			}
 		}
 	case termaction.ActivateCommandPalette:
 		if err := a.openCommandPalette(); err != nil {

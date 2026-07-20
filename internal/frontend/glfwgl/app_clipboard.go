@@ -13,8 +13,14 @@ func (a *App) writeInputBytes(data []byte) {
 }
 
 func (a *App) writePaneInputBytes(pane termmux.PaneID, data []byte) {
-	if pane == 0 {
-		return
+	if err := a.writePaneInputBytesResult(pane, data); err != nil {
+		a.Notify("input: " + err.Error())
+	}
+}
+
+func (a *App) writePaneInputBytesResult(pane termmux.PaneID, data []byte) error {
+	if pane == 0 || a.mux == nil {
+		return termmux.ErrPaneNotFound
 	}
 	events, err := a.mux.Write(pane, data)
 	if errors.Is(err, termmux.ErrPaneNotRunning) {
@@ -24,13 +30,9 @@ func (a *App) writePaneInputBytes(pane termmux.PaneID, data []byte) {
 	}
 	if len(events) > 0 {
 		a.pendingMuxEvents = append(a.pendingMuxEvents, events...)
-	}
-	if err != nil {
-		a.Notify("input: " + err.Error())
-	}
-	if len(events) > 0 {
 		a.requestRedraw()
 	}
+	return err
 }
 
 func (a *App) writeInput(s string) { a.writeInputBytes([]byte(s)) }

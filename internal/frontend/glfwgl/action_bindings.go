@@ -142,7 +142,7 @@ func (a *App) dispatchKeyActionAtOrigin(envelope termaction.Envelope, callback *
 		}
 	}
 	if consume {
-		a.suppressNextChar = scriptKeyProducesChar(key, mods)
+		a.charSuppression.armBinding(scriptKeyProducesChar(key, mods))
 	}
 	return consume
 }
@@ -187,6 +187,9 @@ func reloadChord(key glfw.Key, mods glfw.ModifierKey) bool {
 }
 
 func (a *App) handleKeyEvent(key glfw.Key, eventAction glfw.Action, mods glfw.ModifierKey) {
+	if eventAction == glfw.Press || eventAction == glfw.Repeat {
+		a.charSuppression.clearOnNonEchoInput()
+	}
 	if a.handleModalKey(key, eventAction, mods) {
 		return
 	}

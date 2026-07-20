@@ -10,7 +10,6 @@ import (
 
 	"cervterm/internal/config"
 	"cervterm/internal/frontend/gpu"
-	"cervterm/internal/input"
 	"cervterm/internal/metrics"
 	"cervterm/internal/modal"
 	termmux "cervterm/internal/mux"
@@ -104,7 +103,8 @@ type App struct {
 	quickSelect       quickSelectActivation
 	notice            string
 	noticeUntil       time.Time
-	suppressNextChar  bool
+	charSuppression   charSuppression
+	textTarget        committedTextTargetState
 	lastStats         time.Time
 	blinkStart        time.Time
 	showStats         bool
@@ -330,23 +330,7 @@ func (a *App) installCallbacks() {
 		a.requestRedraw()
 	})
 	a.window.SetCharCallback(func(_ *glfw.Window, char rune) {
-		if a.handleModalChar(char) {
-			return
-		}
-		if a.suppressNextChar {
-			a.suppressNextChar = false
-			return
-		}
-		// While the search bar is open, printable input edits the query and never
-		// reaches the PTY (trap 1). closeSearch restores this callback's normal
-		// flow exactly by clearing a.search.active.
-		if a.search.active {
-			a.search.appendRune(char)
-			return
-		}
-		if encoded, ok := input.Encode(input.Event{Rune: char}); ok {
-			a.writeInputBytes(encoded)
-		}
+		a.routeGLFWChar(char)
 	})
 	a.window.SetKeyCallback(func(_ *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		a.handleKeyEvent(key, action, mods)

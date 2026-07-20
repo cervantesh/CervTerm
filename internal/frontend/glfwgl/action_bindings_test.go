@@ -274,14 +274,14 @@ func TestLegacyCallbackRepeatAndCharacterSuppressionRemainExact(t *testing.T) {
 	if got := factory.sessions[0].text(); got != "" {
 		t.Fatalf("callback repeat leaked to PTY: %q", got)
 	}
-	if !a.suppressNextChar {
+	if !a.charSuppression.bindingArmed() {
 		t.Fatal("printable callback repeat did not preserve character suppression")
 	}
 
-	a.suppressNextChar = false
+	a.charSuppression.clear()
 	a.handleKeyEvent(glfw.KeyA, glfw.Press, 0)
-	if a.notice != "pressed" || !a.suppressNextChar {
-		t.Fatalf("callback press: notice=%q suppress=%v", a.notice, a.suppressNextChar)
+	if a.notice != "pressed" || !a.charSuppression.bindingArmed() {
+		t.Fatalf("callback press: notice=%q suppress=%v", a.notice, a.charSuppression.bindingArmed())
 	}
 }
 
