@@ -15,12 +15,23 @@ type compositionCoordinator struct {
 	capture        func() (ime.Target, error)
 	route          func(ime.Target, string) error
 	deliveryActive bool
+	changed        func(ime.Snapshot)
 }
 
 func (coordinator *compositionCoordinator) bind(capture func() (ime.Target, error), route func(ime.Target, string) error) {
 	coordinator.capture = capture
 	coordinator.route = route
 	coordinator.deliveryActive = capture != nil && route != nil
+}
+
+func (coordinator *compositionCoordinator) bindPresentation(changed func(ime.Snapshot)) {
+	coordinator.changed = changed
+}
+
+func (coordinator *compositionCoordinator) notifyChanged() {
+	if coordinator.changed != nil {
+		coordinator.changed(coordinator.model.Snapshot())
+	}
 }
 
 func (coordinator *compositionCoordinator) start() (uint64, error) {
@@ -31,7 +42,11 @@ func (coordinator *compositionCoordinator) start() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return coordinator.model.Start(target)
+	generation, err := coordinator.model.Start(target)
+	if err == nil {
+		coordinator.notifyChanged()
+	}
+	return generation, err
 }
 
 func (coordinator *compositionCoordinator) update(generation uint64, update ime.NativeUpdate) error {
@@ -44,6 +59,7 @@ func (coordinator *compositionCoordinator) update(generation uint64, update ime.
 		}
 		return err
 	}
+	coordinator.notifyChanged()
 	return nil
 }
 
@@ -58,6 +74,7 @@ func (coordinator *compositionCoordinator) commit(generation uint64, units []uin
 		}
 		return err
 	}
+	coordinator.notifyChanged()
 	return coordinator.route(commit.Target, commit.Text)
 }
 
@@ -69,7 +86,11 @@ func (coordinator *compositionCoordinator) cancel(reason ime.CancelReason) error
 	if !snapshot.Active {
 		return nil
 	}
-	return coordinator.model.Cancel(snapshot.Generation, reason)
+	err := coordinator.model.Cancel(snapshot.Generation, reason)
+	if err == nil {
+		coordinator.notifyChanged()
+	}
+	return err
 }
 
 func (coordinator *compositionCoordinator) reconcile(target ime.Target, targetErr error, reason ime.CancelReason) error {
@@ -102,6 +123,7 @@ func malformedCompositionError(err error) bool {
 
 func (a *App) initCompositionCoordinator() {
 	a.composition.bind(a.captureCommittedTextTarget, a.routeCommittedText)
+	a.composition.bindPresentation(func(ime.Snapshot) { a.requestRedraw() })
 }
 
 func (a *App) cancelComposition(reason ime.CancelReason) error {

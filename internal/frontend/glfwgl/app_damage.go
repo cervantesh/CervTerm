@@ -5,9 +5,16 @@ package glfwgl
 import (
 	"image/color"
 
+	"cervterm/internal/ime"
 	"cervterm/internal/render"
 	termsel "cervterm/internal/selection"
 )
+
+type preeditDamageState struct {
+	active   bool
+	revision uint64
+	target   ime.Target
+}
 
 type damageState struct {
 	valid             bool
@@ -30,6 +37,7 @@ type damageState struct {
 	searchMatchLen    int
 	modalMode         uint8
 	modalRevision     uint64
+	composition       preeditDamageState
 	statusSeq         int
 	statusGeometry    statusGeometry
 	overlaySeq        int
@@ -51,6 +59,8 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 	}
 	render.HashRows(a.rowHashes, a.snap.Cells, a.snap.Cols)
 
+	compositionSnapshot := a.composition.snapshot()
+	composition := preeditDamageState{active: compositionSnapshot.Active, revision: compositionSnapshot.Revision, target: compositionSnapshot.Target}
 	stateChanged := !a.damage.valid ||
 		w != a.damage.framebufferWidth || h != a.damage.framebufferHeight ||
 		a.contentScaleX != a.damage.contentScaleX || a.contentScaleY != a.damage.contentScaleY ||
@@ -63,6 +73,7 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 		a.search.matchRow != a.damage.searchMatchRow || a.search.matchCol != a.damage.searchMatchCol ||
 		a.search.matchLen != a.damage.searchMatchLen ||
 		uint8(a.modal.Mode()) != a.damage.modalMode || a.modal.Revision() != a.damage.modalRevision ||
+		composition != a.damage.composition ||
 		a.status.seq != a.damage.statusSeq || a.status.geometry != a.damage.statusGeometry ||
 		a.overlays.seq != a.damage.overlaySeq ||
 		a.link.hoverActive != a.damage.hoverActive ||
@@ -142,6 +153,8 @@ func (a *App) recordDamageFrame(w, h, displayOffset int, alternateScreen, notice
 	a.damage.searchMatchRow, a.damage.searchMatchCol = a.search.matchRow, a.search.matchCol
 	a.damage.searchMatchLen = a.search.matchLen
 	a.damage.modalMode, a.damage.modalRevision = uint8(a.modal.Mode()), a.modal.Revision()
+	composition := a.composition.snapshot()
+	a.damage.composition = preeditDamageState{active: composition.Active, revision: composition.Revision, target: composition.Target}
 	a.damage.statusSeq, a.damage.statusGeometry = a.status.seq, a.status.geometry
 	a.damage.overlaySeq = a.overlays.seq
 	a.damage.hoverActive = a.link.hoverActive
