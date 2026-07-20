@@ -17,13 +17,19 @@ import (
 )
 
 type fakeNotificationSink struct {
-	requests []core.NotificationRequest
-	err      error
+	requests   []core.NotificationRequest
+	err        error
+	closeErr   error
+	closeCalls int
 }
 
 func (sink *fakeNotificationSink) Notify(title, body string) error {
 	sink.requests = append(sink.requests, core.NotificationRequest{Title: title, Body: body})
 	return sink.err
+}
+func (sink *fakeNotificationSink) Close() error {
+	sink.closeCalls++
+	return sink.closeErr
 }
 
 func TestNotificationPolicyRequiresConsentFreshnessFocusAndRate(t *testing.T) {
@@ -63,6 +69,31 @@ func TestNotificationAdapterErrorsAreRedacted(t *testing.T) {
 	app.applyNotificationEffectWithFocus(core.NotificationRequest{Title: "secret-title", Body: "secret-body"}, true, true)
 	if got := logs.String(); strings.Contains(got, "secret") || strings.Count(got, "native notification unavailable") != 1 {
 		t.Fatalf("logs were not redacted/coalesced: %q", got)
+	}
+}
+
+func TestNotificationDisableClosesNativeSinkAndRetainsFailedOwnership(t *testing.T) {
+	old := config.NotificationConfig{Enabled: true, Focus: "always", RateLimitMS: 100}
+	sink := &fakeNotificationSink{}
+	app := &App{cfg: config.Defaults(), notificationState: notificationState{sink: sink}}
+	app.cfg.Notification = config.NotificationConfig{Enabled: false, Focus: "always", RateLimitMS: 100}
+	app.applyNotificationConfigChange(old)
+	if sink.closeCalls != 1 || app.notificationState.sink != nil {
+		t.Fatalf("successful disable cleanup calls=%d sink=%T", sink.closeCalls, app.notificationState.sink)
+	}
+
+	var logs bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&logs)
+	defer log.SetOutput(previous)
+	failed := &fakeNotificationSink{closeErr: errors.New("secret-delete-detail")}
+	app.notificationState.sink = failed
+	app.applyNotificationConfigChange(old)
+	if failed.closeCalls != 1 || app.notificationState.sink != failed {
+		t.Fatalf("failed cleanup calls=%d sink retained=%t", failed.closeCalls, app.notificationState.sink == failed)
+	}
+	if got := logs.String(); strings.Contains(got, "secret") || strings.Count(got, "native notification cleanup failed") != 1 {
+		t.Fatalf("cleanup log was not redacted/coalesced: %q", got)
 	}
 }
 
