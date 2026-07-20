@@ -3,10 +3,10 @@
 package glfwgl
 
 import (
-	"errors"
 	"log"
 	"time"
 
+	"cervterm/internal/config"
 	"cervterm/internal/core"
 	"cervterm/internal/notificationpolicy"
 
@@ -15,12 +15,7 @@ import (
 
 type notificationEffectSink interface {
 	Notify(title, body string) error
-}
-
-type unsupportedNotificationEffectSink struct{}
-
-func (unsupportedNotificationEffectSink) Notify(string, string) error {
-	return errors.New("native notification adapter unavailable")
+	Close() error
 }
 
 type notificationState struct {
@@ -48,7 +43,7 @@ func (a *App) applyNotificationEffectWithFocus(request core.NotificationRequest,
 		return
 	}
 	if a.notificationState.sink == nil {
-		a.notificationState.sink = unsupportedNotificationEffectSink{}
+		a.notificationState.sink = newPlatformNotificationEffectSink(a.window)
 	}
 	if err := a.notificationState.sink.Notify(request.Title, request.Body); err != nil && !a.notificationState.unsupportedWarned {
 		a.notificationState.unsupportedWarned = true
@@ -62,4 +57,33 @@ func (a *App) reportNotificationOverflow() {
 	}
 	a.notificationState.overflowWarned = true
 	log.Print("notification request overflow; excess requests dropped")
+}
+
+func (a *App) closeNotificationEffectSink() error {
+	if a.notificationState.sink == nil {
+		return nil
+	}
+	err := a.notificationState.sink.Close()
+	if err == nil {
+		a.notificationState.sink = nil
+	}
+	return err
+}
+
+func (a *App) applyNotificationConfigChange(old config.NotificationConfig) {
+	if old == a.cfg.Notification {
+		return
+	}
+	if a.notificationState.gate != nil {
+		a.notificationState.gate.Reset()
+	}
+	var cleanupErr error
+	if old.Enabled && !a.cfg.Notification.Enabled {
+		cleanupErr = a.closeNotificationEffectSink()
+	}
+	a.notificationState.unsupportedWarned = false
+	if cleanupErr != nil {
+		a.notificationState.unsupportedWarned = true
+		log.Print("native notification cleanup failed")
+	}
 }

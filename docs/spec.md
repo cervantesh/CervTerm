@@ -170,6 +170,8 @@ go run -tags glfw ./cmd/cervterm
 - A pure per-window gate rejects disabled, deferred, focus-suppressed, or rate-limited requests before any adapter call.
 - Missing-window queues revoke request freshness, preventing delayed native effects after projection creation.
 - Adapter/overflow diagnostics are bounded and redact all terminal-provided title/body content.
+- Windows uses one projection-owned `Shell_NotifyIconW` balloon adapter with `NIF_REALTIME` and quiet-time respect; add/modify/delete failures roll back or fail closed without payload logging.
+- Non-Windows notification adapters remain unavailable and fail closed.
 
 ## Native windows, workspaces, and saved layouts
 

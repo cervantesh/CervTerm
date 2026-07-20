@@ -395,12 +395,7 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 		a.bellGate.Reset()
 	}
 	a.cfg.Notification = next.Notification
-	if oldNotification != a.cfg.Notification {
-		if a.notificationState.gate != nil {
-			a.notificationState.gate.Reset()
-		}
-		a.notificationState.unsupportedWarned = false
-	}
+	a.applyNotificationConfigChange(oldNotification)
 	a.cfg.Render.MaxFPS = next.Render.MaxFPS
 	a.applyWindowAppearance()
 	if prepared.rasterChanged {
