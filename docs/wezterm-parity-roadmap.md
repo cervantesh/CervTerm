@@ -267,8 +267,10 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 
 ## Phase 12 — Accessibility
 **Scope:** screen-reader representation and events for windows, tabs, panes, terminal content, cursor, selection, and semantic zones.
+
+**Status (2026-07-20):** experimental implementation complete on Windows behind restart-scoped `accessibility.enabled=false`. Visible-only snapshots, UIA Text/Text2, semantic events, lifecycle, privacy bounds and automated qualification are complete. Narrator/NVDA rows remain SKIP, so support/default-on and macOS/Linux adapters remain future work.
 **Work**
-- Add a separate accessibility capability under ADR-0005's narrow-capability decision family; do not widen the Phase 11 composition interface.
+- Keep accessibility as the separate ADR-0013 projection capability; do not widen the Phase 11 composition interface.
 - Define roles/names/focus/value/text-range/event mapping in the Phase 12 design.
 - Build immutable accessibility snapshots from render/core/mux state.
 - Add bounded/coalesced events for text, caret, selection, focus, tabs, panes, bells/notifications.
@@ -277,7 +279,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 
 **Success:** navigation order matches window/tab/pane topology; screen readers receive focused content/caret changes without reading every repaint; no frontend toolkit dependency enters core/mux.
 
-**Tests:** snapshot goldens, event coalescing, text ranges/graphemes, focus topology, privacy policy, manual Narrator/NVDA matrix.
+**Tests:** snapshot goldens, event coalescing, text ranges/graphemes, focus topology, privacy policy and allocation/process gates pass; manual Narrator/NVDA matrix remains explicit SKIP.
 
 **Rollback:** native adapter is optional; snapshot model remains testable.
 

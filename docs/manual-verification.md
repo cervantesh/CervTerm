@@ -180,3 +180,5 @@ Accessibility remains experimental, restart-scoped, visible-only, and default-of
 - Restart with `accessibility.enabled = false`; verify CervTerm installs no UIA provider and legacy terminal behavior is unchanged.
 
 Record Windows build, CervTerm commit, architecture, screen-reader/version, config, and PASS/SKIP/FAIL per row in `docs/validation/phase-12-accessibility-qualification.md`. Automated ABI/projection/privacy tests do not replace this matrix and do not establish a support claim.
+
+Automated performance, process-sample, gate and tool-availability evidence is recorded in `docs/validation/phase-12-accessibility-closeout.md`. Its assistive-technology rows are explicit SKIP and do not replace this manual matrix.
