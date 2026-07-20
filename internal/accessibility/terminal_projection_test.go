@@ -53,6 +53,7 @@ func projectGolden(t *testing.T, name string, input TerminalProjectionInput) Doc
 	if err != nil {
 		t.Fatal(err)
 	}
+	want = bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
 	if !bytes.Equal(encoded, want) {
 		t.Fatalf("terminal golden %s changed\n got:\n%s\nwant:\n%s", name, encoded, want)
 	}
