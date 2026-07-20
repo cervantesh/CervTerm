@@ -13,10 +13,12 @@ import (
 func TestRuntimeMetricsProbeWritesBoundedSnapshot(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
 	t.Setenv("CERVTERM_RUNTIME_METRICS_OUT", path)
-	t.Setenv("CERVTERM_RUNTIME_METRICS_DELAY", "1ms")
+	t.Setenv("CERVTERM_RUNTIME_METRICS_DELAY", "20ms")
+	t.Setenv("CERVTERM_RUNTIME_METRICS_WARMUP", "5ms")
 	app := &App{}
-	app.meter.AddFrame()
 	startRuntimeMetricsProbe(app)
+	time.Sleep(10 * time.Millisecond)
+	app.meter.AddFrame()
 	recordRuntimeMetricsWake(app)
 	recordRuntimeMetricsWake(app)
 	deadline := time.Now().Add(time.Second)
