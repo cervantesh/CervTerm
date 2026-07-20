@@ -18,6 +18,8 @@ function Resolve-InputPath([string]$Path) {
 }
 
 function Measure-CervTerm([string]$Name, [string]$Exe, [string]$Config) {
+  $exeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Exe).Hash
+	$configHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Config).Hash
   1..$Iterations | ForEach-Object {
     $run = $_
 	$priorMetricsOut = $env:CERVTERM_RUNTIME_METRICS_OUT
@@ -57,6 +59,10 @@ function Measure-CervTerm([string]$Name, [string]$Exe, [string]$Config) {
 	  }
       [pscustomobject]@{
         Name = $Name
+		ExePath = $Exe
+		ExeSHA256 = $exeHash
+		ConfigPath = $Config
+		ConfigSHA256 = $configHash
         Run = $run
         ReadyMS = [math]::Round($readyMS, 2)
         WorkingSetMiB = [math]::Round($process.WorkingSet64 / 1MB, 2)
