@@ -21,7 +21,7 @@ func (controller *Controller) Start(target Target) (uint64, error) {
 	if controller.active {
 		return 0, ErrAlreadyActive
 	}
-	if controller.generation == maxCounter || controller.revision == maxCounter {
+	if controller.generation == maxCounter || controller.revision >= maxCounter-1 {
 		return 0, ErrCounterExhausted
 	}
 	controller.generation++
@@ -44,7 +44,9 @@ func (controller *Controller) Update(generation uint64, update NativeUpdate) err
 	if err != nil {
 		return err
 	}
-	if controller.revision == maxCounter {
+	// Preserve one final revision so every active composition can still be
+	// committed or cancelled instead of becoming permanently wedged.
+	if controller.revision >= maxCounter-1 {
 		return ErrCounterExhausted
 	}
 	controller.revision++

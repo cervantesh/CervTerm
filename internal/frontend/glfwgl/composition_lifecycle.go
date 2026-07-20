@@ -38,6 +38,7 @@ func (a *App) closeModal() []modal.Intent {
 func (a *App) compositionNativeFocusChanged(focused bool) {
 	if !focused {
 		_ = a.cancelComposition(ime.CancelFocusLost)
+		a.charSuppression.clearEcho()
 	}
 }
 
