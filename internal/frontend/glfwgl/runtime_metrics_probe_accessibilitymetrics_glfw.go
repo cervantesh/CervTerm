@@ -24,10 +24,14 @@ func startRuntimeMetricsProbe(app *App) {
 	}
 	delay := runtimeMetricsDuration("CERVTERM_RUNTIME_METRICS_DELAY", 3*time.Second)
 	warmup := runtimeMetricsDuration("CERVTERM_RUNTIME_METRICS_WARMUP", time.Second)
+	startPath := os.Getenv("CERVTERM_RUNTIME_METRICS_START")
 	probe := &runtimeMetricsProbe{}
 	runtimeMetricsProbes.Store(app, probe)
 	go func() {
-		time.Sleep(warmup)
+		if !awaitRuntimeMetricsStart(startPath, warmup) {
+			runtimeMetricsProbes.Delete(app)
+			return
+		}
 		runtime.GC()
 		before := app.meter.Snapshot()
 		beforeWakes := probe.wakes.Load()
@@ -52,6 +56,21 @@ func startRuntimeMetricsProbe(app *App) {
 		}
 		runtimeMetricsProbes.Delete(app)
 	}()
+}
+
+func awaitRuntimeMetricsStart(path string, warmup time.Duration) bool {
+	if path == "" {
+		time.Sleep(warmup)
+		return true
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return false
 }
 
 func runtimeMetricsDuration(name string, fallback time.Duration) time.Duration {

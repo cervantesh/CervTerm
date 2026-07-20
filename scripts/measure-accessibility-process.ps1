@@ -25,13 +25,18 @@ function Measure-CervTerm([string]$Name, [string]$Exe, [string]$Config) {
 	$priorMetricsOut = $env:CERVTERM_RUNTIME_METRICS_OUT
 	$priorMetricsDelay = $env:CERVTERM_RUNTIME_METRICS_DELAY
 	$priorMetricsWarmup = $env:CERVTERM_RUNTIME_METRICS_WARMUP
+	$priorMetricsStart = $env:CERVTERM_RUNTIME_METRICS_START
 	$metricsPath = $null
+	$metricsStartPath = $null
 	if ($RuntimeMetricsDir) {
 	  New-Item -ItemType Directory -Force -Path $RuntimeMetricsDir | Out-Null
 	  $metricsPath = Join-Path $RuntimeMetricsDir "$Name-$run.json"
+	  $metricsStartPath = Join-Path $RuntimeMetricsDir "$Name-$run.start"
+	  Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $metricsPath, $metricsStartPath
 	  $env:CERVTERM_RUNTIME_METRICS_OUT = $metricsPath
 	  $env:CERVTERM_RUNTIME_METRICS_DELAY = "${IdleSeconds}s"
 	  $env:CERVTERM_RUNTIME_METRICS_WARMUP = "${WarmupSeconds}s"
+	  $env:CERVTERM_RUNTIME_METRICS_START = $metricsStartPath
 	}
     $timer = [Diagnostics.Stopwatch]::StartNew()
     $process = Start-Process -FilePath $Exe -ArgumentList @("--config", $Config, "--log-file", "-") -PassThru
@@ -50,10 +55,14 @@ function Measure-CervTerm([string]$Name, [string]$Exe, [string]$Config) {
       $readyMS = $timer.Elapsed.TotalMilliseconds
 	  Start-Sleep -Seconds $WarmupSeconds
       $cpuBefore = $process.TotalProcessorTime.TotalMilliseconds
+	  if ($metricsStartPath) { New-Item -ItemType File -Force -Path $metricsStartPath | Out-Null }
       Start-Sleep -Seconds $IdleSeconds
       $process.Refresh()
+	  $idleCPU = $process.TotalProcessorTime.TotalMilliseconds - $cpuBefore
       $runtimeMetrics = $null
 	  if ($metricsPath) {
+	    $metricsDeadline = [DateTime]::UtcNow.AddSeconds(2)
+	    while (-not (Test-Path -LiteralPath $metricsPath) -and [DateTime]::UtcNow -lt $metricsDeadline) { Start-Sleep -Milliseconds 10 }
 	    if (-not (Test-Path -LiteralPath $metricsPath)) { throw "$Name runtime metrics were not written" }
 	    $runtimeMetrics = Get-Content -Raw -LiteralPath $metricsPath | ConvertFrom-Json
 	  }
@@ -67,7 +76,7 @@ function Measure-CervTerm([string]$Name, [string]$Exe, [string]$Config) {
         ReadyMS = [math]::Round($readyMS, 2)
         WorkingSetMiB = [math]::Round($process.WorkingSet64 / 1MB, 2)
         PrivateMiB = [math]::Round($process.PrivateMemorySize64 / 1MB, 2)
-        IdleCPUms = [math]::Round($process.TotalProcessorTime.TotalMilliseconds - $cpuBefore, 2)
+        IdleCPUms = [math]::Round($idleCPU, 2)
         IdleSeconds = $IdleSeconds
 		WarmupSeconds = $WarmupSeconds
         Handles = $process.HandleCount
@@ -83,6 +92,7 @@ function Measure-CervTerm([string]$Name, [string]$Exe, [string]$Config) {
       $env:CERVTERM_RUNTIME_METRICS_OUT = $priorMetricsOut
 	  $env:CERVTERM_RUNTIME_METRICS_DELAY = $priorMetricsDelay
 	  $env:CERVTERM_RUNTIME_METRICS_WARMUP = $priorMetricsWarmup
+	  $env:CERVTERM_RUNTIME_METRICS_START = $priorMetricsStart
     }
   }
 }
