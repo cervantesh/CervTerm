@@ -230,6 +230,10 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "blink_interval_ms", kind: KindInteger}, {name: "thickness", kind: KindNumber},
 	}},
 	{name: "clipboard", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "osc52", kind: KindString}}},
+	{name: "bell", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
+		{name: "mode", kind: KindString}, {name: "focus", kind: KindString},
+		{name: "throttle_ms", kind: KindInteger}, {name: "visual_duration_ms", kind: KindInteger},
+	}},
 	{name: "render", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
 		{name: "bidi", kind: KindBoolean}, {name: "text_gamma", kind: KindNumber}, {name: "text_darken", kind: KindNumber},
 		{name: "text_raster", kind: KindString}, {name: "stats_hotkey", kind: KindString},
@@ -264,6 +268,7 @@ func isV2OnlyPath(path string) bool {
 		"background.layers", "quick_select.rules", "launch_menu",
 		"scrollbar.mode", "scrollbar.stable_gutter", "scrollbar.animation_fps", "render.max_fps",
 		"tab_bar.mode", "tab_bar.position", "tab_bar.height_px", "tab_bar.min_width_px", "tab_bar.max_width_px", "tab_bar.padding_x", "tab_bar.show_new_button", "tab_bar.show_close_button",
+		"bell", "bell.mode", "bell.focus", "bell.throttle_ms", "bell.visual_duration_ms",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true
 	default:
@@ -333,6 +338,9 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 	}
 	if version == 1 && root.RawGetString("layout_persistence") != lua.LNil {
 		return Document{}, documentError(source, "layout_persistence", "requires config_version = 2")
+	}
+	if version == 1 && root.RawGetString("bell") != lua.LNil {
+		return Document{}, documentError(source, "bell", "requires config_version = 2")
 	}
 	if unsetPath := findUnsetPath(root, rootSchema, ""); unsetPath != "" {
 		if version == 1 {

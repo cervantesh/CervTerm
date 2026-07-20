@@ -373,6 +373,7 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	oldScrollbar := a.cfg.Scrollbar
 	oldTabBarHeight := a.effectiveTabBarHeight()
 	oldTabBarPosition := a.cfg.TabBar.Position
+	oldBell := a.cfg.Bell
 	a.mux.SetScrollbackCapacity(next.Scrolling.History)
 	a.mux.SetHideCursorWhenScrolled(next.Scrolling.HideCursorWhenScrolled)
 	a.syncFocusedProjection()
@@ -388,6 +389,10 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	a.cfg.Scrollbar = next.Scrollbar
 	a.cfg.TabBar = next.TabBar
 	a.cfg.Cursor = next.Cursor
+	a.cfg.Bell = next.Bell
+	if oldBell != a.cfg.Bell && a.bellGate != nil {
+		a.bellGate.Reset()
+	}
 	a.cfg.Render.MaxFPS = next.Render.MaxFPS
 	a.applyWindowAppearance()
 	if prepared.rasterChanged {

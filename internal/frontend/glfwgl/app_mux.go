@@ -145,7 +145,7 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 		case termmux.PaneCWDChanged:
 			a.fireScriptEvent(func() error { return a.scriptRT.FireCwd(host, event.Text) })
 		case termmux.PaneBell:
-			a.fireScriptEvent(func() error { return a.scriptRT.FireBell(host) })
+			a.deliverBellEvent(event.Pane)
 		case termmux.PaneFocused:
 			oldPane := a.focusedPane
 			if oldPane != 0 && oldPane != event.Pane {
@@ -190,6 +190,7 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 			delete(a.paneUI, event.Pane)
 			delete(a.pendingPaneScroll, event.Pane)
 			delete(a.pendingPaneResize, event.Pane)
+			delete(a.bellDelivered, event.Pane)
 			if a.mouseCapturePane == event.Pane {
 				a.mouseCapturePane = 0
 			}

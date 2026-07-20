@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 
 ### Added
 
+- Live strict bell policies with disabled-by-default audible, visual, and taskbar sinks, focus filtering, bounded throttling, and lossless Lua bell callbacks.
 - Native in-process panes with horizontal and vertical splits, focused input, directional navigation, independent terminal sessions, and deterministic close/collapse behavior.
 - Resize adjacent panes live by dragging their divider with the mouse while preserving minimum terminal dimensions.
 - Zoom the focused pane independently while sharing one bounded multi-size glyph atlas across all panes.

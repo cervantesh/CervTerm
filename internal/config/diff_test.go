@@ -88,6 +88,10 @@ func fullyDifferentConfig(base Config) Config {
 	value.TabBar.ShowNewButton = !value.TabBar.ShowNewButton
 	value.TabBar.ShowCloseButton = !value.TabBar.ShowCloseButton
 	value.Clipboard.OSC52 = "write"
+	value.Bell.Mode = "visual"
+	value.Bell.Focus = "always"
+	value.Bell.ThrottleMS++
+	value.Bell.VisualDurationMS++
 	value.Render.Bidi = !value.Render.Bidi
 	value.Render.TextGamma += 0.01
 	value.Render.TextDarken += 0.01
@@ -126,8 +130,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 96 {
-		t.Fatalf("config leaf count = %d, want 96", len(changes))
+	if len(changes) != 100 {
+		t.Fatalf("config leaf count = %d, want 100", len(changes))
 	}
 }
 

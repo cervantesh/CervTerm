@@ -136,6 +136,7 @@ func (a *App) runProcessLoop(continuous bool) error {
 
 func (a *App) tickProjection() {
 	a.processTermEvents(false)
+	a.catchUpBellEvents()
 	a.applyPendingZoom()
 	a.applyPendingDividerResize()
 	a.resizeToWindow()
@@ -192,6 +193,9 @@ func (a *App) redrawWanted(now time.Time) bool {
 	if a.notice != "" && now.After(a.noticeUntil) {
 		return true // one repaint to clear the expired notice
 	}
+	if !a.bellVisualUntil.IsZero() && !now.Before(a.bellVisualUntil) {
+		return true // one repaint to clear the visual bell
+	}
 	if a.showStats && now.Sub(a.lastStatsDraw) >= 500*time.Millisecond {
 		return true
 	}
@@ -238,6 +242,12 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 		scrollbarWake = max(minWake, scrollbarWake)
 		if wake <= 0 || scrollbarWake < wake {
 			wake = scrollbarWake
+		}
+	}
+	if !a.bellVisualUntil.IsZero() {
+		bellWake := max(minWake, a.bellVisualUntil.Sub(now))
+		if wake <= 0 || bellWake < wake {
+			wake = bellWake
 		}
 	}
 	return wake
