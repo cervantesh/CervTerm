@@ -129,6 +129,9 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Bell.Focus != effective.Bell.Focus, "bell.focus", ApplyLive)
 	changes = appendChange(changes, desired.Bell.ThrottleMS != effective.Bell.ThrottleMS, "bell.throttle_ms", ApplyLive)
 	changes = appendChange(changes, desired.Bell.VisualDurationMS != effective.Bell.VisualDurationMS, "bell.visual_duration_ms", ApplyLive)
+	changes = appendChange(changes, desired.Notification.Enabled != effective.Notification.Enabled, "notification.enabled", ApplyLive)
+	changes = appendChange(changes, desired.Notification.Focus != effective.Notification.Focus, "notification.focus", ApplyLive)
+	changes = appendChange(changes, desired.Notification.RateLimitMS != effective.Notification.RateLimitMS, "notification.rate_limit_ms", ApplyLive)
 
 	changes = appendChange(changes, desired.Render.Bidi != effective.Render.Bidi, "render.bidi", ApplyRestart)
 	changes = appendChange(changes, desired.Render.TextGamma != effective.Render.TextGamma, "render.text_gamma", ApplyRestart)
@@ -180,6 +183,7 @@ func MergeLiveConfig(base, source Config) Config {
 	base.TabBar = source.TabBar
 	base.Cursor = source.Cursor
 	base.Bell = source.Bell
+	base.Notification = source.Notification
 	base.Render.MaxFPS = source.Render.MaxFPS
 	base.LaunchMenu = cloneLaunchTargets(source.LaunchMenu)
 	base.QuickSelect = source.QuickSelect

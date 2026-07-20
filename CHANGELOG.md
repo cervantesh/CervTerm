@@ -9,6 +9,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 ### Added
 
 - Bounded pane-local OSC 9/777 notification request metadata and addressed mux events, without native side effects.
+- Default-off live notification consent, focus, freshness, and rate policy with a redacted fakeable native-adapter boundary.
 - Live strict bell policies with disabled-by-default audible, visual, and taskbar sinks, focus filtering, bounded throttling, and lossless Lua bell callbacks.
 - Native in-process panes with horizontal and vertical splits, focused input, directional navigation, independent terminal sessions, and deterministic close/collapse behavior.
 - Resize adjacent panes live by dragging their divider with the mouse while preserving minimum terminal dimensions.

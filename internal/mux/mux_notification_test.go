@@ -32,7 +32,7 @@ func TestMuxEmitsDetachedNotificationRequest(t *testing.T) {
 			got = &events[i]
 		}
 	}
-	if got == nil || got.Pane != pane || got.Window == 0 || got.Revision != 1 || got.Notification != (core.NotificationRequest{Sequence: 1, Title: "Build", Body: "complete"}) {
+	if got == nil || got.Pane != pane || got.Window == 0 || !got.Fresh || got.Revision != 1 || got.Notification != (core.NotificationRequest{Sequence: 1, Title: "Build", Body: "complete"}) {
 		t.Fatalf("notification event = %#v", got)
 	}
 }

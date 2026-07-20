@@ -105,6 +105,11 @@
     "ThrottleMS": 250,
     "VisualDurationMS": 120
   },
+  "Notification": {
+    "Enabled": false,
+    "Focus": "unfocused",
+    "RateLimitMS": 5000
+  },
   "Render": {
     "Bidi": true,
     "TextGamma": 1.2,

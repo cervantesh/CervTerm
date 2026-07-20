@@ -146,6 +146,10 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 			a.fireScriptEvent(func() error { return a.scriptRT.FireCwd(host, event.Text) })
 		case termmux.PaneBell:
 			a.deliverBellEvent(event.Pane)
+		case termmux.PaneNotificationRequested:
+			a.applyNotificationEffect(event.Notification, event.Fresh)
+		case termmux.PaneNotificationOverflow:
+			a.reportNotificationOverflow()
 		case termmux.PaneFocused:
 			oldPane := a.focusedPane
 			if oldPane != 0 && oldPane != event.Pane {
