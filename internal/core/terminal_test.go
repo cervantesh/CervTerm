@@ -289,6 +289,131 @@ func TestTerminalEraseLineModes(t *testing.T) {
 	}
 }
 
+func TestTerminalEraseChars(t *testing.T) {
+	term := NewTerminal(6, 1)
+	for _, r := range "abcdef" {
+		term.PutRune(r)
+	}
+	term.SetCursor(0, 2)
+
+	term.EraseChars(2)
+	if got := term.PlainText(); got != "ab  ef" {
+		t.Fatalf("erase characters should blank without shifting: %q", got)
+	}
+	if row, col := term.CursorRow(), term.CursorCol(); row != 0 || col != 2 {
+		t.Fatalf("erase characters moved cursor to (%d,%d)", row, col)
+	}
+
+	term.EraseChars(99)
+	if got := term.PlainText(); got != "ab" {
+		t.Fatalf("erase characters should clamp at the line edge: %q", got)
+	}
+}
+
+func TestTerminalEraseCharsClearsIntersectedWideCellPairs(t *testing.T) {
+	t.Run("starts on continuation", func(t *testing.T) {
+		term := NewTerminal(5, 1)
+		term.PutRune('好')
+		term.PutRune('x')
+		term.SetCursor(0, 1)
+		term.EraseChars(1)
+
+		if term.cells[0].Rune != ' ' || term.cells[0].WideContinuation || term.cells[1].Rune != ' ' || term.cells[1].WideContinuation {
+			t.Fatalf("ECH left an orphaned wide pair: %#v", term.cells[:2])
+		}
+		if term.cells[2].Rune != 'x' {
+			t.Fatalf("ECH erased the following cell: %#v", term.cells[2])
+		}
+		if term.CursorCol() != 1 {
+			t.Fatalf("ECH moved cursor to column %d", term.CursorCol())
+		}
+	})
+
+	t.Run("ends on lead", func(t *testing.T) {
+		term := NewTerminal(5, 1)
+		term.PutRune('a')
+		term.PutRune('好')
+		term.PutRune('b')
+		term.SetCursor(0, 1)
+		term.EraseChars(1)
+
+		if term.cells[1].Rune != ' ' || term.cells[1].WideContinuation || term.cells[2].Rune != ' ' || term.cells[2].WideContinuation {
+			t.Fatalf("ECH left an orphaned wide pair: %#v", term.cells[1:3])
+		}
+		if term.cells[0].Rune != 'a' || term.cells[3].Rune != 'b' {
+			t.Fatalf("ECH changed cells outside the wide pair: %#v", term.cells[:4])
+		}
+	})
+
+	t.Run("does not trust stale continuation", func(t *testing.T) {
+		term := NewTerminal(4, 1)
+		term.PutRune('好')
+		term.SetCursor(0, 0)
+		term.PutRune('x')
+		if term.cells[1].WideContinuation {
+			t.Fatalf("narrow overwrite left stale continuation: %#v", term.cells[:2])
+		}
+		term.SetCursor(0, 1)
+		term.EraseChars(1)
+		if term.cells[0].Rune != 'x' {
+			t.Fatalf("ECH over-erased replacement glyph: %#v", term.cells[:2])
+		}
+	})
+
+	t.Run("uses active rendition", func(t *testing.T) {
+		term := NewTerminal(3, 1)
+		fg := RGBColor(RGB{R: 1, G: 2, B: 3})
+		bg := RGBColor(RGB{R: 4, G: 5, B: 6})
+		term.SetFG(fg)
+		term.SetBG(bg)
+		term.PutRune('x')
+		term.SetCursor(0, 0)
+		term.EraseChars(1)
+		if term.cells[0].Rune != ' ' || term.cells[0].Attr.FG != fg || term.cells[0].Attr.BG != bg {
+			t.Fatalf("ECH blank did not preserve active rendition: %#v", term.cells[0])
+		}
+	})
+
+	t.Run("insert mode repairs split pair", func(t *testing.T) {
+		term := NewTerminal(5, 1)
+		term.PutRune('好')
+		term.PutRune('x')
+		term.SetCursor(0, 1)
+		term.SetInsertMode(true)
+		term.PutRune('z')
+		for col, cell := range term.cells {
+			if cell.WideContinuation && (col == 0 || RuneWidth(term.cells[col-1].Rune) != 2) {
+				t.Fatalf("insert mode left orphan continuation at %d: %#v", col, term.cells)
+			}
+			if RuneWidth(cell.Rune) == 2 && (col+1 >= term.cols || !term.cells[col+1].WideContinuation) {
+				t.Fatalf("insert mode left orphan lead at %d: %#v", col, term.cells)
+			}
+		}
+	})
+
+	t.Run("delete repairs split pair", func(t *testing.T) {
+		term := NewTerminal(5, 1)
+		term.PutRune('a')
+		term.PutRune('好')
+		term.PutRune('b')
+		term.SetCursor(0, 2)
+		term.DeleteChars(1)
+		if term.cells[1].Rune != ' ' || term.cells[1].WideContinuation || term.cells[2].Rune != 'b' {
+			t.Fatalf("delete left a split wide pair: %#v", term.cells)
+		}
+	})
+
+	t.Run("wide rune at final column without autowrap is sanitized", func(t *testing.T) {
+		term := NewTerminal(3, 1)
+		term.SetAutoWrapMode(false)
+		term.SetCursor(0, 2)
+		term.PutRune('好')
+		if RuneWidth(term.cells[2].Rune) == 2 || term.cells[2].WideContinuation {
+			t.Fatalf("final column contains orphan wide cell: %#v", term.cells[2])
+		}
+	})
+}
+
 func TestTerminalEraseDisplayModes(t *testing.T) {
 	term := NewTerminal(4, 3)
 	for _, r := range "abcd" {
@@ -349,13 +474,13 @@ func TestTerminalSaveRestoreCursor(t *testing.T) {
 
 func TestTerminalAttributes(t *testing.T) {
 	term := NewTerminal(4, 1)
-	term.SetFG(ANSIColor(2))
-	term.SetBG(ANSIColor(4))
+	term.SetFG(IndexedColor(2))
+	term.SetBG(IndexedColor(4))
 	term.SetBold(true)
 	term.PutRune('x')
 
-	cell := term.Cells()[0]
-	if cell.Rune != 'x' || cell.Attr.FG != ANSIColor(2) || cell.Attr.BG != ANSIColor(4) || !cell.Attr.Bold {
+	cell := copyCells(term)[0]
+	if cell.Rune != 'x' || cell.Attr.FG != IndexedColor(2) || cell.Attr.BG != IndexedColor(4) || !cell.Attr.Bold {
 		t.Fatalf("unexpected cell: %#v", cell)
 	}
 }
@@ -719,4 +844,13 @@ func TestTerminalResizePreservesScrolledAnchor(t *testing.T) {
 	if topBefore != topAfter {
 		t.Fatalf("reflow jumped: top line before=%q (%c) after=%q (%c)", before, topBefore, after, topAfter)
 	}
+}
+
+// copyCells returns a defensive copy of the current screen cells for assertions
+// (replaces the removed Terminal.Cells() accessor, which handed out the live
+// backing slice).
+func copyCells(t *Terminal) []Cell {
+	c := make([]Cell, t.Cols()*t.Rows())
+	t.CopyView(c)
+	return c
 }

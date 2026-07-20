@@ -3,6 +3,7 @@ package fontglyph
 import (
 	"unicode"
 
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/unicodeprops"
 
 	"golang.org/x/image/font"
@@ -11,6 +12,12 @@ import (
 )
 
 type SimpleShaper struct{}
+
+func (SimpleShaper) FeatureCapability() string { return "portable-unsupported" }
+
+func (s SimpleShaper) ShapeFeatures(cluster string, face loadedFace, ppem uint16, _ fontdesc.FeatureSet) ([]ShapedGlyph, bool) {
+	return s.Shape(cluster, face, ppem)
+}
 
 func (SimpleShaper) Shape(cluster string, face loadedFace, ppem uint16) ([]ShapedGlyph, bool) {
 	if cluster == "" || face.sfnt == nil {

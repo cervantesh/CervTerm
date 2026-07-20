@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -39,6 +40,27 @@ func TestGenerateTealHappyPathWithFakeTool(t *testing.T) {
 	}
 	if _, err := os.Stat(luaPath); err != nil {
 		t.Fatalf("expected generated lua file: %v", err)
+	}
+}
+
+func TestLoadTealStructuralErrorNamesAuthoredSource(t *testing.T) {
+	dir := t.TempDir()
+	tlPath := filepath.Join(dir, "tl")
+	if runtime.GOOS == "windows" {
+		tlPath += ".bat"
+		writeTestFile(t, tlPath, "@echo off\r\nif \"%1\"==\"check\" exit /b 0\r\nif \"%1\"==\"gen\" copy \"%4\" \"%~dpn4.lua\" >nul & exit /b 0\r\nexit /b 1\r\n")
+	} else {
+		writeTestFile(t, tlPath, "#!/bin/sh\nif [ \"$1\" = check ]; then exit 0; fi\nif [ \"$1\" = gen ]; then cp \"$4\" \"${4%.tl}.lua\"; exit 0; fi\nexit 1\n")
+		if err := os.Chmod(tlPath, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	tealPath := filepath.Join(dir, "strict.tl")
+	writeTestFile(t, tealPath, `return { config_version = 2, windwo = {} }`)
+	_, _, err := Load(tealPath)
+	if err == nil || !strings.Contains(err.Error(), tealPath+": windwo: unknown field") {
+		t.Fatalf("Load error = %v, want authored Teal path %q", err, tealPath)
 	}
 }
 

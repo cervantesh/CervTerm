@@ -151,8 +151,8 @@ func TestStraddleLineNoLossNoDuplication(t *testing.T) {
 	for _, r := range line {
 		term.PutRune(r)
 	}
-	term.Resize(12, 2)  // narrow AND short: the line wraps past the viewport, so its
-	term.Resize(40, 6)  // head spills to scrollback and its tail stays live (straddle)
+	term.Resize(12, 2)                  // narrow AND short: the line wraps past the viewport, so its
+	term.Resize(40, 6)                  // head spills to scrollback and its tail stays live (straddle)
 	simulateConPTYViewportRepaint(term) // shell repaints the viewport (clears the tail)
 
 	full := fullText(term)

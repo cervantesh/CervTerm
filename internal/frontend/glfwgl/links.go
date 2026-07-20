@@ -14,6 +14,51 @@ type linkRegion struct {
 	startCol int
 	endCol   int
 	url      string
+	explicit bool
+	id       core.HyperlinkID
+}
+
+func detectSnapshotLinks(cells []core.Cell, hyperlinks []core.Hyperlink, cols, rows int) []linkRegion {
+	if cols <= 0 || rows <= 0 || len(cells) < cols*rows {
+		return nil
+	}
+	byID := make(map[core.HyperlinkID]string, len(hyperlinks))
+	for _, hyperlink := range hyperlinks {
+		if hyperlink.ID != 0 && hyperlink.URI != "" {
+			byID[hyperlink.ID] = hyperlink.URI
+		}
+	}
+	links := make([]linkRegion, 0, len(hyperlinks))
+	for row := 0; row < rows; row++ {
+		for col := 0; col < cols; {
+			id := cells[row*cols+col].HyperlinkID
+			if id == 0 {
+				col++
+				continue
+			}
+			end := col + 1
+			for end < cols && cells[row*cols+end].HyperlinkID == id {
+				end++
+			}
+			if uri, ok := byID[id]; ok {
+				links = append(links, linkRegion{row: row, startCol: col, endCol: end - 1, url: uri, explicit: true, id: id})
+			}
+			col = end
+		}
+	}
+	for _, detected := range detectLinks(cells, cols, rows) {
+		overlaps := false
+		for _, explicit := range links {
+			if explicit.row == detected.row && explicit.startCol <= detected.endCol && detected.startCol <= explicit.endCol {
+				overlaps = true
+				break
+			}
+		}
+		if !overlaps {
+			links = append(links, detected)
+		}
+	}
+	return links
 }
 
 // detectLinks scans the visible grid for http:// and https:// URLs, one visual

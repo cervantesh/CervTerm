@@ -1,13 +1,22 @@
 package core
 
 func NewTerminal(cols, rows int) *Terminal {
+	return NewTerminalWithHistory(cols, rows, defaultScrollbackRows)
+}
+
+func NewTerminalWithHistory(cols, rows, history int) *Terminal {
 	if cols < 2 {
 		cols = 2
 	}
 	if rows < 1 {
 		rows = 1
 	}
-	t := &Terminal{cols: cols, rows: rows, attr: Attr{FG: DefaultFG, BG: DefaultBG}, scrollBottom: rows - 1, cursorVisible: true, autoWrap: true}
+	if history < 0 {
+		history = 0
+	} else if history > maxScrollbackRows {
+		history = maxScrollbackRows
+	}
+	t := &Terminal{cols: cols, rows: rows, scrollbackCapacity: history, attr: Attr{FG: DefaultColor(), BG: DefaultColor()}, paletteBase: DefaultPaletteBase(), scrollBottom: rows - 1, cursorVisible: true, autoWrap: true}
 	t.cells = make([]Cell, cols*rows)
 	t.rowWrapped = make([]bool, rows)
 	t.resetTabStops()
@@ -27,8 +36,6 @@ func (t *Terminal) SetTitle(s string) { t.title = s }
 // watching for increases.
 func (t *Terminal) BellCount() int { return t.bellCount }
 func (t *Terminal) Bell()          { t.bellCount++ }
-
-func (t *Terminal) Cells() []Cell { return t.cells }
 
 func (t *Terminal) Clear() {
 	blank := t.blank()
@@ -64,9 +71,13 @@ func (t *Terminal) Reset() {
 	t.DesignateCharset(0, CharsetASCII)
 	t.DesignateCharset(1, CharsetASCII)
 	t.SelectCharset(0)
-	t.SetCursorStyle(0)
+	t.SetCursorStyle(CursorStyleDefault)
 	t.resetTabStops()
 	t.SetCwd("")
+	t.CloseHyperlink()
+	t.hyperlinks.reset()
+	t.semanticBoundaryPending = false
+	t.semanticKind = SemanticNone
 }
 
 func (t *Terminal) ClearLine(row int) {
@@ -101,6 +112,31 @@ func (t *Terminal) ClearToBeginningOfLine() {
 	if t.cursorCol == t.cols-1 {
 		t.rowWrapped[t.cursorRow] = false
 	}
+}
+
+// EraseChars replaces n character positions at and after the cursor with blanks
+// without shifting the remaining cells or moving the cursor (ECMA-48 ECH).
+func (t *Terminal) EraseChars(n int) {
+	if n <= 0 {
+		n = 1
+	}
+	startCol := t.cursorCol
+	endCol := min(t.cols, startCol+n)
+	if startCol >= endCol {
+		return
+	}
+	startCol, endCol = t.expandWideCellRange(t.cursorRow, startCol, endCol)
+
+	blank := Cell{Rune: ' ', Attr: t.attr}
+	rowStart := t.cursorRow * t.cols
+	for col := startCol; col < endCol; col++ {
+		t.cells[rowStart+col] = blank
+	}
+	t.repairWideCells(t.cursorRow, blank)
+	if endCol == t.cols {
+		t.rowWrapped[t.cursorRow] = false
+	}
+	t.wrapNext = false
 }
 
 func (t *Terminal) ClearToEndOfScreen() {
@@ -151,11 +187,18 @@ func (t *Terminal) PutRune(r rune) {
 	if t.insertMode {
 		t.InsertChars(width)
 	}
-	t.cells[idx] = Cell{Rune: r, Attr: t.attr}
+	eraseStart, eraseEnd := t.expandWideCellRange(t.cursorRow, t.cursorCol, min(t.cols, t.cursorCol+width))
+	eraseBlank := Cell{Rune: ' ', Attr: t.attr}
+	for col := eraseStart; col < eraseEnd; col++ {
+		t.cells[t.cursorRow*t.cols+col] = eraseBlank
+	}
+	semantic := t.consumeSemanticCell()
+	t.cells[idx] = Cell{Rune: r, Attr: t.attr, HyperlinkID: t.hyperlinks.current, SemanticKind: semantic}
 	if width == 2 && t.cursorCol+1 < t.cols {
-		t.cells[idx+1] = Cell{Attr: t.attr, WideContinuation: true}
+		t.cells[idx+1] = Cell{Attr: t.attr, HyperlinkID: t.hyperlinks.current, SemanticKind: semantic &^ semanticBoundaryMask, WideContinuation: true}
 	}
 
+	t.repairWideCells(t.cursorRow, eraseBlank)
 	if t.cursorCol+width >= t.cols {
 		t.wrapNext = t.autoWrap
 		t.cursorCol = t.cols - 1
@@ -184,6 +227,7 @@ func (t *Terminal) addCombiningRune(r rune) {
 }
 
 func (t *Terminal) NewLine() {
+	t.stampBlankSemanticRow()
 	t.wrapNext = false
 	if t.cursorRow == t.scrollBottom {
 		t.scrollUpRegion(t.scrollTop, t.scrollBottom, 1)
@@ -242,6 +286,9 @@ func (t *Terminal) SetCursor(row, col int) {
 	if col >= t.cols {
 		col = t.cols - 1
 	}
+	if row != t.cursorRow {
+		t.stampBlankSemanticRow()
+	}
 	t.cursorRow, t.cursorCol = row, col
 	t.wrapNext = false
 }
@@ -292,6 +339,7 @@ func (t *Terminal) InsertChars(n int) {
 	for i := start; i < start+n; i++ {
 		t.cells[i] = blank
 	}
+	t.repairWideCells(t.cursorRow, blank)
 	t.rowWrapped[t.cursorRow] = false
 	t.wrapNext = false
 }
@@ -314,6 +362,7 @@ func (t *Terminal) DeleteChars(n int) {
 	for i := end - n; i < end; i++ {
 		t.cells[i] = blank
 	}
+	t.repairWideCells(t.cursorRow, blank)
 	t.rowWrapped[t.cursorRow] = false
 	t.wrapNext = false
 }
@@ -392,12 +441,16 @@ func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearO
 		}
 		t.primaryScreen = t.snapshotScreen()
 		t.alternateScreen = true
+		t.hyperlinks.reset()
+		t.semanticKind = SemanticNone
+		t.semanticBoundaryPending = false
 		t.cells = make([]Cell, t.cols*t.rows)
 		t.rowWrapped = make([]bool, t.rows)
 		t.scrollback = nil
 		t.scrollbackWrapped = nil
 		t.scrollbackStart = 0
 		t.scrollbackRows = 0
+		t.scrollbackCapacity = 0
 		t.displayOffset = 0
 		if clearOnEnter {
 			t.Clear()
@@ -429,5 +482,6 @@ func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearO
 		t.RestoreCursor()
 	}
 }
-func (t *Terminal) ScrollbackLines() int { return t.scrollbackRows }
-func (t *Terminal) DisplayOffset() int   { return t.displayOffset }
+func (t *Terminal) ScrollbackLines() int    { return t.scrollbackRows }
+func (t *Terminal) ScrollbackCapacity() int { return t.scrollbackCapacity }
+func (t *Terminal) DisplayOffset() int      { return t.displayOffset }

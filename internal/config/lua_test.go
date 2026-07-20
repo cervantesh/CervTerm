@@ -93,3 +93,25 @@ func TestDefaultLuaRoundTrip(t *testing.T) {
 		t.Fatalf("round-trip render config = %#v, want %#v", cfg.Render, defaults.Render)
 	}
 }
+
+func TestFromTableAppearanceAndScrollbar(t *testing.T) {
+	state := lua.NewState()
+	defer state.Close()
+	if err := state.DoString(`cfg = {
+	  window = { opacity = 0.75, blur = false },
+	  colors = { background = "#010203FF" },
+	  scrollbar = { enabled = false, reserved_width_px = 18, width_px = 10, margin_px = 4, radius_px = 5, min_thumb_px = 30, track_color = "#11111122", thumb_color = "#22222233", thumb_hover_color = "#33333344", thumb_press_color = "#44444455", auto_hide_delay_ms = 700, fade_ms = 90, page_step = 0.75, track_click = "jump" },
+	}`); err != nil {
+		t.Fatal(err)
+	}
+	cfg := FromTable(Defaults(), state.GetGlobal("cfg").(*lua.LTable))
+	if cfg.Window.Opacity != .75 || cfg.Window.Blur || cfg.Colors.Background != "#010203FF" {
+		t.Fatalf("appearance overrides missing: %#v %#v", cfg.Window, cfg.Colors)
+	}
+	if cfg.Scrollbar.Enabled || cfg.Scrollbar.ReservedWidthPX != 18 || cfg.Scrollbar.PageStep != .75 || cfg.Scrollbar.TrackClick != "jump" {
+		t.Fatalf("scrollbar overrides missing: %#v", cfg.Scrollbar)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("overrides should validate: %v", err)
+	}
+}

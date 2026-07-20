@@ -83,6 +83,7 @@ func (tt *timerTable) nextDeadline() (time.Time, bool) {
 func buildModule(state *lua.LState, tt *timerTable, statuses *statusTable, overlays *overlayStore) *lua.LTable {
 	mod := state.NewTable()
 	mod.RawSetString("after", state.NewFunction(func(l *lua.LState) int {
+		rejectDeclarativeIncludeRegistration(l, "after")
 		ms := l.CheckInt(1)
 		fn := l.CheckFunction(2)
 		id := tt.add(time.Now().Add(time.Duration(ms)*time.Millisecond), 0, fn)
@@ -90,6 +91,7 @@ func buildModule(state *lua.LState, tt *timerTable, statuses *statusTable, overl
 		return 1
 	}))
 	mod.RawSetString("every", state.NewFunction(func(l *lua.LState) int {
+		rejectDeclarativeIncludeRegistration(l, "every")
 		ms := l.CheckInt(1)
 		fn := l.CheckFunction(2)
 		period := time.Duration(ms) * time.Millisecond
@@ -98,14 +100,17 @@ func buildModule(state *lua.LState, tt *timerTable, statuses *statusTable, overl
 		return 1
 	}))
 	mod.RawSetString("cancel", state.NewFunction(func(l *lua.LState) int {
+		rejectDeclarativeIncludeRegistration(l, "cancel")
 		tt.cancel(l.CheckInt(1))
 		return 0
 	}))
 	mod.RawSetString("status", state.NewFunction(func(l *lua.LState) int {
+		rejectDeclarativeIncludeRegistration(l, "status")
 		statuses.set(l.CheckString(1), l.CheckString(2))
 		return 0
 	}))
 	mod.RawSetString("overlay", state.NewFunction(func(l *lua.LState) int {
+		rejectDeclarativeIncludeRegistration(l, "overlay")
 		ov := overlays.get(l.CheckString(1))
 		if ov.handle == nil {
 			ov.handle = newOverlayHandle(l, overlays, ov)
@@ -113,6 +118,8 @@ func buildModule(state *lua.LState, tt *timerTable, statuses *statusTable, overl
 		l.Push(ov.handle)
 		return 1
 	}))
+	installConfigModule(state, mod)
+	installActionModule(state, mod)
 	return mod
 }
 

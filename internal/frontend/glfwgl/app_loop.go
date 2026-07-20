@@ -5,8 +5,8 @@ package glfwgl
 import (
 	"time"
 
+	termmux "cervterm/internal/mux"
 	ptyio "cervterm/internal/pty"
-	"cervterm/internal/render"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
@@ -14,7 +14,12 @@ import (
 // requestRedraw marks the next frame dirty. Main-thread only: the PTY reader
 // goroutine must never call this — it wakes the loop with glfw.PostEmptyEvent
 // and lets drainIncoming set the flag.
-func (a *App) requestRedraw() { a.needsRedraw = true }
+func (a *App) requestRedraw() {
+	a.needsRedraw = true
+	if a.controller != nil {
+		a.controller.markDamage(a.windowID)
+	}
+}
 
 // wakeMainLoop nudges the event wait from the reader goroutine. PostEmptyEvent
 // is the only GLFW call safe from a non-main thread, and only while GLFW is
@@ -25,132 +30,159 @@ func (a *App) wakeMainLoop() {
 	}
 }
 
-// runLoop dispatches to the configured render loop. "continuous" reproduces the
-// historical poll-and-always-draw loop for benchmarking; the default
-// "on_demand" loop blocks in the OS event wait and draws only on damage.
-func (a *App) runLoop(w *glfw.Window) error {
-	if a.cfg.Render.Redraw == "continuous" {
-		return a.runContinuousLoop(w)
-	}
-	return a.runOnDemandLoop(w)
+// runLoop owns the process-wide OS-thread scheduler. GLFW is pumped once, mux
+// ingress is drained once, and process timers/reload are ticked once per cycle.
+// Projection-local state and presentation remain independent.
+func (a *App) runLoop(_ *glfw.Window) error {
+	return a.runProcessLoop(a.cfg.Render.Redraw == "continuous")
 }
 
-// runContinuousLoop is the pre-on-demand loop: poll, drain, always draw. Event
-// dispatch moved out of draw() into processTermEvents, so it is called here too
-// to keep bells/titles firing with identical observable behavior.
-func (a *App) runContinuousLoop(w *glfw.Window) error {
-	for !w.ShouldClose() {
-		glfw.PollEvents()
-		consumed := a.drainIncoming()
-		a.processTermEvents(consumed)
-		a.applyPendingZoom()
-		a.resizeToWindow()
-		a.fireDueTimers(time.Now())
-		a.fireLifecycleEvents()
-		a.syncStatusSegments()
-		a.syncOverlays()
-		a.draw()
-		w.SwapBuffers()
-		a.meter.AddFrame()
-	}
-	return nil
+func (a *App) runContinuousLoop(_ *glfw.Window) error { return a.runProcessLoop(true) }
+
+func (a *App) runOnDemandLoop(_ *glfw.Window) error { return a.runProcessLoop(false) }
+
+type projectionCycleScheduler interface {
+	projectionIDs() []termmux.WindowID
+	shouldClose(termmux.WindowID) bool
+	closeRuntimeProjection(termmux.WindowID) (termmux.CloseWindowResult, error)
 }
 
-// runOnDemandLoop blocks in glfw.WaitEventsTimeout until an OS event, a
-// PostEmptyEvent wake, or the next time-driven deadline (nextWakeTimeout), then
-// draws only when shouldRedraw reports damage.
-func (a *App) runOnDemandLoop(w *glfw.Window) error {
-	for !w.ShouldClose() {
-		glfw.WaitEventsTimeout(a.nextWakeTimeout(time.Now()).Seconds())
-		consumed := a.drainIncoming()
-		a.processTermEvents(consumed)
-		a.applyPendingZoom()
-		a.resizeToWindow()
-		a.fireDueTimers(time.Now())
-		a.fireLifecycleEvents()
-		a.syncStatusSegments()
-		a.syncOverlays()
-		if a.shouldRedraw(time.Now()) {
-			a.draw()
-			w.SwapBuffers()
-			a.meter.AddFrame()
-			a.needsRedraw = false
+func runProjectionCycle(s projectionCycleScheduler, frame func(termmux.WindowID) error) error {
+	for _, id := range s.projectionIDs() {
+		if s.shouldClose(id) {
+			if _, err := s.closeRuntimeProjection(id); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := frame(id); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// drainIncoming applies every queued PTY chunk. It returns whether it consumed
-// any data and requests a redraw in that case.
-func (a *App) drainIncoming() bool {
-	consumed := false
-	for {
-		select {
-		case data := <-a.incoming:
-			a.mu.Lock()
-			a.parser.Advance(a.term, data)
-			a.mu.Unlock()
-			a.flushReplies()
-			// Fire on_output outside the lock: a handler may call term:write,
-			// which re-enters writeInput and would deadlock on a.mu.
-			if a.scriptRT != nil && a.scriptRT.WantsOutput() {
-				if err := a.scriptRT.FireOutput(a, string(data)); err != nil {
-					a.Notify("script error: " + err.Error())
+func (a *App) runProcessLoop(continuous bool) error {
+	for a.controller.projectionCount() > 0 {
+		now := time.Now()
+		if continuous {
+			if err := a.controller.pollEvents(); err != nil {
+				return err
+			}
+		} else if err := a.controller.waitEvents(a.processNextWakeTimeout(now)); err != nil {
+			return err
+		}
+
+		events := a.controller.drainMux(256)
+		a.controller.dispatch(events)
+		now = time.Now()
+		if activeID := a.controller.active; activeID != 0 {
+			if err := a.controller.withCurrent(activeID, func() {
+				if active := a.controller.activeProjectionApp(); active != nil {
+					active.fireDueTimers(now)
 				}
+			}); err != nil {
+				return err
 			}
-			a.meter.AddBytes(len(data))
-			consumed = true
-		default:
-			if consumed {
-				a.requestRedraw()
+		}
+		if a.controller.projectionApp(a.windowID) != nil {
+			if err := a.controller.withCurrent(a.windowID, func() { a.pollConfigReload(now); a.applyPendingConfigReload() }); err != nil {
+				return err
 			}
-			return consumed
+		}
+		if err := a.controller.syncSharedProjectionState(a); err != nil {
+			return err
+		}
+
+		if err := runProjectionCycle(a.controller, func(id termmux.WindowID) error {
+			projection := a.controller.projectionApp(id)
+			if projection == nil {
+				return nil
+			}
+			if !a.controller.projectionVisible(id) {
+				return nil
+			}
+			drew := false
+			if err := a.controller.withCurrent(id, func() {
+				projection.tickProjection()
+				now = time.Now()
+				if !continuous && !projection.shouldRedraw(now) {
+					return
+				}
+				if continuous {
+					if wait := projection.presentation.wait(now, projection.cfg.Render.MaxFPS); wait > 0 {
+						time.Sleep(wait)
+					}
+				}
+				projection.draw()
+				projection.r.EndFrame()
+				drew = true
+			}); err != nil {
+				return err
+			}
+			if drew {
+				a.controller.clearDamage(id)
+				projection.presentation.record(time.Now())
+				projection.meter.AddFrame()
+				projection.needsRedraw = false
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
-// processTermEvents fires title/cwd/bell handlers on the main thread. It runs every
-// loop iteration but only captures a snapshot when the parser advanced — via
-// drainIncoming or via the no-PTY fallback (termEventsPending) — so
-// bells/titles/cwd changes fire promptly even when draw() is skipped by on-demand
-// rendering. draw() renders the already-captured snapshot. The pending flag is
-// cleared before handlers run: a handler's term:write re-arms it for the next
-// iteration instead of re-entering dispatch.
-func (a *App) processTermEvents(consumed bool) {
-	if a.termEventsPending {
-		consumed = true
-		a.termEventsPending = false
+func (a *App) tickProjection() {
+	a.processTermEvents(false)
+	a.applyPendingZoom()
+	a.applyPendingDividerResize()
+	a.resizeToWindow()
+	a.fireLifecycleEvents()
+	a.syncStatusSegments()
+	a.syncOverlays()
+}
+
+func (a *App) processNextWakeTimeout(now time.Time) time.Duration {
+	wake := maxWake
+	for _, id := range a.controller.projectionIDs() {
+		projection := a.controller.projectionApp(id)
+		if projection == nil || !a.controller.projectionVisible(id) {
+			continue
+		}
+		candidate := projection.nextWakeTimeout(now)
+		if candidate > 0 && candidate < wake {
+			wake = candidate
+		}
 	}
-	if !consumed {
+	return wake
+}
+
+// drainIncoming advances pane-addressed mux ingress on the main thread.
+func (a *App) drainIncoming() bool {
+	events := a.drainMuxEvents(256)
+	return a.dispatchMuxEvents(events)
+}
+
+// processTermEvents drains synthetic events produced by main-thread Host calls.
+func (a *App) processTermEvents(_ bool) {
+	if len(a.pendingMuxEvents) == 0 {
+		a.syncFocusedProjection()
 		return
 	}
-	a.mu.Lock()
-	render.Capture(&a.snap, a.term)
-	a.mu.Unlock()
-	if a.snap.Title != a.lastTitle {
-		a.lastTitle = a.snap.Title
-		if a.cfg.Window.DynamicTitle && a.snap.Title != "" {
-			a.window.SetTitle("CervTerm · " + a.snap.Title)
-		} else {
-			a.window.SetTitle("CervTerm")
+	events := a.pendingMuxEvents
+	a.pendingMuxEvents = nil
+	for i := range events {
+		if events[i].Window == 0 {
+			events[i].Window = a.windowID
 		}
-		a.fireScriptEvent(func() error { return a.scriptRT.FireTitle(a, a.snap.Title) })
 	}
-	if a.snap.Cwd != a.lastCwd {
-		a.lastCwd = a.snap.Cwd
-		a.fireScriptEvent(func() error { return a.scriptRT.FireCwd(a, a.snap.Cwd) })
-	}
-	// BellCount is monotonic; fire once per bell so bursts are not collapsed.
-	for a.lastBellCount < a.snap.BellCount {
-		a.lastBellCount++
-		a.fireScriptEvent(func() error { return a.scriptRT.FireBell(a) })
-	}
+	a.dispatchMuxEvents(events)
 }
 
-// shouldRedraw reports whether the frame must be repainted now: an explicit
-// damage request, a blink phase flip, an expiring notice, or the stats HUD
-// refresh window elapsing.
-func (a *App) shouldRedraw(now time.Time) bool {
+// redrawWanted reports whether visible state currently demands a presentation.
+func (a *App) redrawWanted(now time.Time) bool {
 	if a.needsRedraw {
 		return true
 	}
@@ -163,15 +195,21 @@ func (a *App) shouldRedraw(now time.Time) bool {
 	if a.showStats && now.Sub(a.lastStatsDraw) >= 500*time.Millisecond {
 		return true
 	}
-	return false
+	return a.scrollbarNeedsRedraw(now)
+}
+
+// shouldRedraw applies the presentation cap without clearing redraw demand.
+func (a *App) shouldRedraw(now time.Time) bool {
+	return a.redrawWanted(now) && a.presentation.ready(now, a.cfg.Render.MaxFPS)
 }
 
 // nextWakeTimeout bridges the pure nextWake helper to App state. A redraw
 // already pending (e.g. the first frame before any OS event) short-circuits to
 // minWake so the wait does not stall the paint for up to maxWake.
 func (a *App) nextWakeTimeout(now time.Time) time.Duration {
-	if a.needsRedraw {
-		return minWake
+	presentationWait := a.presentation.wait(now, a.cfg.Render.MaxFPS)
+	if a.redrawWanted(now) {
+		return max(minWake, presentationWait)
 	}
 	// A pending timer bounds the wait. Zero (no timers, or no runtime) leaves
 	// nextWake unchanged, so an idle terminal with no timers still costs nothing.
@@ -182,13 +220,24 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 		}
 	}
 	wake := nextWake(now, a.blinkActive(), a.blinkStart, a.blinkPeriod(), a.noticeUntil, a.showStats, timerDeadline)
-	// A debounced zoom must wake the loop when its deadline arrives so the coalesced
-	// rebuild fires even if no other event does — but never past an earlier deadline
-	// (blink, timers, notice), so those stay on time.
-	if a.zoom.pendingSet {
-		zoomWake := max(minWake, a.zoom.deadline.Sub(now))
+	// A debounced zoom must wake for the earliest pane-local settlement without
+	// delaying an earlier blink, timer, notice, or sibling zoom deadline.
+	if deadline, ok := a.earliestPendingZoomDeadline(); ok {
+		zoomWake := max(minWake, deadline.Sub(now))
 		if wake <= 0 || zoomWake < wake {
 			wake = zoomWake
+		}
+	}
+	if a.divider.settlePending {
+		dividerWake := max(minWake, a.divider.settleAt.Sub(now))
+		if wake <= 0 || dividerWake < wake {
+			wake = dividerWake
+		}
+	}
+	if scrollbarWake, ok := a.scrollbarWake(now); ok {
+		scrollbarWake = max(minWake, scrollbarWake)
+		if wake <= 0 || scrollbarWake < wake {
+			wake = scrollbarWake
 		}
 	}
 	return wake
@@ -218,44 +267,51 @@ func (a *App) blinkActive() bool {
 	if !a.snap.CursorVisible {
 		return false
 	}
-	switch a.snap.CursorStyle {
-	case 1, 3, 5:
-		return true
-	case 2, 4, 6:
-		return false
+	if b, ok := a.snap.CursorStyle.Blink(); ok {
+		return b
 	}
 	return a.cfg.Cursor.Blink
 }
 
-// spawnInitialPTY sizes the terminal to the real initial grid and starts the
-// PTY, so terminal and ConPTY agree from byte zero and no startup resize
-// repaints the shell banner. Called from runWindow once cellW/cellH are final.
-// The terminal resize holds a.mu, but startPTY runs without it (its reader
-// goroutine and the failure-path parser feed both take a.mu). Seeding
-// a.cols/a.rows makes the loop's first resizeToWindow a no-op.
+// spawnInitialPTY bootstraps the implicit mux tab at the real initial grid.
 func (a *App) spawnInitialPTY(w *glfw.Window) {
 	fbW, fbH := w.GetFramebufferSize()
-	cols, rows := a.gridSize(fbW, fbH)
-	a.mu.Lock()
-	a.term.Resize(cols, rows)
-	a.mu.Unlock()
-	a.cols, a.rows = cols, rows
-	// Fire events.resize for the initial grid; the first loop iteration drains it.
-	a.markResizeEvent(cols, rows)
-	if err := a.startPTY(); err != nil {
-		a.parser.Advance(a.term, []byte("\x1b[96mCervTerm\x1b[0m\r\n\r\n"))
-		a.parser.Advance(a.term, []byte("Local PTY unavailable on this platform/build.\r\n"))
-		a.parser.Advance(a.term, []byte(err.Error()+"\r\n\r\n"))
-		a.parser.Advance(a.term, []byte("Type to test the renderer and parser.\r\n"))
+	eventsRect := a.muxContentBounds(fbW, fbH)
+	_, pane, events, err := a.mux.Bootstrap(termmux.SpawnSpec{Options: ptyio.Options{
+		ShellProgram: a.cfg.Shell.Program, ShellArgs: a.cfg.Shell.Args,
+		WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env,
+	}}, eventsRect, a.muxMetrics())
+	a.focusedPane = pane
+	a.dispatchMuxEvents(events)
+	a.syncFocusedProjection()
+	a.markResizeEvent(a.cols, a.rows)
+	if err != nil {
+		a.Notify("PTY unavailable: " + err.Error())
 	}
 }
 
-// gridSize maps a framebuffer size (in pixels) to the terminal grid, applying
-// the padding and cell metrics. Shared by resizeToWindow and the initial PTY
-// spawn in runWindow so the two sites cannot drift.
+func (a *App) outerInsets() OuterInsets {
+	return OuterInsets{
+		Left: float64(a.cfg.Window.PaddingLeft), Right: float64(a.cfg.Window.PaddingRight),
+		Top: float64(a.cfg.Window.PaddingTop), Bottom: float64(a.cfg.Window.PaddingBottom),
+	}
+}
+
+func (a *App) windowGeometry(width, height int) WindowGeometry {
+	return resolveWindowGeometryWithTabBar(width, height, a.insets, a.scrollbarReservedWidth(), a.effectiveTabBarHeight(), a.cfg.TabBar.Position)
+}
+
+func (a *App) muxContentBounds(width, height int) termmux.PixelRect {
+	content := a.windowGeometry(width, height).Content
+	return termmux.PixelRect{X: content.X, Y: content.Y, Width: content.Width, Height: content.Height}
+}
+
+// gridSize maps a framebuffer size to the terminal grid through the same content
+// rectangle used by mux layout and PTY sizing.
 func (a *App) gridSize(w, h int) (cols, rows int) {
-	cols = max(2, int((float32(w)-2*a.paddingX)/a.cellW))
-	rows = max(1, int((float32(h)-2*a.paddingY)/a.cellH))
+	content := a.windowGeometry(w, h).Content
+	cols = max(2, int(float32(content.Width)/a.cellW))
+	rows = max(1, int(float32(content.Height)/a.cellH))
 	return cols, rows
 }
 
@@ -275,25 +331,41 @@ func (a *App) resizeToWindow() {
 // Returns whether the grid dimensions changed.
 func (a *App) resizeGridToWindow() bool {
 	w, h := a.window.GetFramebufferSize()
-	cols, rows := a.gridSize(w, h)
-	if cols == a.cols && rows == a.rows {
+	events, err := a.mux.ResizeBounds(a.muxContentBounds(w, h))
+	if err != nil {
+		a.Notify("resize: " + err.Error())
 		return false
 	}
-	a.cols, a.rows = cols, rows
-	a.mu.Lock()
-	a.term.Resize(cols, rows)
-	a.mu.Unlock()
-	a.markResizeEvent(cols, rows)
-	a.requestRedraw()
-	return true
+	changed := a.dispatchMuxEvents(events)
+	if a.syncFocusedProjection() {
+		a.markResizeEvent(a.cols, a.rows)
+	}
+	return changed
 }
 
-// resizePTYToGrid notifies ConPTY of the current grid dimensions. Kept separate
-// from the local reflow so zoom can coalesce it to one call per burst: ConPTY
-// repaints its viewport asynchronously on every resize, and several in flight at
-// once interleave over the next grid → duplicated/garbled scrollback.
-func (a *App) resizePTYToGrid() {
-	if a.pty != nil {
-		_ = a.pty.Resize(ptyio.Size{Rows: uint16(a.rows), Cols: uint16(a.cols)})
+// resizePTYToGrid applies each pane's latest desired size at a settlement
+// boundary and reports whether every pane accepted it. Window-driven failures
+// enter the bounded pane retry path; divider settlement owns its own retries.
+func (a *App) resizePTYToGrid() bool { return a.resizePTYToGridWithRetry(true, true) }
+
+func (a *App) resizePTYToGridReporting(reportFailure bool) bool {
+	return a.resizePTYToGridWithRetry(reportFailure, false)
+}
+
+func (a *App) resizePTYToGridWithRetry(reportFailure, scheduleRetry bool) bool {
+	succeeded := true
+	now := time.Now()
+	for _, id := range a.mux.PaneIDs() {
+		events, err := a.mux.ApplyResize(id)
+		if err == nil || reportFailure {
+			a.dispatchMuxEvents(events)
+		}
+		if err != nil {
+			succeeded = false
+			if scheduleRetry {
+				a.schedulePanePTYResizeRetry(id, now)
+			}
+		}
 	}
+	return succeeded
 }

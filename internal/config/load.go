@@ -18,6 +18,7 @@ func Load(path string) (Config, string, error) {
 	if resolved == "" {
 		return cfg, "", nil
 	}
+	source := resolved
 	if strings.HasSuffix(resolved, ".tl") {
 		luaPath, err := GenerateTeal(resolved)
 		if err != nil {
@@ -25,7 +26,7 @@ func Load(path string) (Config, string, error) {
 		}
 		resolved = luaPath
 	}
-	loaded, err := LoadLua(resolved, cfg)
+	loaded, err := loadLua(resolved, source, cfg)
 	if err != nil {
 		return cfg, resolved, err
 	}

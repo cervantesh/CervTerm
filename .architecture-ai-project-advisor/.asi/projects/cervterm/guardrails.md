@@ -1,7 +1,7 @@
 # Architecture Guardrails
 
 Project: CervTerm  
-Updated: 2026-07-10
+Updated: 2026-07-16
 
 ## Unicode / Emoji Rendering Guardrails
 
@@ -27,3 +27,18 @@ Updated: 2026-07-10
 - [ ] Keep platform/font compatibility in `internal/fontglyph`.
 - [ ] Avoid architecture-heavy dependencies unless they replace enough handwritten Unicode logic to reduce long-term maintenance.
 - [ ] Decisions with durable architecture impact require an ADR.
+
+## WezTerm-Inspired Parity Guardrails
+
+- [ ] Do not add renderer-backend selection or make backend migration a prerequisite.
+- [ ] Do not introduce local, SSH, WSL, serial, or remote domain abstractions.
+- [ ] Do not add a daemon, live detach/reattach, or persistence of running processes.
+- [ ] Keep mux ownership of pane/tab identity, topology, focus, geometry, and lifecycle out of GLFW.
+- [ ] Keep GLFW and OpenGL calls on the OS thread.
+- [ ] Every public config field updates Go schema, Lua mapping, Teal types, template, validation, reload semantics, tests, and docs together.
+- [ ] Invalid reload candidates must preserve the last valid config, bindings, and runtime.
+- [ ] Terminal-originated data cannot cause external side effects without validation and explicit policy.
+- [ ] IME preedit remains frontend state; only committed text reaches the PTY.
+- [ ] Terminal image transfers require bounded encoded bytes, decoded bytes, pixels, objects, processing time, and cache memory.
+- [ ] Workspaces may persist layout and launch descriptors only, never live processes, PTY handles, credentials, or claimed session continuity.
+- [ ] Each roadmap phase requires focused tests, full gates, validation evidence, and architecture drift review before merge.

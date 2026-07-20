@@ -3,42 +3,62 @@
 package glfwgl
 
 import (
-	"strings"
+	"errors"
 	"time"
 
-	"cervterm/internal/core"
-	"cervterm/internal/render"
+	"cervterm/internal/config"
+	termmux "cervterm/internal/mux"
 	termsel "cervterm/internal/selection"
 )
 
-// App's script.Host implementation: the terminal surface Lua handlers see.
-
-func (a *App) WriteInput(s string) {
-	a.writeInput(s)
+// paneHost binds the existing script.Host surface to one immutable pane ID for
+// the duration of a callback. Background output can therefore never redirect
+// term:* operations to the currently focused sibling.
+type paneHost struct {
+	app  *App
+	pane termmux.PaneID
 }
 
-// Notify runs on the main thread only (script dispatch and drain paths), so it
-// may set the redraw flag directly to paint the notice promptly.
+func (h paneHost) RuntimeConfig() config.Config { return h.app.RuntimeConfig() }
+
+func (h paneHost) ApplyRuntimeConfig(next config.Config) error {
+	return h.app.ApplyRuntimeConfig(next)
+}
+
+func (h paneHost) RequestConfigReload() bool { return h.app.RequestConfigReload() }
+
+func (a *App) hostForFocused() paneHost {
+	id, _ := a.mux.FocusedPane()
+	return paneHost{app: a, pane: id}
+}
+
+// App remains a script.Host compatibility adapter for call sites that are
+// inherently focused-pane/window-level (keys, timers, focus events).
+func (a *App) WriteInput(s string)              { a.hostForFocused().WriteInput(s) }
+func (a *App) Selection() string                { return a.hostForFocused().Selection() }
+func (a *App) Scroll(lines int) bool            { return a.hostForFocused().Scroll(lines) }
+func (a *App) ScrollToBottom()                  { a.hostForFocused().ScrollToBottom() }
+func (a *App) ScrollbackLen() int               { return a.hostForFocused().ScrollbackLen() }
+func (a *App) Size() (int, int)                 { return a.hostForFocused().Size() }
+func (a *App) Cursor() (int, int)               { return a.hostForFocused().Cursor() }
+func (a *App) Title() string                    { return a.hostForFocused().Title() }
+func (a *App) Cwd() string                      { return a.hostForFocused().Cwd() }
+func (a *App) SetTitle(title string)            { a.hostForFocused().SetTitle(title) }
+func (a *App) Line(row int) (string, bool)      { return a.hostForFocused().Line(row) }
+func (a *App) LineWrapped(row int) (bool, bool) { return a.hostForFocused().LineWrapped(row) }
+func (a *App) Search(query string) bool         { return a.hostForFocused().Search(query) }
+
 func (a *App) Notify(msg string) {
 	a.notice = msg
 	a.noticeUntil = time.Now().Add(4 * time.Second)
 	a.requestRedraw()
 }
 
-func (a *App) Selection() string {
-	if !a.selectionActive {
-		return ""
-	}
-	// Script handlers run on the main thread between frames, never inside
-	// draw(), so reusing a.snap is safe while the terminal snapshot is captured
-	// under a.mu.
-	a.mu.Lock()
-	render.Capture(&a.snap, a.term)
-	a.mu.Unlock()
-	return termsel.Text(a.snap, termsel.Range{Start: a.selectionStart, End: a.selectionEnd})
-}
-
 func (a *App) SetClipboard(text string) {
+	if a.clipboardSetter != nil {
+		a.clipboardSetter(text)
+		return
+	}
 	if a.window != nil {
 		a.window.SetClipboardString(text)
 	}
@@ -51,166 +71,169 @@ func (a *App) Clipboard() string {
 	return a.window.GetClipboardString()
 }
 
-func (a *App) Scroll(lines int) bool {
-	a.mu.Lock()
-	moved := a.term.ScrollViewport(lines)
-	a.mu.Unlock()
+func (a *App) FontSize() float64 {
+	if id, ok := a.focusedFontPane(); ok {
+		return a.paneFontSize(id)
+	}
+	return a.cfg.Font.Size
+}
+
+func (a *App) SetFontSize(pts float64) {
+	pts = clampZoomFontSize(pts)
+	if id, ok := a.focusedFontPane(); ok {
+		state := a.ensurePaneUI(id)
+		if state.font.fontSize == pts && !state.font.pending {
+			return
+		}
+		a.setPaneFontSize(id, pts)
+		return
+	}
+	// Before mux bootstrap, scripting configures the base used by the initial
+	// pane and by reset; there is no pane-local state or PTY to update yet.
+	a.cfg.Font.Size = pts
+	a.zoom.base = pts
+}
+
+func (h paneHost) WriteInput(s string) {
+	if h.pane == 0 {
+		return
+	}
+	events, err := h.app.mux.Write(h.pane, []byte(s))
+	if errors.Is(err, termmux.ErrPaneNotRunning) {
+		if view, ok := h.app.mux.PaneView(h.pane); ok && view.State == termmux.PaneStateFailed {
+			events, err = h.app.mux.FeedFallback(h.pane, []byte(s))
+		}
+	}
+	if err != nil {
+		h.app.Notify("input: " + err.Error())
+	}
+	h.app.pendingMuxEvents = append(h.app.pendingMuxEvents, events...)
+	if len(events) > 0 {
+		h.app.requestRedraw()
+	}
+}
+
+func (h paneHost) Notify(message string)    { h.app.Notify(message) }
+func (h paneHost) SetClipboard(text string) { h.app.SetClipboard(text) }
+func (h paneHost) Clipboard() string        { return h.app.Clipboard() }
+func (h paneHost) FontSize() float64 {
+	if h.pane != 0 {
+		return h.app.paneFontSize(h.pane)
+	}
+	return h.app.FontSize()
+}
+
+func (h paneHost) SetFontSize(points float64) {
+	if h.pane != 0 {
+		h.app.setPaneFontSize(h.pane, points)
+		return
+	}
+	h.app.SetFontSize(points)
+}
+
+func (h paneHost) Selection() string {
+	if h.pane == h.app.focusedPane {
+		h.app.saveActivePaneUI()
+	}
+	state := h.app.ensurePaneUI(h.pane)
+	if !state.selection.active {
+		return ""
+	}
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return ""
+	}
+	return termsel.Text(view.Snapshot.Cells, view.Snapshot.Cols, view.Snapshot.Rows, termsel.Range{Start: state.selection.start, End: state.selection.end})
+}
+
+func (h paneHost) Scroll(lines int) bool {
+	moved, _ := h.app.mux.ScrollViewport(h.pane, lines)
 	if moved {
-		a.requestRedraw()
-		// Defer events.scroll: this runs inside a handler, so it must not re-enter
-		// Lua dispatch. The loop drains the pending offset next iteration.
-		a.markScrollEvent()
+		h.app.recordPaneScroll(h.pane)
+		h.app.requestRedraw()
 	}
 	return moved
 }
 
-func (a *App) ScrollToBottom() {
-	a.mu.Lock()
-	moved := a.term.ScrollViewport(-a.term.ScrollbackLines())
-	a.mu.Unlock()
-	if moved {
-		a.requestRedraw()
-		a.markScrollEvent()
-	}
-}
-
-func (a *App) ScrollbackLen() int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.ScrollbackLines()
-}
-
-// flushReplies sends queued parser replies to the PTY outside a.mu. Main
-// thread only.
-func (a *App) flushReplies() {
-	if len(a.pendingReplies) == 0 {
+func (h paneHost) ScrollToBottom() {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
 		return
 	}
-	replies := a.pendingReplies
-	a.pendingReplies = nil
-	if a.pty == nil {
-		return
-	}
-	for _, b := range replies {
-		_, _ = a.pty.Write(b)
+	if moved, _ := h.app.mux.ScrollViewport(h.pane, -view.ScrollbackLines); moved {
+		h.app.recordPaneScroll(h.pane)
+		h.app.requestRedraw()
 	}
 }
 
-// Size, Cursor, Title, Cwd, and Line expose read-only terminal state to Lua handlers.
-// They are called on the main loop thread while the handler runs; the lock guards
-// against future concurrent access and matches the other term accessors.
-
-func (a *App) Size() (int, int) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.Cols(), a.term.Rows()
+func (h paneHost) ScrollbackLen() int {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return 0
+	}
+	return view.ScrollbackLines
 }
 
-func (a *App) Cursor() (int, int) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.CursorRow(), a.term.CursorCol()
+func (h paneHost) Size() (int, int) {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return 0, 0
+	}
+	return view.Snapshot.Cols, view.Snapshot.Rows
 }
 
-func (a *App) Title() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.Title()
+func (h paneHost) Cursor() (int, int) {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return 0, 0
+	}
+	return view.Snapshot.CursorRow, view.Snapshot.CursorCol
 }
 
-func (a *App) Cwd() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.Cwd()
+func (h paneHost) Title() string {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return ""
+	}
+	return view.Snapshot.Title
 }
 
-func (a *App) SetTitle(title string) {
-	a.mu.Lock()
-	changed := a.term.Title() != title
+func (h paneHost) Cwd() string {
+	view, ok := h.app.mux.PaneView(h.pane)
+	if !ok {
+		return ""
+	}
+	return view.Snapshot.Cwd
+}
+
+func (h paneHost) SetTitle(title string) {
+	changed, _ := h.app.mux.SetTitle(h.pane, title)
 	if changed {
-		a.term.SetTitle(title)
-	}
-	a.mu.Unlock()
-	if changed {
-		// Re-arm terminal event processing so this follows the same title update
-		// and script dispatch path as an OSC 0/2 title change.
-		a.termEventsPending = true
-		a.requestRedraw()
+		h.app.pendingMuxEvents = append(h.app.pendingMuxEvents, termmux.Event{Kind: termmux.PaneTitleChanged, Pane: h.pane, Text: title}, termmux.Event{Kind: termmux.PaneDirty, Pane: h.pane})
+		h.app.requestRedraw()
 	}
 }
 
-func (a *App) Line(row int) (string, bool) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	cols, rows := a.term.Cols(), a.term.Rows()
-	if row < 0 || row >= rows {
-		return "", false
-	}
-	cells := make([]core.Cell, cols*rows)
-	a.term.CopyView(cells)
-	start := row * cols
-	last := start + cols - 1
-	for last >= start && (cells[last].Rune == ' ' || cells[last].Rune == 0) {
-		last--
-	}
-	var b strings.Builder
-	for i := start; i <= last; i++ {
-		if cells[i].WideContinuation {
-			continue
-		}
-		r := cells[i].Rune
-		if r == 0 {
-			r = ' '
-		}
-		b.WriteRune(r)
-		for _, c := range cells[i].Combining() {
-			b.WriteRune(c)
-		}
-	}
-	return b.String(), true
+func (h paneHost) Line(row int) (string, bool) { return h.app.mux.Line(h.pane, row) }
+func (h paneHost) LineWrapped(row int) (bool, bool) {
+	return h.app.mux.LineWrapped(h.pane, row)
 }
 
-func (a *App) LineWrapped(row int) (bool, bool) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.term.LineWrapped(row)
-}
-
-// Search jumps to the first (bottom-most) match for query and scrolls it into
-// view, returning whether a match was found. It is the non-interactive,
-// scriptable counterpart to the ctrl+shift+f bar: it records the match cells so
-// draw highlights them, but does not open the modal UI. Main-thread only.
-func (a *App) Search(query string) bool {
+func (h paneHost) Search(query string) bool {
 	if query == "" {
 		return false
 	}
-	a.mu.Lock()
-	from := a.term.ScrollbackLines() + a.term.Rows()
-	row, col, ok := a.term.SearchBackward(query, from)
-	if ok {
-		a.searchMatchRow, a.searchMatchCol = row, col
-		a.searchMatchLen = len([]rune(query))
-		a.searchHasMatch = true
-		a.scrollGlobalRowIntoView(row)
+	row, col, ok, _ := h.app.mux.SearchUpward(h.pane, query, false, 0)
+	if !ok {
+		return false
 	}
-	a.mu.Unlock()
-	if ok {
-		a.requestRedraw()
+	state := h.app.ensurePaneUI(h.pane)
+	state.search.matchRow, state.search.matchCol = row, col
+	state.search.matchLen = len([]rune(query))
+	state.search.hasMatch = true
+	if h.pane == h.app.focusedPane {
+		h.app.loadPaneUI(h.pane)
 	}
-	return ok
-}
-
-// FontSize returns the active font size in points.
-func (a *App) FontSize() float64 { return a.cfg.Font.Size }
-
-// SetFontSize changes the font size and rebuilds the atlas + grid at the current
-// content scale. pts arrives already clamped to 6..72 by the Lua boundary. Runs
-// on the main thread with the GL context current (dispatched from a key/timer
-// handler); rebuildAtlasAndGrid documents that requirement.
-func (a *App) SetFontSize(pts float64) {
-	if pts == a.cfg.Font.Size {
-		return
-	}
-	a.cfg.Font.Size = pts
-	a.rebuildAtlasAndGrid(a.contentScaleX, a.contentScaleY)
+	h.app.requestRedraw()
+	return true
 }

@@ -29,10 +29,11 @@ func NewLocalWithOptions(rows, cols uint16, opts Options) (Session, error) {
 	}
 	cmd := exec.Command(shell, opts.ShellArgs...)
 	cmd.Dir = opts.WorkingDirectory
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	configuredEnv := map[string]string{"TERM": "xterm-256color", "COLORTERM": "truecolor"}
 	for key, value := range opts.Env {
-		cmd.Env = append(cmd.Env, key+"="+value)
+		configuredEnv[key] = value
 	}
+	cmd.Env = MergeEnvironment(os.Environ(), configuredEnv, false)
 	f, err := creackpty.StartWithSize(cmd, &creackpty.Winsize{Rows: rows, Cols: cols})
 	if err != nil {
 		return nil, err

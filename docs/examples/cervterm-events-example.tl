@@ -1,6 +1,7 @@
 local cervterm = require("cervterm")
 
 local config = {
+  config_version = 2,
   events = {
     output = function(term: cervterm.Term, data: string)
       if data:find("error") then

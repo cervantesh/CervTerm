@@ -1,0 +1,33 @@
+Phase 4 Windows package qualification summary
+Version: 0.0.0-phase4-local
+Host: Windows 11 windows/amd64; Go 1.25.8
+
+release-preflight: 39 pass, 0 required fail, 1 warning
+warning: vttest executable not provided; reusable MSYS2 build route remains documented
+govulncheck: 0 called vulnerabilities
+installed-package-smoke: PASS
+  version/build-info: PASS
+  doctor: PASS
+  bundled files/licenses/docs: PASS
+  diagnostics log and raw PTY markers: PASS
+  known capture child exit 0xc0000374 accepted only after artifact validation
+daily-driver-smoke: PASS
+  cmd-basic: PASS
+  git-log: PASS
+  pager-more: PASS
+  alternate-screen: PASS
+  resize-reflow-40col: PASS
+  resize-reflow-100col: PASS
+  long-session: PASS
+
+Local gate summary
+  maturity gates: PASS
+  go test ./... -count=1: PASS
+  go test -tags glfw ./... -count=1: PASS
+  go vet -unsafeptr=false ./...: PASS
+  exact planned race package set: PASS
+  VT fuzz smoke: PASS
+  Teal typecheck: PASS
+  support matrix JSON parse: PASS
+
+Generated package, smoke directories, and full command logs remain untracked under dist/. This checked-in summary contains no local font or configuration paths.

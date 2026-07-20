@@ -4,9 +4,7 @@ package glfwgl
 
 import (
 	"fmt"
-	"math"
-
-	"cervterm/internal/fontglyph"
+	"time"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
@@ -29,59 +27,44 @@ func (a *App) applyScale(scaleX, scaleY float32) {
 	// Derive uiScale from the same clamped factor as the glyph DPI so chrome
 	// never grows out of proportion with text past the 4x DPI clamp.
 	a.uiScale = float32(effectiveDPI(scaleX, scaleY) / 96)
-	// Snap the text-grid origin to whole pixels. cellW/cellH are integers, so an
-	// integer origin keeps every glyph quad pixel-aligned; a fractional padding
-	// (e.g. 18*1.25 = 22.5) would draw glyphs on half-pixels and the LINEAR atlas
-	// filter would blur them.
-	a.paddingX = float32(math.Round(float64(a.cfg.Window.PaddingX) * float64(a.uiScale)))
-	a.paddingY = float32(math.Round(float64(a.cfg.Window.PaddingY) * float64(a.uiScale)))
+	a.insets = projectOuterInsets(a.outerInsets(), a.uiScale)
+	a.drawOriginX = float32(a.insets.Left)
+	a.drawOriginY = float32(a.insets.Top)
 }
 
 func (a *App) rebuildForContentScale(scaleX, scaleY float32) {
 	if a.contentScaleX == scaleX && a.contentScaleY == scaleY {
 		return
 	}
-	a.rebuildAtlasAndGrid(scaleX, scaleY)
-}
-
-// rebuildAtlasAndGrid rebuilds the glyph atlas and cell metrics for the current
-// cfg.Font.Size at the given content scale, then reflows the grid AND resizes the
-// PTY. Used by one-shot callers (content-scale changes, term:set_font_size) where
-// the PTY resize need not be coalesced. Zoom instead calls rebuildAtlasGridVisual
-// per step and defers the PTY resize (see applyPendingZoom).
-func (a *App) rebuildAtlasAndGrid(scaleX, scaleY float32) {
-	if a.rebuildAtlasGridVisual(scaleX, scaleY) {
-		a.resizePTYToGrid()
-	}
-}
-
-// rebuildAtlasGridVisual rebuilds the glyph atlas + cell metrics for the current
-// cfg.Font.Size at the given content scale and reflows the LOCAL grid, WITHOUT
-// resizing the PTY. It touches GL, so it must run on the main thread with the
-// context current; every caller (content-scale GLFW callback, the zoom apply in
-// applyPendingZoom, term:set_font_size dispatch) runs on the loop thread between
-// frames — never inside draw(). Returns false (leaving state unchanged) when the
-// backend for the new spec could not be built.
-func (a *App) rebuildAtlasGridVisual(scaleX, scaleY float32) bool {
-	spec := fontglyph.Spec{Family: a.cfg.Font.Family, Size: a.cfg.Font.Size, DPI: effectiveDPI(scaleX, scaleY), TextRaster: a.cfg.Render.TextRaster}
-	if a.atlas != nil {
-		// Reuse the existing atlas (and its GL textures) instead of allocating a
-		// fresh one every zoom step; only the font backend and glyph cache change.
-		if !a.atlas.reconfigure(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken) {
-			return false
-		}
-	} else {
-		atlas, err := newGlyphAtlasWithSpec(spec, a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
-		if err != nil {
-			return false
-		}
-		a.atlas = atlas
-	}
-	// The atlas re-probes the shaper (and drops the run caches with it).
-	a.ligaturesActive = a.cfg.Font.Ligatures && a.atlas.supportsLigatures()
-	a.cellW = float32(a.atlas.cellW)
-	a.cellH = float32(a.atlas.cellH)
 	a.applyScale(scaleX, scaleY)
-	a.cols, a.rows = 0, 0
-	return a.resizeGridToWindow()
+	if a.atlas == nil {
+		return
+	}
+	if a.mux == nil || len(a.mux.PaneIDs()) == 0 {
+		cellW, cellH, _, ok := a.atlas.useSpec(a.fontSpec(a.cfg.Font.Size, scaleX, scaleY), a.cfg.Render.TextGamma, a.cfg.Render.TextDarken)
+		if ok {
+			a.cellW, a.cellH = float32(cellW), float32(cellH)
+		}
+		return
+	}
+	for _, id := range a.mux.PaneIDs() {
+		state := a.ensurePaneUI(id)
+		gridChanged, applied := a.applyPaneFontVisual(id, state.font.fontSize, scaleX, scaleY)
+		state.font.ptyDirty = state.font.ptyDirty || (applied && gridChanged)
+	}
+	// Content-scale changes are one-shot window transitions. Settle each pane
+	// independently and arm the same bounded retry policy used by pane zoom.
+	now := time.Now()
+	for _, id := range a.mux.PaneIDs() {
+		state := a.ensurePaneUI(id)
+		if !state.font.ptyDirty {
+			continue
+		}
+		if a.applyPanePTYResize(id) {
+			state.font.ptyDirty = false
+			continue
+		}
+		a.schedulePanePTYResizeRetry(id, now)
+	}
+	a.restoreFocusedFontProjection()
 }

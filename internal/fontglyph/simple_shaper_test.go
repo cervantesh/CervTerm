@@ -1,6 +1,10 @@
 package fontglyph
 
-import "testing"
+import (
+	"testing"
+
+	"cervterm/internal/fontdesc"
+)
 
 func TestSimpleShaperShapesSingleRuneToGlyphID(t *testing.T) {
 	backend, err := NewOpenTypeBackend(Spec{Family: "Go Mono", Size: 14, DPI: 96})
@@ -54,5 +58,27 @@ func TestOpenTypeBackendHasDefaultShaper(t *testing.T) {
 	}
 	if glyphs, ok := backend.shaper.Shape("A", backend.faces[0], backend.ppem); !ok || len(glyphs) == 0 {
 		t.Fatalf("default shaper failed to shape simple glyph: %#v ok=%v", glyphs, ok)
+	}
+}
+
+func TestSimpleShaperReportsDeterministicFeatureCapability(t *testing.T) {
+	backend, err := NewOpenTypeBackend(Spec{Family: "Go Mono", Size: 14, DPI: 96})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	backend.SetShaper(SimpleShaper{})
+	features, err := fontdesc.NewFeatureSet(false, map[string]int{"ss01": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ConfigureBackendFeatures(backend, features)
+	if got := BackendFeatureCapability(backend); got != "portable-unsupported" {
+		t.Fatalf("capability=%q", got)
+	}
+	plain, plainOK := (SimpleShaper{}).Shape("A", backend.faces[0], backend.ppem)
+	featured, featureOK := (SimpleShaper{}).ShapeFeatures("A", backend.faces[0], backend.ppem, features)
+	if !plainOK || !featureOK || len(plain) != 1 || len(featured) != 1 || plain[0].GlyphID != featured[0].GlyphID {
+		t.Fatalf("portable feature fallback changed glyphs: %#v/%#v", plain, featured)
 	}
 }

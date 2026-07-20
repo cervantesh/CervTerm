@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"cervterm/internal/core"
-	"cervterm/internal/render"
 )
 
 type Point struct {
@@ -29,11 +28,11 @@ func Contains(r Range, p Point) bool {
 	return !before(p, r.Start) && !before(r.End, p)
 }
 
-func Text(snap render.Snapshot, r Range) string {
-	if snap.Cols <= 0 || snap.Rows <= 0 || len(snap.Cells) == 0 {
+func Text(cells []core.Cell, cols, rows int, r Range) string {
+	if cols <= 0 || rows <= 0 || len(cells) == 0 {
 		return ""
 	}
-	r = clamp(snap, Normalize(r))
+	r = clamp(cols, rows, Normalize(r))
 
 	var b strings.Builder
 	for row := r.Start.Row; row <= r.End.Row; row++ {
@@ -41,7 +40,7 @@ func Text(snap render.Snapshot, r Range) string {
 		if row == r.Start.Row {
 			startCol = r.Start.Col
 		}
-		endCol := snap.Cols - 1
+		endCol := cols - 1
 		if row == r.End.Row {
 			endCol = r.End.Col
 		}
@@ -49,7 +48,7 @@ func Text(snap render.Snapshot, r Range) string {
 			continue
 		}
 
-		line := lineText(snap, row, startCol, endCol)
+		line := lineText(cells, cols, row, startCol, endCol)
 		b.WriteString(line)
 		if row != r.End.Row {
 			b.WriteByte('\n')
@@ -65,58 +64,33 @@ func before(a, b Point) bool {
 	return a.Col < b.Col
 }
 
-func clamp(snap render.Snapshot, r Range) Range {
-	r.Start = clampPoint(snap, r.Start)
-	r.End = clampPoint(snap, r.End)
+func clamp(cols, rows int, r Range) Range {
+	r.Start = clampPoint(cols, rows, r.Start)
+	r.End = clampPoint(cols, rows, r.End)
 	return Normalize(r)
 }
 
-func clampPoint(snap render.Snapshot, p Point) Point {
+func clampPoint(cols, rows int, p Point) Point {
 	if p.Row < 0 {
 		p.Row = 0
 	}
 	if p.Col < 0 {
 		p.Col = 0
 	}
-	if p.Row >= snap.Rows {
-		p.Row = snap.Rows - 1
+	if p.Row >= rows {
+		p.Row = rows - 1
 	}
-	if p.Col >= snap.Cols {
-		p.Col = snap.Cols - 1
+	if p.Col >= cols {
+		p.Col = cols - 1
 	}
 	return p
 }
 
-func lineText(snap render.Snapshot, row, startCol, endCol int) string {
-	last := endCol
-	for last >= startCol {
-		cell := snap.Cells[row*snap.Cols+last]
-		if !isBlankCell(cell) {
-			break
-		}
-		last--
-	}
-	if last < startCol {
-		return ""
-	}
-
-	var b strings.Builder
-	for col := startCol; col <= last; col++ {
-		writeCellText(&b, snap.Cells[row*snap.Cols+col])
-	}
-	return b.String()
-}
-
-func isBlankCell(cell core.Cell) bool {
-	return cell.WideContinuation || cell.Rune == 0 || cell.Rune == ' '
-}
-
-func writeCellText(b *strings.Builder, cell core.Cell) {
-	if cell.WideContinuation || cell.Rune == 0 {
-		return
-	}
-	b.WriteRune(cell.Rune)
-	for _, r := range cell.Combining() {
-		b.WriteRune(r)
-	}
+// lineText returns the text of one selected span [startCol, endCol] of a row.
+// It defers to core.RowText — the single canonical row-text rule shared with the
+// term:line() accessor — applied to the span slice, so the trailing-blank trim
+// and cell-skipping policy match copy/paste and Lua exactly.
+func lineText(cells []core.Cell, cols, row, startCol, endCol int) string {
+	base := row * cols
+	return core.RowText(cells[base+startCol : base+endCol+1])
 }

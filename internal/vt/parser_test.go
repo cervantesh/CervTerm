@@ -17,9 +17,9 @@ func TestParserTextAndSGR(t *testing.T) {
 	if got != want {
 		t.Fatalf("plain text mismatch\nwant: %q\n got: %q", want, got)
 	}
-	cell := term.Cells()[1*term.Cols()]
-	if cell.Attr.FG != core.ANSIColor(1) {
-		t.Fatalf("expected red fg, got %#v", cell.Attr.FG)
+	cell := copyCells(term)[1*term.Cols()]
+	if index, ok := cell.Attr.FG.Index(); !ok || index != 1 || cell.Attr.FG.Kind() != core.ColorIndexed {
+		t.Fatalf("expected indexed red fg, got %#v", cell.Attr.FG)
 	}
 }
 
@@ -28,16 +28,16 @@ func TestParserBrightAndDefaultSGR(t *testing.T) {
 	var p Parser
 
 	p.Advance(term, []byte("\x1b[94mF\x1b[103mB\x1b[39;49mD"))
-	cells := term.Cells()
+	cells := copyCells(term)
 
-	if cells[0].Attr.FG != core.ANSIColor(12) {
-		t.Fatalf("expected bright blue fg, got %#v", cells[0].Attr.FG)
+	if cells[0].Attr.FG != core.IndexedColor(12) {
+		t.Fatalf("expected bright blue index, got %#v", cells[0].Attr.FG)
 	}
-	if cells[1].Attr.FG != core.ANSIColor(12) || cells[1].Attr.BG != core.ANSIColor(11) {
-		t.Fatalf("expected bright blue on bright yellow, got %#v", cells[1].Attr)
+	if cells[1].Attr.FG != core.IndexedColor(12) || cells[1].Attr.BG != core.IndexedColor(11) {
+		t.Fatalf("expected bright blue on bright yellow indexes, got %#v", cells[1].Attr)
 	}
-	if cells[2].Attr.FG != core.DefaultFG || cells[2].Attr.BG != core.DefaultBG {
-		t.Fatalf("expected default colors after reset, got %#v", cells[2].Attr)
+	if !cells[2].Attr.FG.IsDefault() || !cells[2].Attr.BG.IsDefault() {
+		t.Fatalf("expected logical defaults after reset, got %#v", cells[2].Attr)
 	}
 }
 
@@ -46,32 +46,58 @@ func TestParserExtendedSGRColors(t *testing.T) {
 	var p Parser
 
 	p.Advance(term, []byte("\x1b[38;5;196mR\x1b[48;5;21mB\x1b[38;2;12;34;56mT\x1b[48;2;200;150;100mQ"))
-	cells := term.Cells()
+	cells := copyCells(term)
 
-	if cells[0].Attr.FG != (core.RGB{R: 255, G: 0, B: 0}) {
-		t.Fatalf("expected 256-color red fg, got %#v", cells[0].Attr.FG)
+	if index, ok := cells[0].Attr.FG.Index(); !ok || index != 196 {
+		t.Fatalf("expected indexed 196 fg, got %#v", cells[0].Attr.FG)
 	}
-	if cells[1].Attr.BG != (core.RGB{R: 0, G: 0, B: 255}) {
-		t.Fatalf("expected 256-color blue bg, got %#v", cells[1].Attr.BG)
+	if index, ok := cells[1].Attr.BG.Index(); !ok || index != 21 {
+		t.Fatalf("expected indexed 21 bg, got %#v", cells[1].Attr.BG)
 	}
-	if cells[2].Attr.FG != (core.RGB{R: 12, G: 34, B: 56}) {
+	if rgb, ok := cells[2].Attr.FG.RGB(); !ok || rgb != (core.RGB{R: 12, G: 34, B: 56}) {
 		t.Fatalf("expected truecolor fg, got %#v", cells[2].Attr.FG)
 	}
-	if cells[3].Attr.BG != (core.RGB{R: 200, G: 150, B: 100}) {
+	if rgb, ok := cells[3].Attr.BG.RGB(); !ok || rgb != (core.RGB{R: 200, G: 150, B: 100}) {
 		t.Fatalf("expected truecolor bg, got %#v", cells[3].Attr.BG)
+	}
+
+	resolver := core.DefaultColorResolver()
+	if got := resolver.ResolveFG(cells[0].Attr.FG); got != (core.RGB{R: 255}) {
+		t.Fatalf("indexed fg resolved to %#v", got)
+	}
+	if got := resolver.ResolveBG(cells[1].Attr.BG); got != (core.RGB{B: 255}) {
+		t.Fatalf("indexed bg resolved to %#v", got)
 	}
 }
 
 func TestParserAdditionalSGRAttributes(t *testing.T) {
 	term := core.NewTerminal(20, 2)
 	var p Parser
-	p.Advance(term, []byte("\x1b[3;4;7;9mX\x1b[23;24;27;29mY"))
-	cells := term.Cells()
+	p.Advance(term, []byte("\x1b[31;44;3;4;7;9mX\x1b[23;24;27;29mY"))
+	cells := copyCells(term)
 	if !cells[0].Attr.Italic || !cells[0].Attr.Underline || !cells[0].Attr.Inverse || !cells[0].Attr.Strikethrough {
 		t.Fatalf("expected all additional attrs on first cell, got %#v", cells[0].Attr)
 	}
+	if cells[0].Attr.FG != core.IndexedColor(1) || cells[0].Attr.BG != core.IndexedColor(4) {
+		t.Fatalf("inverse must preserve logical FG/BG fields, got %#v", cells[0].Attr)
+	}
 	if cells[1].Attr.Italic || cells[1].Attr.Underline || cells[1].Attr.Inverse || cells[1].Attr.Strikethrough {
 		t.Fatalf("expected attrs reset on second cell, got %#v", cells[1].Attr)
+	}
+	if cells[1].Attr.FG != core.IndexedColor(1) || cells[1].Attr.BG != core.IndexedColor(4) {
+		t.Fatalf("attribute resets must preserve colors, got %#v", cells[1].Attr)
+	}
+}
+
+func TestParserMalformedExtendedColorPreservesBehavior(t *testing.T) {
+	term := core.NewTerminal(8, 1)
+	var p Parser
+	p.Advance(term, []byte("\x1b[32mA\x1b[38;5mB\x1b[38;2;1;2mC"))
+	cells := copyCells(term)
+	for i := 0; i < 3; i++ {
+		if cells[i].Attr.FG != core.IndexedColor(2) {
+			t.Fatalf("malformed extended color changed FG at cell %d: %#v", i, cells[i].Attr.FG)
+		}
 	}
 }
 
@@ -225,6 +251,41 @@ func TestParserEraseModes(t *testing.T) {
 	}
 	if got := term.PlainText(); got != before {
 		t.Fatalf("CSI 3J should not clear viewport, got %q want %q", got, before)
+	}
+}
+
+func TestParserEraseCharactersForCMDCompletion(t *testing.T) {
+	term := core.NewTerminal(40, 1)
+	var p Parser
+
+	p.Advance(term, []byte(">type a-very-long-completion-name.txt"))
+	// ConPTY rewrites a shorter cmd.exe completion at column 2, then emits ECH
+	// for the cells that belonged to the previous, longer candidate.
+	p.Advance(term, []byte("\x1b[1;2Htype b.txt\x1b[27X"))
+
+	if got := term.PlainText(); got != ">type b.txt" {
+		t.Fatalf("CSI X left stale completion text: %q", got)
+	}
+	if row, col := term.CursorRow(), term.CursorCol(); row != 0 || col != 11 {
+		t.Fatalf("CSI X moved cursor to (%d,%d)", row, col)
+	}
+}
+
+func TestParserEraseCharactersClearsWidePair(t *testing.T) {
+	term := core.NewTerminal(5, 1)
+	var p Parser
+	p.Advance(term, []byte("好x\x1b[1;2H\x1b[X"))
+
+	cells := make([]core.Cell, 5)
+	term.CopyView(cells)
+	if cells[0].Rune != ' ' || cells[0].WideContinuation || cells[1].Rune != ' ' || cells[1].WideContinuation {
+		t.Fatalf("CSI X left an orphaned wide pair: %#v", cells[:2])
+	}
+	if cells[2].Rune != 'x' {
+		t.Fatalf("CSI X erased the following cell: %#v", cells[2])
+	}
+	if term.CursorCol() != 1 {
+		t.Fatalf("CSI X moved cursor to column %d", term.CursorCol())
 	}
 }
 
@@ -406,8 +467,8 @@ func FuzzParserAdvanceDoesNotPanic(f *testing.F) {
 		if term.CursorCol() < 0 || term.CursorCol() >= term.Cols() {
 			t.Fatalf("cursor col out of bounds: %d cols=%d", term.CursorCol(), term.Cols())
 		}
-		if len(term.Cells()) != term.Rows()*term.Cols() {
-			t.Fatalf("cell length = %d, want %d", len(term.Cells()), term.Rows()*term.Cols())
+		if len(copyCells(term)) != term.Rows()*term.Cols() {
+			t.Fatalf("cell length = %d, want %d", len(copyCells(term)), term.Rows()*term.Cols())
 		}
 	})
 }
@@ -440,4 +501,12 @@ func TestParserGoldenRecordings(t *testing.T) {
 			}
 		})
 	}
+}
+
+// copyCells returns a defensive copy of the current screen cells for assertions
+// (replaces the removed core.Terminal.Cells() accessor).
+func copyCells(t *core.Terminal) []core.Cell {
+	c := make([]core.Cell, t.Cols()*t.Rows())
+	t.CopyView(c)
+	return c
 }

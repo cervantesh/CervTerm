@@ -2,14 +2,22 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
+
+	"cervterm/internal/fontdesc"
+	"cervterm/internal/quickselect"
 
 	lua "github.com/yuin/gopher-lua"
 )
 
 func LoadLua(path string, base Config) (Config, error) {
+	return loadLua(path, path, base)
+}
+
+func loadLua(evalPath, sourcePath string, base Config) (Config, error) {
 	state := lua.NewState(lua.Options{SkipOpenLibs: false})
 	defer state.Close()
-	if err := state.DoFile(path); err != nil {
+	if err := state.DoFile(evalPath); err != nil {
 		return base, err
 	}
 	value := state.Get(-1)
@@ -17,16 +25,61 @@ func LoadLua(path string, base Config) (Config, error) {
 	if !ok {
 		return base, fmt.Errorf("config must return a table, got %s", value.Type().String())
 	}
-	return FromTable(base, table), nil
+	var document Document
+	var err error
+	version, versionErr := documentVersion(sourcePath, table)
+	if versionErr != nil {
+		return base, versionErr
+	}
+	hasNamedScheme := version >= 2 && (table.RawGetString("color_scheme") != lua.LNil || table.RawGetString("color_schemes") != lua.LNil)
+	if hasNamedScheme {
+		document, err = decodeCompositionDocument(sourcePath, table, map[string]fieldSchema{
+			"color_schemes": {name: "color_schemes", kind: KindColorSchemeMap},
+		})
+	} else {
+		document, err = DecodeDocument(sourcePath, table)
+	}
+	if err != nil {
+		return base, err
+	}
+	if hasNamedScheme {
+		canonical, canonicalErr := filepath.Abs(sourcePath)
+		if canonicalErr != nil {
+			return base, canonicalErr
+		}
+		graph := &SourceGraph{
+			Primary: canonical,
+			Sources: []SourceNode{{RequestedPath: sourcePath, CanonicalPath: canonical, SelectedPath: evalPath, Document: document}},
+			state:   state,
+		}
+		composition, composeErr := ComposeSourceGraph(state, graph, CompositionOptions{})
+		if composeErr != nil {
+			return base, composeErr
+		}
+		return FromDocument(base, composition.Document), nil
+	}
+	return FromDocument(base, document), nil
 }
 
 func FromTable(cfg Config, root *lua.LTable) Config {
 	if tbl := tableField(root, "window"); tbl != nil {
 		cfg.Window.Width = intField(tbl, "width", cfg.Window.Width)
 		cfg.Window.Height = intField(tbl, "height", cfg.Window.Height)
+		cfg.Window.InitialRows = intField(tbl, "initial_rows", cfg.Window.InitialRows)
+		cfg.Window.InitialCols = intField(tbl, "initial_cols", cfg.Window.InitialCols)
+		cfg.Window.Decorations = stringField(tbl, "decorations", cfg.Window.Decorations)
+		cfg.Window.Titlebar = stringField(tbl, "titlebar", cfg.Window.Titlebar)
 		cfg.Window.PaddingX = intField(tbl, "padding_x", cfg.Window.PaddingX)
 		cfg.Window.PaddingY = intField(tbl, "padding_y", cfg.Window.PaddingY)
 		cfg.Window.DynamicTitle = boolField(tbl, "dynamic_title", cfg.Window.DynamicTitle)
+		cfg.Window.Opacity = numberField(tbl, "opacity", cfg.Window.Opacity)
+		cfg.Window.TextOpacity = numberField(tbl, "text_opacity", cfg.Window.TextOpacity)
+		cfg.Window.BackgroundOpacity = numberField(tbl, "background_opacity", cfg.Window.BackgroundOpacity)
+		cfg.Window.Blur = boolField(tbl, "blur", cfg.Window.Blur)
+	}
+	if tbl := tableField(root, "layout_persistence"); tbl != nil {
+		cfg.LayoutPersistence.Enabled = boolField(tbl, "enabled", cfg.LayoutPersistence.Enabled)
+		cfg.LayoutPersistence.Path = stringField(tbl, "path", cfg.LayoutPersistence.Path)
 	}
 	if tbl := tableField(root, "font"); tbl != nil {
 		cfg.Font.Family = stringField(tbl, "family", cfg.Font.Family)
@@ -38,11 +91,48 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Colors.Background = stringField(tbl, "background", cfg.Colors.Background)
 		cfg.Colors.Cursor = stringField(tbl, "cursor", cfg.Colors.Cursor)
 		cfg.Colors.SelectionBackground = stringField(tbl, "selection_background", cfg.Colors.SelectionBackground)
+		cfg.Colors.ChromeBackground = stringField(tbl, "chrome_background", cfg.Colors.ChromeBackground)
+		cfg.Colors.ChromeMuted = stringField(tbl, "chrome_muted", cfg.Colors.ChromeMuted)
+		cfg.Colors.Accent = stringField(tbl, "accent", cfg.Colors.Accent)
+		cfg.Colors.Split = stringField(tbl, "split", cfg.Colors.Split)
+		cfg.Colors.SearchMatch = stringField(tbl, "search_match", cfg.Colors.SearchMatch)
+		cfg.Colors.Error = stringField(tbl, "error", cfg.Colors.Error)
+		cfg.Colors.ANSI = ansiField(tbl, "ansi", cfg.Colors.ANSI)
+		cfg.Colors.IndexedColors = indexedColorsField(tbl, "indexed_colors", cfg.Colors.IndexedColors)
 	}
 	if tbl := tableField(root, "scrolling"); tbl != nil {
 		cfg.Scrolling.History = intField(tbl, "history", cfg.Scrolling.History)
 		cfg.Scrolling.WheelMultiplier = intField(tbl, "wheel_multiplier", cfg.Scrolling.WheelMultiplier)
 		cfg.Scrolling.HideCursorWhenScrolled = boolField(tbl, "hide_cursor_when_scrolled", cfg.Scrolling.HideCursorWhenScrolled)
+	}
+	if tbl := tableField(root, "scrollbar"); tbl != nil {
+		cfg.Scrollbar.Enabled = boolField(tbl, "enabled", cfg.Scrollbar.Enabled)
+		cfg.Scrollbar.Mode = stringField(tbl, "mode", cfg.Scrollbar.Mode)
+		cfg.Scrollbar.StableGutter = boolField(tbl, "stable_gutter", cfg.Scrollbar.StableGutter)
+		cfg.Scrollbar.AnimationFPS = intField(tbl, "animation_fps", cfg.Scrollbar.AnimationFPS)
+		cfg.Scrollbar.ReservedWidthPX = intField(tbl, "reserved_width_px", cfg.Scrollbar.ReservedWidthPX)
+		cfg.Scrollbar.WidthPX = intField(tbl, "width_px", cfg.Scrollbar.WidthPX)
+		cfg.Scrollbar.MarginPX = intField(tbl, "margin_px", cfg.Scrollbar.MarginPX)
+		cfg.Scrollbar.RadiusPX = intField(tbl, "radius_px", cfg.Scrollbar.RadiusPX)
+		cfg.Scrollbar.MinThumbPX = intField(tbl, "min_thumb_px", cfg.Scrollbar.MinThumbPX)
+		cfg.Scrollbar.TrackColor = stringField(tbl, "track_color", cfg.Scrollbar.TrackColor)
+		cfg.Scrollbar.ThumbColor = stringField(tbl, "thumb_color", cfg.Scrollbar.ThumbColor)
+		cfg.Scrollbar.ThumbHoverColor = stringField(tbl, "thumb_hover_color", cfg.Scrollbar.ThumbHoverColor)
+		cfg.Scrollbar.ThumbPressColor = stringField(tbl, "thumb_press_color", cfg.Scrollbar.ThumbPressColor)
+		cfg.Scrollbar.AutoHideDelayMS = intField(tbl, "auto_hide_delay_ms", cfg.Scrollbar.AutoHideDelayMS)
+		cfg.Scrollbar.FadeMS = intField(tbl, "fade_ms", cfg.Scrollbar.FadeMS)
+		cfg.Scrollbar.PageStep = numberField(tbl, "page_step", cfg.Scrollbar.PageStep)
+		cfg.Scrollbar.TrackClick = stringField(tbl, "track_click", cfg.Scrollbar.TrackClick)
+	}
+	if tbl := tableField(root, "tab_bar"); tbl != nil {
+		cfg.TabBar.Mode = stringField(tbl, "mode", cfg.TabBar.Mode)
+		cfg.TabBar.Position = stringField(tbl, "position", cfg.TabBar.Position)
+		cfg.TabBar.HeightPX = intField(tbl, "height_px", cfg.TabBar.HeightPX)
+		cfg.TabBar.MinWidthPX = intField(tbl, "min_width_px", cfg.TabBar.MinWidthPX)
+		cfg.TabBar.MaxWidthPX = intField(tbl, "max_width_px", cfg.TabBar.MaxWidthPX)
+		cfg.TabBar.PaddingX = intField(tbl, "padding_x", cfg.TabBar.PaddingX)
+		cfg.TabBar.ShowNewButton = boolField(tbl, "show_new_button", cfg.TabBar.ShowNewButton)
+		cfg.TabBar.ShowCloseButton = boolField(tbl, "show_close_button", cfg.TabBar.ShowCloseButton)
 	}
 	if tbl := tableField(root, "cursor"); tbl != nil {
 		cfg.Cursor.Shape = stringField(tbl, "shape", cfg.Cursor.Shape)
@@ -63,6 +153,7 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Render.ZoomOutHotkey = stringField(tbl, "zoom_out_hotkey", cfg.Render.ZoomOutHotkey)
 		cfg.Render.ZoomResetHotkey = stringField(tbl, "zoom_reset_hotkey", cfg.Render.ZoomResetHotkey)
 		cfg.Render.VSync = boolField(tbl, "vsync", cfg.Render.VSync)
+		cfg.Render.MaxFPS = intField(tbl, "max_fps", cfg.Render.MaxFPS)
 		cfg.Render.Redraw = stringField(tbl, "redraw", cfg.Render.Redraw)
 		cfg.Render.Damage = stringField(tbl, "damage", cfg.Render.Damage)
 	}
@@ -72,6 +163,11 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Shell.Args = stringListField(tbl, "args", cfg.Shell.Args)
 		cfg.Shell.Env = stringMapField(tbl, "env", cfg.Shell.Env)
 	}
+	if tbl := tableField(root, "quick_select"); tbl != nil {
+		cfg.QuickSelect.Rules = quickSelectRuleListField(tbl, "rules", cfg.QuickSelect.Rules)
+		cfg.QuickSelect.Compiled, _ = PrepareQuickSelect(cfg.QuickSelect.Rules)
+	}
+	cfg.LaunchMenu = launchTargetListField(root, "launch_menu", cfg.LaunchMenu)
 	return cfg
 }
 
@@ -125,6 +221,140 @@ func stringListField(tbl *lua.LTable, key string, fallback []string) []string {
 	return out
 }
 
+func descriptorListField(tbl *lua.LTable, key string, fallback []fontdesc.Descriptor) []fontdesc.Descriptor {
+	list, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	out := make([]fontdesc.Descriptor, list.Len())
+	for index := range out {
+		entry, ok := list.RawGetInt(index + 1).(*lua.LTable)
+		if !ok {
+			return fallback
+		}
+		descriptor := fontdesc.Descriptor{
+			Family:         string(entry.RawGetString("family").(lua.LString)),
+			CollectionFace: stringField(entry, "collection_face", ""),
+			Weight:         intField(entry, "weight", fontdesc.DefaultWeight),
+			Style:          fontdesc.Style(stringField(entry, "style", string(fontdesc.StyleNormal))),
+			Stretch:        intField(entry, "stretch", fontdesc.DefaultStretch),
+			AttributeMode:  fontdesc.AttributeMode(stringField(entry, "attribute_mode", string(fontdesc.AttributeModeAugment))),
+		}
+		if raw := entry.RawGetString("collection_index"); raw != lua.LNil {
+			descriptor.CollectionIndex = fontdesc.SomeCollectionIndex(uint32(raw.(lua.LNumber)))
+		}
+		normalized, err := descriptor.Normalize()
+		if err != nil {
+			return fallback
+		}
+		out[index] = normalized
+	}
+	return out
+}
+
+func fontRuleListField(tbl *lua.LTable, key string, fallback []fontdesc.Rule) []fontdesc.Rule {
+	list, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	out := make([]fontdesc.Rule, list.Len())
+	for index := range out {
+		entry, ok := list.RawGetInt(index + 1).(*lua.LTable)
+		if !ok {
+			return fallback
+		}
+		matchTable, ok := entry.RawGetString("match").(*lua.LTable)
+		if !ok {
+			return fallback
+		}
+		use, err := parseDescriptorValue("", fmt.Sprintf("font.rules[%d].use", index+1), entry.RawGetString("use"))
+		if err != nil {
+			return fallback
+		}
+		match, _, err := parseFontRuleMatch("", fmt.Sprintf("font.rules[%d].match", index+1), matchTable)
+		if err != nil {
+			return fallback
+		}
+		rule, err := (fontdesc.Rule{Match: match, Use: use}).Normalize()
+		if err != nil {
+			return fallback
+		}
+		out[index] = rule
+	}
+	return out
+}
+
+func quickSelectRuleListField(tbl *lua.LTable, key string, fallback []QuickSelectRule) []QuickSelectRule {
+	list, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	out := make([]QuickSelectRule, list.Len())
+	for i := range out {
+		entry, ok := list.RawGetInt(i + 1).(*lua.LTable)
+		if !ok {
+			return fallback
+		}
+		out[i] = QuickSelectRule{
+			ID: stringField(entry, "id", ""), Pattern: stringField(entry, "pattern", ""),
+			Action: quickselect.Action(stringField(entry, "action", "")), Priority: intField(entry, "priority", 0),
+		}
+	}
+	return out
+}
+
+func launchTargetListField(tbl *lua.LTable, key string, fallback []LaunchTarget) []LaunchTarget {
+	list, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	out := make([]LaunchTarget, list.Len())
+	for i := range out {
+		entry, ok := list.RawGetInt(i + 1).(*lua.LTable)
+		if !ok {
+			return fallback
+		}
+		out[i] = LaunchTarget{
+			ID: stringField(entry, "id", ""), Label: stringField(entry, "label", ""),
+			Program: stringField(entry, "program", ""), CWD: stringField(entry, "cwd", ""),
+			Args: stringListField(entry, "args", nil), Env: stringMapField(entry, "env", nil),
+		}
+	}
+	return out
+}
+
+func ansiField(tbl *lua.LTable, key string, fallback [16]string) [16]string {
+	list, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok || list.Len() != len(fallback) {
+		return fallback
+	}
+	var out [16]string
+	for index := range out {
+		value, ok := list.RawGetInt(index + 1).(lua.LString)
+		if !ok {
+			return fallback
+		}
+		out[index] = string(value)
+	}
+	return out
+}
+
+func indexedColorsField(tbl *lua.LTable, key string, fallback IndexedColorOverrides) IndexedColorOverrides {
+	mapTable, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	var out IndexedColorOverrides
+	for _, index := range indexedColorKeys(mapTable) {
+		value, ok := mapTable.RawGetInt(index).(lua.LString)
+		if !ok {
+			continue
+		}
+		_ = out.Set(uint8(index), string(value))
+	}
+	return out
+}
+
 func stringMapField(tbl *lua.LTable, key string, fallback map[string]string) map[string]string {
 	mapTable, ok := tbl.RawGetString(key).(*lua.LTable)
 	if !ok {
@@ -136,6 +366,22 @@ func stringMapField(tbl *lua.LTable, key string, fallback map[string]string) map
 		value, valueOK := v.(lua.LString)
 		if keyOK && valueOK {
 			out[string(key)] = string(value)
+		}
+	})
+	return out
+}
+
+func integerMapField(tbl *lua.LTable, key string, fallback map[string]int) map[string]int {
+	mapTable, ok := tbl.RawGetString(key).(*lua.LTable)
+	if !ok {
+		return fallback
+	}
+	out := make(map[string]int)
+	mapTable.ForEach(func(k, v lua.LValue) {
+		name, keyOK := k.(lua.LString)
+		number, valueOK := v.(lua.LNumber)
+		if keyOK && valueOK {
+			out[string(name)] = int(number)
 		}
 	})
 	return out
