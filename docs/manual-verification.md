@@ -149,3 +149,19 @@ Use a shell integration that emits OSC 133 or OSC 633, plus a temporary v2 confi
 - On Windows, accepted notifications use the native notification-area balloon, respect quiet time, truncate Unicode safely, and remove their icon on window close/rollback. Adapter errors must not reveal title/body.
 
 Automated cross-slice evidence is recorded at `docs/validation/phase-10-closeout.md`. Windows native API behavior still requires the manual checks above. Linux is headless-qualified; macOS and Linux GUI link/bell/notification behavior is explicitly skipped and no native notification support is claimed.
+
+## Phase 11 native IME qualification
+
+Native Windows IME support is experimental and restart-scoped. Set `config_version = 2` and `ime = { enabled = true }`, restart CervTerm, and retain the default `false` on machines that have not completed this matrix.
+
+For each installed Microsoft Japanese, Pinyin, and Korean IME:
+
+- Compose and commit ASCII, BMP CJK and supplementary-plane text; verify exactly one PTY write and no duplicate GLFW echo.
+- Exercise converted and unconverted target spans, moving the IME cursor through surrogate pairs and grapheme clusters.
+- Verify the candidate window follows terminal, search and command-palette carets across padding, splits, independent pane zoom, DPI changes and RTL text.
+- Change pane/tab/window/modal focus during preedit; verify cancellation targets the captured activation and never writes preedit to the PTY.
+- Resize, scroll, zoom, switch workspaces, create/close child windows and restore a saved multi-window layout while composing.
+- Trigger malformed/oversized input through the fake test harness; verify cancellation, bounded diagnostics and continued GLFW fallback.
+- Disable `ime.enabled`, restart, and verify no native subclass/candidate activity and unchanged legacy GLFW character input.
+
+Record exact Windows build, CervTerm commit, Go architecture, IME names/versions and PASS/SKIP/FAIL for every row in `docs/validation/phase-11-ime-qualification.md`. A missing J/C/K IME is SKIP, never PASS, and cannot justify default enablement.
