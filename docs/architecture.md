@@ -26,10 +26,10 @@ The core never imports the mux, renderer, PTY, GLFW, or OpenGL. Each mux pane ow
 ## Native in-process mux
 
 ```text
-Frontend -> Mux Window -> implicit Tab -> SplitTree -> Pane -> local PTY Session -> Terminal Core
+Frontend -> Workspace -> Mux Window -> Tab -> SplitTree -> Pane -> local PTY Session -> Terminal Core
 ```
 
-The mux is process-local and supports native column/row splits, stable split identities and ratios, draggable dividers, focused-pane input, independent scrollback/selection/search/mouse/zoom state, deterministic close/collapse and clipped rendering. GLFW projects pointer and font intent, while `internal/mux` validates ratios and owns pixel/grid geometry using renderer-neutral metrics per pane. Terminal grids update live and PTY resize settles once after divider or pane-zoom interaction. Mixed font sizes share one bounded two-page glyph atlas whose entries are namespaced by raster specification; selecting a pane never clears atlas pages. Visible tabs, multiple local windows, and layout-only workspaces are planned above these ownership boundaries. Domains, a daemon, live detach/reattach, remote sessions, and tmux integration are excluded.
+The mux is process-local and supports native column/row splits, stable split identities and ratios, draggable dividers, focused-pane input, independent scrollback/selection/search/mouse/zoom state, deterministic close/collapse and clipped rendering. It owns visible tabs, multiple local windows, named local workspaces, and layout-only fresh-session persistence above those panes. GLFW projects pointer and font intent, while `internal/mux` validates ratios and owns pixel/grid geometry using renderer-neutral metrics per pane. Terminal grids update live and PTY resize settles once after divider or pane-zoom interaction. Mixed font sizes share one bounded two-page glyph atlas whose entries are namespaced by raster specification; selecting a pane never clears atlas pages. Domains, a daemon, live detach/reattach, remote sessions, and tmux integration are excluded.
 
 ## Bounded font model and fixed-grid projection
 
@@ -86,6 +86,12 @@ Public legacy `script.Load` remains available. The executable is the only proces
 The process-local mux owns a bounded ordered collection of stable `TabID` states. Each tab owns one split tree, remembered focused pane, title and monotonic revision; pane/session/parser/terminal identity remains globally unique and survives transactional cross-tab transfer. Candidate source/destination trees are projected with per-pane metrics before a single commit, and inactive tabs remain excluded from terminal input, active layout and PTY resize.
 
 The GLFW frontend projects only the active tab and treats `Mux.Tabs()` as detached metadata. The retained top/bottom tab bar reserves the same authoritative geometry used by startup planning, runtime grid sizing and scrollbar tracks. Modal input precedes tab chrome, which precedes terminal mouse routing. Close confirmation retains the clicked stable ID and revision and rejects rename, reorder, pane-membership or lifecycle drift; background activity produces one retained badge update without creating a frame cadence.
+
+## Trusted terminal metadata and external effects
+
+OSC 8 hyperlinks, OSC 133/633 shell zones, BEL state, and OSC 9/777 notification requests enter through the bounded VT collector and remain pane-local metadata in core/mux snapshots. Parsing never opens a URI, invokes a native notification, or executes a command. Semantic actions retain stable origin-pane targeting and read only detached bounded history.
+
+The GLFW OS thread owns centralized effect policy and fakeable adapters. Link opening requires a fresh explicit activation and validated absolute HTTP(S) authority. Every BEL is delivered monotonically to mux/Lua while optional sinks alone are focus-filtered or throttled. Native notification consent defaults off, is focus/freshness/rate gated, and uses projection-owned Windows resources; non-Windows adapters fail closed. Diagnostics are coalesced and omit terminal-provided URI query/payload and notification content.
 
 ## Verifiable measurements
 
