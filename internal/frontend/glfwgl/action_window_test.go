@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	termaction "cervterm/internal/action"
+	"cervterm/internal/ime"
 	termmux "cervterm/internal/mux"
 )
 
@@ -101,9 +102,16 @@ func TestCrossWindowActionsUseStableOriginAndPreserveSessions(t *testing.T) {
 	controller.dispatch(events)
 	before := muxWindowPaneCount(a.mux)
 	ctx := termaction.Context{Source: termaction.SourceScript, Origin: termaction.Ref{Kind: termaction.RefPane, ID: 1}, Focused: termaction.Ref{Kind: termaction.RefPane, ID: 1}, OriginWindow: termaction.Ref{Kind: termaction.RefWindow, ID: 1}, FocusedWindow: termaction.Ref{Kind: termaction.RefWindow, ID: 1}}
+	a.initCompositionCoordinator()
+	if _, err := a.composition.start(); err != nil {
+		t.Fatal(err)
+	}
 	err = a.executeAction(windowEnvelope(termaction.MoveTabToWindow{WindowID: uint64(view.ID), TabID: 1, Position: 1}), ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if snapshot := a.composition.snapshot(); snapshot.Active || snapshot.LastCancel != ime.CancelTargetChanged {
+		t.Fatalf("source tab composition=%#v", snapshot)
 	}
 	after := muxWindowPaneCount(a.mux)
 	if before != after {
@@ -166,15 +174,28 @@ func TestMovePaneToWindowUsesPerPaneMetricsAndStaleSourceIsAtomic(t *testing.T) 
 	}
 	ctx := termaction.Context{Source: termaction.SourceScript, Origin: termaction.Ref{Kind: termaction.RefPane, ID: uint64(pane)}, Focused: termaction.Ref{Kind: termaction.RefPane, ID: uint64(pane)}, OriginWindow: termaction.Ref{Kind: termaction.RefWindow, ID: 1}, FocusedWindow: termaction.Ref{Kind: termaction.RefWindow, ID: 1}}
 	beforeCount := muxWindowPaneCount(a.mux)
+	a.initCompositionCoordinator()
+	if _, err := a.composition.start(); err != nil {
+		t.Fatal(err)
+	}
 	if err := a.executeAction(windowEnvelope(termaction.MovePaneToWindow{WindowID: uint64(view.ID), PaneID: uint64(pane), Axis: termaction.SplitRows}), ctx); err != nil {
 		t.Fatal(err)
 	}
+	if snapshot := a.composition.snapshot(); snapshot.Active || snapshot.LastCancel != ime.CancelTargetChanged {
+		t.Fatalf("source pane composition=%#v", snapshot)
+	}
 	if owner, ok := a.mux.WindowForPane(pane); !ok || owner != view.ID || muxWindowPaneCount(a.mux) != beforeCount {
 		t.Fatalf("owner=%d ok=%v count=%d", owner, ok, muxWindowPaneCount(a.mux))
+	}
+	if _, err := a.composition.start(); err != nil {
+		t.Fatal(err)
 	}
 	before := a.mux.Windows()
 	err = a.executeAction(windowEnvelope(termaction.MovePaneToWindow{WindowID: uint64(view.ID), PaneID: 999, Axis: termaction.SplitRows}), ctx)
 	if err == nil || !reflect.DeepEqual(before, a.mux.Windows()) {
 		t.Fatalf("stale err=%v before=%#v after=%#v", err, before, a.mux.Windows())
+	}
+	if snapshot := a.composition.snapshot(); !snapshot.Active {
+		t.Fatalf("failed transfer cancelled composition=%#v", snapshot)
 	}
 }

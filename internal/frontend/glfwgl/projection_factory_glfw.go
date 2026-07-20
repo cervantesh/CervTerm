@@ -32,7 +32,7 @@ func (f *glfwProjectionFactory) Prepare() (bundle *nativeProjectionBundle, spec 
 }
 
 func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, y int, position, initialGrid bool) (bundle *nativeProjectionBundle, spec termmux.SpawnSpec, content termmux.PixelRect, metrics termmux.CellMetrics, title string, err error) {
-	bundle = &nativeProjectionBundle{app: child}
+	bundle = &nativeProjectionBundle{app: child, beforeUnbind: newCompositionBeforeUnbind(child)}
 	fail := func(cause error) (*nativeProjectionBundle, termmux.SpawnSpec, termmux.PixelRect, termmux.CellMetrics, string, error) {
 		return bundle, spec, content, metrics, "", cause
 	}
@@ -152,6 +152,7 @@ func newProjectionApp(owner *App) *App {
 		pendingPaneResize: make(map[termmux.PaneID]termmux.PaneGeometry), configWatchHashes: make(map[string][32]byte),
 		bellState: bellState{bellDelivered: owner.bellDelivered},
 	}
+	child.initCompositionCoordinator()
 	child.initZoomHotkeys()
 	child.initActionBindings()
 	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {

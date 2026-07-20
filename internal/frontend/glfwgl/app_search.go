@@ -40,8 +40,9 @@ type searchController struct {
 	matchLen       int // match length in runes (highlight cell span, v1)
 	viewRow        int // frame-local: match's viewport row, or -1 when off-screen
 
-	term   searchTerminal
-	redraw func()
+	term              searchTerminal
+	redraw            func()
+	activationChanged func()
 }
 
 // init wires the App services the controller depends on. Called once after the
@@ -49,6 +50,10 @@ type searchController struct {
 func (s *searchController) init(term searchTerminal, redraw func()) {
 	s.term = term
 	s.redraw = redraw
+}
+
+func (s *searchController) bindActivationChange(changed func()) {
+	s.activationChanged = changed
 }
 
 // handleKey processes the search hotkey and, while the bar is open, all keyboard
@@ -85,15 +90,22 @@ func (s *searchController) open() bool {
 	s.query = s.query[:0]
 	s.hasMatch = false
 	s.redraw()
+	if s.activationChanged != nil {
+		s.activationChanged()
+	}
 	return true
 }
 
 // close returns to the live view input flow. It leaves the viewport where the
 // last match scrolled it; the user scrolls back to the bottom as usual.
 func (s *searchController) close() {
+	wasActive := s.active
 	s.active = false
 	s.hasMatch = false
 	s.redraw()
+	if wasActive && s.activationChanged != nil {
+		s.activationChanged()
+	}
 }
 
 // appendRune adds a printable rune to the query. Editing is rune-based, so
