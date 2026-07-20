@@ -300,3 +300,5 @@ func newDormantIMMDecoder(app *App, hwnd uintptr, api immContextAPI) *immDecoder
 		Now: time.Now,
 	}}
 }
+
+var _ wndProcDecoder = (*immDecoder)(nil)

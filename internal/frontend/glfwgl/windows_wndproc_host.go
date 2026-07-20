@@ -35,13 +35,27 @@ type wndProcDecoder interface {
 	handleMessage(message uint32, lParam uintptr) (bool, error)
 }
 
+type wndProcMessageHandler interface {
+	handleWndProcMessage(hwnd uintptr, message uint32, wParam, lParam uintptr) (handled bool, result uintptr, err error)
+}
+
+type wndProcDecoderHandler struct{ decoder wndProcDecoder }
+
+func (handler *wndProcDecoderHandler) handleWndProcMessage(_ uintptr, message uint32, _ uintptr, lParam uintptr) (bool, uintptr, error) {
+	if handler == nil || handler.decoder == nil {
+		return false, 0, errWndProcHostInvalid
+	}
+	handled, err := handler.decoder.handleMessage(message, lParam)
+	return handled, 0, err
+}
+
 const maxWndProcHandlers = 8
 
 type wndProcHandlerID uint64
 
 type wndProcHandlerEntry struct {
 	id      wndProcHandlerID
-	handler wndProcDecoder
+	handler wndProcMessageHandler
 	active  bool
 	legacy  bool
 }
@@ -62,7 +76,7 @@ type windowsWndProcHost struct {
 	dispatchDepth int
 }
 
-func (host *windowsWndProcHost) registerHandler(handler wndProcDecoder) (wndProcHandlerID, error) {
+func (host *windowsWndProcHost) registerHandler(handler wndProcMessageHandler) (wndProcHandlerID, error) {
 	if host == nil || handler == nil || host.released {
 		return 0, errWndProcHostInvalid
 	}
@@ -95,11 +109,11 @@ func (host *windowsWndProcHost) seedLegacyHandler() error {
 			return nil
 		}
 	}
-	_, err := host.appendHandler(host.decoder, true)
+	_, err := host.appendHandler(&wndProcDecoderHandler{decoder: host.decoder}, true)
 	return err
 }
 
-func (host *windowsWndProcHost) appendHandler(handler wndProcDecoder, legacy bool) (wndProcHandlerID, error) {
+func (host *windowsWndProcHost) appendHandler(handler wndProcMessageHandler, legacy bool) (wndProcHandlerID, error) {
 	handlerValue := reflect.ValueOf(handler)
 	if !handlerValue.IsValid() || !handlerValue.Comparable() {
 		return 0, errWndProcHostInvalid
@@ -124,7 +138,7 @@ func (host *windowsWndProcHost) appendHandler(handler wndProcDecoder, legacy boo
 	return entry.id, nil
 }
 
-func sameWndProcHandler(left, right wndProcDecoder) bool {
+func sameWndProcHandler(left, right wndProcMessageHandler) bool {
 	if reflect.TypeOf(left) != reflect.TypeOf(right) {
 		return false
 	}
@@ -288,7 +302,7 @@ func (host *windowsWndProcHost) dispatch(hwnd uintptr, message uint32, wParam, l
 		if entry == nil || !entry.active || entry.handler == nil {
 			continue
 		}
-		handled, handlerErr, panicked := host.safeHandle(entry.handler, message, lParam)
+		handled, handlerResult, handlerErr, panicked := host.safeHandle(entry.handler, hwnd, message, wParam, lParam)
 		if handlerErr != nil {
 			host.safeReport(handlerErr)
 		}
@@ -296,21 +310,21 @@ func (host *windowsWndProcHost) dispatch(hwnd uintptr, message uint32, wParam, l
 			break
 		}
 		if handled || (panicked && entry.legacy && isIMMCompositionMessage(message)) {
-			return 0
+			return handlerResult
 		}
 	}
 	return host.safeChainThrough(backend, prior, hwnd, message, wParam, lParam)
 }
 
-func (host *windowsWndProcHost) safeHandle(handler wndProcDecoder, message uint32, lParam uintptr) (handled bool, err error, panicked bool) {
+func (host *windowsWndProcHost) safeHandle(handler wndProcMessageHandler, hwnd uintptr, message uint32, wParam, lParam uintptr) (handled bool, result uintptr, err error, panicked bool) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			host.safeReport(errWndProcCallbackPanic)
-			handled, err, panicked = false, nil, true
+			handled, result, err, panicked = false, 0, nil, true
 		}
 	}()
-	handled, err = handler.handleMessage(message, lParam)
-	return handled, err, false
+	handled, result, err = handler.handleWndProcMessage(hwnd, message, wParam, lParam)
+	return handled, result, err, false
 }
 
 func (host *windowsWndProcHost) safeChainThrough(backend wndProcBackend, prior, hwnd uintptr, message uint32, wParam, lParam uintptr) (result uintptr) {
@@ -348,7 +362,5 @@ func ownershipMismatch(got, want uintptr) error {
 }
 
 func isIMMCompositionMessage(message uint32) bool {
-	return message == wmIMEStartComposition || message == wmIMEComposition || message == wmIMEEndComposition
+	return message == 0x010d || message == 0x010f || message == 0x010e
 }
-
-var _ wndProcDecoder = (*immDecoder)(nil)

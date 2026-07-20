@@ -93,9 +93,19 @@ func (decoder *fakeWndProcDecoder) handleMessage(message uint32, lParam uintptr)
 	return decoder.handled, decoder.err
 }
 
+func (decoder *fakeWndProcDecoder) handleWndProcMessage(_ uintptr, message uint32, _ uintptr, lParam uintptr) (bool, uintptr, error) {
+	handled, err := decoder.handleMessage(message, lParam)
+	return handled, 0, err
+}
+
 type nonComparableWndProcDecoder struct{ values []int }
 
 func (nonComparableWndProcDecoder) handleMessage(uint32, uintptr) (bool, error) { return false, nil }
+
+func (decoder nonComparableWndProcDecoder) handleWndProcMessage(_ uintptr, message uint32, _ uintptr, lParam uintptr) (bool, uintptr, error) {
+	handled, err := decoder.handleMessage(message, lParam)
+	return handled, 0, err
+}
 
 func TestDormantWndProcHostInstallDispatchRestoreRelease(t *testing.T) {
 	backend := &fakeWndProcBackend{current: 9, chainResult: 77}
@@ -396,7 +406,7 @@ func TestWndProcHostContainsIndividualHandlerPanicAndError(t *testing.T) {
 	panicking := &fakeWndProcDecoder{panic: true}
 	failing := &fakeWndProcDecoder{err: errors.New("handler")}
 	last := &fakeWndProcDecoder{}
-	for _, handler := range []wndProcDecoder{panicking, failing, last} {
+	for _, handler := range []wndProcMessageHandler{panicking, failing, last} {
 		if _, err := host.registerHandler(handler); err != nil {
 			t.Fatal(err)
 		}
