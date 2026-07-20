@@ -127,6 +127,7 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 			return fmt.Errorf("bind projection: %w", errWindowProjectionMissing)
 		}
 		child.windowID = id
+		child.catchUpBellEvents()
 		child.installCallbacks()
 		child.needsRedraw = true
 		return nil
@@ -148,6 +149,7 @@ func newProjectionApp(owner *App) *App {
 		cellW: 9, cellH: 16, uiScale: 1, blinkStart: time.Now(),
 		paneUI: make(map[termmux.PaneID]*paneUIState), pendingPaneScroll: make(map[termmux.PaneID]int),
 		pendingPaneResize: make(map[termmux.PaneID]termmux.PaneGeometry), configWatchHashes: make(map[string][32]byte),
+		bellState: bellState{bellDelivered: owner.bellDelivered},
 	}
 	child.initZoomHotkeys()
 	child.initActionBindings()
