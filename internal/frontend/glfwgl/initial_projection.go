@@ -65,6 +65,9 @@ func (a *App) adoptInitialProjection(window *glfw.Window) error {
 		},
 	}
 	a.activateProjectionIME(window, bundle.beforeUnbind)
+	if accessibilityErr := prepareProjectionAccessibility(a, window, bundle.beforeUnbind); accessibilityErr != nil {
+		return errors.Join(accessibilityErr, bundle.beforeUnbind.close())
+	}
 	if err := a.controller.adoptProjectionBundle(termmux.WindowID(initialWindowID), bundle); err != nil {
 		return errors.Join(err, bundle.beforeUnbind.close())
 	}
