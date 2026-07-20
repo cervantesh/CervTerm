@@ -93,6 +93,10 @@ func (decoder *fakeWndProcDecoder) handleMessage(message uint32, lParam uintptr)
 	return decoder.handled, decoder.err
 }
 
+type nonComparableWndProcDecoder struct{ values []int }
+
+func (nonComparableWndProcDecoder) handleMessage(uint32, uintptr) (bool, error) { return false, nil }
+
 func TestDormantWndProcHostInstallDispatchRestoreRelease(t *testing.T) {
 	backend := &fakeWndProcBackend{current: 9, chainResult: 77}
 	decoder := &fakeWndProcDecoder{}
@@ -227,7 +231,7 @@ func TestDormantWndProcHostRetainsOwnershipOnUnexpectedRollbackDisplacement(t *t
 
 func TestDormantWndProcHostReentrantReleaseStillChainsCapturedPrior(t *testing.T) {
 	backend := &fakeWndProcBackend{current: 9, chainResult: 77}
-	decoder := &fakeWndProcDecoder{}
+	decoder := &fakeWndProcDecoder{handled: true}
 	host := &windowsWndProcHost{backend: backend, decoder: decoder, hwnd: 5}
 	if err := host.install(); err != nil {
 		t.Fatal(err)
@@ -295,5 +299,119 @@ func TestDormantWndProcHostRestoreFailureCanRetrySafely(t *testing.T) {
 	}
 	if err := host.release(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWndProcHostDeterministicHandlersConsumeOnce(t *testing.T) {
+	backend := &fakeWndProcBackend{current: 9, chainResult: 77}
+	var order []string
+	legacy := &fakeWndProcDecoder{hook: func() { order = append(order, "legacy") }}
+	second := &fakeWndProcDecoder{handled: true, hook: func() { order = append(order, "second") }}
+	third := &fakeWndProcDecoder{hook: func() { order = append(order, "third") }}
+	host := &windowsWndProcHost{backend: backend, decoder: legacy, hwnd: 5}
+	secondID, err := host.registerHandler(second)
+	if err != nil || secondID == 0 {
+		t.Fatalf("register second id=%d err=%v", secondID, err)
+	}
+	if _, err := host.registerHandler(third); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.registerHandler(second); !errors.Is(err, errWndProcHandlerDuplicate) {
+		t.Fatalf("duplicate err=%v", err)
+	}
+	if err := host.install(); err != nil {
+		t.Fatal(err)
+	}
+	if got := backend.callback(5, 42, 0, 0); got != 0 || !reflect.DeepEqual(order, []string{"legacy", "second"}) || len(backend.chainCalls) != 0 {
+		t.Fatalf("consumed got=%d order=%v chain=%v", got, order, backend.chainCalls)
+	}
+	order = nil
+	second.handled = false
+	if got := backend.callback(5, 43, 0, 0); got != 77 || !reflect.DeepEqual(order, []string{"legacy", "second", "third"}) || len(backend.chainCalls) != 1 {
+		t.Fatalf("unhandled got=%d order=%v chain=%v", got, order, backend.chainCalls)
+	}
+	if err := host.unregisterHandler(secondID); err != nil {
+		t.Fatal(err)
+	}
+	if err := host.unregisterHandler(secondID); !errors.Is(err, errWndProcHandlerMissing) {
+		t.Fatalf("stale removal err=%v", err)
+	}
+}
+
+func TestWndProcHostHandlerBoundAndExhaustion(t *testing.T) {
+	host := &windowsWndProcHost{backend: &fakeWndProcBackend{current: 9}, decoder: &fakeWndProcDecoder{}, hwnd: 5}
+	for index := 0; index < maxWndProcHandlers-1; index++ {
+		if _, err := host.registerHandler(&fakeWndProcDecoder{}); err != nil {
+			t.Fatalf("register %d: %v", index, err)
+		}
+	}
+	if _, err := host.registerHandler(&fakeWndProcDecoder{}); !errors.Is(err, errWndProcHandlerLimit) {
+		t.Fatalf("limit err=%v", err)
+	}
+	exhausted := &windowsWndProcHost{backend: &fakeWndProcBackend{current: 9}, hwnd: 5, nextHandlerID: ^wndProcHandlerID(0)}
+	if _, err := exhausted.registerHandler(&fakeWndProcDecoder{}); !errors.Is(err, errWndProcHandlerExhausted) {
+		t.Fatalf("exhaustion err=%v", err)
+	}
+}
+
+func TestWndProcHostReentrantUnregisterSkipsPendingHandler(t *testing.T) {
+	backend := &fakeWndProcBackend{current: 9, chainResult: 77}
+	host := &windowsWndProcHost{backend: backend, hwnd: 5}
+	var secondID wndProcHandlerID
+	first := &fakeWndProcDecoder{}
+	second := &fakeWndProcDecoder{}
+	replacement := &fakeWndProcDecoder{}
+	first.hook = func() {
+		first.hook = nil
+		if err := host.unregisterHandler(secondID); err != nil {
+			t.Fatalf("reentrant unregister: %v", err)
+		}
+		if _, err := host.registerHandler(replacement); err != nil {
+			t.Fatalf("reentrant replacement: %v", err)
+		}
+	}
+	if _, err := host.registerHandler(first); err != nil {
+		t.Fatal(err)
+	}
+	var err error
+	secondID, err = host.registerHandler(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := host.install(); err != nil {
+		t.Fatal(err)
+	}
+	if got := backend.callback(5, 42, 0, 0); got != 77 || len(first.calls) != 1 || len(second.calls) != 0 || len(replacement.calls) != 0 || len(host.handlers) != 2 {
+		t.Fatalf("result=%d first=%d second=%d replacement=%d handlers=%d", got, len(first.calls), len(second.calls), len(replacement.calls), len(host.handlers))
+	}
+	if got := backend.callback(5, 43, 0, 0); got != 77 || len(replacement.calls) != 1 {
+		t.Fatalf("next dispatch result=%d replacement=%d", got, len(replacement.calls))
+	}
+}
+
+func TestWndProcHostContainsIndividualHandlerPanicAndError(t *testing.T) {
+	backend := &fakeWndProcBackend{current: 9, chainResult: 77}
+	reports := 0
+	host := &windowsWndProcHost{backend: backend, hwnd: 5, report: func(error) { reports++ }}
+	panicking := &fakeWndProcDecoder{panic: true}
+	failing := &fakeWndProcDecoder{err: errors.New("handler")}
+	last := &fakeWndProcDecoder{}
+	for _, handler := range []wndProcDecoder{panicking, failing, last} {
+		if _, err := host.registerHandler(handler); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := host.install(); err != nil {
+		t.Fatal(err)
+	}
+	if got := backend.callback(5, 42, 0, 0); got != 77 || reports != 2 || len(last.calls) != 1 || len(backend.chainCalls) != 1 {
+		t.Fatalf("got=%d reports=%d last=%d chain=%d", got, reports, len(last.calls), len(backend.chainCalls))
+	}
+}
+
+func TestWndProcHostRejectsNonComparableHandlerIdentity(t *testing.T) {
+	host := &windowsWndProcHost{backend: &fakeWndProcBackend{current: 9}, hwnd: 5}
+	if _, err := host.registerHandler(nonComparableWndProcDecoder{values: []int{1}}); !errors.Is(err, errWndProcHostInvalid) {
+		t.Fatalf("non-comparable handler err=%v", err)
 	}
 }

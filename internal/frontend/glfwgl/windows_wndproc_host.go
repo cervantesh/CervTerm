@@ -5,6 +5,7 @@ package glfwgl
 import (
 	"errors"
 	"fmt"
+	"reflect"
 )
 
 var (
@@ -14,6 +15,10 @@ var (
 	errWndProcOwnershipLost    = errors.New("WndProc ownership was lost")
 	errWndProcReleaseInstalled = errors.New("installed WndProc callback cannot be released")
 	errWndProcCallbackPanic    = errors.New("WndProc callback panic")
+	errWndProcHandlerLimit     = errors.New("WndProc handler limit reached")
+	errWndProcHandlerDuplicate = errors.New("WndProc handler is already registered")
+	errWndProcHandlerMissing   = errors.New("WndProc handler registration is stale")
+	errWndProcHandlerExhausted = errors.New("WndProc handler ID exhausted")
 )
 
 type wndProcCallback func(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr
@@ -30,17 +35,114 @@ type wndProcDecoder interface {
 	handleMessage(message uint32, lParam uintptr) (bool, error)
 }
 
+const maxWndProcHandlers = 8
+
+type wndProcHandlerID uint64
+
+type wndProcHandlerEntry struct {
+	id      wndProcHandlerID
+	handler wndProcDecoder
+	active  bool
+	legacy  bool
+}
+
 type windowsWndProcHost struct {
-	backend     wndProcBackend
-	decoder     wndProcDecoder
-	report      func(error)
-	hwnd        uintptr
-	prior       uintptr
-	callback    wndProcCallback
-	callbackPtr uintptr
-	installed   bool
-	active      bool
-	released    bool
+	backend       wndProcBackend
+	decoder       wndProcDecoder
+	report        func(error)
+	hwnd          uintptr
+	prior         uintptr
+	callback      wndProcCallback
+	callbackPtr   uintptr
+	installed     bool
+	active        bool
+	released      bool
+	handlers      []*wndProcHandlerEntry
+	nextHandlerID wndProcHandlerID
+	dispatchDepth int
+}
+
+func (host *windowsWndProcHost) registerHandler(handler wndProcDecoder) (wndProcHandlerID, error) {
+	if host == nil || handler == nil || host.released {
+		return 0, errWndProcHostInvalid
+	}
+	if err := host.seedLegacyHandler(); err != nil {
+		return 0, err
+	}
+	return host.appendHandler(handler, false)
+}
+
+func (host *windowsWndProcHost) unregisterHandler(id wndProcHandlerID) error {
+	if host == nil || id == 0 || host.released {
+		return errWndProcHandlerMissing
+	}
+	for _, entry := range host.handlers {
+		if entry != nil && entry.id == id && entry.active {
+			entry.active = false
+			host.compactHandlers()
+			return nil
+		}
+	}
+	return errWndProcHandlerMissing
+}
+
+func (host *windowsWndProcHost) seedLegacyHandler() error {
+	if host == nil || host.decoder == nil {
+		return nil
+	}
+	for _, entry := range host.handlers {
+		if entry != nil && entry.legacy {
+			return nil
+		}
+	}
+	_, err := host.appendHandler(host.decoder, true)
+	return err
+}
+
+func (host *windowsWndProcHost) appendHandler(handler wndProcDecoder, legacy bool) (wndProcHandlerID, error) {
+	handlerValue := reflect.ValueOf(handler)
+	if !handlerValue.IsValid() || !handlerValue.Comparable() {
+		return 0, errWndProcHostInvalid
+	}
+	for _, entry := range host.handlers {
+		if entry != nil && entry.active && sameWndProcHandler(entry.handler, handler) {
+			return 0, errWndProcHandlerDuplicate
+		}
+	}
+	if len(host.handlers) >= maxWndProcHandlers {
+		return 0, errWndProcHandlerLimit
+	}
+	if host.nextHandlerID == ^wndProcHandlerID(0) {
+		return 0, errWndProcHandlerExhausted
+	}
+	host.nextHandlerID++
+	if host.nextHandlerID == 0 {
+		return 0, errWndProcHandlerExhausted
+	}
+	entry := &wndProcHandlerEntry{id: host.nextHandlerID, handler: handler, active: true, legacy: legacy}
+	host.handlers = append(host.handlers, entry)
+	return entry.id, nil
+}
+
+func sameWndProcHandler(left, right wndProcDecoder) bool {
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return false
+	}
+	leftValue := reflect.ValueOf(left)
+	return leftValue.IsValid() && leftValue.Comparable() && leftValue.Interface() == reflect.ValueOf(right).Interface()
+}
+
+func (host *windowsWndProcHost) compactHandlers() {
+	kept := host.handlers[:0]
+	for _, entry := range host.handlers {
+		if entry != nil && entry.active {
+			kept = append(kept, entry)
+		}
+	}
+	for index := len(kept); index < len(host.handlers); index++ {
+		host.handlers[index] = nil
+	}
+	host.handlers = kept
 }
 
 func (host *windowsWndProcHost) install() (err error) {
@@ -51,7 +153,13 @@ func (host *windowsWndProcHost) install() (err error) {
 	if host.installed {
 		return nil
 	}
-	if host.backend == nil || host.decoder == nil || host.hwnd == 0 || host.released {
+	if host.backend == nil || host.hwnd == 0 || host.released {
+		return errWndProcHostInvalid
+	}
+	if err := host.seedLegacyHandler(); err != nil {
+		return err
+	}
+	if len(host.handlers) == 0 {
 		return errWndProcHostInvalid
 	}
 	observed, err := host.backend.GetWindowProc(host.hwnd)
@@ -133,6 +241,7 @@ func (host *windowsWndProcHost) release() error {
 	}
 	host.active, host.released = false, true
 	host.decoder = nil
+	host.handlers = nil
 	host.prior, host.hwnd = 0, 0
 	return nil
 }
@@ -165,17 +274,43 @@ func (host *windowsWndProcHost) dispatch(hwnd uintptr, message uint32, wParam, l
 			}
 		}
 	}()
-	if host == nil || !host.active || !host.installed || host.released || hwnd != host.hwnd || host.decoder == nil {
+	if host == nil || !host.active || !host.installed || host.released || hwnd != host.hwnd || len(host.handlers) == 0 {
 		return host.safeChainThrough(backend, prior, hwnd, message, wParam, lParam)
 	}
-	handled, err := host.decoder.handleMessage(message, lParam)
-	if err != nil {
-		host.safeReport(err)
-	}
-	if handled {
-		return 0
+	host.dispatchDepth++
+	defer func() {
+		host.dispatchDepth--
+		if host.dispatchDepth == 0 {
+			host.compactHandlers()
+		}
+	}()
+	for _, entry := range append([]*wndProcHandlerEntry(nil), host.handlers...) {
+		if entry == nil || !entry.active || entry.handler == nil {
+			continue
+		}
+		handled, handlerErr, panicked := host.safeHandle(entry.handler, message, lParam)
+		if handlerErr != nil {
+			host.safeReport(handlerErr)
+		}
+		if host.released || !host.active || !host.installed {
+			break
+		}
+		if handled || (panicked && entry.legacy && isIMMCompositionMessage(message)) {
+			return 0
+		}
 	}
 	return host.safeChainThrough(backend, prior, hwnd, message, wParam, lParam)
+}
+
+func (host *windowsWndProcHost) safeHandle(handler wndProcDecoder, message uint32, lParam uintptr) (handled bool, err error, panicked bool) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			host.safeReport(errWndProcCallbackPanic)
+			handled, err, panicked = false, nil, true
+		}
+	}()
+	handled, err = handler.handleMessage(message, lParam)
+	return handled, err, false
 }
 
 func (host *windowsWndProcHost) safeChainThrough(backend wndProcBackend, prior, hwnd uintptr, message uint32, wParam, lParam uintptr) (result uintptr) {
