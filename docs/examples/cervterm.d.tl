@@ -180,6 +180,12 @@ local record cervterm
     visual_duration_ms: integer
   end
 
+  record NotificationConfig
+    enabled: boolean
+    focus: string
+    rate_limit_ms: integer
+  end
+
   record RenderConfig
     bidi: boolean
     text_gamma: number
@@ -411,6 +417,12 @@ local record cervterm
     visual_duration_ms: integer | Unset
   end
 
+  record NotificationDocument
+    enabled: boolean | Unset
+    focus: string | Unset
+    rate_limit_ms: integer | Unset
+  end
+
   record RenderDocument
     bidi: boolean | Unset
     text_gamma: number | Unset
@@ -506,6 +518,7 @@ local record cervterm
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
     bell: BellDocument | Unset
+    notification: NotificationDocument | Unset
     render: RenderDocument | Unset
     shell: ShellDocument | Unset
     launch_menu: {LaunchTarget} | Unset | nil
@@ -537,6 +550,7 @@ local record cervterm
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
     bell: BellDocument | Unset
+    notification: NotificationDocument | Unset
     render: RenderDocument | Unset
     shell: ShellDocument | Unset
     launch_menu: {LaunchTarget} | Unset | nil

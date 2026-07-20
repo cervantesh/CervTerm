@@ -24,6 +24,8 @@ Repeatable `--config-override PATH=VALUE` inputs apply left-to-right after the s
 
 `bell` is a strict v2 live policy. `mode` is `disabled` (default), `audible`, `visual`, or `taskbar`; `focus` is `unfocused` (default) or `always`; `throttle_ms` is bounded to `0..60000`; and `visual_duration_ms` is bounded to `50..2000`. These settings throttle only frontend effects. Every BEL still increments the pane-local monotonic count and invokes `events.bell` once, even when effects are disabled, focus-suppressed, or throttled. Audible effects use the Windows system bell; unsupported platforms report capability failure without affecting the callback stream.
 
+`notification` is a strict v2 live consent policy for bounded OSC 9/777 metadata. `enabled` defaults to `false`, `focus` is `unfocused` (default) or `always`, and `rate_limit_ms` is bounded to `100..60000`. Requests queued before their native window exists lose freshness and can never produce a delayed external effect. Adapter failures and overflow diagnostics are coalesced and never include request title/body.
+
 ## Keybindings
 
 Add a `keys` array to the returned config table. Each entry has:

@@ -164,6 +164,13 @@ go run -tags glfw ./cmd/cervterm
 - A bounded per-mode gate throttles only OS/visual effects. Visual expiry participates in the on-demand wake loop; native effects execute from frontend event dispatch on the locked OS thread.
 - Windows audible mode uses the system message bell. Unsupported native audible adapters fail closed without dropping the observable bell event.
 
+### Notification policy
+
+- Strict v2 `notification` configuration reloads live and defaults to disabled explicit consent.
+- A pure per-window gate rejects disabled, deferred, focus-suppressed, or rate-limited requests before any adapter call.
+- Missing-window queues revoke request freshness, preventing delayed native effects after projection creation.
+- Adapter/overflow diagnostics are bounded and redact all terminal-provided title/body content.
+
 ## Native windows, workspaces, and saved layouts
 
 - One process mux owns ordered named workspaces, native-window models, tabs, pane trees, and all local sessions/readers; native hosts are projections owned by the locked OS thread.

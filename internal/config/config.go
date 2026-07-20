@@ -28,6 +28,7 @@ type Config struct {
 	Cursor            CursorConfig
 	Clipboard         ClipboardConfig
 	Bell              BellConfig
+	Notification      NotificationConfig
 	Render            RenderConfig
 	Shell             ShellConfig
 	QuickSelect       QuickSelectConfig
@@ -185,11 +186,12 @@ func Defaults() Config {
 			Mode: "multiple", Position: "top", HeightPX: 28, MinWidthPX: 96, MaxWidthPX: 220, PaddingX: 8,
 			ShowNewButton: true, ShowCloseButton: true,
 		},
-		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
-		Clipboard: ClipboardConfig{OSC52: "off"},
-		Bell:      BellConfig{Mode: "disabled", Focus: "unfocused", ThrottleMS: 250, VisualDurationMS: 120},
-		Render:    RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", ZoomInHotkey: "ctrl+equal", ZoomOutHotkey: "ctrl+minus", ZoomResetHotkey: "ctrl+0", VSync: true, MaxFPS: 0, Redraw: "on_demand", Damage: "rows"},
-		Shell:     ShellConfig{Args: []string{}, Env: map[string]string{}},
+		Cursor:       CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
+		Clipboard:    ClipboardConfig{OSC52: "off"},
+		Bell:         BellConfig{Mode: "disabled", Focus: "unfocused", ThrottleMS: 250, VisualDurationMS: 120},
+		Notification: NotificationConfig{Enabled: false, Focus: "unfocused", RateLimitMS: 5000},
+		Render:       RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", ZoomInHotkey: "ctrl+equal", ZoomOutHotkey: "ctrl+minus", ZoomResetHotkey: "ctrl+0", VSync: true, MaxFPS: 0, Redraw: "on_demand", Damage: "rows"},
+		Shell:        ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
 }
 
@@ -410,6 +412,7 @@ func (c Config) Validate() error {
 		errs = append(errs, fmt.Errorf("clipboard.osc52 %q must be write or off", c.Clipboard.OSC52))
 	}
 	errs = append(errs, validateBell(c.Bell)...)
+	errs = append(errs, validateNotification(c.Notification)...)
 	if c.Render.TextGamma < 0.5 || c.Render.TextGamma > 3.0 {
 		errs = append(errs, errors.New("render.text_gamma must be between 0.5 and 3.0"))
 	}
