@@ -52,6 +52,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Bounded pane-local OSC 133/633 prompt, command-input, and command-output metadata that preserves the 32-byte cell budget through wide cells, blank semantic rows, scrollback, reflow, resize, reset, and alternate screens without retaining shell command/property payloads; generation-checked bounded semantic-history snapshots; typed `ScrollToPrompt(-1|1)` navigation; bounded `CopySemanticZone("input"|"output")`; and viewport-safe `SelectSemanticZone("input"|"output")`.
 - Bounded quick select for visible HTTP(S) links and compiled custom regex rules, with prefix-free labels, copy/open actions, and stale-generation rejection.
 - A bounded retained launch menu with argv-only local process descriptors, sensitive environment provenance, deterministic environment merging, and spawn-before-topology commit.
+- Experimental default-off Windows UI Automation integration with immutable visible-only terminal/modal/IME documents, stable provider identity, coalesced generation updates, shared WndProc ownership, strict v2/Teal configuration, privacy-safe diagnostics, and fail-closed per-window fallback.
 
 ### Fixed
 

@@ -174,6 +174,11 @@ return {
     -- Native Windows IME/preedit integration; restart required. Disabled by default.
     enabled = %t,
   },
+	accessibility = {
+		-- Windows UI Automation integration; restart required. Disabled by default.
+		enabled = %t,
+		scope = %q, -- visible is the only supported privacy scope
+	},
   bell = {
     -- Sink effects are disabled by default; Lua bell callbacks remain lossless.
     mode = %q, -- disabled, audible, visual, or taskbar
@@ -301,6 +306,7 @@ return {
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
 		cfg.Clipboard.OSC52,
 		cfg.IME.Enabled,
+		cfg.Accessibility.Enabled, cfg.Accessibility.Scope,
 		cfg.Bell.Mode, cfg.Bell.Focus, cfg.Bell.ThrottleMS, cfg.Bell.VisualDurationMS,
 		cfg.Notification.Enabled, cfg.Notification.Focus, cfg.Notification.RateLimitMS,
 		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.ZoomInHotkey, cfg.Render.ZoomOutHotkey, cfg.Render.ZoomResetHotkey, cfg.Render.VSync, cfg.Render.MaxFPS, cfg.Render.Redraw, cfg.Render.Damage, cfg.Render.Bidi,

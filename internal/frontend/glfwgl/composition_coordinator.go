@@ -136,6 +136,12 @@ func (a *App) initCompositionCoordinator() {
 			_ = a.candidateGeometry.hide()
 		}
 		a.requestRedraw()
+		if snapshot.Revision != a.accessibilityCompositionRevision {
+			a.accessibilityCompositionRevision = snapshot.Revision
+			if a.accessibilityRuntime != nil {
+				a.accessibilityRuntime.Invalidate(accessibilityAllSemanticIntents)
+			}
+		}
 	})
 }
 

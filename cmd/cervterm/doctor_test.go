@@ -36,6 +36,9 @@ func TestRunDoctorPrintsActionableSections(t *testing.T) {
 		"text-darken: 0.00",
 		"ime-enabled: false",
 		"ime-activation: unavailable",
+		"accessibility-enabled: false",
+		"accessibility-scope: visible",
+		"accessibility-activation: unavailable",
 		"background-formats: png,jpeg,gif-static",
 		"background-budget: cpu=134217728 gpu=134217728",
 		"background-surface-capability: runtime-probed",
@@ -213,5 +216,29 @@ func TestDoctorReportsConfiguredIMEIntentAndPlatformCapability(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("doctor output missing %q\n%s", want, output)
 		}
+	}
+}
+
+func TestDoctorReportsConfiguredAccessibilityIntentAndPlatformCapability(t *testing.T) {
+	path := t.TempDir() + "/cervterm.lua"
+	if err := os.WriteFile(path, []byte(`return {config_version=2,accessibility={enabled=true,scope="visible"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := captureStdout(t, func() {
+		if code := runDoctor(doctorOptions{ConfigPath: path, LogPath: "-"}); code != 0 {
+			t.Fatalf("runDoctor exit code=%d", code)
+		}
+	})
+	capability := "accessibility-platform-capability: unsupported"
+	if runtime.GOOS == "windows" {
+		capability = "accessibility-platform-capability: windows-uia-opt-in"
+	}
+	for _, want := range []string{"accessibility-enabled: true", "accessibility-scope: visible", capability, "accessibility-activation: unavailable (no active frontend in diagnostic mode)"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("doctor output missing %q\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "HWND") || strings.Contains(output, "provider-token") {
+		t.Fatalf("doctor leaked native accessibility details\n%s", output)
 	}
 }

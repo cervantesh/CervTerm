@@ -177,6 +177,11 @@ local record cervterm
     enabled: boolean
   end
 
+  record AccessibilityConfig
+    enabled: boolean
+    scope: string
+  end
+
   record BellConfig
     mode: string
     focus: string
@@ -418,6 +423,11 @@ local record cervterm
     enabled: boolean | Unset
   end
 
+  record AccessibilityDocument
+    enabled: boolean | Unset
+    scope: string | Unset
+  end
+
   record BellDocument
     mode: string | Unset
     focus: string | Unset
@@ -526,6 +536,7 @@ local record cervterm
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
     ime: IMEDocument | Unset
+    accessibility: AccessibilityDocument | Unset
     bell: BellDocument | Unset
     notification: NotificationDocument | Unset
     render: RenderDocument | Unset
@@ -559,6 +570,7 @@ local record cervterm
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
     ime: IMEDocument | Unset
+    accessibility: AccessibilityDocument | Unset
     bell: BellDocument | Unset
     notification: NotificationDocument | Unset
     render: RenderDocument | Unset

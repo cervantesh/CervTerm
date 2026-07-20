@@ -33,11 +33,18 @@ func (c *windowController) applyWorkspaceProjection(events []termmux.Event) {
 			continue
 		}
 		if _, ok := visible[id]; ok {
+			becameVisible := !projection.visible
 			projection.visible = true
 			projection.host.Show()
+			if becameVisible && projection.app != nil {
+				projection.app.refreshAccessibilityProjection()
+			}
 		} else {
 			if projection.visible && projection.app != nil {
 				_ = projection.app.cancelComposition(ime.CancelWindowHidden)
+			}
+			if projection.visible && projection.app != nil {
+				projection.app.refreshAccessibilityProjection()
 			}
 			projection.visible = false
 			projection.host.Hide()
