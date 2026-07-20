@@ -29,6 +29,10 @@ Automated coverage verifies strict v2 decoding, default-off legacy behavior, vis
 | IME preedit/caret/target spans | SKIP | SKIP | Installed J/C/K IMEs and screen reader required. |
 | Child window/layout restore/provider lifetime | SKIP | SKIP | Manual multi-window run required. |
 | Rapid output/resize/scroll responsiveness | SKIP | SKIP | Manual performance observation required. |
+| DPI changes with per-pane zoom and candidate/preedit geometry | SKIP | SKIP | Supervised mixed-DPI desktop session required. |
+| Terminal resize, soft-wrap reflow and alternate-screen transitions | SKIP | SKIP | Manual screen-reader continuity run required. |
+| Bell/notification announcement rate and body privacy | SKIP | SKIP | Manual event-rate observation with UIA client required. |
+| Shutdown, close, restore and zero post-disconnect callbacks | SKIP | SKIP | Manual Accessibility Insights/UIA client observation required. |
 | Default-off/no-provider regression | SKIP | SKIP | Manual Accessibility Insights inspection required. |
 
 ## Disposition

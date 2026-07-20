@@ -31,6 +31,7 @@ Best-effort support currently targets:
 - default config and documented Lua config overrides,
 - OSC 8 hyperlinks and OSC 133/633 shell semantic metadata/actions under the documented trust policy,
 - default-off terminal notification requests; the native notification adapter is currently Windows-only.
+- controlled testing of the restart-scoped, visible-only, default-off Windows UI Automation adapter.
 
 Not yet guaranteed:
 
@@ -39,6 +40,7 @@ Not yet guaranteed:
 - MSI or stable winget install path,
 - full cross-platform GUI behavior,
 - native bell/notification effects on macOS or Linux GUI builds.
+- Narrator/NVDA support, default-on accessibility, macOS NSAccessibility, Linux AT-SPI, or Windows 386 accessibility.
 
 ## Security or supply-chain concerns
 

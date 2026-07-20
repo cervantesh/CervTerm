@@ -95,11 +95,13 @@ The GLFW OS thread owns centralized effect policy and fakeable adapters. Link op
 
 ## Native projection capability seam
 
-Platform services that GLFW does not model use separate optional interfaces owned by one native projection on the locked OS thread. Phase 11 reserves only a composition capability; Phase 12 accessibility must use a distinct interface and privacy/snapshot contract. No native type crosses into core, VT, input, render or mux.
+Platform services that GLFW does not model use separate optional interfaces owned by one native projection on the locked OS thread. Composition and accessibility use distinct capabilities and privacy/snapshot contracts; the Windows adapters share one bounded transactional WndProc router without sharing behavior interfaces. No native type crosses into core, VT, input, render or mux.
 
 Composition state is bounded and frontend-only. It captures a stable pane/search/modal activation, renders preedit without changing terminal snapshots, and routes only a validated commit exactly once. Any target/focus/window/modal ambiguity cancels rather than transfers. Windows may subclass the GLFW HWND transactionally, but callback deactivation and exact WndProc restoration must complete through one pre-unbind coordinator before ordinary resource closure and HWND destruction. Disabled/unavailable installation preserves the legacy GLFW character path.
 
 Accessibility uses a separate bounded semantic-document capability. The GLFW owner thread derives immutable visible-only text, focus, caret and selection snapshots from detached render/mux/modal values; off-thread native providers read only the atomic publication. Logical grapheme order defines ranges while rendered BiDi mappings define rectangles. Accessibility and IME share one transactional native message router, and providers disconnect before existing WndProc restoration and HWND destruction. Scrollback and hidden metadata are not exposed by the initial policy.
+
+The Windows UIA adapter is production-wired only behind strict restart-scoped `accessibility.enabled`; it remains visible-only, default-off and experimental. Semantic changes coalesce once per projection cycle, native events are listener-gated, and capture/publication/event failures disconnect that window's provider while preserving terminal input and rendering.
 
 ## Verifiable measurements
 
