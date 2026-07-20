@@ -1,0 +1,23 @@
+package mux
+
+func (m *Mux) advancePane(p *pane, data []byte) []Event {
+	oldTitle, oldCWD, oldBell := p.title, p.cwd, p.bellCount
+	p.advanceTerminal(data)
+	events := p.flushReplies()
+	p.capture()
+	events = append(events,
+		Event{Kind: PaneOutput, Pane: p.id, Data: append([]byte(nil), data...)},
+		Event{Kind: PaneDirty, Pane: p.id},
+	)
+	if p.title != oldTitle {
+		events = append(events, Event{Kind: PaneTitleChanged, Pane: p.id, Text: p.title})
+	}
+	if p.cwd != oldCWD {
+		events = append(events, Event{Kind: PaneCWDChanged, Pane: p.id, Text: p.cwd})
+	}
+	for bell := oldBell; bell < p.bellCount; bell++ {
+		events = append(events, Event{Kind: PaneBell, Pane: p.id})
+	}
+	events = appendPaneNotificationEvents(events, p)
+	return m.ResolveEventAddresses(events)
+}
