@@ -30,6 +30,7 @@ func (a *App) setFocusedPane(pane termmux.PaneID) {
 	if a.focusedPane == pane {
 		return
 	}
+	_ = a.cancelComposition(ime.CancelTargetChanged)
 	a.focusedPane = pane
 	if a.textTarget.sequence == maxTextTargetSequence {
 		a.textTarget.paneActivation = 0
@@ -64,6 +65,29 @@ func (a *App) captureCommittedTextTarget() (ime.Target, error) {
 	a.textTarget.sequence++
 	a.textTarget.paneActivation = a.textTarget.sequence
 	return ime.Target{Kind: ime.TargetPane, ID: uint64(a.focusedPane), Activation: a.textTarget.paneActivation}, nil
+}
+
+func (a *App) currentCommittedTextTarget() (ime.Target, error) {
+	if a.modal.Active() {
+		state := a.modal.Snapshot()
+		target := ime.Target{Kind: ime.TargetModal, ID: uint64(state.OpeningPane), Activation: uint64(state.Activation)}
+		if target.Valid() {
+			return target, nil
+		}
+		return ime.Target{}, errTextTargetStale
+	}
+	if a.search.active {
+		target := ime.Target{Kind: ime.TargetSearch, ID: uint64(a.focusedPane), Activation: uint64(a.search.activation)}
+		if target.Valid() {
+			return target, nil
+		}
+		return ime.Target{}, errTextTargetStale
+	}
+	target := ime.Target{Kind: ime.TargetPane, ID: uint64(a.focusedPane), Activation: a.textTarget.paneActivation}
+	if a.mux != nil && target.Valid() {
+		return target, nil
+	}
+	return ime.Target{}, errTextTargetStale
 }
 
 func (a *App) routeCommittedText(target ime.Target, text string) error {

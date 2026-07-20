@@ -105,6 +105,7 @@ type App struct {
 	noticeUntil       time.Time
 	charSuppression   charSuppression
 	textTarget        committedTextTargetState
+	composition       compositionCoordinator
 	lastStats         time.Time
 	blinkStart        time.Time
 	showStats         bool
@@ -183,6 +184,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 		pendingPaneResize:      make(map[termmux.PaneID]termmux.PaneGeometry),
 		bellState:              bellState{bellDelivered: make(map[termmux.PaneID]int)},
 	}
+	app.initCompositionCoordinator()
 	app.linkLauncher = platformURLLauncher{}
 	app.configScope = app.runtimeScopes.NewScope()
 	app.configWatch = newConfigWatchState(watchPaths...)
@@ -461,6 +463,7 @@ func (a *App) installCallbacks() {
 	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
 		a.recordNativeFocus(focused)
 		if !focused {
+			a.compositionNativeFocusChanged(false)
 			a.keyTable.cancel()
 			a.finishDividerDrag()
 			a.clearDividerCursor()

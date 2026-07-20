@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cervterm/internal/config"
+	"cervterm/internal/ime"
 	termmux "cervterm/internal/mux"
 	"cervterm/internal/script"
 
@@ -68,13 +69,14 @@ func (close projectionResourceFunc) Close() error { return close() }
 // controller still rolls it back, preventing callbacks or native resources
 // from escaping failed candidate creation.
 type nativeProjectionBundle struct {
-	host      nativeWindowHost
-	app       *App
-	handle    func([]termmux.Event) bool
-	bind      func(termmux.WindowID) error
-	unbind    func() error
-	resources []projectionResource
-	closed    bool
+	host         nativeWindowHost
+	app          *App
+	handle       func([]termmux.Event) bool
+	bind         func(termmux.WindowID) error
+	unbind       func() error
+	beforeUnbind *compositionBeforeUnbind
+	resources    []projectionResource
+	closed       bool
 }
 
 type nativeProjectionFactory interface {
@@ -238,19 +240,6 @@ func (c *windowController) activate(id termmux.WindowID) error {
 	return nil
 }
 
-func (c *windowController) focus(id termmux.WindowID) error {
-	if err := c.requireLoop(); err != nil {
-		return err
-	}
-	projection, ok := c.windows[id]
-	if !ok || projection.closed {
-		return errWindowProjectionMissing
-	}
-	projection.host.Focus()
-	c.active = id
-	return nil
-}
-
 func (c *windowController) projectionIDs() []termmux.WindowID {
 	ids := make([]termmux.WindowID, 0, len(c.order))
 	for _, id := range c.order {
@@ -364,8 +353,15 @@ func (c *windowController) closeProjection(id termmux.WindowID) error {
 	}
 	projection.host.MakeContextCurrent()
 	var teardownErr error
+	if projection.bundle != nil {
+		teardownErr = projection.bundle.unbindProjection()
+	} else if projection.app != nil {
+		teardownErr = projection.app.cancelComposition(ime.CancelTeardown)
+		projection.app.composition.deactivateDelivery()
+		projection.app.charSuppression.clear()
+	}
 	if projection.teardown != nil {
-		teardownErr = projection.teardown()
+		teardownErr = errors.Join(teardownErr, projection.teardown())
 	}
 	if projection.bundle != nil {
 		teardownErr = errors.Join(teardownErr, projection.bundle.close())
