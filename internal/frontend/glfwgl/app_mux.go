@@ -171,6 +171,7 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 			}
 			consumed = true
 		case termmux.PaneGeometryChanged:
+			a.invalidateCandidateGeometry()
 			if event.Pane == a.focusedPane {
 				a.cols, a.rows = event.Geometry.Cols, event.Geometry.Rows
 			}
