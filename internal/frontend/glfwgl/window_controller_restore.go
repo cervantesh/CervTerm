@@ -216,8 +216,7 @@ func (c *windowController) abortRestoreProjections(candidate *restoreProjectionC
 	var joined error
 	for index := len(candidate.bound) - 1; index >= 0; index-- {
 		bundle := candidate.bundles[candidate.bound[index]]
-		joined = errors.Join(joined, bundle.unbind())
-		bundle.unbind = nil
+		joined = errors.Join(joined, bundle.unbindProjection())
 	}
 	candidate.bound = nil
 	if partial != nil {

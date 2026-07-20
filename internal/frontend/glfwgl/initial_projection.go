@@ -3,11 +3,17 @@
 package glfwgl
 
 import (
+	"cervterm/internal/ime"
 	termmux "cervterm/internal/mux"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
 func (a *App) closeUnadoptedProjectionResources() {
+	if a != nil {
+		_ = a.cancelComposition(ime.CancelTeardown)
+		a.composition.deactivateDelivery()
+		a.charSuppression.clear()
+	}
 	a.closeDividerCursors()
 	if a.atlas != nil {
 		a.atlas.close()
@@ -28,6 +34,7 @@ func (a *App) closeUnadoptedProjectionResources() {
 func (a *App) adoptInitialProjection(window *glfw.Window) error {
 	bundle := &nativeProjectionBundle{
 		host: window, app: a, handle: a.applyMuxEvents,
+		beforeUnbind: newCompositionBeforeUnbind(a),
 		resources: []projectionResource{
 			projectionResourceFunc(func() error {
 				a.closeDividerCursors()

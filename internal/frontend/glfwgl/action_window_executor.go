@@ -4,6 +4,7 @@ package glfwgl
 
 import (
 	termaction "cervterm/internal/action"
+	"cervterm/internal/ime"
 	termmux "cervterm/internal/mux"
 )
 
@@ -60,9 +61,14 @@ func (a *App) executeMoveTabToWindow(context termaction.Context, command termact
 	if err != nil {
 		return err
 	}
+	sourceProjection := a.controller.projectionApp(source)
+	cancelSource := sourceProjection != nil && sourceProjection.compositionTargetsTab(termmux.TabID(command.TabID))
 	events, err := a.mux.TransferTabBetweenWindows(termmux.TabTransferRequest{SourceWindow: source, DestinationWindow: destination, Tab: termmux.TabID(command.TabID), Position: command.Position, SourceBounds: sb, DestinationBounds: db, Resolve: resolve})
 	if err != nil {
 		return err
+	}
+	if cancelSource {
+		_ = sourceProjection.cancelComposition(ime.CancelTargetChanged)
 	}
 	a.controller.dispatch(events)
 	return nil
@@ -97,9 +103,14 @@ func (a *App) executeMovePaneToWindow(context termaction.Context, command termac
 	if command.Axis == termaction.SplitRows {
 		axis = termmux.SplitRows
 	}
+	sourceProjection := a.controller.projectionApp(source)
+	cancelSource := sourceProjection != nil && sourceProjection.compositionTargetsPane(termmux.PaneID(command.PaneID))
 	events, err := a.mux.TransferPaneBetweenWindows(termmux.PaneTransferRequest{SourceWindow: source, DestinationWindow: destination, Pane: termmux.PaneID(command.PaneID), DestinationTab: active.ID, DestinationPane: active.Focused, Axis: axis, Ratio: termmux.DefaultSplitRatio, SourceBounds: sb, DestinationBounds: db, Resolve: resolve})
 	if err != nil {
 		return err
+	}
+	if cancelSource {
+		_ = sourceProjection.cancelComposition(ime.CancelTargetChanged)
 	}
 	a.controller.dispatch(events)
 	return nil
