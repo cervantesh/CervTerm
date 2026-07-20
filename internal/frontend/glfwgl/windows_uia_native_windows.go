@@ -72,6 +72,8 @@ type nativeUIAObject struct {
 	fragment     uintptr
 	simple       uintptr
 	fragmentRoot uintptr
+	text         uintptr
+	textCapable  bool
 	provider     *nativeUIAProvider
 	node         accessibility.NodeID
 	refs         atomic.Uint32
@@ -85,6 +87,7 @@ type nativeUIAProvider struct {
 	pointer      uintptr
 	closeOnce    sync.Once
 	finalizeOnce sync.Once
+	textRanges   atomic.Int32
 }
 
 var (
@@ -97,11 +100,15 @@ var (
 	uiaHostProviderProc       = uiaAutomationCore.NewProc("UiaHostProviderFromHwnd")
 	uiaReturnProviderProc     = uiaAutomationCore.NewProc("UiaReturnRawElementProvider")
 	uiaDisconnectProviderProc = uiaAutomationCore.NewProc("UiaDisconnectProvider")
+	uiaReservedNotSupported   = uiaAutomationCore.NewProc("UiaGetReservedNotSupportedValue")
 	uiaKernel32               = syscall.NewLazyDLL("kernel32.dll")
 	uiaGlobalAlloc            = uiaKernel32.NewProc("GlobalAlloc")
 	uiaGlobalFree             = uiaKernel32.NewProc("GlobalFree")
 	uiaOleAut                 = syscall.NewLazyDLL("oleaut32.dll")
 	uiaSysAllocStringLen      = uiaOleAut.NewProc("SysAllocStringLen")
+	uiaSysStringLen           = uiaOleAut.NewProc("SysStringLen")
+	uiaSysFreeString          = uiaOleAut.NewProc("SysFreeString")
+	uiaVariantClear           = uiaOleAut.NewProc("VariantClear")
 	uiaSafeArrayCreateVector  = uiaOleAut.NewProc("SafeArrayCreateVector")
 	uiaSafeArrayAccessData    = uiaOleAut.NewProc("SafeArrayAccessData")
 	uiaSafeArrayUnaccessData  = uiaOleAut.NewProc("SafeArrayUnaccessData")
@@ -129,6 +136,7 @@ func ensureNativeUIAVTables() {
 
 func newNativeUIAProvider(root *uiaRootProvider) (*nativeUIAProvider, error) {
 	ensureNativeUIAVTables()
+	ensureNativeUIATextVTables()
 	if root == nil || !root.available() || uiaFragmentRootVTable.ElementProviderFromPoint == 0 {
 		return nil, errUIAProviderInvalid
 	}
@@ -186,6 +194,11 @@ func nativeUIAQueryInterface(this, iidPointer, outputPointer uintptr) uintptr {
 			return uiaHRESULTResult(uiaENoInterface)
 		}
 		result = object.fragmentRoot
+	case uiaIIDTextProvider, uiaIIDTextProvider2:
+		result = object.provider.textInterface(object)
+		if result == 0 {
+			return uiaHRESULTResult(uiaENoInterface)
+		}
 	default:
 		return uiaHRESULTResult(uiaENoInterface)
 	}
@@ -226,14 +239,23 @@ func nativeUIAProviderOptions(this, output uintptr) uintptr {
 }
 
 //go:nocheckptr
-func nativeUIAGetPatternProvider(this, _ uintptr, output uintptr) uintptr {
+func nativeUIAGetPatternProvider(this, pattern uintptr, output uintptr) uintptr {
 	if output == 0 {
 		return uiaHRESULTResult(uiaEPointer)
 	}
 	*(*uintptr)(unsafe.Pointer(output)) = 0
-	if nativeUIAAvailableObject(this) == nil {
+	object := nativeUIAAvailableObject(this)
+	if object == nil {
 		return uiaHRESULTResult(uiaEElementNotAvailable)
 	}
+	if pattern != uiaTextPatternID && pattern != uiaTextPattern2ID {
+		return uiaHRESULTResult(uiaSOK)
+	}
+	text := object.provider.textInterface(object)
+	if text == 0 || nativeUIARetain(object) == 0 {
+		return uiaHRESULTResult(uiaSOK)
+	}
+	*(*uintptr)(unsafe.Pointer(output)) = text
 	return uiaHRESULTResult(uiaSOK)
 }
 

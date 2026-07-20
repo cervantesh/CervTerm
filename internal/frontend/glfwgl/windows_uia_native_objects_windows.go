@@ -56,7 +56,8 @@ func (provider *nativeUIAProvider) objectLocked(id accessibility.NodeID) *native
 	if !ok {
 		return nil
 	}
-	if _, ok := frame.document.Node(id); !ok {
+	node, ok := frame.document.Node(id)
+	if !ok {
 		return nil
 	}
 	provider.pruneObjectsLocked(frame)
@@ -72,7 +73,7 @@ func (provider *nativeUIAProvider) objectLocked(id accessibility.NodeID) *native
 		uiaGlobalFree.Call(fragment)
 		return nil
 	}
-	object := &nativeUIAObject{fragment: fragment, simple: simple, provider: provider, node: id}
+	object := &nativeUIAObject{fragment: fragment, simple: simple, provider: provider, node: id, textCapable: nativeUIATextCapable(node)}
 	provider.objects[id] = object
 	nativeUIAInterfaces.Store(fragment, object)
 	nativeUIAInterfaces.Store(simple, object)
@@ -96,7 +97,7 @@ func freeNativeUIAObject(object *nativeUIAObject) {
 	if object == nil {
 		return
 	}
-	for _, pointer := range []uintptr{object.fragment, object.simple, object.fragmentRoot} {
+	for _, pointer := range []uintptr{object.fragment, object.simple, object.fragmentRoot, object.text} {
 		if pointer != 0 {
 			nativeUIAInterfaces.Delete(pointer)
 			uiaGlobalFree.Call(pointer)
@@ -171,10 +172,16 @@ func nativeUIAReleaseObject(object *nativeUIAObject) uint32 {
 }
 
 func nativeUIARectSafeArray(rect accessibility.Rect) (uintptr, uiaHRESULT) {
-	values := [...]float64{rect.X, rect.Y, rect.Width, rect.Height}
+	return nativeUIADoubleSafeArray([]float64{rect.X, rect.Y, rect.Width, rect.Height})
+}
+
+func nativeUIADoubleSafeArray(values []float64) (uintptr, uiaHRESULT) {
 	array, _, _ := uiaSafeArrayCreateVector.Call(uiaVTR8, 0, uintptr(len(values)))
 	if array == 0 {
 		return 0, uiaEOutOfMemory
+	}
+	if len(values) == 0 {
+		return array, uiaSOK
 	}
 	var data uintptr
 	hr, _, _ := uiaSafeArrayAccessData.Call(array, uintptr(unsafe.Pointer(&data)))
@@ -185,7 +192,7 @@ func nativeUIARectSafeArray(rect accessibility.Rect) (uintptr, uiaHRESULT) {
 		}
 		return 0, uiaEElementNotAvailable
 	}
-	copy(unsafe.Slice((*float64)(unsafe.Pointer(data)), len(values)), values[:])
+	copy(unsafe.Slice((*float64)(unsafe.Pointer(data)), len(values)), values)
 	unaccess, _, _ := uiaSafeArrayUnaccessData.Call(array)
 	if uiaHRESULT(int32(unaccess)) != uiaSOK {
 		uiaSafeArrayDestroy.Call(array)

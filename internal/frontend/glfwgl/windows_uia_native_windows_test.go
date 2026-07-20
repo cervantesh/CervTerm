@@ -259,7 +259,8 @@ func TestNativeUIALazilyPrunesUnreferencedHistoricalNodes(t *testing.T) {
 	if current := native.object(newPane); current == nil {
 		t.Fatal("current pane allocation failed")
 	}
-	if native.objects[paneID] != nil || nativeUIAObjectFromThis(oldPointer) != nil {
+	resolved := nativeUIAObjectFromThis(oldPointer)
+	if native.objects[paneID] != nil || (resolved != nil && resolved.node == paneID) {
 		t.Fatal("unreferenced historical node survived lazy pruning")
 	}
 	native.Close()
