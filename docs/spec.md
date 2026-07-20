@@ -50,6 +50,7 @@ This document is the executable contract for the MVP. Implementation must follow
 - Handles DECSET/DECRST alternate screen mode: `CSI ?1049 h/l`, preserving the primary screen and scrollback.
 - Handles DECOM origin mode, IRM insert mode, alternate screen variants `47`/`1047`/`1048`, DEC Special Graphics G0/G1 charsets, DECSCUSR cursor styles, mouse modes `1000`/`1002`/`1003`/`1004`/`1006`, OSC 4/10/11 palette set/query and OSC 104/110/111 reset, OSC 52 clipboard writes, OSC 7 working-directory URLs, bounded pane-local OSC 8 hyperlink metadata, and bounded OSC 133/633 prompt/input/output semantic metadata. Parsing never opens a URI; opening requires a fresh explicit click or quick-select acceptance and centralized absolute HTTP(S) policy.
 
+- Accepts bounded OSC 9 and OSC 777 `notify` requests as pane-local metadata with monotonic identity and explicit bounded-overflow events. Parsing never invokes a native notification, logs title/body content, or treats payload text as a command.
 ### Input encoding
 
 - `internal/input` converts toolkit-neutral key and mouse events to terminal bytes.
