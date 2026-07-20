@@ -14,13 +14,14 @@ const (
 )
 
 var (
-	ErrInvalidDocument  = errors.New("invalid accessibility document")
-	ErrInvalidIdentity  = errors.New("invalid accessibility identity")
-	ErrInvalidText      = errors.New("invalid accessibility text")
-	ErrInvalidBounds    = errors.New("invalid accessibility bounds")
-	ErrInvalidRange     = errors.New("invalid accessibility range")
-	ErrStaleRange       = errors.New("stale accessibility range")
-	ErrCounterExhausted = errors.New("accessibility document counter exhausted")
+	ErrInvalidDocument   = errors.New("invalid accessibility document")
+	ErrInvalidIdentity   = errors.New("invalid accessibility identity")
+	ErrInvalidText       = errors.New("invalid accessibility text")
+	ErrInvalidBounds     = errors.New("invalid accessibility bounds")
+	ErrInvalidRange      = errors.New("invalid accessibility range")
+	ErrStaleRange        = errors.New("stale accessibility range")
+	ErrCounterExhausted  = errors.New("accessibility document counter exhausted")
+	ErrInvalidProjection = errors.New("invalid accessibility terminal projection")
 )
 
 type NodeKind uint8
@@ -106,6 +107,7 @@ type DocumentDraft struct {
 	Generation uint64
 	Nodes      []NodeDraft
 	Focus      NodeID
+	Truncated  bool
 }
 
 type RowSnapshot struct {

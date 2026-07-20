@@ -1,0 +1,93 @@
+{
+  "ProviderID": 8,
+  "Generation": 2,
+  "Focus": {
+    "Kind": 3,
+    "Projection": 2,
+    "Object": 2,
+    "Activation": 1
+  },
+  "Truncated": false,
+  "Rows": 1,
+  "Graphemes": 3,
+  "UTF8Bytes": 14,
+  "Nodes": [
+    {
+      "ID": {
+        "Kind": 1,
+        "Projection": 2,
+        "Object": 1,
+        "Activation": 0
+      },
+      "Parent": {
+        "Kind": 0,
+        "Projection": 0,
+        "Object": 0,
+        "Activation": 0
+      },
+      "Role": 1,
+      "Name": "window",
+      "Text": "",
+      "Rows": [],
+      "Caret": 0,
+      "HasCaret": false,
+      "Selection": {
+        "Start": 0,
+        "End": 0
+      },
+      "HasSelect": false
+    },
+    {
+      "ID": {
+        "Kind": 3,
+        "Projection": 2,
+        "Object": 2,
+        "Activation": 1
+      },
+      "Parent": {
+        "Kind": 1,
+        "Projection": 2,
+        "Object": 1,
+        "Activation": 0
+      },
+      "Role": 3,
+      "Name": "bidi",
+      "Text": "AבC",
+      "Rows": [
+        {
+          "Text": "AבC",
+          "Bounds": [
+            {
+              "X": 20,
+              "Y": 0,
+              "Width": 10,
+              "Height": 12
+            },
+            {
+              "X": 10,
+              "Y": 0,
+              "Width": 10,
+              "Height": 12
+            },
+            {
+              "X": 0,
+              "Y": 0,
+              "Width": 10,
+              "Height": 12
+            }
+          ],
+          "StartGrapheme": 0,
+          "EndGrapheme": 3,
+          "SoftWrapped": false
+        }
+      ],
+      "Caret": 0,
+      "HasCaret": false,
+      "Selection": {
+        "Start": 0,
+        "End": 0
+      },
+      "HasSelect": false
+    }
+  ]
+}
