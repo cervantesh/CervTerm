@@ -250,24 +250,26 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 ## Phase 11 — IME and Preedit
 **Scope:** composition lifecycle, preedit display, candidate positioning, committed-text routing.
 
+**Status:** Architecture approved. ADR-0005, the Windows feasibility preflight, default-off rollout, and slices 11.1–11.10 are recorded in [`docs/validation/phase-11-preflight.md`](validation/phase-11-preflight.md).
+
 **Work**
 - Accept ADR-0005 and add a narrow native host interface around GLFW.
 - Model start/update/commit/cancel, preedit selection/caret, candidate rectangle, focus loss.
-- Render preedit as frontend overlay anchored to the focused pane cursor.
-- Send only committed text to input encoder; suppress duplicate character callbacks.
-- Ship Windows adapter first, then platform adapters/explicit capability reporting.
+- Render bounded frontend-only preedit at the captured terminal/modal/search caret.
+- Route only committed text through one target-validated exactly-once router; suppress matching native character echoes before every destination.
+- Ship a default-off Windows adapter first with explicit disabled/unavailable fallback; qualify before any default-on change.
 
-**Success:** preedit never reaches PTY; commits are grapheme-safe and exactly once; candidate location tracks pane/zoom/DPI; modal UI and focus changes cancel/transfer deterministically.
+**Success:** preedit never reaches PTY; commits are cluster-safe and exactly once; candidate location tracks target/pane/zoom/DPI; modal, focus and lifecycle drift cancel deterministically rather than transferring composition.
 
 **Tests:** composition state machine, Unicode/graphemes, duplicate suppression, pane focus/zoom/DPI, native manual matrix.
 
-**Rollback:** adapter can be disabled, preserving current character callbacks.
+**Rollback:** set restart-scoped `ime.enabled=false`; automatic host-install failure preserves current GLFW character callbacks.
 
 ## Phase 12 — Accessibility
 **Scope:** screen-reader representation and events for windows, tabs, panes, terminal content, cursor, selection, and semantic zones.
-
 **Work**
-- Extend the accepted ADR-0005 contract with roles/names/focus/value/text-range/event mapping.
+- Add a separate accessibility capability under ADR-0005's narrow-capability decision family; do not widen the Phase 11 composition interface.
+- Define roles/names/focus/value/text-range/event mapping in the Phase 12 design.
 - Build immutable accessibility snapshots from render/core/mux state.
 - Add bounded/coalesced events for text, caret, selection, focus, tabs, panes, bells/notifications.
 - Add Windows adapter first; define macOS/Linux capability roadmap.
@@ -343,7 +345,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 - Tabs: mux model PR, action integration PR, tab bar PR, move/lifecycle hardening PR.
 - Windows/workspaces: host controller PR, move actions PR, persistence PR.
 - Shell integration: OSC 8 PR, semantic zones PR, actions/UI PR, notification policy PR.
-- IME/accessibility: host seam PR, Windows adapter PR, later platform adapter PRs.
+- IME: state/router PRs, render/geometry PRs, dormant Windows decoder/host PRs, default-off activation PR, then qualification/default decision. Accessibility follows its own capability/design PRs.
 - Images: parser/model PR, budgets/fuzz PR, snapshot/renderer PR, then one protocol PR at a time.
 
 ## Stop Conditions
@@ -358,4 +360,4 @@ Stop and return to architecture review if:
 - renderer selection becomes a prerequisite.
 
 ## Immediate Next Action
-Implement Phase 2 slice 1 only: presence-aware raw v1/v2 documents, schema metadata, strict v2 validation, in-memory migrations, and compatibility goldens. Do not add includes until the v1 compatibility gate passes.
+Implement Phase 11 Slice 11.1 only: the pure bounded `internal/ime` composition state, UTF-16/attribute normalization and detached snapshots. Do not wire frontend callbacks or native APIs until that foundation passes.
