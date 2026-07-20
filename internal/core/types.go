@@ -144,6 +144,7 @@ type Terminal struct {
 	cwd                     string
 	cwdSeq                  int
 	bellCount               int
+	notifications           notificationStore
 	hyperlinks              hyperlinkState
 	semanticKind            SemanticKind
 	semanticBoundaryPending bool

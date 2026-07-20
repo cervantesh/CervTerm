@@ -42,9 +42,11 @@ type pane struct {
 	appliedSize    pty.Size
 	resizeErr      error
 
-	title     string
-	cwd       string
-	bellCount int
+	title               string
+	cwd                 string
+	bellCount           int
+	notificationSeq     uint64
+	notificationScratch []core.NotificationRequest
 
 	done      chan struct{}
 	closeOnce sync.Once
