@@ -1,0 +1,55 @@
+BASELINE 820c389
+
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/accessibility
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkAccessibilitySemanticCapture-32    	    7660	    179175 ns/op	  509252 B/op	     587 allocs/op
+BenchmarkAccessibilitySemanticCapture-32    	    5794	    193629 ns/op	  509251 B/op	     587 allocs/op
+BenchmarkAccessibilitySemanticCapture-32    	    6646	    285372 ns/op	  509252 B/op	     587 allocs/op
+BenchmarkAccessibilityEventCoalescing-32    	   10000	    119716 ns/op	    2368 B/op	      97 allocs/op
+BenchmarkAccessibilityEventCoalescing-32    	   10000	    120231 ns/op	    2368 B/op	      97 allocs/op
+BenchmarkAccessibilityEventCoalescing-32    	   10201	    116259 ns/op	    2368 B/op	      97 allocs/op
+PASS
+ok  	cervterm/internal/accessibility	9.466s
+
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 6986712	       169.8 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 7221454	       156.5 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 8040540	       236.5 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1730890	       681.9 ns/op	     768 B/op	       8 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1813597	       678.2 ns/op	     768 B/op	       8 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1841845	       665.8 ns/op	     768 B/op	       8 allocs/op
+PASS
+ok  	cervterm/internal/frontend/glfwgl	11.060s
+
+CANDIDATE 1dfded5
+
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/accessibility
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkAccessibilitySemanticCapture-32    	    5748	    177821 ns/op	  509252 B/op	     587 allocs/op
+BenchmarkAccessibilitySemanticCapture-32    	    6078	    185893 ns/op	  509252 B/op	     587 allocs/op
+BenchmarkAccessibilitySemanticCapture-32    	    5960	    264700 ns/op	  509252 B/op	     587 allocs/op
+BenchmarkAccessibilityEventCoalescing-32    	   10000	    123566 ns/op	    2368 B/op	      97 allocs/op
+BenchmarkAccessibilityEventCoalescing-32    	   10000	    123890 ns/op	    2368 B/op	      97 allocs/op
+BenchmarkAccessibilityEventCoalescing-32    	    9715	    119339 ns/op	    2368 B/op	      97 allocs/op
+PASS
+ok  	cervterm/internal/accessibility	8.023s
+
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 7831057	       167.1 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 7302450	       161.5 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 7422434	       254.1 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1825489	       695.6 ns/op	     768 B/op	       8 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1741988	       708.3 ns/op	     768 B/op	       8 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1733874	       698.2 ns/op	     768 B/op	       8 allocs/op
+PASS
+ok  	cervterm/internal/frontend/glfwgl	11.323s

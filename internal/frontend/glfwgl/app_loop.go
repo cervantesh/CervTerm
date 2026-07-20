@@ -34,6 +34,7 @@ func (a *App) wakeMainLoop() {
 // ingress is drained once, and process timers/reload are ticked once per cycle.
 // Projection-local state and presentation remain independent.
 func (a *App) runLoop(_ *glfw.Window) error {
+	startRuntimeMetricsProbe(a)
 	return a.runProcessLoop(a.cfg.Render.Redraw == "continuous")
 }
 
@@ -135,6 +136,7 @@ func (a *App) runProcessLoop(continuous bool) error {
 }
 
 func (a *App) tickProjection() {
+	recordRuntimeMetricsWake(a)
 	a.processTermEvents(false)
 	a.catchUpBellEvents()
 	a.applyPendingZoom()
