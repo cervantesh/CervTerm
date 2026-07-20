@@ -104,6 +104,6 @@ func (a *App) executeSelectSemanticZone(pane termmux.PaneID, command termaction.
 	if moved {
 		a.recordPaneScroll(pane)
 	}
-	a.requestRedraw()
+	a.requestAccessibilityRedraw()
 	return nil
 }

@@ -76,49 +76,52 @@ type App struct {
 
 	lastFBW, lastFBH int
 
-	cols, rows        int
-	cellW             float32
-	cellH             float32
-	insets            FramebufferInsets
-	drawOriginX       float32
-	drawOriginY       float32
-	uiScale           float32
-	tabBar            tabBarLayout
-	tabBarPressed     tabHit
-	tabBarFirst       int
-	tabBarHeight      int
-	tabClose          tabCloseConfirmation
-	tabActivity       map[termmux.TabID]bool
-	contentScaleX     float32
-	contentScaleY     float32
-	status            statusState
-	overlays          overlayRender
-	scriptRT          *script.Runtime
-	scriptBundle      *script.CandidateBundle
-	scriptActivation  *script.CandidateActivation
-	legacyTransition  *config.LegacyTealTransition
-	scriptGeneration  uint64
-	commandPalette    map[string]commandPaletteActivation
-	workspaceSwitcher map[string]workspaceSwitcherActivation
-	quickSelect       quickSelectActivation
-	notice            string
-	noticeUntil       time.Time
-	charSuppression   charSuppression
-	textTarget        committedTextTargetState
-	composition       compositionCoordinator
-	candidateGeometry candidateGeometryPublisher
-	imeActivation     projectionIMEActivation
-	lastStats         time.Time
-	blinkStart        time.Time
-	showStats         bool
-	statsSpec         script.Spec
-	statsSpecOK       bool
-	zoom              zoomBindings
-	actionBindings    []keyActionBinding
-	keyTable          keyTableState
-	link              linkState
-	linkLauncher      urlLauncher
-	clipboardSetter   func(string)
+	cols, rows                       int
+	cellW                            float32
+	cellH                            float32
+	insets                           FramebufferInsets
+	drawOriginX                      float32
+	drawOriginY                      float32
+	uiScale                          float32
+	tabBar                           tabBarLayout
+	tabBarPressed                    tabHit
+	tabBarFirst                      int
+	tabBarHeight                     int
+	tabClose                         tabCloseConfirmation
+	tabActivity                      map[termmux.TabID]bool
+	contentScaleX                    float32
+	contentScaleY                    float32
+	status                           statusState
+	overlays                         overlayRender
+	scriptRT                         *script.Runtime
+	scriptBundle                     *script.CandidateBundle
+	scriptActivation                 *script.CandidateActivation
+	legacyTransition                 *config.LegacyTealTransition
+	scriptGeneration                 uint64
+	commandPalette                   map[string]commandPaletteActivation
+	workspaceSwitcher                map[string]workspaceSwitcherActivation
+	quickSelect                      quickSelectActivation
+	notice                           string
+	noticeUntil                      time.Time
+	charSuppression                  charSuppression
+	textTarget                       committedTextTargetState
+	composition                      compositionCoordinator
+	candidateGeometry                candidateGeometryPublisher
+	imeActivation                    projectionIMEActivation
+	accessibilityActivation          projectionAccessibilityActivation
+	accessibilityRuntime             projectionAccessibilityRuntime
+	accessibilityCompositionRevision uint64
+	lastStats                        time.Time
+	blinkStart                       time.Time
+	showStats                        bool
+	statsSpec                        script.Spec
+	statsSpecOK                      bool
+	zoom                             zoomBindings
+	actionBindings                   []keyActionBinding
+	keyTable                         keyTableState
+	link                             linkState
+	linkLauncher                     urlLauncher
+	clipboardSetter                  func(string)
 	bellState
 	notificationState
 	hud             hudCache
@@ -329,16 +332,17 @@ func (a *App) installCallbacks() {
 	a.window.SetContentScaleCallback(func(_ *glfw.Window, scaleX, scaleY float32) {
 		a.invalidateCandidateGeometry()
 		a.rebuildForContentScale(scaleX, scaleY)
-		a.requestRedraw()
+		a.requestAccessibilityRedraw()
 	})
 	a.window.SetFramebufferSizeCallback(func(_ *glfw.Window, _, _ int) {
 		a.invalidateCandidateGeometry()
-		a.requestRedraw()
+		a.requestAccessibilityRedraw()
 	})
 	a.window.SetSizeCallback(func(_ *glfw.Window, _, _ int) {
 		a.invalidateCandidateGeometry()
-		a.requestRedraw()
+		a.requestAccessibilityRedraw()
 	})
+	a.installAccessibilityWindowCallbacks()
 	a.window.SetCharCallback(func(_ *glfw.Window, char rune) {
 		a.routeGLFWChar(char)
 	})
@@ -383,7 +387,7 @@ func (a *App) installCallbacks() {
 			a.selection.start = point
 			a.selection.end = point
 			a.clearHover()
-			a.requestRedraw()
+			a.requestAccessibilityRedraw()
 			return
 		}
 		if action == glfw.Release {
@@ -393,7 +397,7 @@ func (a *App) installCallbacks() {
 				a.requestRedraw()
 				return
 			}
-			a.requestRedraw()
+			a.requestAccessibilityRedraw()
 		}
 	})
 	a.window.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
@@ -437,7 +441,7 @@ func (a *App) installCallbacks() {
 		}
 		a.selection.end = a.pointFromPixels(float32(x), float32(y))
 		a.selection.active = true
-		a.requestRedraw()
+		a.requestAccessibilityRedraw()
 	})
 	a.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {
 		if a.handleModalScroll(xoff, yoff) {
@@ -464,7 +468,7 @@ func (a *App) installCallbacks() {
 		moved, _ := a.mux.ScrollViewport(a.focusedPane, rows)
 		if moved {
 			a.scrollbar.lastActivity = time.Now()
-			a.requestRedraw()
+			a.requestAccessibilityRedraw()
 			a.markScrollEvent()
 		}
 	})

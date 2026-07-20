@@ -165,3 +165,18 @@ For each installed Microsoft Japanese, Pinyin, and Korean IME:
 - Disable `ime.enabled`, restart, and verify no native subclass/candidate activity and unchanged legacy GLFW character input.
 
 Record exact Windows build, CervTerm commit, Go architecture, IME names/versions and PASS/SKIP/FAIL for every row in `docs/validation/phase-11-ime-qualification.md`. A missing J/C/K IME is SKIP, never PASS, and cannot justify default enablement.
+
+## Phase 12 Windows UI Automation qualification
+
+Accessibility remains experimental, restart-scoped, visible-only, and default-off. On Windows 11, test both Narrator and a current NVDA release with `accessibility = { enabled = true, scope = "visible" }`:
+
+- Read simple ASCII, wide CJK, emoji/combining clusters, soft wraps, RTL/BiDi rows, cursor and selected text in one pane and multiple independently zoomed panes.
+- Enter and leave alternate screen, scroll beyond the visible viewport, switch tabs/workspaces, and hide/show windows; verify inactive/hidden content and offscreen scrollback are never announced or inspectable.
+- Open search, command palette, launch menu and quick select; edit queries and move modal focus. Verify stable controls, focus, whole-text replacement and no stale terminal document.
+- Enable IME separately, compose Japanese/Chinese/Korean preedit, and verify text, caret and target spans follow the active target without exposing PTY-bound content prematurely.
+- Inspect the UIA tree with Accessibility Insights: verify no OSC 8 URI, shell command, environment value, native handle, provider token, raw pane title, or unbounded user label appears.
+- Create/close child windows and restore a saved layout. Verify fresh provider identity, monotonic generations, no stale window roots, no duplicate controls, and no focus leakage.
+- Exercise rapid output/resize/scroll and forced test-hook publication failure. Verify coalesced updates, responsive input/rendering, one bounded fallback notice, and no native callbacks after close.
+- Restart with `accessibility.enabled = false`; verify CervTerm installs no UIA provider and legacy terminal behavior is unchanged.
+
+Record Windows build, CervTerm commit, architecture, screen-reader/version, config, and PASS/SKIP/FAIL per row in `docs/validation/phase-12-accessibility-qualification.md`. Automated ABI/projection/privacy tests do not replace this matrix and do not establish a support claim.

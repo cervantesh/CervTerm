@@ -159,7 +159,7 @@ func (a *App) scrollViewport(lines int) bool {
 	}
 	if moved {
 		a.scrollbar.lastActivity = time.Now()
-		a.requestRedraw()
+		a.requestAccessibilityRedraw()
 		a.markScrollEvent()
 	}
 	return moved

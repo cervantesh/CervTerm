@@ -266,3 +266,19 @@ func TestNativeUIALazilyPrunesUnreferencedHistoricalNodes(t *testing.T) {
 	native.Close()
 	root.Release()
 }
+
+func TestNativeUIASemanticEventsAreGatedWithoutListeners(t *testing.T) {
+	root, _, _, _, paneID := newUIATestProvider(t)
+	native, err := newNativeUIAProvider(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer native.Close()
+	defer root.Release()
+	original := nativeUIAClientsListening
+	nativeUIAClientsListening = func() bool { return false }
+	defer func() { nativeUIAClientsListening = original }()
+	if err := native.RaiseSemanticEvent(accessibility.SemanticEvent{Kind: accessibility.EventFocusChanged, Node: paneID}); err != nil {
+		t.Fatalf("listener-gated event err=%v", err)
+	}
+}

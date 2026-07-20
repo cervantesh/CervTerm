@@ -143,6 +143,11 @@ func (a *App) tickProjection() {
 	a.fireLifecycleEvents()
 	a.syncStatusSegments()
 	a.syncOverlays()
+	if a.accessibilityRuntime != nil {
+		if err := a.accessibilityRuntime.Refresh(); err != nil {
+			a.failAccessibilityRuntime(err)
+		}
+	}
 }
 
 func (a *App) processNextWakeTimeout(now time.Time) time.Duration {

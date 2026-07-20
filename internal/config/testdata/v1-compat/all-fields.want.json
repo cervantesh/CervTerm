@@ -102,6 +102,10 @@
   "IME": {
     "Enabled": false
   },
+  "Accessibility": {
+    "Enabled": false,
+    "Scope": "visible"
+  },
   "Bell": {
     "Mode": "disabled",
     "Focus": "unfocused",

@@ -93,6 +93,9 @@ func (a *App) modalVisibleRows() int {
 func (a *App) redrawModalMutation(before uint64) {
 	if a.modal.Revision() != before {
 		a.requestRedraw()
+		if a.accessibilityRuntime != nil {
+			a.accessibilityRuntime.Invalidate(accessibilityAllSemanticIntents)
+		}
 	}
 }
 
