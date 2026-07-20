@@ -78,11 +78,13 @@ func (a *App) compositionTargetsTab(tab termmux.TabID) bool {
 }
 
 type compositionBeforeUnbind struct {
-	cancel     func() error
-	deactivate func() error
-	restore    func() error
-	release    func() error
-	done       bool
+	cancel       func() error
+	beforeNative func() error
+	deactivate   func() error
+	restore      func() error
+	release      func() error
+	wndProcHost  *windowsWndProcHost
+	done         bool
 }
 
 func (coordinator *compositionBeforeUnbind) close() error {
@@ -94,7 +96,7 @@ func (coordinator *compositionBeforeUnbind) close() error {
 	// reports an error, retrying restored callbacks or released contexts is unsafe;
 	// callers continue through unbind, resource closure, and HWND destruction.
 	var joined error
-	for _, step := range []func() error{coordinator.cancel, coordinator.deactivate, coordinator.restore, coordinator.release} {
+	for _, step := range []func() error{coordinator.cancel, coordinator.beforeNative, coordinator.deactivate, coordinator.restore, coordinator.release} {
 		joined = errors.Join(joined, callCompositionCleanupStep(step))
 	}
 	return joined
@@ -122,6 +124,15 @@ func (coordinator *compositionBeforeUnbind) attachWndProcHost(host *windowsWndPr
 	}
 	coordinator.restore = host.restore
 	coordinator.release = host.release
+	coordinator.wndProcHost = host
+	return nil
+}
+
+func (coordinator *compositionBeforeUnbind) attachBeforeNative(step func() error) error {
+	if coordinator == nil || coordinator.done || step == nil || coordinator.beforeNative != nil {
+		return errWndProcHostInvalid
+	}
+	coordinator.beforeNative = step
 	return nil
 }
 
