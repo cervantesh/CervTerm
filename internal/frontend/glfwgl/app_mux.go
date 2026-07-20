@@ -85,7 +85,7 @@ func (a *App) syncFocusedProjection() bool {
 	}
 	if a.focusedPane != id {
 		a.saveActivePaneUI()
-		a.focusedPane = id
+		a.setFocusedPane(id)
 		a.loadPaneUI(id)
 	}
 	a.snap = view.Snapshot
@@ -156,7 +156,7 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 				a.sendPaneFocus(oldPane, false)
 			}
 			a.saveActivePaneUI()
-			a.focusedPane = event.Pane
+			a.setFocusedPane(event.Pane)
 			a.loadPaneUI(event.Pane)
 			if oldPane != event.Pane {
 				a.sendPaneFocus(event.Pane, true)

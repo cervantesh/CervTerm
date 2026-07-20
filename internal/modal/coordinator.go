@@ -28,6 +28,9 @@ func (m Mode) Valid() bool { return m >= ModeSearch && m <= ModeTabCloseConfirma
 
 type PaneIdentity uint64
 type FocusIdentity uint64
+type ActivationID uint64
+
+const maxActivationID = ^ActivationID(0)
 
 type Entry struct {
 	ID       string
@@ -38,6 +41,7 @@ type Entry struct {
 
 type State struct {
 	Mode         Mode
+	Activation   ActivationID
 	OpeningPane  PaneIdentity
 	OpeningFocus FocusIdentity
 	Query        []rune
@@ -65,11 +69,15 @@ type Intent struct {
 	Entry Entry
 }
 
-type Coordinator struct{ state State }
+type Coordinator struct {
+	state          State
+	nextActivation ActivationID
+}
 
-func (c *Coordinator) Active() bool     { return c.state.Mode.Valid() }
-func (c *Coordinator) Mode() Mode       { return c.state.Mode }
-func (c *Coordinator) Revision() uint64 { return c.state.Revision }
+func (c *Coordinator) Active() bool             { return c.state.Mode.Valid() }
+func (c *Coordinator) Mode() Mode               { return c.state.Mode }
+func (c *Coordinator) Revision() uint64         { return c.state.Revision }
+func (c *Coordinator) Activation() ActivationID { return c.state.Activation }
 
 func (c *Coordinator) Snapshot() State {
 	s := c.state
@@ -80,12 +88,13 @@ func (c *Coordinator) Snapshot() State {
 }
 
 func (c *Coordinator) Open(mode Mode, pane PaneIdentity, focus FocusIdentity, entries []Entry) bool {
-	if !mode.Valid() || len(entries) == 0 || len(entries) > MaxEntries {
+	if !mode.Valid() || len(entries) == 0 || len(entries) > MaxEntries || c.nextActivation == maxActivationID {
 		return false
 	}
 	copied := append([]Entry(nil), entries...)
+	c.nextActivation++
 	revision := c.state.Revision + 1
-	c.state = State{Mode: mode, OpeningPane: pane, OpeningFocus: focus, Entries: copied, Revision: revision}
+	c.state = State{Mode: mode, Activation: c.nextActivation, OpeningPane: pane, OpeningFocus: focus, Entries: copied, Revision: revision}
 	c.refilter()
 	return true
 }
@@ -112,6 +121,28 @@ func (c *Coordinator) AppendRune(r rune) bool {
 		return c.Active()
 	}
 	c.state.Query = append(c.state.Query, r)
+	c.refilter()
+	c.bump()
+	return true
+}
+
+func (c *Coordinator) AppendText(activation ActivationID, text string) bool {
+	if !c.Active() || activation == 0 || c.state.Activation != activation {
+		return false
+	}
+	runes := []rune(text)
+	if len(c.state.Query)+len(runes) > MaxQueryRunes {
+		return false
+	}
+	for _, r := range runes {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	if len(runes) == 0 {
+		return true
+	}
+	c.state.Query = append(c.state.Query, runes...)
 	c.refilter()
 	c.bump()
 	return true
