@@ -120,8 +120,9 @@ This document is the executable contract for the MVP. Implementation must follow
 - Initial privacy scope exposes only the active visible viewport and focused modal/search input. Scrollback, hidden tabs/windows/workspaces, hyperlink targets and process metadata are excluded.
 - A projection document is limited to 512 rows, 16,384 graphemes, 1 MiB UTF-8 and 256 nodes; truncation and generation staleness are explicit.
 - Focus precedence is modal, search, then focused terminal pane. Repaint-only changes emit no semantic event; changes coalesce once per projection cycle.
-- Windows UI Automation, future macOS NSAccessibility and future Linux AT-SPI remain separate frontend adapters over the same pure document.
+- Windows UI Automation is available as a default-off experimental frontend adapter. Future macOS NSAccessibility and Linux AT-SPI adapters must consume the same pure document rather than widening core/mux contracts.
 - Windows activation is restart-scoped and default-off until real Narrator/NVDA qualification passes.
+- Enabled Windows projections coalesce semantic events, suppress repaint-only damage, redact hidden/minimized projections, gate native delivery on active UIA listeners and disconnect fail-closed without stopping terminal input/rendering.
 
 ### Visual theme
 
