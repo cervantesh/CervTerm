@@ -17,6 +17,7 @@ func (a *App) drawModal(w, h int, chrome chromeColors) {
 	rows := min(18, max(4, a.rows-4))
 	layout := modal.ListLayout(state, modal.LayoutGeometry{Columns: columns, Rows: rows, VisibleRows: rows - 2})
 	a.paint(modalDrawList(layout, columns, rows, w, h, a.cellW, a.cellH, a.uiScale, chrome.background, chrome.accent, chrome.muted))
+	a.drawModalPreedit(w, h, columns, rows, chrome)
 }
 
 func modalDrawList(layout modal.Layout, columns, rows, winW, winH int, cellW, cellH, scale float32, background, accent, muted color.RGBA) []drawCmd {

@@ -99,7 +99,9 @@ func (a *App) draw() {
 				cursorRowOrder = order
 			}
 		}
-		if geometry.Pane == focused && a.snap.CursorVisible {
+		var preeditX, preeditY float32
+		preeditAvailable := 0
+		if geometry.Pane == focused {
 			cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
 			if cursorRowOrder != nil {
 				inverse := render.InversePermutation(cursorRowOrder)
@@ -109,11 +111,18 @@ func (a *App) draw() {
 			}
 			x := a.drawOriginX + float32(cursorCol)*a.cellW
 			y := a.drawOriginY + float32(cursorRow)*a.cellH
-			a.drawCursor(x, y, cursorColor, frameBlink)
+			if a.snap.CursorVisible {
+				a.drawCursor(x, y, cursorColor, frameBlink)
+			}
+			preeditX, preeditY = x, y
+			preeditAvailable = max(0, int((float32(geometry.Pixels.Right())-x)/a.cellW))
 		}
 		a.drawLinkUnderline(cursorColor)
 		if geometry.Pane == focused {
 			a.drawOverlays()
+		}
+		if geometry.Pane == focused {
+			a.drawTerminalPreedit(uint64(geometry.Pane), preeditX, preeditY, preeditAvailable)
 		}
 		a.r.PopClip()
 		state.selection, state.search, state.link, state.mouseReport = a.selection, a.search, a.link, a.mouseReport
@@ -252,6 +261,7 @@ func (a *App) paint(cmds []drawCmd) {
 // state is in the damage global-fallback list).
 func (a *App) drawSearchBar(w, h int, chrome chromeColors) {
 	a.paint(searchBarLayout(a.search.active, string(a.search.query), a.search.hasMatch, w, h, a.cellH, a.uiScale, chrome.background, chrome.accent, chrome.muted))
+	a.drawSearchPreedit(w, h, chrome)
 }
 
 func (a *App) drawTextDecorations(x, y, w, h float32, c color.RGBA, attr core.Attr) {
