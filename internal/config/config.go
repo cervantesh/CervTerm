@@ -27,6 +27,7 @@ type Config struct {
 	Scrollbar         ScrollbarConfig
 	Cursor            CursorConfig
 	Clipboard         ClipboardConfig
+	IME               IMEConfig
 	Bell              BellConfig
 	Notification      NotificationConfig
 	Render            RenderConfig
@@ -188,6 +189,7 @@ func Defaults() Config {
 		},
 		Cursor:       CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
 		Clipboard:    ClipboardConfig{OSC52: "off"},
+		IME:          IMEConfig{Enabled: false},
 		Bell:         BellConfig{Mode: "disabled", Focus: "unfocused", ThrottleMS: 250, VisualDurationMS: 120},
 		Notification: NotificationConfig{Enabled: false, Focus: "unfocused", RateLimitMS: 5000},
 		Render:       RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", ZoomInHotkey: "ctrl+equal", ZoomOutHotkey: "ctrl+minus", ZoomResetHotkey: "ctrl+0", VSync: true, MaxFPS: 0, Redraw: "on_demand", Damage: "rows"},

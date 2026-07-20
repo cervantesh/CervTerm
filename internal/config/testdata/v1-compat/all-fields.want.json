@@ -99,6 +99,9 @@
   "Clipboard": {
     "OSC52": "write"
   },
+  "IME": {
+    "Enabled": false
+  },
   "Bell": {
     "Mode": "disabled",
     "Focus": "unfocused",

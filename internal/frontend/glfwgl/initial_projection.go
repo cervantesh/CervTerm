@@ -5,6 +5,7 @@ package glfwgl
 import (
 	"cervterm/internal/ime"
 	termmux "cervterm/internal/mux"
+	"errors"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
@@ -63,5 +64,9 @@ func (a *App) adoptInitialProjection(window *glfw.Window) error {
 			projectionResourceFunc(a.closeNotificationEffectSink),
 		},
 	}
-	return a.controller.adoptProjectionBundle(termmux.WindowID(initialWindowID), bundle)
+	a.activateProjectionIME(window, bundle.beforeUnbind)
+	if err := a.controller.adoptProjectionBundle(termmux.WindowID(initialWindowID), bundle); err != nil {
+		return errors.Join(err, bundle.beforeUnbind.close())
+	}
+	return nil
 }
