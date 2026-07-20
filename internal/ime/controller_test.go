@@ -150,6 +150,18 @@ func TestControllerRejectsCounterRolloverAtomically(t *testing.T) {
 		t.Fatalf("revision start rollover err=%v state=%#v", err, controller.Snapshot())
 	}
 
+	controller = Controller{revision: maxCounter - 1}
+	if _, err := controller.Start(target); !errors.Is(err, ErrCounterExhausted) || controller.Snapshot().Active {
+		t.Fatalf("revision reservation err=%v state=%#v", err, controller.Snapshot())
+	}
+	controller = Controller{active: true, target: target, generation: 7, revision: maxCounter - 1}
+	if err := controller.Update(7, NativeUpdate{}); !errors.Is(err, ErrCounterExhausted) {
+		t.Fatalf("reserved finish revision update err=%v", err)
+	}
+	if err := controller.Cancel(7, CancelExplicit); err != nil || controller.Snapshot().Active {
+		t.Fatalf("reserved finish revision cancel err=%v state=%#v", err, controller.Snapshot())
+	}
+
 	controller = Controller{active: true, target: target, generation: 7, revision: maxCounter}
 	before := controller.Snapshot()
 	if err := controller.Update(7, NativeUpdate{}); !errors.Is(err, ErrCounterExhausted) {

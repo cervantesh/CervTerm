@@ -26,8 +26,8 @@ func (suppression *charSuppression) armBinding(enabled bool) {
 	}
 }
 
-// armIMEEcho is intentionally not connected to a native host in Slice 11.2.
-// It establishes and tests the bounded pre-routing contract used by Slice 11.6.
+// armIMEEcho is used by the dormant Slice 11.6 decoder but remains disconnected
+// from any production native host until the later activation slice.
 func (suppression *charSuppression) armIMEEcho(generation uint64, text string, now time.Time) bool {
 	if generation == 0 || text == "" || !utf8.ValidString(text) || len(text) > ime.MaxCommitBytes {
 		return false
