@@ -59,6 +59,7 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 		}
 		return child.blurProvider.Close()
 	}))
+	bundle.resources = append(bundle.resources, projectionResourceFunc(child.closeNotificationEffectSink))
 	child.configureNativeWindow(window)
 	child.applyWindowAppearance()
 	glfw.SwapInterval(boolSwapInterval(child.cfg.Render.VSync))
