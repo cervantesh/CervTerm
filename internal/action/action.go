@@ -12,6 +12,7 @@ type ID string
 const (
 	IDCopySelection             ID = "copy_selection"
 	IDCopySemanticZone          ID = "copy_semantic_zone"
+	IDSelectSemanticZone        ID = "select_semantic_zone"
 	IDPasteClipboard            ID = "paste_clipboard"
 	IDToggleSearch              ID = "toggle_search"
 	IDToggleStats               ID = "toggle_stats"
@@ -115,6 +116,17 @@ type CopySemanticZone struct{ Zone SemanticZone }
 func (CopySemanticZone) ID() ID  { return IDCopySemanticZone }
 func (CopySemanticZone) action() {}
 func (a CopySemanticZone) Validate() error {
+	if a.Zone != SemanticZoneInput && a.Zone != SemanticZoneOutput {
+		return fmt.Errorf("semantic zone %q must be input or output", a.Zone)
+	}
+	return nil
+}
+
+type SelectSemanticZone struct{ Zone SemanticZone }
+
+func (SelectSemanticZone) ID() ID  { return IDSelectSemanticZone }
+func (SelectSemanticZone) action() {}
+func (a SelectSemanticZone) Validate() error {
 	if a.Zone != SemanticZoneInput && a.Zone != SemanticZoneOutput {
 		return fmt.Errorf("semantic zone %q must be input or output", a.Zone)
 	}
@@ -347,6 +359,8 @@ func actionIdentity(action Action) (ID, error) {
 	switch action.(type) {
 	case CopySemanticZone:
 		return IDCopySemanticZone, nil
+	case SelectSemanticZone:
+		return IDSelectSemanticZone, nil
 	case CopySelection:
 		return IDCopySelection, nil
 	case PasteClipboard:
