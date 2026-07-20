@@ -177,6 +177,12 @@ return {
     throttle_ms = %d,
     visual_duration_ms = %d,
   },
+  notification = {
+    -- Explicit consent; terminal output cannot enable this policy.
+    enabled = %t,
+    focus = %q, -- always or unfocused
+    rate_limit_ms = %d,
+  },
   render = {
     -- go, auto (DirectWrite on Windows), or subpixel (horizontal RGB LCDs)
     text_raster = %q,
@@ -291,6 +297,7 @@ return {
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
 		cfg.Clipboard.OSC52,
 		cfg.Bell.Mode, cfg.Bell.Focus, cfg.Bell.ThrottleMS, cfg.Bell.VisualDurationMS,
+		cfg.Notification.Enabled, cfg.Notification.Focus, cfg.Notification.RateLimitMS,
 		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.ZoomInHotkey, cfg.Render.ZoomOutHotkey, cfg.Render.ZoomResetHotkey, cfg.Render.VSync, cfg.Render.MaxFPS, cfg.Render.Redraw, cfg.Render.Damage, cfg.Render.Bidi,
 		cfg.Shell.Program, cfg.Shell.WorkingDirectory)
 }

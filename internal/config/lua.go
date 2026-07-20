@@ -149,6 +149,11 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 		cfg.Bell.ThrottleMS = intField(tbl, "throttle_ms", cfg.Bell.ThrottleMS)
 		cfg.Bell.VisualDurationMS = intField(tbl, "visual_duration_ms", cfg.Bell.VisualDurationMS)
 	}
+	if tbl := tableField(root, "notification"); tbl != nil {
+		cfg.Notification.Enabled = boolField(tbl, "enabled", cfg.Notification.Enabled)
+		cfg.Notification.Focus = stringField(tbl, "focus", cfg.Notification.Focus)
+		cfg.Notification.RateLimitMS = intField(tbl, "rate_limit_ms", cfg.Notification.RateLimitMS)
+	}
 	if tbl := tableField(root, "render"); tbl != nil {
 		cfg.Render.Bidi = boolField(tbl, "bidi", cfg.Render.Bidi)
 		cfg.Render.TextGamma = numberField(tbl, "text_gamma", cfg.Render.TextGamma)

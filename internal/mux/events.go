@@ -55,6 +55,7 @@ type Event struct {
 	Data            []byte
 	Text            string
 	Notification    core.NotificationRequest
+	Fresh           bool
 	Geometry        PaneGeometry
 	Err             error
 	Revision        uint64

@@ -354,16 +354,6 @@ func (c *windowController) dispatch(events []termmux.Event) bool {
 	return consumed
 }
 
-const maxPendingWindowEvents = 256
-
-func (c *windowController) queuePending(id termmux.WindowID, event termmux.Event) {
-	pending := c.pending[id]
-	if len(pending) == maxPendingWindowEvents {
-		pending = pending[1:]
-	}
-	c.pending[id] = append(pending, event)
-}
-
 func (c *windowController) closeProjection(id termmux.WindowID) error {
 	if err := c.requireLoop(); err != nil {
 		return err
