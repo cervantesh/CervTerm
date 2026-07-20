@@ -356,27 +356,6 @@ func (m *Mux) Drain(limit int) []Event {
 	return m.ResolveEventAddresses(events)
 }
 
-func (m *Mux) advancePane(p *pane, data []byte) []Event {
-	oldTitle, oldCWD, oldBell := p.title, p.cwd, p.bellCount
-	p.advanceTerminal(data)
-	events := p.flushReplies()
-	p.capture()
-	events = append(events,
-		Event{Kind: PaneOutput, Pane: p.id, Data: append([]byte(nil), data...)},
-		Event{Kind: PaneDirty, Pane: p.id},
-	)
-	if p.title != oldTitle {
-		events = append(events, Event{Kind: PaneTitleChanged, Pane: p.id, Text: p.title})
-	}
-	if p.cwd != oldCWD {
-		events = append(events, Event{Kind: PaneCWDChanged, Pane: p.id, Text: p.cwd})
-	}
-	for bell := oldBell; bell < p.bellCount; bell++ {
-		events = append(events, Event{Kind: PaneBell, Pane: p.id})
-	}
-	return m.ResolveEventAddresses(events)
-}
-
 func (m *Mux) SearchUpward(id PaneID, query string, hasPrev bool, prevRow int) (row, col int, ok bool, err error) {
 	p, exists := m.sessions.lookup(id)
 	if !exists || !m.model.paneExists(id) {
