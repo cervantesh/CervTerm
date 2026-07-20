@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"regexp"
-	"strconv"
 
 	"cervterm/internal/fontdesc"
 	"cervterm/internal/quickselect"
@@ -28,6 +27,7 @@ type Config struct {
 	Cursor            CursorConfig
 	Clipboard         ClipboardConfig
 	IME               IMEConfig
+	Accessibility     AccessibilityConfig
 	Bell              BellConfig
 	Notification      NotificationConfig
 	Render            RenderConfig
@@ -187,13 +187,14 @@ func Defaults() Config {
 			Mode: "multiple", Position: "top", HeightPX: 28, MinWidthPX: 96, MaxWidthPX: 220, PaddingX: 8,
 			ShowNewButton: true, ShowCloseButton: true,
 		},
-		Cursor:       CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
-		Clipboard:    ClipboardConfig{OSC52: "off"},
-		IME:          IMEConfig{Enabled: false},
-		Bell:         BellConfig{Mode: "disabled", Focus: "unfocused", ThrottleMS: 250, VisualDurationMS: 120},
-		Notification: NotificationConfig{Enabled: false, Focus: "unfocused", RateLimitMS: 5000},
-		Render:       RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", ZoomInHotkey: "ctrl+equal", ZoomOutHotkey: "ctrl+minus", ZoomResetHotkey: "ctrl+0", VSync: true, MaxFPS: 0, Redraw: "on_demand", Damage: "rows"},
-		Shell:        ShellConfig{Args: []string{}, Env: map[string]string{}},
+		Cursor:        CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
+		Clipboard:     ClipboardConfig{OSC52: "off"},
+		IME:           IMEConfig{Enabled: false},
+		Accessibility: AccessibilityConfig{Enabled: false, Scope: "visible"},
+		Bell:          BellConfig{Mode: "disabled", Focus: "unfocused", ThrottleMS: 250, VisualDurationMS: 120},
+		Notification:  NotificationConfig{Enabled: false, Focus: "unfocused", RateLimitMS: 5000},
+		Render:        RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", ZoomInHotkey: "ctrl+equal", ZoomOutHotkey: "ctrl+minus", ZoomResetHotkey: "ctrl+0", VSync: true, MaxFPS: 0, Redraw: "on_demand", Damage: "rows"},
+		Shell:         ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
 }
 
@@ -464,6 +465,9 @@ func (c Config) Validate() error {
 	if c.EffectiveBackgroundAlpha() < 0xff && c.Window.Opacity < 1 {
 		errs = append(errs, errors.New("translucent terminal background and window.opacity < 1 cannot be enabled together"))
 	}
+	if err := c.Accessibility.validate(); err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(errs...)
 }
 
@@ -476,23 +480,4 @@ func isHexColor(value string) bool {
 
 func isHexRGBColor(value string) bool {
 	return hexRGBColorPattern.MatchString(value)
-}
-
-// BackgroundAlpha returns the configured background alpha. Invalid colors are
-// treated as opaque; Validate reports their syntax separately.
-func (c Config) BackgroundAlpha() uint8 {
-	if len(c.Colors.Background) != 9 {
-		return 0xff
-	}
-	n, err := strconv.ParseUint(c.Colors.Background[7:9], 16, 8)
-	if err != nil {
-		return 0xff
-	}
-	return uint8(n)
-}
-
-// EffectiveBackgroundAlpha applies the terminal-background opacity multiplier
-// once to the configured solid background alpha.
-func (c Config) EffectiveBackgroundAlpha() uint8 {
-	return uint8(math.Round(float64(c.BackgroundAlpha()) * c.Window.BackgroundOpacity))
 }

@@ -128,6 +128,10 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 			return fmt.Errorf("bind projection: %w", errWindowProjectionMissing)
 		}
 		child.windowID = id
+		if accessibilityErr := prepareProjectionAccessibility(child, window, bundle.beforeUnbind); accessibilityErr != nil {
+			child.windowID = 0
+			return accessibilityErr
+		}
 		child.catchUpBellEvents()
 		child.installCallbacks()
 		child.needsRedraw = true
@@ -138,9 +142,6 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 		return nil
 	}
 	child.activateProjectionIME(window, bundle.beforeUnbind)
-	if accessibilityErr := prepareProjectionAccessibility(child, window, bundle.beforeUnbind); accessibilityErr != nil {
-		return fail(accessibilityErr)
-	}
 	return bundle, spec, content, metrics, title, nil
 }
 

@@ -154,6 +154,21 @@ return {
 
 If installation is unavailable or fails, CervTerm keeps the existing GLFW text-input path and displays a bounded fallback notice. Run `cervterm.exe --doctor --config <path>` to confirm configured intent and platform eligibility. See [`manual-verification.md`](manual-verification.md) before making a support claim.
 
+## Experimental Windows accessibility opt-in
+
+Windows UI Automation exposure is experimental, visible-only, restart-scoped, and disabled by default. Enable it only in a v2 configuration and restart CervTerm:
+
+```lua
+return {
+  config_version = 2,
+  accessibility = { enabled = true, scope = "visible" },
+}
+```
+
+Only the active workspace/window, active tab, visible pane viewports, active modal/search UI, cursor, selection, and IME preedit are published. Scrollback outside the viewport, inactive tabs/workspaces, OSC 8 URIs, shell commands, process arguments, environment values, native handles, and provider tokens are not exposed. If native registration or a later publication fails, CervTerm disables accessibility for that window, keeps terminal input/rendering alive, and displays a bounded fallback notice.
+
+Run `cervterm.exe --doctor --config <path>` to confirm configured intent and platform eligibility. A passing automated suite is not a Narrator/NVDA support claim; complete the matrix in [`manual-verification.md`](manual-verification.md) and record evidence in `docs/validation/phase-12-accessibility-qualification.md`.
+
 ## Known beta limitations
 
 - Windows binaries are currently unsigned unless a release explicitly says otherwise.

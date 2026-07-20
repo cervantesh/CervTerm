@@ -10,29 +10,39 @@ import (
 )
 
 type projectionAccessibilityPreparation struct {
-	Document   accessibility.Document
-	ScreenX    float64
-	ScreenY    float64
-	Bounds     accessibility.Rect
-	HWND       uintptr
-	API        uiaNativeProviderAPI
-	Dispatcher *uiaProviderDispatcher
-	Host       *windowsWndProcHost
-	Report     func(error)
-	EventSink  func(accessibility.Document) error
+	Document          accessibility.Document
+	ScreenX           float64
+	ScreenY           float64
+	Bounds            accessibility.Rect
+	HWND              uintptr
+	API               uiaNativeProviderAPI
+	Dispatcher        *uiaProviderDispatcher
+	Host              *windowsWndProcHost
+	Report            func(error)
+	EventSink         func(accessibility.Document) error
+	SemanticEventSink func(accessibility.SemanticEvent) error
 }
 
 type projectionAccessibility struct {
-	publication *uiaPublication
-	root        *uiaRootProvider
-	native      *nativeUIAProvider
-	dispatcher  *uiaProviderDispatcher
-	token       uintptr
-	host        *windowsWndProcHost
-	handlerID   wndProcHandlerID
-	closeOnce   sync.Once
-	closeErr    error
-	eventSink   func(accessibility.Document) error
+	publication          *uiaPublication
+	root                 *uiaRootProvider
+	native               *nativeUIAProvider
+	dispatcher           *uiaProviderDispatcher
+	token                uintptr
+	host                 *windowsWndProcHost
+	handlerID            wndProcHandlerID
+	closeOnce            sync.Once
+	closeErr             error
+	eventSink            func(accessibility.Document) error
+	semanticEventSink    func(accessibility.SemanticEvent) error
+	scheduler            *accessibility.SemanticScheduler
+	document             accessibility.Document
+	pendingIntents       accessibility.SemanticIntent
+	pendingAnnouncements uint8
+	capture              func(uint64) (projectionAccessibilitySnapshot, error)
+	generation           uint64
+	pending              bool
+	failed               bool
 }
 
 func prepareDormantProjectionAccessibility(spec projectionAccessibilityPreparation, before *compositionBeforeUnbind) (*projectionAccessibility, error) {
@@ -47,7 +57,10 @@ func prepareDormantProjectionAccessibility(spec projectionAccessibilityPreparati
 	if err != nil {
 		return nil, err
 	}
-	lifecycle := &projectionAccessibility{publication: publication, root: root, eventSink: spec.EventSink}
+	lifecycle := &projectionAccessibility{
+		publication: publication, root: root, eventSink: spec.EventSink, semanticEventSink: spec.SemanticEventSink,
+		scheduler: accessibility.NewSemanticScheduler(true), document: spec.Document,
+	}
 	fail := func(cause error) (*projectionAccessibility, error) {
 		return lifecycle, cause
 	}
@@ -104,8 +117,33 @@ func (lifecycle *projectionAccessibility) Publish(document accessibility.Documen
 	if err := lifecycle.publication.PublishScreen(document, screenX, screenY, bounds); err != nil {
 		return err
 	}
+	intents := lifecycle.pendingIntents
+	if intents == accessibility.IntentNone {
+		intents = accessibility.IntentDocument | accessibility.IntentTopology | accessibility.IntentText | accessibility.IntentCaret | accessibility.IntentSelection | accessibility.IntentFocus
+	}
+	lifecycle.scheduler.BeginCycle()
+	lifecycle.scheduler.QueueTransition(lifecycle.document, document, intents)
+	if document.NodeCount() > 1 {
+		for _, kind := range []accessibility.AnnouncementKind{accessibility.AnnouncementBell, accessibility.AnnouncementNotification} {
+			if lifecycle.pendingAnnouncements&(1<<uint8(kind)) != 0 {
+				lifecycle.scheduler.QueueAnnouncement(document.ProviderID(), document.Generation(), kind)
+			}
+		}
+	}
+	lifecycle.document = document
+	lifecycle.pendingIntents = accessibility.IntentNone
+	lifecycle.pendingAnnouncements = 0
 	if lifecycle.eventSink != nil {
-		return lifecycle.eventSink(document)
+		if err := lifecycle.eventSink(document); err != nil {
+			return err
+		}
+	}
+	if lifecycle.semanticEventSink != nil {
+		for _, event := range lifecycle.scheduler.Drain() {
+			if err := lifecycle.semanticEventSink(event); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -128,11 +166,48 @@ func (lifecycle *projectionAccessibility) CaptureAndPublish(capture func() (proj
 	return lifecycle.Publish(snapshot.Document, snapshot.ScreenX, snapshot.ScreenY, snapshot.Bounds)
 }
 
+func (lifecycle *projectionAccessibility) Invalidate(intents accessibility.SemanticIntent) {
+	if lifecycle != nil && !lifecycle.failed && intents != accessibility.IntentNone {
+		lifecycle.pending = true
+		lifecycle.pendingIntents |= intents
+	}
+}
+
+func (lifecycle *projectionAccessibility) Announce(kind accessibility.AnnouncementKind) error {
+	if lifecycle == nil || lifecycle.failed || kind == accessibility.AnnouncementNone {
+		return nil
+	}
+	lifecycle.pending = true
+	lifecycle.pendingAnnouncements |= 1 << uint8(kind)
+	return nil
+}
+
+func (lifecycle *projectionAccessibility) Refresh() error {
+	if lifecycle == nil || !lifecycle.pending || lifecycle.failed || lifecycle.capture == nil {
+		return nil
+	}
+	lifecycle.pending = false
+	next := lifecycle.generation + 1
+	snapshot, err := lifecycle.capture(next)
+	if err == nil {
+		err = lifecycle.Publish(snapshot.Document, snapshot.ScreenX, snapshot.ScreenY, snapshot.Bounds)
+	}
+	if err != nil {
+		lifecycle.failed = true
+		return err
+	}
+	lifecycle.generation = next
+	return nil
+}
+
 func (lifecycle *projectionAccessibility) Close() error {
 	if lifecycle == nil {
 		return nil
 	}
 	lifecycle.closeOnce.Do(func() {
+		if lifecycle.scheduler != nil {
+			lifecycle.scheduler.Close()
+		}
 		if lifecycle.native != nil {
 			lifecycle.native.Close()
 			lifecycle.native = nil
