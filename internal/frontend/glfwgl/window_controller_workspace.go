@@ -2,7 +2,10 @@
 
 package glfwgl
 
-import termmux "cervterm/internal/mux"
+import (
+	"cervterm/internal/ime"
+	termmux "cervterm/internal/mux"
+)
 
 func (c *windowController) applyWorkspaceProjection(events []termmux.Event) {
 	relevant := false
@@ -33,6 +36,9 @@ func (c *windowController) applyWorkspaceProjection(events []termmux.Event) {
 			projection.visible = true
 			projection.host.Show()
 		} else {
+			if projection.visible && projection.app != nil {
+				_ = projection.app.cancelComposition(ime.CancelWindowHidden)
+			}
 			projection.visible = false
 			projection.host.Hide()
 		}

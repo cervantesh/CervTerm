@@ -5,6 +5,7 @@ package glfwgl
 import (
 	"fmt"
 
+	"cervterm/internal/ime"
 	termmux "cervterm/internal/mux"
 	termsel "cervterm/internal/selection"
 
@@ -72,6 +73,7 @@ func (a *App) loadPaneUI(id termmux.PaneID) {
 	a.activatePaneFont(id)
 	a.lterm = muxSearchTerminal{mux: a.mux, pane: id}
 	a.search.init(a.lterm, a.requestRedraw)
+	a.search.bindActivationChange(func() { _ = a.cancelComposition(ime.CancelTargetChanged) })
 }
 
 func (a *App) syncFocusedProjection() bool {
@@ -117,6 +119,7 @@ func (a *App) focusPane(id termmux.PaneID) bool {
 func (a *App) applyMuxEvents(events []termmux.Event) bool {
 	consumed := false
 	for _, event := range events {
+		a.cancelCompositionForMuxEvent(event)
 		host := paneHost{app: a, pane: event.Pane}
 		switch event.Kind {
 		case termmux.PaneStarted:
@@ -219,6 +222,7 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 	}
 	if consumed {
 		a.syncFocusedProjection()
+		_ = a.reconcileComposition(ime.CancelTargetChanged)
 		a.requestRedraw()
 	}
 	return consumed
