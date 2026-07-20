@@ -106,7 +106,10 @@ func (a *App) markResizeEvent(cols, rows int) {
 // Coalescing per loop iteration (last offset wins) means a burst of wheel ticks
 // fires the handler once with the final offset, not once per tick. Called from
 // the wheel callback and term:scroll / term:scroll_to_bottom.
-func (a *App) markScrollEvent() { a.recordPaneScroll(a.focusedPane) }
+func (a *App) markScrollEvent() {
+	a.invalidateCandidateGeometry()
+	a.recordPaneScroll(a.focusedPane)
+}
 
 func (a *App) recordPaneScroll(id termmux.PaneID) {
 	if view, ok := a.mux.PaneView(id); ok {

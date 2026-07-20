@@ -119,7 +119,9 @@ func (a *App) drawTerminalPreedit(paneID uint64, x, y float32, availableCells in
 	if !ok {
 		return
 	}
-	a.drawPreeditAt(preparePreeditPresentation(snapshot, availableCells), x, y, a.chrome)
+	presentation := preparePreeditPresentation(snapshot, availableCells)
+	a.drawPreeditAt(presentation, x, y, a.chrome)
+	a.publishCandidateGeometry(presentation, x, y)
 }
 
 func (a *App) drawSearchPreedit(winW, winH int, chrome chromeColors) {
@@ -134,8 +136,10 @@ func (a *App) drawSearchPreedit(winW, winH int, chrome chromeColors) {
 	y := barY + pad
 	available := max(0, int((float32(winW)-x-pad)/a.cellW))
 	a.r.PushClip(gpu.ClipRect{X: 0, Y: int(barY), Width: winW, Height: int(a.cellH + 2*pad)})
-	a.drawPreeditAt(preparePreeditPresentation(snapshot, available), x, y, chrome)
+	presentation := preparePreeditPresentation(snapshot, available)
+	a.drawPreeditAt(presentation, x, y, chrome)
 	a.r.PopClip()
+	a.publishCandidateGeometry(presentation, x, y)
 }
 
 func (a *App) drawModalPreedit(winW, winH, columns, rows int, chrome chromeColors) {
@@ -153,6 +157,8 @@ func (a *App) drawModalPreedit(winW, winH, columns, rows int, chrome chromeColor
 	x += float32(queryCells) * a.cellW
 	available := max(0, columns-queryCells)
 	a.r.PushClip(gpu.ClipRect{X: int(panelX), Y: int(panelY), Width: int(width), Height: int(height)})
-	a.drawPreeditAt(preparePreeditPresentation(snapshot, available), x, y, chrome)
+	presentation := preparePreeditPresentation(snapshot, available)
+	a.drawPreeditAt(presentation, x, y, chrome)
 	a.r.PopClip()
+	a.publishCandidateGeometry(presentation, x, y)
 }

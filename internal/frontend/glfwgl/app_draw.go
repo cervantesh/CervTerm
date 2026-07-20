@@ -28,6 +28,8 @@ type hudCache struct {
 }
 
 func (a *App) draw() {
+	a.beginCandidateGeometryFrame()
+	defer a.finishCandidateGeometryFrame()
 	frameNow := time.Now()
 	frameBlink := a.blinkPhaseAt(frameNow)
 	if a.notice != "" && frameNow.After(a.noticeUntil) {
