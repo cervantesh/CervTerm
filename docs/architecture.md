@@ -99,6 +99,8 @@ Platform services that GLFW does not model use separate optional interfaces owne
 
 Composition state is bounded and frontend-only. It captures a stable pane/search/modal activation, renders preedit without changing terminal snapshots, and routes only a validated commit exactly once. Any target/focus/window/modal ambiguity cancels rather than transfers. Windows may subclass the GLFW HWND transactionally, but callback deactivation and exact WndProc restoration must complete through one pre-unbind coordinator before ordinary resource closure and HWND destruction. Disabled/unavailable installation preserves the legacy GLFW character path.
 
+Accessibility uses a separate bounded semantic-document capability. The GLFW owner thread derives immutable visible-only text, focus, caret and selection snapshots from detached render/mux/modal values; off-thread native providers read only the atomic publication. Logical grapheme order defines ranges while rendered BiDi mappings define rectangles. Accessibility and IME share one transactional native message router, and providers disconnect before existing WndProc restoration and HWND destruction. Scrollback and hidden metadata are not exposed by the initial policy.
+
 ## Verifiable measurements
 
 Run parser/core allocation checks:
