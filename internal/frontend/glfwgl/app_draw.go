@@ -33,6 +33,9 @@ func (a *App) draw() {
 	if a.notice != "" && frameNow.After(a.noticeUntil) {
 		a.notice = ""
 	}
+	if !a.bellVisualUntil.IsZero() && !frameNow.Before(a.bellVisualUntil) {
+		a.bellVisualUntil = time.Time{}
+	}
 	w, h := a.window.GetFramebufferSize()
 	if w != a.lastFBW || h != a.lastFBH {
 		a.r.Resize(w, h)
@@ -146,6 +149,11 @@ func (a *App) draw() {
 	a.prepareStatusBand(w)
 	a.drawScrollbar(frameNow, background, w, h)
 	a.drawTabBar(w, h)
+	if !a.bellVisualUntil.IsZero() && frameNow.Before(a.bellVisualUntil) {
+		flash := a.chrome.accent
+		flash.A = 0x38
+		a.fillRect(0, 0, float32(w), float32(h), flash)
+	}
 	a.drawHUD(w, h, a.chrome, frameNow)
 	a.drawStatusBand(w, a.chrome)
 	a.drawSearchBar(w, h, a.chrome)

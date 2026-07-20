@@ -125,6 +125,10 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Cursor.Thickness != effective.Cursor.Thickness, "cursor.thickness", ApplyLive)
 
 	changes = appendChange(changes, desired.Clipboard.OSC52 != effective.Clipboard.OSC52, "clipboard.osc52", ApplyRestart)
+	changes = appendChange(changes, desired.Bell.Mode != effective.Bell.Mode, "bell.mode", ApplyLive)
+	changes = appendChange(changes, desired.Bell.Focus != effective.Bell.Focus, "bell.focus", ApplyLive)
+	changes = appendChange(changes, desired.Bell.ThrottleMS != effective.Bell.ThrottleMS, "bell.throttle_ms", ApplyLive)
+	changes = appendChange(changes, desired.Bell.VisualDurationMS != effective.Bell.VisualDurationMS, "bell.visual_duration_ms", ApplyLive)
 
 	changes = appendChange(changes, desired.Render.Bidi != effective.Render.Bidi, "render.bidi", ApplyRestart)
 	changes = appendChange(changes, desired.Render.TextGamma != effective.Render.TextGamma, "render.text_gamma", ApplyRestart)
@@ -175,6 +179,7 @@ func MergeLiveConfig(base, source Config) Config {
 	base.Scrollbar = source.Scrollbar
 	base.TabBar = source.TabBar
 	base.Cursor = source.Cursor
+	base.Bell = source.Bell
 	base.Render.MaxFPS = source.Render.MaxFPS
 	base.LaunchMenu = cloneLaunchTargets(source.LaunchMenu)
 	base.QuickSelect = source.QuickSelect

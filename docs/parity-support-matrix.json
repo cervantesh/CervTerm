@@ -41,6 +41,7 @@
     {"id": "ux.command_palette_quick_select_launch", "status": "supported", "phase": 7, "evidence": ["internal/modal", "internal/frontend/glfwgl/command_palette.go", "internal/quickselect", "internal/frontend/glfwgl/quick_select.go", "internal/config/launch_menu.go", "internal/frontend/glfwgl/launch_menu.go", "docs/manual-verification.md#phase-7-retained-ux-qualification"]},
     {"id": "mux.visible_tabs", "status": "supported", "phase": 8, "evidence": ["internal/mux/model_tabs.go", "internal/mux/model_transfer.go", "internal/frontend/glfwgl/tab_bar.go", "internal/frontend/glfwgl/tab_close.go", "internal/action/tab.go", "docs/validation/phase-8-visible-tabs.md"]},
     {"id": "mux.multiple_windows_workspaces", "status": "planned", "phase": 9, "evidence": ["docs/wezterm-parity-roadmap.md#phase-9--multiple-windows-and-local-workspaces"]},
+    {"id": "shell.bell_policies", "status": "supported", "phase": 10, "evidence": ["internal/bellpolicy/policy.go", "internal/frontend/glfwgl/app_bell.go", "internal/config/bell_test.go", "docs/validation/phase-10-bell-policies.md"]},
     {"id": "shell.semantic_zones_notifications", "status": "planned", "phase": 10, "evidence": ["docs/wezterm-parity-roadmap.md#phase-10--shell-semantics-links-bell-and-notifications"]},
     {"id": "input.ime_preedit", "status": "planned", "phase": 11, "evidence": ["docs/wezterm-parity-roadmap.md#phase-11--ime-and-preedit"]},
     {"id": "accessibility.screen_reader", "status": "planned", "phase": 12, "evidence": ["docs/wezterm-parity-roadmap.md#phase-12--accessibility"]},
