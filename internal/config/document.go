@@ -154,6 +154,9 @@ func FromDocument(base Config, document Document) Config {
 		if render := tableField(document.Root, "render"); render != nil {
 			cfg.Render.MaxFPS = intField(render, "max_fps", cfg.Render.MaxFPS)
 		}
+		if imeConfig := tableField(document.Root, "ime"); imeConfig != nil {
+			cfg.IME.Enabled = boolField(imeConfig, "enabled", cfg.IME.Enabled)
+		}
 	}
 	if quick := tableField(document.Root, "quick_select"); quick != nil {
 		cfg.QuickSelect.Rules = quickSelectRuleListField(quick, "rules", cfg.QuickSelect.Rules)
@@ -230,6 +233,7 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "blink_interval_ms", kind: KindInteger}, {name: "thickness", kind: KindNumber},
 	}},
 	{name: "clipboard", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "osc52", kind: KindString}}},
+	{name: "ime", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "enabled", kind: KindBoolean}}},
 	{name: "bell", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
 		{name: "mode", kind: KindString}, {name: "focus", kind: KindString},
 		{name: "throttle_ms", kind: KindInteger}, {name: "visual_duration_ms", kind: KindInteger},
@@ -273,6 +277,7 @@ func isV2OnlyPath(path string) bool {
 		"tab_bar.mode", "tab_bar.position", "tab_bar.height_px", "tab_bar.min_width_px", "tab_bar.max_width_px", "tab_bar.padding_x", "tab_bar.show_new_button", "tab_bar.show_close_button",
 		"bell", "bell.mode", "bell.focus", "bell.throttle_ms", "bell.visual_duration_ms",
 		"notification", "notification.enabled", "notification.focus", "notification.rate_limit_ms",
+		"ime", "ime.enabled",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true
 	default:
@@ -348,6 +353,9 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 	}
 	if version == 1 && root.RawGetString("notification") != lua.LNil {
 		return Document{}, documentError(source, "notification", "requires config_version = 2")
+	}
+	if version == 1 && root.RawGetString("ime") != lua.LNil {
+		return Document{}, documentError(source, "ime", "requires config_version = 2")
 	}
 	if unsetPath := findUnsetPath(root, rootSchema, ""); unsetPath != "" {
 		if version == 1 {

@@ -107,6 +107,7 @@ type App struct {
 	textTarget        committedTextTargetState
 	composition       compositionCoordinator
 	candidateGeometry candidateGeometryPublisher
+	imeActivation     projectionIMEActivation
 	lastStats         time.Time
 	blinkStart        time.Time
 	showStats         bool

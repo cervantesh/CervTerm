@@ -98,6 +98,9 @@ local config: cervterm.Config = {
   clipboard = {
     osc52 = "off",
   },
+  ime = {
+    enabled = false,
+  },
   render = {
     bidi = false,
     text_gamma = 1.15,

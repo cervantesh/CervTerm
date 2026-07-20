@@ -137,6 +137,7 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 		child.windowID = 0
 		return nil
 	}
+	child.activateProjectionIME(window, bundle.beforeUnbind)
 	return bundle, spec, content, metrics, title, nil
 }
 
