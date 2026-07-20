@@ -35,7 +35,7 @@ func TestAccessibilityPackageHasNoFrontendMuxPTYOrNativeImports(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, forbidden := range []string{"cervterm/internal/core", "cervterm/internal/render", "cervterm/internal/frontend", "cervterm/internal/mux", "cervterm/internal/pty", "golang.org/x/sys", "github.com/go-gl"} {
+			for _, forbidden := range []string{"cervterm/internal/core", "cervterm/internal/render", "cervterm/internal/frontend", "cervterm/internal/mux", "cervterm/internal/modal", "cervterm/internal/ime", "cervterm/internal/pty", "golang.org/x/sys", "github.com/go-gl"} {
 				if strings.HasPrefix(name, forbidden) {
 					t.Fatalf("%s imports forbidden dependency %q", entry.Name(), name)
 				}
