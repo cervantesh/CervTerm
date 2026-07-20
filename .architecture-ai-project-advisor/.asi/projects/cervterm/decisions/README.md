@@ -6,7 +6,7 @@
 | [0002-version-config-composition-and-provenance.md](./0002-version-config-composition-and-provenance.md) | Accepted | Version configuration composition and provenance | 2026-07-17 | Phase 2 |
 | [0003-use-a-typed-action-model.md](./0003-use-a-typed-action-model.md) | Accepted | Use a typed action model | 2026-07-16 | Phase 1 |
 | [0004-own-tabs-windows-and-workspaces-in-process.md](./0004-own-tabs-windows-and-workspaces-in-process.md) | Accepted | Own tabs, windows, and workspaces in process | 2026-07-16 | Before Phase 8 |
-| [0005-introduce-a-native-host-seam-for-ime-and-accessibility.md](./0005-introduce-a-native-host-seam-for-ime-and-accessibility.md) | Proposed | Introduce a native host seam for IME and accessibility | 2026-07-16 | Before Phase 11 |
+| [0005-introduce-a-native-host-seam-for-ime-and-accessibility.md](./0005-introduce-a-native-host-seam-for-ime-and-accessibility.md) | Accepted | Use narrow native projection capabilities; composition first | 2026-07-20 | Phase 11 foundation |
 | [0006-bound-terminal-image-lifetime-and-resources.md](./0006-bound-terminal-image-lifetime-and-resources.md) | Proposed | Bound terminal image lifetime and resources | 2026-07-16 | Before Phase 13 |
 | [0007-persist-workspace-layouts-not-live-processes.md](./0007-persist-workspace-layouts-not-live-processes.md) | Accepted | Persist workspace layouts, not live processes | 2026-07-16 | Before Phase 9 |
 | [0008-gate-terminal-originated-external-side-effects.md](./0008-gate-terminal-originated-external-side-effects.md) | Accepted | Gate terminal-originated external side effects | 2026-07-20 | Phase 10 |

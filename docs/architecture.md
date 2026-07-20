@@ -93,6 +93,12 @@ OSC 8 hyperlinks, OSC 133/633 shell zones, BEL state, and OSC 9/777 notification
 
 The GLFW OS thread owns centralized effect policy and fakeable adapters. Link opening requires a fresh explicit activation and validated absolute HTTP(S) authority. Every BEL is delivered monotonically to mux/Lua while optional sinks alone are focus-filtered or throttled. Native notification consent defaults off, is focus/freshness/rate gated, and uses projection-owned Windows resources; non-Windows adapters fail closed. Diagnostics are coalesced and omit terminal-provided URI query/payload and notification content.
 
+## Native projection capability seam
+
+Platform services that GLFW does not model use separate optional interfaces owned by one native projection on the locked OS thread. Phase 11 reserves only a composition capability; Phase 12 accessibility must use a distinct interface and privacy/snapshot contract. No native type crosses into core, VT, input, render or mux.
+
+Composition state is bounded and frontend-only. It captures a stable pane/search/modal activation, renders preedit without changing terminal snapshots, and routes only a validated commit exactly once. Any target/focus/window/modal ambiguity cancels rather than transfers. Windows may subclass the GLFW HWND transactionally, but callback deactivation and exact WndProc restoration must complete through one pre-unbind coordinator before ordinary resource closure and HWND destruction. Disabled/unavailable installation preserves the legacy GLFW character path.
+
 ## Verifiable measurements
 
 Run parser/core allocation checks:
