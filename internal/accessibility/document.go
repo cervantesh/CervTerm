@@ -53,6 +53,7 @@ func NewDocument(draft DocumentDraft) (Document, error) {
 		providerID: draft.ProviderID,
 		generation: draft.Generation,
 		index:      make(map[NodeID]int, min(len(draft.Nodes), MaxNodes)),
+		truncated:  draft.Truncated,
 	}
 	limit := len(draft.Nodes)
 	nodesOmitted := limit > MaxNodes
