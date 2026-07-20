@@ -70,6 +70,84 @@ func TestDormantProjectionAccessibilityPreparePublishAndTeardown(t *testing.T) {
 	}
 }
 
+func TestProjectionAccessibilityRefreshCoalescesAndPublishesSemanticEvents(t *testing.T) {
+	document, rootID, paneID := uiaTestDocument(t, 1)
+	backend := &fakeWndProcBackend{current: 9, callbackPtr: 77}
+	before := newCompositionBeforeUnbind(&App{})
+	var events []accessibility.SemanticEvent
+	lifecycle, err := prepareDormantProjectionAccessibility(projectionAccessibilityPreparation{
+		Document: document, Bounds: accessibility.Rect{Width: 800, Height: 600}, HWND: 55,
+		API: &fakeUIANativeAPI{host: 88, hostHR: uiaSOK}, Dispatcher: newUIAProviderDispatcher(),
+		Host:              &windowsWndProcHost{backend: backend, hwnd: 55},
+		SemanticEventSink: func(event accessibility.SemanticEvent) error { events = append(events, event); return nil },
+	}, before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lifecycle.Close(); _ = before.close() }()
+	caret := 2
+	next, err := accessibility.NewDocument(accessibility.DocumentDraft{ProviderID: 7, Generation: 2, Focus: paneID, Nodes: []accessibility.NodeDraft{
+		{ID: rootID, Role: accessibility.RoleWindow, Name: "CervTerm"},
+		{ID: paneID, Parent: rootID, Role: accessibility.RoleTerminal, Name: "terminal", Rows: []accessibility.RowDraft{{Text: "next", Bounds: []accessibility.Rect{{Width: 8, Height: 16}, {X: 8, Width: 8, Height: 16}, {X: 16, Width: 8, Height: 16}, {X: 24, Width: 8, Height: 16}}}}, Caret: &caret},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	captures := 0
+	lifecycle.capture = func(uint64) (projectionAccessibilitySnapshot, error) {
+		captures++
+		return projectionAccessibilitySnapshot{Document: next, Bounds: accessibility.Rect{Width: 800, Height: 600}}, nil
+	}
+	lifecycle.generation = 1
+	lifecycle.Invalidate(accessibility.IntentText | accessibility.IntentCaret)
+	lifecycle.Invalidate(accessibility.IntentText)
+	if err := lifecycle.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if captures != 1 || lifecycle.generation != 2 || len(events) != 2 || events[0].Kind != accessibility.EventTextChanged || events[1].Kind != accessibility.EventCaretChanged {
+		t.Fatalf("captures=%d generation=%d events=%#v", captures, lifecycle.generation, events)
+	}
+	if err := lifecycle.Refresh(); err != nil || captures != 1 {
+		t.Fatalf("idle refresh captures=%d err=%v", captures, err)
+	}
+	announcementDocument, _, _ := uiaTestDocument(t, 3)
+	lifecycle.capture = func(uint64) (projectionAccessibilitySnapshot, error) {
+		captures++
+		return projectionAccessibilitySnapshot{Document: announcementDocument, Bounds: accessibility.Rect{Width: 800, Height: 600}}, nil
+	}
+	if err := lifecycle.Announce(accessibility.AnnouncementBell); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("announcement was not coalesced: events=%#v", events)
+	}
+	if err := lifecycle.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if captures != 2 || len(events) <= 2 || events[len(events)-1].Kind != accessibility.EventAnnouncement || events[len(events)-1].Announcement != accessibility.AnnouncementBell {
+		t.Fatalf("captures=%d announcement events=%#v", captures, events)
+	}
+	beforeHidden := len(events)
+	hidden, err := accessibility.NewDocument(accessibility.DocumentDraft{ProviderID: 7, Generation: 4, Focus: rootID, Nodes: []accessibility.NodeDraft{{ID: rootID, Role: accessibility.RoleWindow, Name: "CervTerm"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lifecycle.capture = func(uint64) (projectionAccessibilitySnapshot, error) {
+		return projectionAccessibilitySnapshot{Document: hidden, Bounds: accessibility.Rect{Width: 800, Height: 600}}, nil
+	}
+	if err := lifecycle.Announce(accessibility.AnnouncementNotification); err != nil {
+		t.Fatal(err)
+	}
+	if err := lifecycle.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range events[beforeHidden:] {
+		if event.Kind == accessibility.EventAnnouncement {
+			t.Fatalf("hidden announcement leaked: %#v", events)
+		}
+	}
+}
+
 func TestDormantProjectionAccessibilityInstallFailureRollsBack(t *testing.T) {
 	document, _, _ := uiaTestDocument(t, 1)
 	injected := errors.New("callback")
@@ -161,6 +239,7 @@ func TestInitialProjectionTransfersDormantAccessibilityOwnership(t *testing.T) {
 	}
 	window := new(glfw.Window)
 	app := &App{cfg: config.Defaults()}
+	app.cfg.Accessibility.Enabled = true
 	app.controller = &windowController{windows: map[termmux.WindowID]*windowProjection{
 		termmux.WindowID(initialWindowID): {id: termmux.WindowID(initialWindowID), host: window, app: app},
 	}}

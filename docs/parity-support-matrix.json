@@ -44,7 +44,7 @@
     {"id": "shell.bell_policies", "status": "supported", "phase": 10, "evidence": ["internal/bellpolicy/policy.go", "internal/frontend/glfwgl/app_bell.go", "internal/config/bell_test.go", "docs/validation/phase-10-bell-policies.md"]},
     {"id": "shell.semantic_zones_notifications", "status": "supported", "phase": 10, "evidence": ["internal/core/semantic.go", "internal/vt/parser_osc.go", "internal/frontend/glfwgl/action_semantic.go", "internal/notificationpolicy", "internal/frontend/glfwgl/notification_native_windows.go", "docs/validation/phase-10-closeout.md"]},
     {"id": "input.ime_preedit", "status": "planned", "phase": 11, "evidence": ["docs/wezterm-parity-roadmap.md#phase-11--ime-and-preedit"]},
-    {"id": "accessibility.screen_reader", "status": "planned", "phase": 12, "evidence": ["docs/wezterm-parity-roadmap.md#phase-12--accessibility"]},
+    {"id": "accessibility.screen_reader", "status": "partial", "phase": 12, "evidence": ["internal/accessibility", "internal/frontend/glfwgl/projection_accessibility.go", "internal/frontend/glfwgl/projection_accessibility_factory_windows.go", "docs/getting-started.md#experimental-windows-accessibility-opt-in", "docs/validation/phase-12-accessibility-qualification.md"]},
     {"id": "graphics.kitty", "status": "planned", "phase": 13, "evidence": ["docs/wezterm-parity-roadmap.md#phase-13--image-model-and-kitty-graphics"]},
     {"id": "graphics.sixel_iterm", "status": "planned", "phase": 14, "evidence": ["docs/wezterm-parity-roadmap.md#phase-14--sixel-and-iterm-inline-images"]},
     {"id": "renderer.selection", "status": "excluded", "phase": null, "evidence": ["docs/wezterm-parity-roadmap.md#non-goals"]},

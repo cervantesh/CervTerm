@@ -126,6 +126,8 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 
 	changes = appendChange(changes, desired.Clipboard.OSC52 != effective.Clipboard.OSC52, "clipboard.osc52", ApplyRestart)
 	changes = appendChange(changes, desired.IME.Enabled != effective.IME.Enabled, "ime.enabled", ApplyRestart)
+	changes = appendChange(changes, desired.Accessibility.Enabled != effective.Accessibility.Enabled, "accessibility.enabled", ApplyRestart)
+	changes = appendChange(changes, desired.Accessibility.Scope != effective.Accessibility.Scope, "accessibility.scope", ApplyRestart)
 	changes = appendChange(changes, desired.Bell.Mode != effective.Bell.Mode, "bell.mode", ApplyLive)
 	changes = appendChange(changes, desired.Bell.Focus != effective.Bell.Focus, "bell.focus", ApplyLive)
 	changes = appendChange(changes, desired.Bell.ThrottleMS != effective.Bell.ThrottleMS, "bell.throttle_ms", ApplyLive)

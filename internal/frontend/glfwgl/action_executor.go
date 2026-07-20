@@ -306,7 +306,7 @@ func (a *App) executeScrollAction(pane termmux.PaneID, command termaction.Scroll
 		if pane == a.focusedPane && a.window != nil && a.cfg.Scrollbar.Enabled {
 			a.scrollbar.lastActivity = time.Now()
 		}
-		a.requestRedraw()
+		a.requestAccessibilityRedraw()
 	}
 	return nil
 }
@@ -346,7 +346,7 @@ func (a *App) executeScrollToPrompt(pane termmux.PaneID, command termaction.Scro
 	}
 	if moved {
 		a.recordPaneScroll(pane)
-		a.requestRedraw()
+		a.requestAccessibilityRedraw()
 	}
 	return nil
 }

@@ -79,7 +79,7 @@ func (a *App) draw() {
 		paneBackgroundBase := panePaletteBackground(backgroundBase, panePalette, a.snap.PaletteOverrides)
 		paneBackground := effectivePaneBackground(backgroundBase, paneBackgroundBase, a.snap.PaletteOverrides.BGSet, a.cfg.Window.BackgroundOpacity)
 		a.selection, a.search, a.link, a.mouseReport = state.selection, state.search, state.link, state.mouseReport
-		a.search.init(muxSearchTerminal{mux: a.mux, pane: geometry.Pane}, a.requestRedraw)
+		a.search.init(muxSearchTerminal{mux: a.mux, pane: geometry.Pane}, a.requestAccessibilityRedraw)
 		a.search.viewRow = -1
 		if a.search.hasMatch {
 			if row, ok := a.mux.GlobalRowToViewport(geometry.Pane, a.search.matchRow); ok {

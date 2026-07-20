@@ -17,6 +17,9 @@ func (a *App) openModal(mode modal.Mode, pane modal.PaneIdentity, focus modal.Fo
 		return false
 	}
 	_ = a.cancelComposition(ime.CancelModalChanged)
+	if a.accessibilityRuntime != nil {
+		a.accessibilityRuntime.Invalidate(accessibilityAllSemanticIntents)
+	}
 	return true
 }
 
@@ -25,6 +28,9 @@ func (a *App) replaceModal(mode modal.Mode, entries []modal.Entry) bool {
 		return false
 	}
 	_ = a.cancelComposition(ime.CancelModalChanged)
+	if a.accessibilityRuntime != nil {
+		a.accessibilityRuntime.Invalidate(accessibilityAllSemanticIntents)
+	}
 	return true
 }
 
@@ -34,6 +40,9 @@ func (a *App) closeModal() []modal.Intent {
 	}
 	intents := a.modal.Close()
 	_ = a.cancelComposition(ime.CancelModalChanged)
+	if a.accessibilityRuntime != nil {
+		a.accessibilityRuntime.Invalidate(accessibilityAllSemanticIntents)
+	}
 	return intents
 }
 

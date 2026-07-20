@@ -150,7 +150,7 @@ func (h paneHost) Scroll(lines int) bool {
 	moved, _ := h.app.mux.ScrollViewport(h.pane, lines)
 	if moved {
 		h.app.recordPaneScroll(h.pane)
-		h.app.requestRedraw()
+		h.app.requestAccessibilityRedraw()
 	}
 	return moved
 }
@@ -162,7 +162,7 @@ func (h paneHost) ScrollToBottom() {
 	}
 	if moved, _ := h.app.mux.ScrollViewport(h.pane, -view.ScrollbackLines); moved {
 		h.app.recordPaneScroll(h.pane)
-		h.app.requestRedraw()
+		h.app.requestAccessibilityRedraw()
 	}
 }
 
