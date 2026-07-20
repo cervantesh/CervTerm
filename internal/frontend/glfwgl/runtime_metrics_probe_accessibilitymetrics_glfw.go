@@ -22,19 +22,20 @@ func startRuntimeMetricsProbe(app *App) {
 	if app == nil || path == "" {
 		return
 	}
-	delay := 3 * time.Second
-	if value := os.Getenv("CERVTERM_RUNTIME_METRICS_DELAY"); value != "" {
-		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 && parsed <= 30*time.Second {
-			delay = parsed
-		}
-	}
+	delay := runtimeMetricsDuration("CERVTERM_RUNTIME_METRICS_DELAY", 3*time.Second)
+	warmup := runtimeMetricsDuration("CERVTERM_RUNTIME_METRICS_WARMUP", time.Second)
 	probe := &runtimeMetricsProbe{}
 	runtimeMetricsProbes.Store(app, probe)
 	go func() {
+		time.Sleep(warmup)
+		runtime.GC()
+		before := app.meter.Snapshot()
+		beforeWakes := probe.wakes.Load()
 		time.Sleep(delay)
 		runtime.GC()
-		snapshot := app.meter.Snapshot()
+		after := app.meter.Snapshot()
 		payload := struct {
+			WarmupMS   int64  `json:"warmup_ms"`
 			DelayMS    int64  `json:"delay_ms"`
 			Wakes      uint64 `json:"wakes"`
 			Frames     uint64 `json:"frames"`
@@ -43,14 +44,21 @@ func startRuntimeMetricsProbe(app *App) {
 			TotalAlloc uint64 `json:"total_alloc"`
 			NumGC      uint32 `json:"num_gc"`
 		}{
-			DelayMS: delay.Milliseconds(), Wakes: probe.wakes.Load(), Frames: snapshot.Frames,
-			HeapAlloc: snapshot.HeapAlloc, Allocs: snapshot.Allocs, TotalAlloc: snapshot.TotalAlloc, NumGC: snapshot.NumGC,
+			WarmupMS: warmup.Milliseconds(), DelayMS: delay.Milliseconds(), Wakes: probe.wakes.Load() - beforeWakes, Frames: after.Frames - before.Frames,
+			HeapAlloc: after.HeapAlloc, Allocs: after.Allocs - before.Allocs, TotalAlloc: after.TotalAlloc - before.TotalAlloc, NumGC: after.NumGC - before.NumGC,
 		}
 		if encoded, err := json.MarshalIndent(payload, "", "  "); err == nil {
 			_ = os.WriteFile(path, append(encoded, '\n'), 0o600)
 		}
 		runtimeMetricsProbes.Delete(app)
 	}()
+}
+
+func runtimeMetricsDuration(name string, fallback time.Duration) time.Duration {
+	if parsed, err := time.ParseDuration(os.Getenv(name)); err == nil && parsed > 0 && parsed <= 30*time.Second {
+		return parsed
+	}
+	return fallback
 }
 
 func recordRuntimeMetricsWake(app *App) {
