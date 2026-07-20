@@ -38,3 +38,20 @@ var copySemanticZoneCodec = codecOps{
 		return CopySemanticZone{Zone: args.Zone}, nil
 	},
 }
+
+var selectSemanticZoneCodec = codecOps{
+	encode: func(action Action, _ *Codec, _ int, _ *codecBudget) (json.RawMessage, error) {
+		value, ok := action.(SelectSemanticZone)
+		if !ok {
+			return nil, fmt.Errorf("expected SelectSemanticZone, got %T", action)
+		}
+		return json.Marshal(copySemanticZoneArgs{Zone: value.Zone})
+	},
+	decode: func(data json.RawMessage, _ *Codec, _ int, _ *codecBudget) (Action, error) {
+		var args copySemanticZoneArgs
+		if err := decodeObject(data, &args); err != nil {
+			return nil, err
+		}
+		return SelectSemanticZone{Zone: args.Zone}, nil
+	},
+}

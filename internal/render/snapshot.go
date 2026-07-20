@@ -19,6 +19,7 @@ type Snapshot struct {
 	BellCount              int
 	PaletteOverrides       core.PaletteOverrides
 	Cells                  []core.Cell
+	Wrapped                []bool
 	Hyperlinks             []core.Hyperlink
 	SemanticZones          []core.SemanticZone
 	SemanticZonesTruncated bool
@@ -44,6 +45,11 @@ func CaptureWithOptions(dst *Snapshot, term *core.Terminal, opts CaptureOptions)
 	} else {
 		dst.Cells = dst.Cells[:cellCount]
 	}
+	if cap(dst.Wrapped) < term.Rows() {
+		dst.Wrapped = make([]bool, term.Rows())
+	} else {
+		dst.Wrapped = dst.Wrapped[:term.Rows()]
+	}
 
 	dst.Cols = term.Cols()
 	dst.Rows = term.Rows()
@@ -58,6 +64,9 @@ func CaptureWithOptions(dst *Snapshot, term *core.Terminal, opts CaptureOptions)
 	dst.BellCount = term.BellCount()
 	dst.PaletteOverrides = term.PaletteOverrides()
 	term.CopyView(dst.Cells)
+	for row := range dst.Wrapped {
+		dst.Wrapped[row], _ = term.LineWrapped(row)
+	}
 	dst.Hyperlinks = term.ProjectHyperlinks(dst.Cells, dst.Hyperlinks)
 	dst.SemanticZones, dst.SemanticZonesTruncated = core.ProjectSemanticZones(dst.Cells, dst.SemanticZones)
 }
