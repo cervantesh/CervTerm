@@ -28,14 +28,17 @@ Best-effort support currently targets:
 - Windows portable zip releases from GitHub Releases,
 - the GLFW/OpenGL frontend on Windows,
 - headless Linux verification artifacts,
-- default config and documented Lua config overrides.
+- default config and documented Lua config overrides,
+- OSC 8 hyperlinks and OSC 133/633 shell semantic metadata/actions under the documented trust policy,
+- default-off terminal notification requests; the native notification adapter is currently Windows-only.
 
 Not yet guaranteed:
 
 - stable daily-driver compatibility for all TUIs,
 - signed Windows installer UX,
 - MSI or stable winget install path,
-- full cross-platform GUI behavior.
+- full cross-platform GUI behavior,
+- native bell/notification effects on macOS or Linux GUI builds.
 
 ## Security or supply-chain concerns
 

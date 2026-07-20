@@ -16,6 +16,8 @@ CervTerm already has:
 - Lua configuration, Teal check/gen, discovery/validation/templates, scripting callbacks/timers/status/overlays, and atomic single-file reload.
 - System font discovery, OpenType shaping/ligatures, lazy fallback, color glyphs, a bounded shared multi-size atlas, and DirectWrite coverage.
 - Phase 5 appearance/window controls: per-side padding, independent text/background opacity, bounded layered backgrounds, scrollbar modes/stable gutter/fade FPS, `render.max_fps`, and initial rows/columns plus native decoration/titlebar requests.
+- Visible tabs, multiple native windows, named local workspaces, and layout-only fresh-session persistence.
+- Bounded OSC 8 links and OSC 133/633 semantic zones/actions, strict bell policies, and default-off Windows native notifications behind centralized trust gates.
 - Parser/render benchmarks, fuzz/golden fixtures, daily-driver smoke, package smoke, CI, and release provenance.
 
 ## Historical four-phase MVP roadmap

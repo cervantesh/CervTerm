@@ -9,6 +9,6 @@
 | [0005-introduce-a-native-host-seam-for-ime-and-accessibility.md](./0005-introduce-a-native-host-seam-for-ime-and-accessibility.md) | Proposed | Introduce a native host seam for IME and accessibility | 2026-07-16 | Before Phase 11 |
 | [0006-bound-terminal-image-lifetime-and-resources.md](./0006-bound-terminal-image-lifetime-and-resources.md) | Proposed | Bound terminal image lifetime and resources | 2026-07-16 | Before Phase 13 |
 | [0007-persist-workspace-layouts-not-live-processes.md](./0007-persist-workspace-layouts-not-live-processes.md) | Accepted | Persist workspace layouts, not live processes | 2026-07-16 | Before Phase 9 |
-| [0008-gate-terminal-originated-external-side-effects.md](./0008-gate-terminal-originated-external-side-effects.md) | Proposed | Gate terminal-originated external side effects | 2026-07-16 | Before Phase 10 |
+| [0008-gate-terminal-originated-external-side-effects.md](./0008-gate-terminal-originated-external-side-effects.md) | Accepted | Gate terminal-originated external side effects | 2026-07-20 | Phase 10 |
 | [0009-compose-local-named-color-schemes-before-inline-colors.md](./0009-compose-local-named-color-schemes-before-inline-colors.md) | Accepted | Compose local named color schemes before inline colors | 2026-07-17 | Phase 3 |
 | [0010-keep-osc-palette-overrides-pane-local-and-bounded.md](./0010-keep-osc-palette-overrides-pane-local-and-bounded.md) | Accepted | Keep OSC palette overrides pane-local and bounded | 2026-07-17 | Phase 3 |
