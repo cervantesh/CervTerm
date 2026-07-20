@@ -1,0 +1,163 @@
+{
+  "ProviderID": 4,
+  "Generation": 1,
+  "Focus": {
+    "Kind": 4,
+    "Projection": 21,
+    "Object": 10,
+    "Activation": 7
+  },
+  "Truncated": false,
+  "Rows": 2,
+  "Graphemes": 6,
+  "UTF8Bytes": 21,
+  "Nodes": [
+    {
+      "ID": {
+        "Kind": 1,
+        "Projection": 21,
+        "Object": 1,
+        "Activation": 0
+      },
+      "Parent": {
+        "Kind": 0,
+        "Projection": 0,
+        "Object": 0,
+        "Activation": 0
+      },
+      "Role": 1,
+      "Name": "",
+      "Text": "",
+      "Rows": [],
+      "Caret": 0,
+      "HasCaret": false,
+      "Selection": {
+        "Start": 0,
+        "End": 0
+      },
+      "HasSelect": false
+    },
+    {
+      "ID": {
+        "Kind": 2,
+        "Projection": 21,
+        "Object": 2,
+        "Activation": 0
+      },
+      "Parent": {
+        "Kind": 1,
+        "Projection": 21,
+        "Object": 1,
+        "Activation": 0
+      },
+      "Role": 2,
+      "Name": "",
+      "Text": "",
+      "Rows": [],
+      "Caret": 0,
+      "HasCaret": false,
+      "Selection": {
+        "Start": 0,
+        "End": 0
+      },
+      "HasSelect": false
+    },
+    {
+      "ID": {
+        "Kind": 3,
+        "Projection": 21,
+        "Object": 3,
+        "Activation": 4
+      },
+      "Parent": {
+        "Kind": 2,
+        "Projection": 21,
+        "Object": 2,
+        "Activation": 0
+      },
+      "Role": 3,
+      "Name": "terminal",
+      "Text": "shell",
+      "Rows": [
+        {
+          "Text": "shell",
+          "Bounds": [
+            {
+              "X": 0,
+              "Y": 0,
+              "Width": 8,
+              "Height": 16
+            },
+            {
+              "X": 8,
+              "Y": 0,
+              "Width": 8,
+              "Height": 16
+            },
+            {
+              "X": 16,
+              "Y": 0,
+              "Width": 8,
+              "Height": 16
+            },
+            {
+              "X": 24,
+              "Y": 0,
+              "Width": 8,
+              "Height": 16
+            },
+            {
+              "X": 32,
+              "Y": 0,
+              "Width": 8,
+              "Height": 16
+            }
+          ],
+          "StartGrapheme": 0,
+          "EndGrapheme": 5,
+          "SoftWrapped": false
+        }
+      ],
+      "Caret": 0,
+      "HasCaret": true,
+      "Selection": {
+        "Start": 0,
+        "End": 0
+      },
+      "HasSelect": false
+    },
+    {
+      "ID": {
+        "Kind": 4,
+        "Projection": 21,
+        "Object": 10,
+        "Activation": 7
+      },
+      "Parent": {
+        "Kind": 1,
+        "Projection": 21,
+        "Object": 1,
+        "Activation": 0
+      },
+      "Role": 4,
+      "Name": "palette",
+      "Text": "m",
+      "Rows": [
+        {
+          "Text": "m",
+          "Bounds": null,
+          "StartGrapheme": 0,
+          "EndGrapheme": 1,
+          "SoftWrapped": false
+        }
+      ],
+      "Caret": 1,
+      "HasCaret": true,
+      "Selection": {
+        "Start": 0,
+        "End": 0
+      },
+      "HasSelect": false
+    }
+  ]
+}
