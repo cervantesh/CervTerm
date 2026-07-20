@@ -1,0 +1,74 @@
+{
+  "ProviderID": 11,
+  "Generation": 1,
+  "Focus": {
+    "Kind": 3,
+    "Projection": 7,
+    "Object": 2,
+    "Activation": 1
+  },
+  "Truncated": true,
+  "Rows": 1,
+  "Graphemes": 0,
+  "UTF8Bytes": 14,
+  "Nodes": [
+    {
+      "ID": {
+        "Kind": 1,
+        "Projection": 7,
+        "Object": 1,
+        "Activation": 0
+      },
+      "Parent": {
+        "Kind": 0,
+        "Projection": 0,
+        "Object": 0,
+        "Activation": 0
+      },
+      "Role": 1,
+      "Name": "window",
+      "Text": "",
+      "Rows": [],
+      "Caret": 0,
+      "HasCaret": false,
+      "Selection": {
+        "Start": 0,
+        "End": 0
+      },
+      "HasSelect": false
+    },
+    {
+      "ID": {
+        "Kind": 3,
+        "Projection": 7,
+        "Object": 2,
+        "Activation": 1
+      },
+      "Parent": {
+        "Kind": 1,
+        "Projection": 7,
+        "Object": 1,
+        "Activation": 0
+      },
+      "Role": 3,
+      "Name": "terminal",
+      "Text": "",
+      "Rows": [
+        {
+          "Text": "",
+          "Bounds": null,
+          "StartGrapheme": 0,
+          "EndGrapheme": 0,
+          "SoftWrapped": false
+        }
+      ],
+      "Caret": 0,
+      "HasCaret": false,
+      "Selection": {
+        "Start": 0,
+        "End": 0
+      },
+      "HasSelect": false
+    }
+  ]
+}
