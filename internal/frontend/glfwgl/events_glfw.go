@@ -39,7 +39,7 @@ func (a *App) dispatchScriptTableKey(key glfw.Key, mods glfw.ModifierKey, repeat
 		a.dispatchScriptBinding(*result.binding, key, mods, repeat, result.origin)
 	}
 	if result.consume {
-		a.suppressNextChar = scriptKeyProducesChar(key, mods)
+		a.charSuppression.armBinding(scriptKeyProducesChar(key, mods))
 	}
 	return result.consume
 }
@@ -59,10 +59,11 @@ func (a *App) dispatchScriptKey(key glfw.Key, mods glfw.ModifierKey, repeat bool
 		if binding.ToTable != "" {
 			table, exists := a.scriptRT.BindingSet().Table(binding.ToTable)
 			if !exists {
+				a.charSuppression.armBinding(scriptKeyProducesChar(key, mods))
 				return true
 			}
 			a.keyTable = keyTableState{mode: keyTableNamed, table: table.Name, deadline: time.Now().Add(time.Duration(table.TimeoutMS) * time.Millisecond), origin: uint64(a.focusedPane)}
-			a.suppressNextChar = scriptKeyProducesChar(key, mods)
+			a.charSuppression.armBinding(scriptKeyProducesChar(key, mods))
 			return true
 		}
 		return a.dispatchScriptBinding(binding, key, mods, repeat, uint64(a.focusedPane))

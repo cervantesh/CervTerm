@@ -291,7 +291,7 @@ func (a *App) spawnInitialPTY(w *glfw.Window) {
 		ShellProgram: a.cfg.Shell.Program, ShellArgs: a.cfg.Shell.Args,
 		WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env,
 	}}, eventsRect, a.muxMetrics())
-	a.focusedPane = pane
+	a.setFocusedPane(pane)
 	a.dispatchMuxEvents(events)
 	a.syncFocusedProjection()
 	a.markResizeEvent(a.cols, a.rows)

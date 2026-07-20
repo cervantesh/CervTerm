@@ -137,7 +137,7 @@ func (a *App) draw() {
 		}
 	}
 	if focused != 0 {
-		a.focusedPane = focused
+		a.setFocusedPane(focused)
 		a.loadPaneUI(focused)
 		if view, ok := a.mux.PaneView(focused); ok {
 			a.snap = view.Snapshot
