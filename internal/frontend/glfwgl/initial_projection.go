@@ -22,6 +22,7 @@ func (a *App) closeUnadoptedProjectionResources() {
 		_ = a.blurProvider.Close()
 		a.blurProvider = nil
 	}
+	_ = a.closeNotificationEffectSink()
 }
 
 func (a *App) adoptInitialProjection(window *glfw.Window) error {
@@ -52,6 +53,7 @@ func (a *App) adoptInitialProjection(window *glfw.Window) error {
 				}
 				return nil
 			}),
+			projectionResourceFunc(a.closeNotificationEffectSink),
 		},
 	}
 	return a.controller.adoptProjectionBundle(termmux.WindowID(initialWindowID), bundle)
