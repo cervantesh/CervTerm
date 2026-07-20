@@ -9,7 +9,7 @@ import (
 
 func TestDefaultLuaLoadsAndValidates(t *testing.T) {
 	template := DefaultLua()
-	if !strings.Contains(template, "return {") || !strings.Contains(template, "font =") {
+	if !strings.Contains(template, "return {") || !strings.Contains(template, "config_version = 2,") || !strings.Contains(template, "font =") {
 		t.Fatalf("default Lua template missing expected sections:\n%s", template)
 	}
 	path := filepath.Join(t.TempDir(), "cervterm.lua")
@@ -22,5 +22,35 @@ func TestDefaultLuaLoadsAndValidates(t *testing.T) {
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("DefaultLua config should validate: %v", err)
+	}
+}
+
+func TestDefaultLuaContainsAppearanceSchema(t *testing.T) {
+	template := DefaultLua()
+	for _, field := range []string{"padding_left =", "padding_right =", "padding_top =", "padding_bottom =", "opacity =", "text_opacity =", "background_opacity =", "blur =", "scrollbar =", "reserved_width_px =", "thumb_hover_color =", "track_click ="} {
+		if !strings.Contains(template, field) {
+			t.Fatalf("default Lua template missing %q", field)
+		}
+	}
+}
+
+func TestDefaultLuaDocumentsTypedAndCallbackActions(t *testing.T) {
+	template := DefaultLua()
+	for _, fragment := range []string{
+		`local cervterm = require("cervterm")`,
+		"cervterm.action.CopySelection",
+		"cervterm.action.ScrollPage(1)",
+		"cervterm.action.Zoom(1)",
+		`cervterm.action.SplitPane("columns")`,
+		`cervterm.action.ResizePane("right", 3)`,
+		`cervterm.action.SwapPane("left")`,
+		`cervterm.action.MovePane("down")`,
+		"cervterm.action.Multiple",
+		`label = "Send greeting"`,
+		"one-second watchdog",
+	} {
+		if !strings.Contains(template, fragment) {
+			t.Fatalf("default Lua template missing %q", fragment)
+		}
 	}
 }

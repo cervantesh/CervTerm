@@ -42,7 +42,7 @@ func TestCollectRenderClusterEmojiModifier(t *testing.T) {
 	term := core.NewTerminal(4, 1)
 	term.PutRune('👍')
 	term.PutRune('\U0001F3FD')
-	cluster, ok := collectRenderCluster(term.Cells(), term.Cols(), 0, 0)
+	cluster, ok := collectRenderCluster(copyCells(term), term.Cols(), 0, 0)
 	if !ok {
 		t.Fatalf("expected emoji modifier cluster")
 	}
@@ -54,7 +54,7 @@ func TestCollectRenderClusterEmojiModifier(t *testing.T) {
 func TestCollectRenderClusterSingleEmoji(t *testing.T) {
 	term := core.NewTerminal(4, 1)
 	term.PutRune('😀')
-	cluster, ok := collectRenderCluster(term.Cells(), term.Cols(), 0, 0)
+	cluster, ok := collectRenderCluster(copyCells(term), term.Cols(), 0, 0)
 	if !ok {
 		t.Fatalf("expected single emoji cluster")
 	}
@@ -67,7 +67,7 @@ func TestCollectRenderClusterRegionalIndicatorPair(t *testing.T) {
 	term := core.NewTerminal(4, 1)
 	term.PutRune('🇦')
 	term.PutRune('🇷')
-	cluster, ok := collectRenderCluster(term.Cells(), term.Cols(), 0, 0)
+	cluster, ok := collectRenderCluster(copyCells(term), term.Cols(), 0, 0)
 	if !ok {
 		t.Fatalf("expected regional indicator flag cluster")
 	}
@@ -81,7 +81,7 @@ func TestCollectRenderClusterKeycapUsesClusterWidth(t *testing.T) {
 	term.PutRune('1')
 	term.PutRune('\ufe0f')
 	term.PutRune('\u20e3')
-	cluster, ok := collectRenderCluster(term.Cells(), term.Cols(), 0, 0)
+	cluster, ok := collectRenderCluster(copyCells(term), term.Cols(), 0, 0)
 	if !ok {
 		t.Fatalf("expected keycap emoji cluster")
 	}
@@ -96,7 +96,7 @@ func TestCollectRenderClusterTagFlag(t *testing.T) {
 	for _, r := range england {
 		term.PutRune(r)
 	}
-	cluster, ok := collectRenderCluster(term.Cells(), term.Cols(), 0, 0)
+	cluster, ok := collectRenderCluster(copyCells(term), term.Cols(), 0, 0)
 	if !ok {
 		t.Fatalf("expected tag flag emoji cluster")
 	}
@@ -127,4 +127,12 @@ func TestCollectRenderClusterFastPathsBareASCII(t *testing.T) {
 	if _, ok := collectRenderCluster(keycap, 1, 0, 0); !ok {
 		t.Fatalf("keycap sequence (digit + U+20E3) must still cluster")
 	}
+}
+
+// copyCells returns a defensive copy of the current screen cells for assertions
+// (replaces the removed core.Terminal.Cells() accessor).
+func copyCells(t *core.Terminal) []core.Cell {
+	c := make([]core.Cell, t.Cols()*t.Rows())
+	t.CopyView(c)
+	return c
 }

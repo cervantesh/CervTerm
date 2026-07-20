@@ -21,6 +21,9 @@ import (
 
 func main() {
 	configPath := flag.String("config", "", "path to cervterm.lua or cervterm.tl")
+	compositionFlags := registerCompositionFlags(flag.CommandLine)
+	explainFlags := registerExplainConfigFlags(flag.CommandLine)
+	frontendFlags := registerFrontendStartupFlags(flag.CommandLine)
 	showVersion := flag.Bool("version", false, "print CervTerm version")
 	showBuildInfo := flag.Bool("build-info", false, "print CervTerm build information")
 	printDefaultConfig := flag.Bool("print-default-config", false, "print default Lua configuration")
@@ -46,13 +49,20 @@ func main() {
 		fmt.Print(config.DefaultLua())
 		return
 	}
+	candidateOptions, err := compositionFlags.candidateOptions(os.Args[1:], os.LookupEnv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	if explainFlags.requested() {
+		os.Exit(runExplainConfig(configDiagnosticOptions{ConfigPath: *configPath, Candidate: candidateOptions, Fields: append([]string(nil), explainFlags.fields...)}))
+	}
 	if *doctor {
 		var warnings []string
 		for _, warning := range fontglyph.DiagnoseEmojiFonts().Warnings {
 			warnings = append(warnings, warning)
 		}
-		scale := glfwgl.DetectContentScale()
-		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath, EmojiWarnings: warnings, ContentScale: scale}))
+		os.Exit(runDoctor(doctorOptions{ConfigPath: *configPath, LogPath: *logPath, EmojiWarnings: warnings, ContentScale: "not probed in diagnostic mode", CandidateOptions: candidateOptions, SafeFonts: frontendFlags.safeFonts}))
 	}
 	logFile, err := applog.Setup(applog.ResolvePath(*logPath))
 	if err != nil {
@@ -93,20 +103,35 @@ func main() {
 	if path == "" {
 		path = config.DiscoverPath()
 	}
-	var rt *script.Runtime
-	cfg := config.Defaults()
-	if path != "" {
-		cfg, rt, err = script.Load(path, cfg)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer rt.Close()
-		log.Printf("loaded config: %s", path)
-	}
-	if err := cfg.Validate(); err != nil {
+	if err := validateCompositionTarget(compositionFlags, path, 0); err != nil {
 		log.Fatal(err)
 	}
-	if err := glfwgl.RunWithOptions(cfg, rt); err != nil {
+	loaded := script.VersionedSource{Config: config.Defaults(), AuthoredVersion: 1}
+	if path != "" {
+		var loadErr error
+		loaded, loadErr = script.LoadVersioned(path, loaded.Config, candidateOptions)
+		if loadErr != nil {
+			log.Fatal(loadErr)
+		}
+		log.Printf("loaded config v%d: %s", loaded.AuthoredVersion, path)
+	}
+	if err := validateCompositionTarget(compositionFlags, path, loaded.AuthoredVersion); err != nil {
+		closeVersionedSource(&loaded)
+		log.Fatal(err)
+	}
+	if err := loaded.Config.Validate(); err != nil {
+		if loaded.Candidate != nil {
+			loaded.Candidate.Close()
+		} else if loaded.Runtime != nil {
+			loaded.Runtime.Close()
+		}
+		if loaded.LegacyTransition != nil {
+			_ = loaded.LegacyTransition.Rollback()
+		}
+		log.Fatal(err)
+	}
+	glfwgl.SetSafeFontsMode(frontendFlags.safeFonts)
+	if err := glfwgl.RunWithVersioned(loaded, path); err != nil {
 		log.Fatal(err)
 	}
 }

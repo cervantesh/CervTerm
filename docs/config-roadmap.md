@@ -9,6 +9,12 @@ CervTerm will support two configuration authoring modes:
 
 Lua is the runtime target. Teal is the safer authoring layer for users and AI agents that benefit from a typed schema.
 
+## Current status (2026-07-16)
+
+The original v1 sequence below is retained as design history. Go/Lua/Teal configuration, discovery, validation, generated templates, scripting callbacks, safe atomic single-file reload, opacity/blur, scrollbar, pane bindings, font selection, cursor controls, and the native pane mux are implemented. The canonical forward plan is [`wezterm-parity-roadmap.md`](wezterm-parity-roadmap.md), and support state is tracked in [`parity-support-matrix.json`](parity-support-matrix.json).
+
+The next configuration work is a typed action registry followed by versioned composition, includes, provenance, CLI/profile overrides, dependency watching, and migration. Local/SSH/WSL domains and renderer selection are excluded.
+
 ## Why both Lua and Teal?
 
 - Lua is simple, embeddable, and familiar in terminal configuration ecosystems.
@@ -42,15 +48,15 @@ Ideas to adopt:
 - Lua as the direct config language.
 - Config file returns a table.
 - Optional helper module exposed by CervTerm.
-- Live reload once config validation is stable.
-- CLI overrides such as `--config window.opacity=0.9` later.
-- Modular config using `require` later.
+- Extend the existing atomic reload to composed config dependencies.
+- Add typed CLI/profile/per-window overrides after precedence and provenance are accepted in ADR-0002.
+- Add local includes/modules with canonical paths and cycle detection.
 
-Ideas to defer:
+Ideas to exclude or defer:
 
-- Full event/callback API.
-- Multiplexing, workspaces, remote domains.
-- Large Lua helper API.
+- Local, SSH, WSL, serial, and remote domains are excluded.
+- Plugin marketplaces and unrestricted remote code are excluded.
+- Continue expanding the typed helper/action API incrementally.
 
 ### Alacritty
 
@@ -78,7 +84,7 @@ Kitty uses a custom `kitty.conf` directive format with a very broad configuratio
 
 Ideas to adopt:
 
-- Rich font configuration over time: family, bold/italic faces, size, line height, cell width/height, baseline/glyph offset.
+- Rich font configuration is implemented for ordered descriptors, real/synthetic styles, lazy fallback/rules, OpenType features, line height, cell width, baseline and glyph offsets.
 - Scrollbar settings eventually: visible mode, width, opacity, colors.
 - Scrollback pager concept later.
 - Include/import support.
@@ -114,7 +120,7 @@ Near-term fields:
 - `padding_x`
 - `padding_y`
 - `dynamic_title`
-- `opacity` later
+- `opacity` (implemented)
 - `decorations` later
 
 ### `font`
@@ -153,8 +159,11 @@ colors = {
       "#57627A", "#FF7AA8", "#A6FFB5", "#FFE68A",
       "#9BB8FF", "#E5A7FF", "#90F4FF", "#FFFFFF",
    },
+   indexed_colors = { [16] = "#102030", [196] = "#FF1010" },
 }
 ```
+
+Implemented: `colors.ansi` is a live dense list of exactly 16 `#RRGGBB` entries. `colors.indexed_colors` is a live sparse numeric map for indices 16–255; missing or unset entries retain the xterm cube/grayscale fallback.
 
 Near-term fields:
 
@@ -166,7 +175,7 @@ Near-term fields:
 - `cursor`
 - `selection_background`
 - `ansi`
-- `indexed_colors` later
+- `indexed_colors`
 
 ### `scrolling`
 
@@ -185,7 +194,7 @@ Near-term fields:
 - `wheel_multiplier`
 - `touch_multiplier`
 - `hide_cursor_when_scrolled`
-- `scrollbar` later
+- `scrollbar` (basic interactive scrollbar implemented; visibility policies remain planned)
 
 ### `cursor`
 
@@ -371,7 +380,7 @@ return config
 
 ## Implementation phases
 
-### Phase 1: Go config model
+### Phase 1: Go config model (implemented)
 
 - Add `internal/config`.
 - Define `Config` structs.
@@ -379,42 +388,46 @@ return config
 - Add validation for colors, dimensions, font size, shell fields.
 - Provide `--print-default-config` so users can generate a validated Lua template without opening documentation.
 
-### Phase 2: Lua loader
+### Phase 2: Lua loader (implemented)
 
 - Embed a Lua runtime.
 - Load `cervterm.lua` returning a table.
 - Convert Lua table to Go `Config`.
 - Reject unknown fields or warn depending on strict mode.
 
-### Phase 3: Teal support
+### Phase 3: Teal support (implemented)
 
 - Add `cervterm.tl` support.
 - Run `tl check` if available.
 - Run `tl gen` to Lua or use generated Lua cache.
 - If `tl` is unavailable, show an actionable error and fallback only if configured.
 
-### Phase 4: Hot reload
+### Phase 4: Atomic reload (single-file implemented; composition/dependency watching planned)
 
-- Watch the loaded config file and imported modules.
-- Reload safe fields live: colors, font size, padding, scroll multiplier.
-- Defer unsafe fields to restart: shell program, backend, renderer.
+- Existing behavior atomically reloads the primary configuration after full candidate validation.
+- Phase 2 of the parity roadmap adds dependency watching, provenance, migrations, and deterministic composition.
+- Live-safe and restart-required diffs must be explicit; renderer/backend selection is not a configuration goal.
 
-### Phase 5: Advanced configuration
+### Phase 5: Advanced configuration (appearance/window subset implemented; superseded by parity roadmap)
 
-- Keybindings.
-- Mouse bindings.
-- Cursor shapes.
-- Font fallback.
-- Scrollbar.
-- Themes and imports.
+Implemented Phase 5.1-5.6 fields include:
 
-## Initial non-goals
+- `padding.left/right/top/bottom`;
+- independent text/background opacity with whole-window opacity/blur compatibility checks;
+- bounded solid, linear-gradient, and image background layers with fit/alignment;
+- scrollbar `always`/`hover`/`scrolling`/`never`, stable gutter, and bounded animation FPS;
+- `render.max_fps` presentation limiting without changing on-demand idle policy;
+- initial terminal rows/columns and capability-aware native decorations/titlebar requests.
 
-- No plugin/event API in v1.
-- No multiplexing/workspaces config in v1.
-- No remote domains in v1.
-- No dynamic config generation in v1.
-- No full Kitty-level font feature controls until the renderer supports them.
+Renderer/backend selection is deliberately not part of the schema. Phase 6 key tables and advanced mouse bindings are implemented. Phase 7 adds bounded `quick_select.rules` and ordered `launch_menu` descriptors with atomic composition, provenance, Teal declarations, retained UI actions, and argv-only spawn semantics; theme catalogs/imports remain tracked by their own parity phases.
+
+## Original v1 non-goals and current disposition
+
+- Broad callbacks and native pane multiplexing are now implemented.
+- Visible tabs, local windows, and layout-only workspaces are planned.
+- Local/SSH/WSL/remote domains remain excluded.
+- Dynamic remote configuration and plugin marketplaces remain excluded.
+- Rich font descriptors/features/metrics are implemented without renderer-backend selection.
 
 ## Sources
 

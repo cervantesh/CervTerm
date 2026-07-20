@@ -1,0 +1,140 @@
+{
+  "Window": {
+    "Width": 1200,
+    "Height": 800,
+    "InitialRows": 0,
+    "InitialCols": 0,
+    "Decorations": "system",
+    "Titlebar": "dark",
+    "PaddingX": 8,
+    "PaddingY": 9,
+    "PaddingLeft": 8,
+    "PaddingRight": 8,
+    "PaddingTop": 9,
+    "PaddingBottom": 9,
+    "DynamicTitle": false,
+    "Opacity": 0.9,
+    "TextOpacity": 1,
+    "BackgroundOpacity": 1,
+    "Blur": false
+  },
+  "LayoutPersistence": {
+    "Enabled": false,
+    "Path": ""
+  },
+  "Font": {
+    "Family": "JetBrains Mono",
+    "Size": 15.5,
+    "Ligatures": true,
+    "LineHeight": 1,
+    "CellWidth": 1,
+    "BaselineOffset": 0,
+    "GlyphOffsetX": 0,
+    "GlyphOffsetY": 0
+  },
+  "Colors": {
+    "Foreground": "#010203",
+    "Background": "#040506FF",
+    "Cursor": "#070809",
+    "SelectionBackground": "#0A0B0C",
+    "ChromeBackground": "#10141CF0",
+    "ChromeMuted": "#A8B3C7FF",
+    "Accent": "#60E8F0FF",
+    "Split": "#4A5263FF",
+    "SearchMatch": "#7A5C12FF",
+    "Error": "#D87272FF",
+    "ANSI": [
+      "#1B2232",
+      "#FF5C8A",
+      "#8BF59A",
+      "#F8D866",
+      "#7AA2FF",
+      "#D88CFF",
+      "#60E8F0",
+      "#D8DEEA",
+      "#57627A",
+      "#FF7AA8",
+      "#A6FFB5",
+      "#FFE68A",
+      "#9BB8FF",
+      "#E5A7FF",
+      "#90F4FF",
+      "#FFFFFF"
+    ],
+    "IndexedColors": {}
+  },
+  "Background": {
+    "Layers": null
+  },
+  "Scrolling": {
+    "History": 3210,
+    "WheelMultiplier": 4,
+    "HideCursorWhenScrolled": false
+  },
+  "Scrollbar": {
+    "Enabled": true,
+    "Mode": "scrolling",
+    "StableGutter": true,
+    "AnimationFPS": 60,
+    "ReservedWidthPX": 16,
+    "WidthPX": 10,
+    "MarginPX": 3,
+    "RadiusPX": 5,
+    "MinThumbPX": 30,
+    "TrackColor": "#10111266",
+    "ThumbColor": "#131415CC",
+    "ThumbHoverColor": "#161718E6",
+    "ThumbPressColor": "#191A1BFF",
+    "AutoHideDelayMS": 900,
+    "FadeMS": 175,
+    "PageStep": 0.75,
+    "TrackClick": "jump"
+  },
+  "Cursor": {
+    "Shape": "beam",
+    "Blink": false,
+    "BlinkIntervalMS": 700,
+    "Thickness": 0.2
+  },
+  "Clipboard": {
+    "OSC52": "write"
+  },
+  "Render": {
+    "Bidi": true,
+    "TextGamma": 1.2,
+    "TextDarken": 0.1,
+    "TextRaster": "auto",
+    "StatsHotkey": "ctrl+shift+s",
+    "ZoomInHotkey": "ctrl+equal",
+    "ZoomOutHotkey": "ctrl+minus",
+    "ZoomResetHotkey": "ctrl+0",
+    "VSync": false,
+    "MaxFPS": 0,
+    "Redraw": "continuous",
+    "Damage": "frame"
+  },
+  "Shell": {
+    "Program": "pwsh",
+    "Args": [
+      "-NoLogo"
+    ],
+    "WorkingDirectory": "C:/work",
+    "Env": {
+      "TERM_PROGRAM": "CervTerm"
+    }
+  },
+  "QuickSelect": {
+    "Rules": null
+  },
+  "TabBar": {
+    "Mode": "multiple",
+    "Position": "top",
+    "HeightPX": 28,
+    "MinWidthPX": 96,
+    "MaxWidthPX": 220,
+    "PaddingX": 8,
+    "ShowNewButton": true,
+    "ShowCloseButton": true
+  },
+  "LaunchMenu": null
+}

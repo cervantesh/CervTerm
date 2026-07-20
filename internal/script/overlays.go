@@ -192,7 +192,10 @@ func (s *overlayStore) scenes() []OverlayScene {
 func newOverlayHandle(l *lua.LState, store *overlayStore, ov *overlay) *lua.LTable {
 	tbl := l.NewTable()
 	reg := func(name string, fn lua.LGFunction) {
-		tbl.RawSetString(name, l.NewFunction(fn))
+		tbl.RawSetString(name, l.NewFunction(func(state *lua.LState) int {
+			rejectDeclarativeIncludeRegistration(state, "overlay."+name)
+			return fn(state)
+		}))
 	}
 	reg("clear", func(l *lua.LState) int {
 		l.CheckTypes(1, lua.LTTable)

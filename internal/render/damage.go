@@ -25,8 +25,8 @@ func HashRows(dst []uint64, cells []core.Cell, cols int) {
 			for _, combining := range marks {
 				hash = hashUint32(hash, uint32(combining))
 			}
-			hash = hashRGB(hash, cell.Attr.FG)
-			hash = hashRGB(hash, cell.Attr.BG)
+			hash = hashLogicalColor(hash, cell.Attr.FG)
+			hash = hashLogicalColor(hash, cell.Attr.BG)
 			hash = hashBool(hash, cell.Attr.Bold)
 			hash = hashBool(hash, cell.Attr.Dim)
 			hash = hashBool(hash, cell.Attr.Italic)
@@ -34,6 +34,8 @@ func HashRows(dst []uint64, cells []core.Cell, cols int) {
 			hash = hashBool(hash, cell.Attr.Inverse)
 			hash = hashBool(hash, cell.Attr.Strikethrough)
 			hash = hashBool(hash, cell.Attr.Blink)
+			hash = hashUint32(hash, uint32(cell.HyperlinkID))
+			hash = hashUint32(hash, uint32(cell.SemanticKind))
 			hash = hashBool(hash, cell.WideContinuation)
 		}
 		dst[row] = hash
@@ -48,12 +50,8 @@ func hashUint32(hash uint64, value uint32) uint64 {
 	return hash
 }
 
-func hashRGB(hash uint64, value core.RGB) uint64 {
-	for _, component := range [...]uint8{value.R, value.G, value.B} {
-		hash ^= uint64(component)
-		hash *= fnvPrime64
-	}
-	return hash
+func hashLogicalColor(hash uint64, value core.LogicalColor) uint64 {
+	return hashUint32(hash, uint32(value))
 }
 
 func hashBool(hash uint64, value bool) uint64 {

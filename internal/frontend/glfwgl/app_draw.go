@@ -9,104 +9,147 @@ import (
 	"time"
 
 	"cervterm/internal/core"
+	"cervterm/internal/frontend/gpu"
+	termmux "cervterm/internal/mux"
 	"cervterm/internal/render"
-	cervtermtheme "cervterm/internal/theme"
-
-	"github.com/go-gl/gl/v2.1/gl"
 )
 
+// hudCache holds the cached HUD rows and the inputs they were built from; see
+// refreshHUDCache. Main-thread only.
+type hudCache struct {
+	lines     []string // cached HUD rows
+	colors    []color.RGBA
+	notice    string
+	showStats bool
+	cols      int
+	chrome    chromeColors
+	rows      int
+	statsAt   time.Time
+}
+
 func (a *App) draw() {
-	// One timestamp and blink phase for the whole frame: sampling time.Now more
-	// than once lets a blink boundary or notice expiry land between samples,
-	// painting one state while recording another and losing the corrective
-	// repaint.
 	frameNow := time.Now()
 	frameBlink := a.blinkPhaseAt(frameNow)
 	if a.notice != "" && frameNow.After(a.noticeUntil) {
-		a.notice = "" // expired: this frame paints without it and stops re-triggering
+		a.notice = ""
 	}
-
 	w, h := a.window.GetFramebufferSize()
-	gl.Viewport(0, 0, int32(w), int32(h))
-	gl.MatrixMode(gl.PROJECTION)
-	gl.LoadIdentity()
-	gl.Ortho(0, float64(w), float64(h), 0, -1, 1)
-	gl.MatrixMode(gl.MODELVIEW)
-	gl.LoadIdentity()
+	if w != a.lastFBW || h != a.lastFBH {
+		a.r.Resize(w, h)
+		a.lastFBW, a.lastFBH = w, h
+	}
+	a.applyPreparedBackgroundResize()
+	a.requestBackgroundResize(w, h)
+	a.r.BeginFrame(w, h)
 
-	palette := cervtermtheme.DefaultPalette()
-	background := configColor(a.cfg.Colors.Background, themeColor(palette.Background))
-	cursorColor := configColor(a.cfg.Colors.Cursor, themeColor(palette.Accent))
+	a.chrome = resolveChromeColors(a.cfg)
+	backgroundBase := configColor(a.cfg.Colors.Background, color.RGBA{0x08, 0x0B, 0x12, 0xFF})
+	background := applyOpacity(backgroundBase, a.cfg.Window.BackgroundOpacity)
+	cursorColor := configColor(a.cfg.Colors.Cursor, a.chrome.accent)
 	selectionColor := configColor(a.cfg.Colors.SelectionBackground, color.RGBA{0x2A, 0x63, 0x77, 0xFF})
-	defaultFG := configColor(a.cfg.Colors.Foreground, rgb(core.DefaultFG))
-	gl.Disable(gl.TEXTURE_2D)
+	paletteBase := configuredPaletteBase(a.cfg.Colors)
 	a.updateFPS()
+	a.restoreBackgroundSurface(background, w, h)
 
-	// Title/cwd/bell events are fired in processTermEvents (once per data batch),
-	// not here, so on-demand rendering does not delay them to the next repaint.
-	a.mu.Lock()
-	render.Capture(&a.snap, a.term)
-	displayOffset := a.term.DisplayOffset()
-	scrollbackRows := a.term.ScrollbackLines()
-	alternateScreen := a.term.AlternateScreenMode()
-	a.mu.Unlock()
-	// Convert the match's global (physical-row) index to a viewport row using the
-	// same convention as CopyView: the top visible global row is
-	// scrollbackRows-displayOffset (trap 2). Off-screen matches yield -1.
-	a.searchViewRow = -1
-	if a.searchHasMatch {
-		if vr := a.searchMatchRow - (scrollbackRows - displayOffset); vr >= 0 && vr < a.snap.Rows {
-			a.searchViewRow = vr
-		}
+	layout, err := a.mux.Layout()
+	if err != nil {
+		a.Notify("layout: " + err.Error())
+		return
 	}
-	a.refreshLinks()
-	a.prepareStatusBand(w)
-	noticeVisible := a.notice != "" && frameNow.Before(a.noticeUntil)
-	fullRedraw, damagedRows := a.prepareDamage(w, h, displayOffset, alternateScreen, noticeVisible, background)
-	if fullRedraw {
-		glClearColor(background)
-		gl.Clear(gl.COLOR_BUFFER_BIT)
-	}
-
-	var cursorRowOrder []int
+	focused, _ := a.mux.FocusedPane()
+	baseOriginX, baseOriginY := a.drawOriginX, a.drawOriginY
+	a.saveActivePaneUI()
 	rowsDrawn := 0
-	for r, damaged := range damagedRows {
-		if !damaged {
+	for _, geometry := range layout.Panes {
+		view, ok := a.mux.PaneView(geometry.Pane)
+		if !ok {
 			continue
 		}
-		rowsDrawn++
-		if !fullRedraw {
-			fillRect(0, a.paddingY+float32(r)*a.cellH, float32(w), a.cellH, background)
-		}
-		order := a.drawRow(r, background, selectionColor, defaultFG)
-		if r == a.snap.CursorRow {
-			cursorRowOrder = order
-		}
-	}
-
-	if a.snap.CursorVisible {
-		cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
-		if cursorRowOrder != nil {
-			inverse := render.InversePermutation(cursorRowOrder)
-			if cursorCol >= 0 && cursorCol < len(inverse) {
-				cursorCol = inverse[cursorCol]
+		state := a.ensurePaneUI(geometry.Pane)
+		a.activatePaneFont(geometry.Pane)
+		a.snap = view.Snapshot
+		panePalette := a.snap.PaletteOverrides.Apply(paletteBase)
+		colorResolver := panePalette.ColorResolver()
+		defaultFG := rgb(panePalette.FG)
+		paneBackgroundBase := panePaletteBackground(backgroundBase, panePalette, a.snap.PaletteOverrides)
+		paneBackground := effectivePaneBackground(backgroundBase, paneBackgroundBase, a.snap.PaletteOverrides.BGSet, a.cfg.Window.BackgroundOpacity)
+		a.selection, a.search, a.link, a.mouseReport = state.selection, state.search, state.link, state.mouseReport
+		a.search.init(muxSearchTerminal{mux: a.mux, pane: geometry.Pane}, a.requestRedraw)
+		a.search.viewRow = -1
+		if a.search.hasMatch {
+			if row, ok := a.mux.GlobalRowToViewport(geometry.Pane, a.search.matchRow); ok {
+				a.search.viewRow = row
 			}
 		}
-		x := a.paddingX + float32(cursorCol)*a.cellW
-		y := a.paddingY + float32(cursorRow)*a.cellH
-		a.drawCursor(x, y, cursorColor, frameBlink)
+		a.drawOriginX = float32(geometry.Pixels.X)
+		a.drawOriginY = float32(geometry.Pixels.Y)
+		a.refreshLinks()
+		a.r.PushClip(gpu.ClipRect{X: geometry.Pixels.X, Y: geometry.Pixels.Y, Width: geometry.Pixels.Width, Height: geometry.Pixels.Height})
+		if paneNeedsFlatBackground(len(a.cfg.Background.Layers), a.snap.PaletteOverrides.BGSet) {
+			a.replaceRect(float32(geometry.Pixels.X), float32(geometry.Pixels.Y), float32(geometry.Pixels.Width), float32(geometry.Pixels.Height), paneBackground)
+		}
+		var cursorRowOrder []int
+		for row := 0; row < a.snap.Rows; row++ {
+			rowsDrawn++
+			order := a.drawRow(row, paneBackgroundBase, selectionColor, defaultFG, &colorResolver)
+			if row == a.snap.CursorRow {
+				cursorRowOrder = order
+			}
+		}
+		if geometry.Pane == focused && a.snap.CursorVisible {
+			cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
+			if cursorRowOrder != nil {
+				inverse := render.InversePermutation(cursorRowOrder)
+				if cursorCol >= 0 && cursorCol < len(inverse) {
+					cursorCol = inverse[cursorCol]
+				}
+			}
+			x := a.drawOriginX + float32(cursorCol)*a.cellW
+			y := a.drawOriginY + float32(cursorRow)*a.cellH
+			a.drawCursor(x, y, cursorColor, frameBlink)
+		}
+		a.drawLinkUnderline(cursorColor)
+		if geometry.Pane == focused {
+			a.drawOverlays()
+		}
+		a.r.PopClip()
+		state.selection, state.search, state.link, state.mouseReport = a.selection, a.search, a.link, a.mouseReport
 	}
-
+	a.drawOriginX, a.drawOriginY = baseOriginX, baseOriginY
+	for _, divider := range layout.Dividers {
+		r := divider.Pixels
+		a.fillRect(float32(r.X), float32(r.Y), float32(r.Width), float32(r.Height), a.chrome.split)
+	}
+	if view, ok := a.mux.PaneView(focused); ok {
+		r := view.Geometry.Pixels
+		if r.Width > 0 && r.Height > 0 {
+			accent := a.chrome.accent
+			if view.State == termmux.PaneStateExited || view.State == termmux.PaneStateFailed {
+				accent = a.chrome.error
+			}
+			a.fillRect(float32(r.X), float32(r.Y), float32(r.Width), 1, accent)
+			a.fillRect(float32(r.X), float32(r.Bottom()-1), float32(r.Width), 1, accent)
+			a.fillRect(float32(r.X), float32(r.Y), 1, float32(r.Height), accent)
+			a.fillRect(float32(r.Right()-1), float32(r.Y), 1, float32(r.Height), accent)
+		}
+	}
+	if focused != 0 {
+		a.focusedPane = focused
+		a.loadPaneUI(focused)
+		if view, ok := a.mux.PaneView(focused); ok {
+			a.snap = view.Snapshot
+			a.cols, a.rows = view.Snapshot.Cols, view.Snapshot.Rows
+		}
+	}
+	a.retainVisibleFontContexts(layout)
 	a.damage.rowsDrawn = rowsDrawn
-	a.drawLinkUnderline(cursorColor)
-	a.drawOverlays()
-	a.drawHUD(w, h, palette, frameNow)
-	a.drawStatusBand(w, palette)
-	a.drawSearchBar(w, h, palette)
-	a.recordDamageFrame(w, h, displayOffset, alternateScreen, noticeVisible, background, rowsDrawn)
-
-	// Record exactly what this frame rendered so shouldRedraw detects the next
-	// blink flip / stats-window elapse against the painted state.
+	a.prepareStatusBand(w)
+	a.drawScrollbar(frameNow, background, w, h)
+	a.drawTabBar(w, h)
+	a.drawHUD(w, h, a.chrome, frameNow)
+	a.drawStatusBand(w, a.chrome)
+	a.drawSearchBar(w, h, a.chrome)
+	a.drawModal(w, h, a.chrome)
 	a.lastBlinkPhase = frameBlink
 	if a.showStats {
 		a.lastStatsDraw = frameNow
@@ -134,7 +177,7 @@ func (a *App) updateFPS() {
 // the 500ms stats window elapsed, cols/rows changed, or the visible notice
 // text differs from what was cached. The notice is independent of showStats, so
 // all four (showStats, notice) combinations are handled.
-func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
+func (a *App) refreshHUDCache(chrome chromeColors, now time.Time) {
 	noticeVisible := a.notice != "" && now.Before(a.noticeUntil)
 	curNotice := ""
 	if noticeVisible {
@@ -143,108 +186,72 @@ func (a *App) refreshHUDCache(palette cervtermtheme.Palette, now time.Time) {
 	// Stats numbers only need 500ms freshness (same cadence shouldRedraw uses).
 	// A just-toggled-on panel or a cols/rows change forces an immediate rebuild
 	// so no stale numbers flash before the next window rolls over.
-	statsStale := a.showStats && (!a.hudShowStats ||
-		a.cols != a.hudCols || a.rows != a.hudRows ||
-		now.Sub(a.hudStatsAt) >= 500*time.Millisecond)
-	if !statsStale && curNotice == a.hudNotice && a.showStats == a.hudShowStats {
+	statsStale := a.showStats && (!a.hud.showStats ||
+		a.cols != a.hud.cols || a.rows != a.hud.rows ||
+		now.Sub(a.hud.statsAt) >= 500*time.Millisecond)
+	if !statsStale && curNotice == a.hud.notice && a.showStats == a.hud.showStats && chrome == a.hud.chrome {
 		return
 	}
 
-	a.hudLines = a.hudLines[:0]
-	a.hudColors = a.hudColors[:0]
+	a.hud.lines = a.hud.lines[:0]
+	a.hud.colors = a.hud.colors[:0]
 	if a.showStats {
 		s := a.meter.Snapshot()
-		a.hudLines = append(a.hudLines,
-			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.cfg.Render.TextRaster, a.cfg.Font.Family, a.cfg.Font.Size),
+		a.hud.lines = append(a.hud.lines,
+			fmt.Sprintf("CervTerm  %dx%d  %.0f fps  rows:%d/%d  raster:%s  %s %.0f", a.cols, a.rows, a.fps, a.damage.rowsDrawn, a.snap.Rows, a.effectiveTextRaster(), a.cfg.Font.Family, a.FontSize()),
 			fmt.Sprintf("%.1f KB read  heap %.1f MB  mallocs %d  GC %d  pause %s", float64(s.Bytes)/1024, float64(s.HeapAlloc)/(1024*1024), s.Allocs, s.NumGC, s.LastGCPause))
-		a.hudColors = append(a.hudColors, themeColor(palette.Muted), themeColor(palette.Muted))
-		a.hudStatsAt = now
+		a.hud.colors = append(a.hud.colors, chrome.muted, chrome.muted)
+		a.hud.statsAt = now
 	}
 	if noticeVisible {
-		a.hudLines = append(a.hudLines, a.notice)
-		a.hudColors = append(a.hudColors, themeColor(palette.Accent))
+		a.hud.lines = append(a.hud.lines, a.notice)
+		a.hud.colors = append(a.hud.colors, chrome.accent)
 	}
-	a.hudShowStats = a.showStats
-	a.hudNotice = curNotice
-	a.hudCols, a.hudRows = a.cols, a.rows
+	a.hud.showStats = a.showStats
+	a.hud.notice = curNotice
+	a.hud.cols, a.hud.rows = a.cols, a.rows
+	a.hud.chrome = chrome
 }
 
 // drawHUD overlays the optional two-row stats panel (toggled by the stats
 // hotkey) and any transient notice on top of the terminal, so the terminal
 // itself has no permanent chrome.
-func (a *App) drawHUD(w, h int, palette cervtermtheme.Palette, now time.Time) {
-	a.refreshHUDCache(palette, now)
-	lines := a.hudLines
-	colors := a.hudColors
-	if len(lines) == 0 {
-		return
-	}
-
-	widest := 0
-	for _, ln := range lines {
-		if n := len([]rune(ln)); n > widest {
-			widest = n
-		}
-	}
-	pad := 6 * a.uiScale
-	bx, by := pad, pad
-	bw := float32(widest)*a.cellW + 2*pad
-	bh := float32(len(lines))*a.cellH + 2*pad
-	gl.Disable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	fillRect(bx, by, bw, bh, color.RGBA{0x10, 0x14, 0x1C, 0xF0})
-	fillRect(bx, by, bw, max(1, a.uiScale), themeColor(palette.Accent))
-	for i, ln := range lines {
-		a.drawString(ln, bx+pad, by+pad+float32(i)*a.cellH, colors[i], 1)
-	}
+func (a *App) drawHUD(w, h int, chrome chromeColors, now time.Time) {
+	a.refreshHUDCache(chrome, now)
+	a.paint(hudLayout(a.hud.lines, a.hud.colors, a.cellW, a.cellH, a.uiScale, chrome.background, chrome.accent))
 }
 
-// searchHighlightColor tints the current match cells under the glyphs, a warm
-// amber distinct from the cool selection fill so the two never read as the same.
-var searchHighlightColor = color.RGBA{0x7A, 0x5C, 0x12, 0xFF}
+// paint executes a draw-list, translating each command into the corresponding
+// renderer call. The renderer owns the translucent-blend state (BLEND stays
+// enabled), which the alpha in chromeBoxColor relies on.
+func (a *App) paint(cmds []drawCmd) {
+	if len(cmds) == 0 {
+		return
+	}
+	for _, c := range cmds {
+		switch c.kind {
+		case cmdRect:
+			a.fillRect(c.x, c.y, c.w, c.h, c.col)
+		case cmdText:
+			a.drawString(c.text, c.x, c.y, c.col, 1)
+		}
+	}
+}
 
 // drawSearchBar renders the modal search overlay at the bottom of the window,
 // mirroring drawHUD's translucent-fill + accent-line + drawString style. It is
 // drawn only while the bar is open; closing repaints a clean frame (the search
 // state is in the damage global-fallback list).
-func (a *App) drawSearchBar(w, h int, palette cervtermtheme.Palette) {
-	if !a.searching {
-		return
-	}
-	label := "buscar: " + string(a.searchQuery)
-	info := ""
-	switch {
-	case len(a.searchQuery) == 0:
-		info = ""
-	case a.searchHasMatch:
-		info = "  [enter: siguiente]"
-	default:
-		info = "  sin resultados"
-	}
-	line := label + info
-
-	pad := 6 * a.uiScale
-	bh := a.cellH + 2*pad
-	by := float32(h) - bh
-	gl.Disable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	fillRect(0, by, float32(w), bh, color.RGBA{0x10, 0x14, 0x1C, 0xF0})
-	fillRect(0, by, float32(w), max(1, a.uiScale), themeColor(palette.Accent))
-	textColor := themeColor(palette.Accent)
-	if len(a.searchQuery) > 0 && !a.searchHasMatch {
-		textColor = themeColor(palette.Muted)
-	}
-	a.drawString(line, pad, by+pad, textColor, 1)
+func (a *App) drawSearchBar(w, h int, chrome chromeColors) {
+	a.paint(searchBarLayout(a.search.active, string(a.search.query), a.search.hasMatch, w, h, a.cellH, a.uiScale, chrome.background, chrome.accent, chrome.muted))
 }
 
-func drawTextDecorations(x, y, w, h float32, c color.RGBA, attr core.Attr) {
+func (a *App) drawTextDecorations(x, y, w, h float32, c color.RGBA, attr core.Attr) {
 	if attr.Underline {
-		fillRect(x, y+h-2, w, 1, c)
+		a.fillRect(x, y+h-2, w, 1, c)
 	}
 	if attr.Strikethrough {
-		fillRect(x, y+h*0.55, w, 1, c)
+		a.fillRect(x, y+h*0.55, w, 1, c)
 	}
 }
 
@@ -256,32 +263,15 @@ func (a *App) drawString(s string, x, y float32, c color.RGBA, scale float32) {
 }
 
 func (a *App) drawRune(r rune, x, y float32, c color.RGBA, scale, skew float32) {
-	gl.Enable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	glColor(c)
 	a.atlas.drawRune(r, x, y, c, scale, skew)
-	gl.Disable(gl.TEXTURE_2D)
 }
 
 func (a *App) drawCluster(cluster string, cellSpan int, x, y float32, c color.RGBA, scale, skew float32) bool {
-	gl.Enable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	glColor(c)
-	ok := a.atlas.drawCluster(cluster, cellSpan, x, y, c, scale, skew)
-	gl.Disable(gl.TEXTURE_2D)
-	return ok
+	return a.atlas.drawCluster(cluster, cellSpan, x, y, c, scale, skew)
 }
 
 func (a *App) drawRunGlyph(run string, cellSpan int, x, y float32, c color.RGBA, scale, skew float32) bool {
-	gl.Enable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	glColor(c)
-	ok := a.atlas.drawRun(run, cellSpan, x, y, c, scale, skew)
-	gl.Disable(gl.TEXTURE_2D)
-	return ok
+	return a.atlas.drawRun(run, cellSpan, x, y, c, scale, skew)
 }
 
 // drawCursor renders the cursor using the frame's precomputed blink phase so
@@ -291,24 +281,27 @@ func (a *App) drawRunGlyph(run string, cellSpan int, x, y float32, c color.RGBA,
 func (a *App) drawCursor(x, y float32, c color.RGBA, blinkPhase bool) {
 	thickness := cursorThicknessPixels(a.cfg.Cursor.Thickness, a.cellW, a.cellH)
 	shape, blink := a.cfg.Cursor.Shape, a.cfg.Cursor.Blink
-	switch a.snap.CursorStyle {
-	case 1, 2:
-		shape, blink = "block", a.snap.CursorStyle == 1
-	case 3, 4:
-		shape, blink = "underline", a.snap.CursorStyle == 3
-	case 5, 6:
-		shape, blink = "beam", a.snap.CursorStyle == 5
+	switch a.snap.CursorStyle.Shape() {
+	case core.CursorShapeBlock:
+		shape = "block"
+	case core.CursorShapeUnderline:
+		shape = "underline"
+	case core.CursorShapeBar:
+		shape = "beam"
+	}
+	if b, ok := a.snap.CursorStyle.Blink(); ok {
+		blink = b
 	}
 	if blink && !blinkPhase {
 		return
 	}
 	switch shape {
 	case "block":
-		fillRect(x, y, a.cellW, a.cellH, c)
+		a.fillRect(x, y, a.cellW, a.cellH, c)
 	case "beam":
-		fillRect(x, y, thickness, a.cellH, c)
+		a.fillRect(x, y, thickness, a.cellH, c)
 	default:
-		fillRect(x, y+a.cellH-thickness, a.cellW, thickness, c)
+		a.fillRect(x, y+a.cellH-thickness, a.cellW, thickness, c)
 	}
 }
 
@@ -332,7 +325,7 @@ func cursorThicknessPixels(configured float64, cellW, cellH float32) float32 {
 }
 
 func configColor(hex string, fallback color.RGBA) color.RGBA {
-	if len(hex) != 7 || hex[0] != '#' {
+	if (len(hex) != 7 && len(hex) != 9) || hex[0] != '#' {
 		return fallback
 	}
 	r, errR := strconv.ParseUint(hex[1:3], 16, 8)
@@ -341,27 +334,24 @@ func configColor(hex string, fallback color.RGBA) color.RGBA {
 	if errR != nil || errG != nil || errB != nil {
 		return fallback
 	}
-	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
+	a := uint64(255)
+	if len(hex) == 9 {
+		var err error
+		a, err = strconv.ParseUint(hex[7:9], 16, 8)
+		if err != nil {
+			return fallback
+		}
+	}
+	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: uint8(a)}
 }
 
-func glClearColor(c color.RGBA) {
-	gl.ClearColor(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, 1)
-}
-func glColor(c color.RGBA) {
-	gl.Color4f(float32(c.R)/255, float32(c.G)/255, float32(c.B)/255, float32(c.A)/255)
+func (a *App) replaceRect(x, y, w, h float32, c color.RGBA) {
+	a.r.ReplaceRect(x, y, w, h, c)
 }
 
-func fillRect(x, y, w, h float32, c color.RGBA) {
-	glColor(c)
-	gl.Begin(gl.QUADS)
-	gl.Vertex2f(x, y)
-	gl.Vertex2f(x+w, y)
-	gl.Vertex2f(x+w, y+h)
-	gl.Vertex2f(x, y+h)
-	gl.End()
+func (a *App) fillRect(x, y, w, h float32, c color.RGBA) {
+	a.r.FillRect(x, y, w, h, c)
 }
-
-func themeColor(c cervtermtheme.Color) color.RGBA { return color.RGBA{c.R, c.G, c.B, 0xFF} }
 
 func rgb(c core.RGB) color.RGBA { return color.RGBA{c.R, c.G, c.B, 0xFF} }
 func brighten(c color.RGBA) color.RGBA {

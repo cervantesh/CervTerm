@@ -4,11 +4,12 @@ package fontglyph
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
+	"runtime"
 	"syscall"
 	"unicode/utf16"
 	"unsafe"
+
+	"cervterm/internal/fontdesc"
 )
 
 const (
@@ -151,7 +152,52 @@ type dwriteGlyphOffset struct {
 	AscenderOffset float32
 }
 
-func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uint16) ([]ShapedGlyph, bool, error) {
+type dwriteFontFeature struct {
+	Name      uint32
+	Parameter uint32
+}
+
+type dwriteTypographicFeatures struct {
+	Features     *dwriteFontFeature
+	FeatureCount uint32
+}
+
+type dwriteFeatureArguments struct {
+	entries      []dwriteFontFeature
+	typography   []dwriteTypographicFeatures
+	pointers     []*dwriteTypographicFeatures
+	rangeLengths []uint32
+}
+
+func newDirectWriteFeatureArguments(features fontdesc.FeatureSet, textLength uint32) dwriteFeatureArguments {
+	entries := features.Entries()
+	if len(entries) == 0 || textLength == 0 {
+		return dwriteFeatureArguments{}
+	}
+	arguments := dwriteFeatureArguments{entries: make([]dwriteFontFeature, len(entries)), typography: make([]dwriteTypographicFeatures, 1), pointers: make([]*dwriteTypographicFeatures, 1), rangeLengths: []uint32{textLength}}
+	for index, feature := range entries {
+		arguments.entries[index] = dwriteFontFeature{Name: directWriteFeatureTag(feature.Tag), Parameter: uint32(feature.Value)}
+	}
+	arguments.typography[0] = dwriteTypographicFeatures{Features: &arguments.entries[0], FeatureCount: uint32(len(arguments.entries))}
+	arguments.pointers[0] = &arguments.typography[0]
+	return arguments
+}
+
+func directWriteFeatureTag(tag string) uint32 {
+	if len(tag) != 4 {
+		return 0
+	}
+	return uint32(tag[0]) | uint32(tag[1])<<8 | uint32(tag[2])<<16 | uint32(tag[3])<<24
+}
+
+func (a *dwriteFeatureArguments) callPointers() (features, lengths uintptr, ranges uintptr) {
+	if len(a.pointers) == 0 {
+		return 0, 0, 0
+	}
+	return uintptr(unsafe.Pointer(&a.pointers[0])), uintptr(unsafe.Pointer(&a.rangeLengths[0])), uintptr(len(a.pointers))
+}
+
+func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uint16, features fontdesc.FeatureSet) ([]ShapedGlyph, bool, error) {
 	if !a.hasGlyphShapingMethods() {
 		return nil, false, fmt.Errorf("IDWriteTextAnalyzer shaping methods unavailable")
 	}
@@ -180,6 +226,8 @@ func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uin
 	if err != nil {
 		return nil, false, err
 	}
+	featureArguments := newDirectWriteFeatureArguments(features, textLength)
+	featurePointer, featureRangeLengths, featureRanges := featureArguments.callPointers()
 	hr, _, callErr := syscall.Syscall18(
 		a.lpVtbl.getGlyphs, 18,
 		uintptr(unsafe.Pointer(a)),
@@ -191,9 +239,9 @@ func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uin
 		uintptr(unsafe.Pointer(&script)),
 		uintptr(unsafe.Pointer(localeName)), // localeName
 		0,                                   // numberSubstitution
-		0,                                   // features
-		0,                                   // featureRangeLengths
-		0,                                   // featureRanges
+		featurePointer,
+		featureRangeLengths,
+		featureRanges,
 		uintptr(maxGlyphCount),
 		uintptr(unsafe.Pointer(&clusterMap[0])),
 		uintptr(unsafe.Pointer(&textProps[0])),
@@ -201,6 +249,7 @@ func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uin
 		uintptr(unsafe.Pointer(&glyphProps[0])),
 		uintptr(unsafe.Pointer(&actualGlyphCount)),
 	)
+	runtime.KeepAlive(featureArguments)
 	if failedHRESULT(hr) {
 		return nil, false, fmt.Errorf("IDWriteTextAnalyzer::GetGlyphs: HRESULT 0x%08x (%v)", uint32(hr), callErr)
 	}
@@ -226,12 +275,13 @@ func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uin
 		0, // isRightToLeft
 		uintptr(unsafe.Pointer(&script)),
 		uintptr(unsafe.Pointer(localeName)), // localeName
-		0,                                   // features
-		0,                                   // featureRangeLengths
-		0,                                   // featureRanges
+		featurePointer,
+		featureRangeLengths,
+		featureRanges,
 		uintptr(unsafe.Pointer(&glyphAdvances[0])),
 		uintptr(unsafe.Pointer(&glyphOffsets[0])),
 	)
+	runtime.KeepAlive(featureArguments)
 	if failedHRESULT(hr) {
 		return nil, false, fmt.Errorf("IDWriteTextAnalyzer::GetGlyphPlacements: HRESULT 0x%08x (%v)", uint32(hr), callErr)
 	}
@@ -260,54 +310,22 @@ func math32bits(f float32) uint32 {
 }
 
 func (f *iWriteFactory) createFontFaceFromPath(path string) (*iUnknown, error) {
+	return f.createFontFaceFromPathIndex(path, 0)
+}
+
+func (f *iWriteFactory) createFontFaceFromPathIndex(path string, faceIndex int) (*iUnknown, error) {
 	if f == nil || f.lpVtbl == nil || f.lpVtbl.createFontFileReference == 0 || f.lpVtbl.createFontFace == 0 {
 		return nil, fmt.Errorf("IDWriteFactory font-face APIs unavailable")
 	}
-	path16, err := syscall.UTF16PtrFromString(path)
+	if faceIndex < 0 || faceIndex >= fontdesc.MaxFacesPerFile {
+		return nil, fmt.Errorf("font face index %d is outside 0..%d", faceIndex, fontdesc.MaxFacesPerFile-1)
+	}
+	fontFile, faceType, err := f.openFontFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var fontFile *iUnknown
-	hr, _, callErr := syscall.SyscallN(
-		f.lpVtbl.createFontFileReference,
-		uintptr(unsafe.Pointer(f)),
-		uintptr(unsafe.Pointer(path16)),
-		0,
-		uintptr(unsafe.Pointer(&fontFile)),
-	)
-	if failedHRESULT(hr) {
-		return nil, fmt.Errorf("IDWriteFactory::CreateFontFileReference(%s): HRESULT 0x%08x (%v)", path, uint32(hr), callErr)
-	}
-	if fontFile == nil {
-		return nil, fmt.Errorf("IDWriteFactory::CreateFontFileReference(%s) returned nil font file", path)
-	}
-	// Keep fontFile alive with the returned fontFace. Some DirectWrite builds keep
-	// references to the file loader data while shaping; releasing it here caused
-	// GetGlyphs to reject otherwise valid arguments in the Go COM bridge.
-
-	fontFaceType := uintptr(dwriteFontFaceTypeTrueType)
-	if strings.EqualFold(filepath.Ext(path), ".ttc") {
-		fontFaceType = dwriteFontFaceTypeOpenTypeCollection
-	}
-	fontFiles := []*iUnknown{fontFile}
-	var fontFace *iUnknown
-	hr, _, callErr = syscall.SyscallN(
-		f.lpVtbl.createFontFace,
-		uintptr(unsafe.Pointer(f)),
-		fontFaceType,
-		1,
-		uintptr(unsafe.Pointer(&fontFiles[0])),
-		0,
-		0,
-		uintptr(unsafe.Pointer(&fontFace)),
-	)
-	if failedHRESULT(hr) {
-		return nil, fmt.Errorf("IDWriteFactory::CreateFontFace(%s): HRESULT 0x%08x (%v)", path, uint32(hr), callErr)
-	}
-	if fontFace == nil {
-		return nil, fmt.Errorf("IDWriteFactory::CreateFontFace(%s) returned nil font face", path)
-	}
-	return fontFace, nil
+	defer fontFile.release()
+	return f.createAnalyzedFontFace(fontFile, faceType, faceIndex)
 }
 
 func (u *iUnknown) release() {

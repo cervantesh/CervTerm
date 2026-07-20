@@ -3,24 +3,29 @@
 package glfwgl
 
 import (
+	"image"
 	"image/color"
+	"image/draw"
 	"log"
 	"math"
 
 	"cervterm/internal/config"
 	"cervterm/internal/core"
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/fontglyph"
+	"cervterm/internal/frontend/gpu"
 	"cervterm/internal/render"
-
-	"github.com/go-gl/gl/v2.1/gl"
 )
 
 const (
-	atlasPageSize  = 2048
-	atlasPageCount = 2
+	atlasPageSize        = 2048
+	atlasPageCount       = 2
+	maxAtlasFontContexts = fontdesc.MaxRetainedContexts
 )
 
 type atlasKey struct {
+	spec atlasFontKey
+	face fontdesc.ResolvedFaceKey
 	kind byte
 	r    rune   // single-rune glyphs (kind 'r'); 0 for clusters/runs
 	span int32  // cell span for clusters/runs (kind 'c'/'l'); 0 for single runes
@@ -34,57 +39,91 @@ type atlasEntry struct {
 	colored    bool
 	subpixel   bool
 	cellSpan   int
+	cellW      int
+	cellH      int
 	generation uint64
 }
 
 type atlasPage struct {
-	tex    uint32
 	packer shelfPacker
+}
+
+type atlasNegativeKey struct {
+	reason byte
+	key    atlasKey
+}
+
+const (
+	negativeRun byte = iota + 1
+	negativeRaster
+	negativeInsertion
+)
+
+type atlasNegativeCache struct {
+	generation uint64
+	entries    map[atlasNegativeKey]struct{}
+	ring       []atlasNegativeKey
+	next       int
+}
+
+func (c *atlasNegativeCache) ensureGeneration(generation uint64) {
+	if c.generation == generation && c.entries != nil {
+		return
+	}
+	c.generation = generation
+	c.entries = make(map[atlasNegativeKey]struct{})
+	c.ring = nil
+	c.next = 0
+}
+
+func (c *atlasNegativeCache) contains(generation uint64, reason byte, key atlasKey) bool {
+	c.ensureGeneration(generation)
+	_, ok := c.entries[atlasNegativeKey{reason: reason, key: key}]
+	return ok
+}
+
+func (c *atlasNegativeCache) record(generation uint64, reason byte, key atlasKey) {
+	c.ensureGeneration(generation)
+	entry := atlasNegativeKey{reason: reason, key: key}
+	if _, exists := c.entries[entry]; exists {
+		return
+	}
+	if len(c.ring) < fontdesc.MaxNegativeEntries {
+		c.ring = append(c.ring, entry)
+	} else {
+		delete(c.entries, c.ring[c.next])
+		c.ring[c.next] = entry
+		c.next = (c.next + 1) % len(c.ring)
+	}
+	c.entries[entry] = struct{}{}
 }
 
 type glyphAtlas struct {
 	cellW, cellH int
 	baseline     int
 	backend      fontglyph.Backend
+	coverageLUT  *[256]uint8
+	r            gpu.Renderer
 	pages        [atlasPageCount]atlasPage
 	entries      map[atlasKey]atlasEntry
-	runNegative  map[atlasKey]uint64 // run key -> generation of a proven no-ligature result
 	generation   uint64
-	boundTexture uint32
-	coverageLUT  *[256]uint8
+
+	contexts       map[atlasFontKey]*atlasFontContext
+	activeContext  *atlasFontContext
+	pinnedContexts map[atlasFontKey]struct{}
+	contextClock   uint64
+	backendFactory atlasBackendFactory
+	prewarming     bool
+	closed         bool
 }
 
-func newGlyphAtlas() (*glyphAtlas, error) {
+func newGlyphAtlas(r gpu.Renderer) (*glyphAtlas, error) {
 	defaults := config.Defaults().Render
-	return newGlyphAtlasWithSpec(fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96, TextRaster: defaults.TextRaster}, defaults.TextGamma, defaults.TextDarken)
+	return newGlyphAtlasWithSpec(r, fontglyph.Spec{Family: "Go Mono", Size: 14, DPI: 96, TextRaster: defaults.TextRaster}, defaults.TextGamma, defaults.TextDarken)
 }
 
-func newGlyphAtlasWithSpec(spec fontglyph.Spec, textGamma, textDarken float64) (*glyphAtlas, error) {
-	backend, err := fontglyph.NewOpenTypeBackend(spec)
-	if err != nil {
-		return nil, err
-	}
-	cellW, cellH, baseline := backend.CellMetrics()
-	a := &glyphAtlas{
-		cellW: cellW, cellH: cellH, baseline: baseline,
-		backend: backend, entries: make(map[atlasKey]atlasEntry), generation: 1,
-	}
-	if textGamma != 1 || textDarken != 0 {
-		lut := render.CoverageLUT(textGamma, textDarken)
-		a.coverageLUT = &lut
-	}
-	for i := range a.pages {
-		a.pages[i].packer = newShelfPacker(atlasPageSize, atlasPageSize)
-		a.pages[i].tex = createAtlasTexture()
-	}
-	a.prewarmASCII()
-	return a, nil
-}
-
-func (a *glyphAtlas) prewarmASCII() {
-	for r := rune(32); r <= 126; r++ {
-		_, _ = a.cachedRune(r)
-	}
+func newGlyphAtlasWithSpec(r gpu.Renderer, spec fontglyph.Spec, textGamma, textDarken float64) (*glyphAtlas, error) {
+	return newGlyphAtlasWithBackendFactory(r, spec, textGamma, textDarken, newAtlasBackend)
 }
 
 func (a *glyphAtlas) Reset() {
@@ -95,64 +134,51 @@ func (a *glyphAtlas) Reset() {
 	// race those still-pending draws — a well-behaved driver serializes the read
 	// before the write, but many do not, and the earlier-drawn glyphs (higher rows,
 	// i.e. the ones "further back") sample cleared/overwritten texels and vanish.
-	// gl.Finish drains the pipeline so every pending draw completes against the old
-	// atlas before we touch it. Reset is rare (zoom reconfigure or atlas overflow),
-	// so the full stall is not a hot-path cost.
-	gl.Finish()
+	// ClearAtlasPage drains the pipeline (glFinish) so every pending draw completes
+	// against the old atlas before we touch it. Reset is rare (zoom reconfigure or
+	// atlas overflow), so the full stall is not a hot-path cost.
 	for i := range a.pages {
 		a.pages[i].packer.Reset()
-		clearAtlasTexture(a.pages[i].tex)
+		a.r.ClearAtlasPage(i)
 	}
 	clear(a.entries)
-	clear(a.runNegative)
 	a.generation++
-	a.boundTexture = 0
+	for _, ctx := range a.contexts {
+		ctx.prewarmed = false
+		ctx.negatives.ensureGeneration(a.generation)
+	}
 	log.Printf("glyph atlas generation reset: generation=%d", a.generation)
 }
 
-// reconfigure re-points the atlas at a new font spec (size/DPI/family) while
-// reusing the existing GL textures instead of allocating a fresh
-// atlasPageCount×atlasPageSize² pair per zoom step. The glyph cache is cleared
-// and ASCII re-prewarmed at the new size. Returns false (leaving the atlas
-// unchanged) if the new backend could not be built.
-func (a *glyphAtlas) reconfigure(spec fontglyph.Spec, textGamma, textDarken float64) bool {
-	backend, err := fontglyph.NewOpenTypeBackend(spec)
-	if err != nil {
-		return false
+func (a *glyphAtlas) resolveStyle(request fontdesc.RequestedFaceStyle) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode) {
+	if a == nil {
+		return fontdesc.ResolvedFaceKey{}, fontdesc.SyntheticNone
 	}
-	if a.backend != nil {
-		a.backend.Close()
-	}
-	a.backend = backend
-	a.cellW, a.cellH, a.baseline = backend.CellMetrics()
-	if textGamma != 1 || textDarken != 0 {
-		lut := render.CoverageLUT(textGamma, textDarken)
-		a.coverageLUT = &lut
-	} else {
-		a.coverageLUT = nil
-	}
-	a.Reset() // clears the packer + textures + entries in place (keeps the textures)
-	a.prewarmASCII()
-	return true
+	return a.activeContext.resolveStyle(request)
 }
 
-func (a *glyphAtlas) close() {
-	if a.backend != nil {
-		a.backend.Close()
+func (a *glyphAtlas) resolveRuneStyle(request fontdesc.RequestedFaceStyle, value rune) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode) {
+	if a == nil {
+		return fontdesc.ResolvedFaceKey{}, fontdesc.SyntheticNone
 	}
-	for i := range a.pages {
-		if a.pages[i].tex != 0 {
-			gl.DeleteTextures(1, &a.pages[i].tex)
-			a.pages[i].tex = 0
-		}
+	return a.activeContext.resolveRuneStyle(request, value)
+}
+
+func (a *glyphAtlas) resolveClusterStyle(request fontdesc.RequestedFaceStyle, cluster string) (fontdesc.ResolvedFaceKey, fontdesc.SyntheticMode) {
+	if a == nil {
+		return fontdesc.ResolvedFaceKey{}, fontdesc.SyntheticNone
 	}
-	a.entries = nil
+	return a.activeContext.resolveClusterStyle(request, cluster)
 }
 
 func (a *glyphAtlas) drawRune(r rune, x, y float32, fg color.RGBA, scale, skew float32) {
-	entry, ok := a.cachedRune(r)
+	a.drawRuneStyle(fontdesc.RequestedFaceStyleNormal, r, x, y, fg, scale, skew)
+}
+
+func (a *glyphAtlas) drawRuneStyle(request fontdesc.RequestedFaceStyle, r rune, x, y float32, fg color.RGBA, scale, skew float32) {
+	entry, ok := a.cachedRuneStyle(request, r)
 	if !ok && r != '?' {
-		entry, ok = a.cachedRune('?')
+		entry, ok = a.cachedRuneStyle(request, '?')
 	}
 	if ok {
 		a.drawEntry(entry, x, y, fg, scale, skew)
@@ -160,18 +186,29 @@ func (a *glyphAtlas) drawRune(r rune, x, y float32, fg color.RGBA, scale, skew f
 }
 
 func (a *glyphAtlas) drawCluster(cluster string, cellSpan int, x, y float32, fg color.RGBA, scale, skew float32) bool {
-	entry, ok := a.cachedCluster(cluster, cellSpan)
+	return a.drawClusterStyle(fontdesc.RequestedFaceStyleNormal, cluster, cellSpan, x, y, fg, scale, skew)
+}
+
+func (a *glyphAtlas) drawClusterStyle(request fontdesc.RequestedFaceStyle, cluster string, cellSpan int, x, y float32, fg color.RGBA, scale, skew float32) bool {
+	entry, ok := a.cachedClusterStyle(request, cluster, cellSpan)
 	if ok {
 		a.drawEntry(entry, x, y, fg, scale, skew)
 	}
 	return ok
 }
 
-// supportsLigatures reports whether the backend's active shaper can substitute
+// supportsLigatures reports whether the active context's shaper can substitute
 // ligature glyphs. Probed once by the App so no per-frame reflection happens.
-func (a *glyphAtlas) supportsLigatures() bool {
-	otb, ok := a.backend.(*fontglyph.OpenTypeBackend)
-	return ok && otb.SupportsLigatures()
+func (a *glyphAtlas) supportsLigatures(compatibility bool) bool {
+	ctx := a.activeContext
+	backend, ok := activeLigatureBackend(ctx)
+	if !ok {
+		return false
+	}
+	if ctx.features.IsZero() {
+		return compatibility && backend.SupportsLigatures()
+	}
+	return ctx.features.RequiresRunShaping() && backend.SupportsLigatures()
 }
 
 // drawRun draws a shaped ligature spanning cellSpan cells, returning false when
@@ -179,7 +216,11 @@ func (a *glyphAtlas) supportsLigatures() bool {
 // cached (positive as an atlas entry, negative in runNegative) so a run is
 // shaped at most once per atlas generation.
 func (a *glyphAtlas) drawRun(run string, cellSpan int, x, y float32, fg color.RGBA, scale, skew float32) bool {
-	entry, ok := a.cachedRun(run, cellSpan)
+	return a.drawRunStyle(fontdesc.RequestedFaceStyleNormal, run, cellSpan, x, y, fg, scale, skew)
+}
+
+func (a *glyphAtlas) drawRunStyle(request fontdesc.RequestedFaceStyle, run string, cellSpan int, x, y float32, fg color.RGBA, scale, skew float32) bool {
+	entry, ok := a.cachedRunStyle(request, run, cellSpan)
 	if ok {
 		a.drawEntry(entry, x, y, fg, scale, skew)
 	}
@@ -187,61 +228,103 @@ func (a *glyphAtlas) drawRun(run string, cellSpan int, x, y float32, fg color.RG
 }
 
 func (a *glyphAtlas) cachedRun(run string, cellSpan int) (atlasEntry, bool) {
-	if run == "" {
+	return a.cachedRunStyle(fontdesc.RequestedFaceStyleNormal, run, cellSpan)
+}
+
+func (a *glyphAtlas) cachedRunStyle(request fontdesc.RequestedFaceStyle, run string, cellSpan int) (atlasEntry, bool) {
+	ctx := a.activeContext
+	if run == "" || ctx == nil {
 		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	key := atlasKey{kind: 'l', text: run, span: int32(cellSpan)}
+	face, _ := ctx.resolveClusterStyle(request, run)
+	key := atlasKey{spec: ctx.key, face: face, kind: 'l', text: run, span: int32(cellSpan)}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
-	if gen, ok := a.runNegative[key]; ok && entryGenerationValid(gen, a.generation) {
+	if ctx.negatives.contains(a.generation, negativeRun, key) {
 		return atlasEntry{}, false
 	}
-	otb, ok := a.backend.(*fontglyph.OpenTypeBackend)
-	if !ok {
+	var rasterized fontglyph.RasterizedGlyph
+	var ligated bool
+	if backend, ok := activeStyledBackend(ctx); ok {
+		rasterized, ligated = backend.RasterizeRunStyle(request, run, cellSpan)
+	} else if backend, ok := activeLigatureBackend(ctx); ok {
+		rasterized, ligated = backend.RasterizeRun(run, cellSpan)
+	} else {
 		return atlasEntry{}, false
 	}
-	rasterized, ligated := otb.RasterizeRun(run, cellSpan)
 	if !ligated {
-		if a.runNegative == nil {
-			a.runNegative = make(map[atlasKey]uint64)
-		}
-		a.runNegative[key] = a.generation
+		ctx.negatives.record(a.generation, negativeRun, key)
 		return atlasEntry{}, false
 	}
-	return a.insertRaster(key, rasterized)
+	return a.insertRaster(key, rasterized, ctx)
 }
 
 func (a *glyphAtlas) cachedRune(r rune) (atlasEntry, bool) {
+	return a.cachedRuneStyle(fontdesc.RequestedFaceStyleNormal, r)
+}
+
+func (a *glyphAtlas) cachedRuneStyle(request fontdesc.RequestedFaceStyle, r rune) (atlasEntry, bool) {
+	ctx := a.activeContext
+	if ctx == nil {
+		return atlasEntry{}, false
+	}
+	face, _ := ctx.resolveRuneStyle(request, r)
 	// Key on the rune directly; the old atlasKey{text: string(r)} allocated a
 	// string on every glyph lookup — i.e. per visible cell per frame.
-	key := atlasKey{kind: 'r', r: r}
+	key := atlasKey{spec: ctx.key, face: face, kind: 'r', r: r}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
-	span := max(1, core.RuneWidth(r))
-	rasterized, ok := a.backend.Rasterize(r, span)
-	if !ok {
+	if ctx.negatives.contains(a.generation, negativeRaster, key) {
 		return atlasEntry{}, false
 	}
-	return a.insertRaster(key, rasterized)
+	span := max(1, core.RuneWidth(r))
+	var rasterized fontglyph.RasterizedGlyph
+	var ok bool
+	if backend, styled := activeStyledBackend(ctx); styled {
+		rasterized, ok = backend.RasterizeStyle(request, r, span)
+	} else {
+		rasterized, ok = ctx.backend.Rasterize(r, span)
+	}
+	if !ok {
+		ctx.negatives.record(a.generation, negativeRaster, key)
+		return atlasEntry{}, false
+	}
+	return a.insertRaster(key, rasterized, ctx)
 }
 
 func (a *glyphAtlas) cachedCluster(cluster string, cellSpan int) (atlasEntry, bool) {
-	if cluster == "" {
+	return a.cachedClusterStyle(fontdesc.RequestedFaceStyleNormal, cluster, cellSpan)
+}
+
+func (a *glyphAtlas) cachedClusterStyle(request fontdesc.RequestedFaceStyle, cluster string, cellSpan int) (atlasEntry, bool) {
+	ctx := a.activeContext
+	if cluster == "" || ctx == nil {
 		return atlasEntry{}, false
 	}
 	cellSpan = max(1, cellSpan)
-	key := atlasKey{kind: 'c', text: cluster, span: int32(cellSpan)}
+	face, _ := ctx.resolveClusterStyle(request, cluster)
+	key := atlasKey{spec: ctx.key, face: face, kind: 'c', text: cluster, span: int32(cellSpan)}
 	if entry, ok := a.currentEntry(key); ok {
 		return entry, true
 	}
-	rasterized, ok := a.backend.RasterizeCluster(cluster, cellSpan)
-	if !ok {
+	if ctx.negatives.contains(a.generation, negativeRaster, key) {
 		return atlasEntry{}, false
 	}
-	return a.insertRaster(key, rasterized)
+	var rasterized fontglyph.RasterizedGlyph
+	var ok bool
+	if backend, styled := activeStyledBackend(ctx); styled {
+		rasterized, ok = backend.RasterizeClusterStyle(request, cluster, cellSpan)
+	} else {
+		rasterized, ok = ctx.backend.RasterizeCluster(cluster, cellSpan)
+	}
+	if !ok {
+		ctx.negatives.record(a.generation, negativeRaster, key)
+		return atlasEntry{}, false
+	}
+	return a.insertRaster(key, rasterized, ctx)
 }
 
 func (a *glyphAtlas) currentEntry(key atlasKey) (atlasEntry, bool) {
@@ -249,55 +332,94 @@ func (a *glyphAtlas) currentEntry(key atlasKey) (atlasEntry, bool) {
 	return entry, ok && entryGenerationValid(entry.generation, a.generation)
 }
 
-func (a *glyphAtlas) insertRaster(key atlasKey, glyph fontglyph.RasterizedGlyph) (atlasEntry, bool) {
-	entry, ok := a.tryInsert(key, glyph)
+func (a *glyphAtlas) insertionFailedThisGeneration(ctx *atlasFontContext, key atlasKey) bool {
+	return ctx != nil && ctx.negatives.contains(a.generation, negativeInsertion, key)
+}
+
+func (a *glyphAtlas) recordInsertionFailure(ctx *atlasFontContext, key atlasKey) {
+	if ctx != nil {
+		ctx.negatives.record(a.generation, negativeInsertion, key)
+	}
+}
+
+func projectRasterToContext(glyph fontglyph.RasterizedGlyph, ctx *atlasFontContext) fontglyph.RasterizedGlyph {
+	if glyph.Image == nil || ctx == nil {
+		return glyph
+	}
+	span := max(1, glyph.CellSpan)
+	targetW, targetH := ctx.cellW*span, ctx.cellH
+	bounds := glyph.Image.Bounds()
+	offsetX := (targetW-bounds.Dx())/2 + int(math.Round(ctx.metrics.GlyphOffsetX))
+	offsetY := (targetH-bounds.Dy())/2 + int(math.Round(ctx.metrics.BaselineOffset+ctx.metrics.GlyphOffsetY))
+	if bounds.Dx() == targetW && bounds.Dy() == targetH && offsetX == 0 && offsetY == 0 {
+		return glyph
+	}
+	projected := image.NewRGBA(image.Rect(0, 0, targetW, targetH))
+	draw.Draw(projected, image.Rect(offsetX, offsetY, offsetX+bounds.Dx(), offsetY+bounds.Dy()), glyph.Image, bounds.Min, draw.Src)
+	glyph.Image = projected
+	glyph.Width, glyph.Height = targetW, targetH
+	glyph.CellSpan = span
+	glyph.AdvanceX = float64(targetW)
+	return glyph
+}
+
+func (a *glyphAtlas) insertRaster(key atlasKey, glyph fontglyph.RasterizedGlyph, ctx *atlasFontContext) (atlasEntry, bool) {
+	if a.insertionFailedThisGeneration(ctx, key) || glyph.Image == nil {
+		return atlasEntry{}, false
+	}
+	sourceW, sourceH := glyph.Image.Bounds().Dx(), glyph.Image.Bounds().Dy()
+	if sourceW <= 0 || sourceH <= 0 || sourceW > atlasPageSize || sourceH > atlasPageSize {
+		a.recordInsertionFailure(ctx, key)
+		return atlasEntry{}, false
+	}
+	glyph = projectRasterToContext(glyph, ctx)
+	w, h := glyph.Image.Bounds().Dx(), glyph.Image.Bounds().Dy()
+	if w <= 0 || h <= 0 || w > atlasPageSize || h > atlasPageSize {
+		a.recordInsertionFailure(ctx, key)
+		return atlasEntry{}, false
+	}
+	entry, ok := a.tryInsert(key, glyph, ctx)
 	if ok {
 		return entry, true
 	}
+	if a.prewarming {
+		return atlasEntry{}, false
+	}
 	a.Reset()
 	a.prewarmASCII()
-	return a.tryInsert(key, glyph)
+	if entry, ok := a.currentEntry(key); ok {
+		return entry, true
+	}
+	entry, ok = a.tryInsert(key, glyph, ctx)
+	if !ok {
+		a.recordInsertionFailure(ctx, key)
+	}
+	return entry, ok
 }
 
-func (a *glyphAtlas) tryInsert(key atlasKey, glyph fontglyph.RasterizedGlyph) (atlasEntry, bool) {
+func (a *glyphAtlas) tryInsert(key atlasKey, glyph fontglyph.RasterizedGlyph, ctx *atlasFontContext) (atlasEntry, bool) {
 	w, h := glyph.Image.Bounds().Dx(), glyph.Image.Bounds().Dy()
 	for pageIndex := range a.pages {
 		x, y, ok := a.pages[pageIndex].packer.Insert(w, h)
 		if !ok {
 			continue
 		}
-		gl.BindTexture(gl.TEXTURE_2D, a.pages[pageIndex].tex)
-		if a.coverageLUT != nil && !glyph.HasColor {
-			render.ApplyCoverageLUT(glyph.Image.Pix, a.coverageLUT)
+		pixels := glyph.Image.Pix
+		if ctx.coverageLUT != nil && !glyph.HasColor {
+			pixels = append([]byte(nil), pixels...)
+			render.ApplyCoverageLUT(pixels, ctx.coverageLUT)
 		}
-		gl.TexSubImage2D(gl.TEXTURE_2D, 0, int32(x), int32(y), int32(w), int32(h), gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(glyph.Image.Pix))
-		a.boundTexture = a.pages[pageIndex].tex
+		a.r.UploadAtlasRegion(pageIndex, x, y, w, h, pixels)
 		entry := atlasEntry{
 			page: pageIndex, u0: float32(x) / atlasPageSize, v0: float32(y) / atlasPageSize,
 			u1: float32(x+w) / atlasPageSize, v1: float32(y+h) / atlasPageSize,
-			colored: glyph.HasColor, subpixel: glyph.Subpixel, cellSpan: glyph.CellSpan, generation: a.generation,
+			colored: glyph.HasColor, subpixel: glyph.Subpixel, cellSpan: glyph.CellSpan,
+			cellW: ctx.cellW, cellH: ctx.cellH, generation: a.generation,
 		}
 		a.entries[key] = entry
 		return entry, true
 	}
 	return atlasEntry{}, false
-}
-
-func createAtlasTexture() uint32 {
-	var tex uint32
-	gl.GenTextures(1, &tex)
-	gl.BindTexture(gl.TEXTURE_2D, tex)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, atlasPageSize, atlasPageSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
-	return tex
-}
-
-func clearAtlasTexture(tex uint32) {
-	gl.BindTexture(gl.TEXTURE_2D, tex)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, atlasPageSize, atlasPageSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
 }
 
 func (a *glyphAtlas) drawEntry(entry atlasEntry, x, y float32, fg color.RGBA, scale, skew float32) {
@@ -308,38 +430,19 @@ func (a *glyphAtlas) drawEntry(entry atlasEntry, x, y float32, fg color.RGBA, sc
 	// so rounding preserves uniform spacing.
 	x = float32(math.Round(float64(x)))
 	y = float32(math.Round(float64(y)))
-	w := float32(a.cellW*max(1, entry.cellSpan)) * scale
-	h := float32(a.cellH) * scale
-	if entry.colored {
-		gl.Color4ub(255, 255, 255, 255)
-	}
-	tex := a.pages[entry.page].tex
-	if a.boundTexture != tex {
-		gl.BindTexture(gl.TEXTURE_2D, tex)
-		a.boundTexture = tex
-	}
+	w := float32(entry.cellW*max(1, entry.cellSpan)) * scale
+	h := float32(entry.cellH) * scale
+	// The renderer owns tint/blend/binding; the atlas only selects the glyph mode.
+	// The subpixel two-pass, colored white-tint, and skew semantics live in
+	// glRenderer.DrawGlyph (bit-identical to the former inline GL emit). Precedence
+	// matches the original drawEntry: subpixel wins over colored — the old code set
+	// the colored white tint first but the subpixel branch ran (and returned) with
+	// its own two-pass colors, so a colored+subpixel glyph took the subpixel path.
+	mode := gpu.GlyphMask
 	if entry.subpixel {
-		gl.BlendFunc(gl.ZERO, gl.ONE_MINUS_SRC_COLOR)
-		gl.Color4ub(255, 255, 255, 255)
-		a.drawQuad(entry, x, y, w, h, skew)
-		gl.BlendFunc(gl.ONE, gl.ONE)
-		glColor(fg)
-		a.drawQuad(entry, x, y, w, h, skew)
-		gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-		return
+		mode = gpu.GlyphSubpixel
+	} else if entry.colored {
+		mode = gpu.GlyphColor
 	}
-	a.drawQuad(entry, x, y, w, h, skew)
-}
-
-func (a *glyphAtlas) drawQuad(entry atlasEntry, x, y, w, h, skew float32) {
-	gl.Begin(gl.QUADS)
-	gl.TexCoord2f(entry.u0, entry.v0)
-	gl.Vertex2f(x+skew, y)
-	gl.TexCoord2f(entry.u1, entry.v0)
-	gl.Vertex2f(x+w+skew, y)
-	gl.TexCoord2f(entry.u1, entry.v1)
-	gl.Vertex2f(x+w, y+h)
-	gl.TexCoord2f(entry.u0, entry.v1)
-	gl.Vertex2f(x, y+h)
-	gl.End()
+	a.r.DrawGlyph(entry.page, mode, x, y, w, h, skew, entry.u0, entry.v0, entry.u1, entry.v1, fg)
 }

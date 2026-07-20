@@ -175,16 +175,17 @@ func (f *iWriteFactory) createAnalyzedFontFace(file *dwriteFontFile, faceType ui
 	return face, nil
 }
 
-func (d *dwriteRasterizer) RasterizeGlyph(glyphID uint16, cellW, cellH, baseline, cellSpan int) (*image.RGBA, bool) {
+func (d *dwriteRasterizer) RasterizeGlyph(glyphID uint16, cellW, cellH, baseline, cellSpan int, advancePx float32) (*image.RGBA, bool) {
 	canvas := image.NewRGBA(image.Rect(0, 0, cellW*max(1, cellSpan), cellH))
 	if d == nil || d.factory == nil || d.fontFace == nil || glyphID == 0 || d.emSize <= 0 {
 		return canvas, false
 	}
-	advance := float32(0)
+	originX := (float32(canvas.Bounds().Dx()) - advancePx) / 2
+	runAdvance := advancePx
 	offset := dwriteGlyphOffset{}
-	run := dwriteGlyphRun{FontFace: d.fontFace, FontEmSize: d.emSize, GlyphCount: 1, GlyphIndices: &glyphID, GlyphAdvances: &advance, GlyphOffsets: &offset}
+	run := dwriteGlyphRun{FontFace: d.fontFace, FontEmSize: d.emSize, GlyphCount: 1, GlyphIndices: &glyphID, GlyphAdvances: &runAdvance, GlyphOffsets: &offset}
 	var analysis *dwriteGlyphRunAnalysis
-	hr, _, _ := syscall.SyscallN(d.factory.lpVtbl.createGlyphRunAnalysis, uintptr(unsafe.Pointer(d.factory)), uintptr(unsafe.Pointer(&run)), uintptr(math.Float32bits(1)), 0, dwriteRenderingModeNaturalSymmetric, dwriteMeasuringModeNatural, uintptr(math.Float32bits(0)), uintptr(math.Float32bits(float32(baseline))), uintptr(unsafe.Pointer(&analysis)))
+	hr, _, _ := syscall.SyscallN(d.factory.lpVtbl.createGlyphRunAnalysis, uintptr(unsafe.Pointer(d.factory)), uintptr(unsafe.Pointer(&run)), uintptr(math.Float32bits(1)), 0, dwriteRenderingModeNaturalSymmetric, dwriteMeasuringModeNatural, uintptr(math.Float32bits(originX)), uintptr(math.Float32bits(float32(baseline))), uintptr(unsafe.Pointer(&analysis)))
 	if failedHRESULT(hr) || analysis == nil {
 		if analysis != nil {
 			analysis.release()
@@ -209,13 +210,14 @@ func (d *dwriteRasterizer) RasterizeGlyph(glyphID uint16, cellW, cellH, baseline
 	if failedHRESULT(hr) {
 		return canvas, false
 	}
-	// The texture bounds were measured at origin X=0. Moving their integer
-	// left edge to x=1 is equivalent to the Go drawer's dotX=1-bounds.Min.X.
+	// Match the Go raster path: center the font's natural advance box in the cell.
+	// DirectWrite reports alpha-texture bounds in canvas coordinates after applying
+	// originX, so retain bounds.Left instead of hard-left-aligning every glyph.
 	for y := 0; y < int(h); y++ {
 		for x := 0; x < int(w); x++ {
 			i := (y*int(w) + x) * 3
 			a := uint8((uint16(texture[i]) + uint16(texture[i+1]) + uint16(texture[i+2]) + 1) / 3)
-			dx, dy := 1+x, int(bounds.Top)+y
+			dx, dy := int(bounds.Left)+x, int(bounds.Top)+y
 			if dx >= 0 && dx < canvas.Bounds().Dx() && dy >= 0 && dy < canvas.Bounds().Dy() {
 				p := canvas.PixOffset(dx, dy)
 				canvas.Pix[p], canvas.Pix[p+1], canvas.Pix[p+2], canvas.Pix[p+3] = a, a, a, a

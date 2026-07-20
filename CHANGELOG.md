@@ -8,46 +8,52 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 
 ### Added
 
-- Product roadmap and implementation plan.
-- Lua configuration loading and Teal check/gen integration.
-- VT scroll regions, insert/delete char/line operations, cursor visibility, autowrap, application cursor/keypad modes, and SGR mouse mode tracking.
-- Expanded key encoding and SGR mouse event encoding.
-- Unicode width handling for CJK/wide cells and combining marks.
-- OpenType-rendered embedded Go Mono glyph atlas.
-- GitHub Actions CI for tests, GLFW compile check, and Windows artifact build.
-
-- Default Lua config template generation via `--print-default-config`.
-- Parser fuzz smoke target and replay-style VT golden fixture.
-- vttest-oriented compatibility checklist.
-- Unix PTY implementation compile-verified for Linux.
-- Renderer-neutral color glyph backend support for bitmap color glyphs, COLRv0/CPAL, broad COLRv1 paints/composites/variations, SVG glyph extraction/rasterization, and initial cluster handling.
-- Optional system emoji color-font rasterization fixture when a known system emoji font is installed.
-- SVG text/tspan layout handling with font-size, text-anchor, and dominant-baseline support.
-- Redistributable SVG text fixture table and vttest capture workflow notes/script.
-- Windows packaging metadata: manifest, version info, resource script, SVG icon source, and generated `.ico`.
-### Security
-
-- OSC 52 clipboard write is now OFF by default (was "write"); set `clipboard.osc52 = "write"` to restore. Clipboard reads via OSC 52 remain denied. (#61)
-- Bracketed paste strips any embedded `ESC[201~` end marker so a hostile clipboard cannot break out of bracketed mode into command input. (#62)
-- The pprof endpoint (`CERVTERM_PPROF`) now refuses non-loopback binds, so `/debug/pprof` is not exposed on the network. (#63)
-- The diagnostic log file is created `0600` (dir `0700`) instead of world-readable. (#64)
+- Native in-process panes with horizontal and vertical splits, focused input, directional navigation, independent terminal sessions, and deterministic close/collapse behavior.
+- Resize adjacent panes live by dragging their divider with the mouse while preserving minimum terminal dimensions.
+- Zoom the focused pane independently while sharing one bounded multi-size glyph atlas across all panes.
+- Retained top/bottom tab bar with bounded live configuration, active-visible overflow, Unicode-safe labels, add/close controls, and authoritative window/scrollbar geometry reservation.
+- Closed typed tab actions for spawn, stable-ID activation/move/rename/close, relative navigation, cross-tab pane transfer, and the retained tab switcher across JSON, Lua, Teal, and the command palette.
+- Stable-ID tab close confirmation with revision invalidation, lifecycle-aware running-pane checks, tab-switcher retention across reorder, and one-shot background activity badges.
+- Configurable RGBA backgrounds, live appearance reload, a reserved scrollbar, and experimental native blur providers for macOS AppKit and KDE X11/Wayland with transparent fallback.
+- A phased WezTerm-inspired parity roadmap, machine-readable support matrix, reproducible performance baseline tool, configuration compatibility policy, and proposed architecture decision gates.
+- A toolkit-neutral typed action model and frontend executor with deterministic registry metadata, semantic targets, strict bounded JSON serialization, sequences, callback metadata, trigger policies, and typed built-in key dispatch.
+- Typed Lua and Teal key actions, validated action composition, optional discovery labels, and legacy callback execution through the shared action executor and watchdog.
+- Versioned configuration documents with strict v2 field/type diagnostics, exact unversioned v1 compatibility, presence tracking, and in-memory migration scaffolding.
+- A candidate-only canonical configuration source graph with bounded include traversal, dependency capture, declarative side-effect guards, and transactional Teal staging.
+- A candidate-only schema composition engine with deterministic record/map/list/function merge, immutable unset tombstones, bounded node counts, and value-free provenance chains.
+- Candidate-only named environment/profile declarations with deterministic selection precedence, same-name merge, and environment-then-profile provenance layers.
+- A candidate-only typed CLI override engine with schema capabilities, sensitive-path rejection, ordered post-profile application, and argument-index provenance.
+- Candidate-only transactional Teal output publication with ownership markers, byte-identical legacy adoption, commit-time identity checks, durable atomic replacement, and reverse rollback.
+- A candidate-only ownership bundle for validated composed configuration, Lua runtime surfaces, provenance/selection, dependency graph/staging, and deferred Teal publication.
+- Exact-once version-aware config loading and atomic explicit-v2 startup/reload activation with prepared frontend resources, bundle ownership transfer, and v2-to-v1 Teal artifact rollback.
+- Dependency-aware hot reload for the complete evaluated config graph, including include/module aliases, deletion and symlink retarget detection, coalesced debounce, and generation-safe acknowledgement.
+- Schema-owned live/new-pane/new-window/recreate/restart classifications with detached desired/effective state, exact pending diagnostics, live cursor reload, and desired shell settings for future panes.
+- Durable process-local `ConfigScopeID` patches for live Lua setters, with shared typed decoding, reload revalidation, explicit clearing, stale-scope rejection, and runtime provenance chains.
+- Executable v2 environment/profile selection and repeatable typed `--config-override` inputs, snapshotted consistently across startup and reload.
+- Failed config attempts now watch the latest discovered and missing dependencies alongside the last successful graph, enabling automatic repair recovery with bounded repeated notices.
+- Read-only `--explain-config`/field filters and composed doctor diagnostics with deterministic provenance, graph reporting, sensitive-value redaction, and no frontend or Teal publication side effects.
+- Logical default/indexed/truecolor cell attributes and a live configurable 16-color ANSI palette resolved during rendering, allowing existing scrollback to recolor without reparsing.
+- Live sparse `colors.indexed_colors` overrides for xterm indices 16–255, with per-key composition/provenance and algorithmic fallback.
+- Local v2 `color_schemes` catalogs and live `color_scheme` selection with deterministic composition, inline color precedence, provenance, diagnostics, Teal types, and atomic reload.
+- Six live semantic chrome colors for application surfaces, muted text, accents, pane dividers, search matches, and error state, available in inline colors and local named schemes.
+- Bounded pane-local OSC 4/10/11 palette set/query and OSC 104/110/111 reset support, with canonical replies, live base-palette reload, and logical scrollback reprojection.
+- Deterministic v2 font descriptors with real normal/bold/italic/bold-italic selection, bounded parsed resources, and safe legacy shorthand fallback.
+- Lazy whole-cluster fallback and symbol rules with ordered primary/fallback/embedded resolution and bounded font discovery.
+- OpenType feature projection and fixed-grid line-height, cell-width, baseline, and glyph offsets with pane-safe cache identities and redacted diagnostics.
+- Phase 5 appearance and window controls: per-side padding; independent text/background opacity; bounded solid, gradient, and image layers; scrollbar visibility/stable-gutter/fade-FPS policy; `render.max_fps`; and initial rows/columns plus native decoration/titlebar requests. Renderer selection remains explicitly excluded.
+- Bounded leader chords, named key tables, exact typed mouse bindings with exclusive gesture capture, and transactional pane resize/swap/move actions, while preserving legacy flat `keys` callbacks.
+- A retained command palette for discoverable typed actions and labeled bindings, with runtime-safe callback invalidation, complete modal input capture, and damage-driven idle rendering.
+- Process-owned native windows and named local workspaces with stable-ID transfer/actions, retained switching, and opt-in atomic layout-only persistence that restores fresh sessions with safe monitor/config fallback.
+- Bounded pane-local OSC 8 hyperlink metadata with 32-byte cell identity, safe referenced-entry retention, primary/alternate isolation, reflow/scrollback preservation, detached render/mux projection, and fresh explicit-click activation through a centralized absolute HTTP(S) policy; no automatic URL opening.
+- Bounded pane-local OSC 133/633 prompt, command-input, and command-output metadata that preserves the 32-byte cell budget through wide cells, blank semantic rows, scrollback, reflow, resize, reset, and alternate screens without retaining shell command/property payloads; generation-checked bounded semantic-history snapshots; typed `ScrollToPrompt(-1|1)` navigation; and bounded `CopySemanticZone("input"|"output")` extraction.
+- Bounded quick select for visible HTTP(S) links and compiled custom regex rules, with prefix-free labels, copy/open actions, and stale-generation rejection.
+- A bounded retained launch menu with argv-only local process descriptors, sensitive environment provenance, deterministic environment merging, and spawn-before-topology commit.
 
 ### Fixed
 
-- Windows: the shell now inherits the full parent environment (PATH, etc.); external programs (git, node, python, npx…) launch correctly, and `shell.env` from config now applies on Windows too. (#70)
-- Windows: CervTerm now advertises ANSI color support (`ANSICON`) so console apps that gate coloring on it (Django, colorama/supports-color CLIs) emit color instead of monochrome. CervTerm already rendered ANSI; the apps just weren't emitting it.
-- Zoom animates frame by frame while only the ConPTY resize is debounced, so rapid zoom no longer garbles or duplicates scrollback. (#59)
-- Scrollback view stays pinned to content while output streams in. (#57)
-
-### Changed
-
-- The window title now honors `window.dynamic_title`; when disabled it stays "CervTerm" instead of reflecting host-controlled OSC 0/2 titles. (#65)
-- Split terminal core into smaller files to keep touched files under 500 lines.
-- Preserved mouse modifiers during SGR drag reports.
-- Expanded README with build/run/configuration and limitation guidance.
-- CI artifacts now include generated default config and release documentation/metadata directories.
-- Emoji cluster grouping now includes emoji modifiers in addition to combining marks and ZWJ sequences.
-
-### Known limitations
-
-- Full GSUB/GPOS shaping, real SVG outline text/font selection, broader redistributable color-font fixtures, authoritative vttest raw captures, `.syso` resource embedding, installer packaging, and signed releases are not implemented yet.
+- Keep selection, search, links, scrollback, mouse reporting, resize events, and Lua callbacks isolated to their originating pane.
+- Allow pane-bound Lua callbacks to read, update, and reload runtime configuration through their originating frontend host.
+- Preserve the released mouse button in SGR reports so mouse-aware terminal applications do not remain stuck dragging.
+- Bound and back off divider-settlement retries so a persistent PTY resize failure cannot leave the application spinning or repeatedly notifying.
+- Generate Teal Lua output beside its source file instead of the current working directory.
+- Center DirectWrite glyph advances correctly.

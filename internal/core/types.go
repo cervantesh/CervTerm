@@ -1,10 +1,18 @@
 package core
 
 type Attr struct {
-	FG, BG                                RGB
+	FG, BG                                LogicalColor
 	Bold, Dim, Italic, Underline, Inverse bool
 	Strikethrough, Blink                  bool
 }
+
+// HasExplicitBG reports whether the cell carries a non-default logical
+// background, including an RGB literal equal to the current physical default.
+func (a Attr) HasExplicitBG() bool { return !a.BG.IsDefault() }
+
+// HasExplicitFG reports whether the cell carries a non-default logical
+// foreground, including an RGB literal equal to the current physical default.
+func (a Attr) HasExplicitFG() bool { return !a.FG.IsDefault() }
 
 type Cell struct {
 	// noCompare keeps Cell non-comparable (it always was, via the old []rune
@@ -20,7 +28,9 @@ type Cell struct {
 	combining        *[]rune
 	Rune             rune
 	Attr             Attr
+	HyperlinkID      HyperlinkID
 	WideContinuation bool
+	SemanticKind     SemanticKind
 }
 
 // Combining returns the cell's stacked zero-width marks, or nil. The backing
@@ -72,7 +82,10 @@ func NewCellWithCombining(r rune, attr Attr, marks ...rune) Cell {
 	return c
 }
 
-const maxScrollbackRows = 2000
+const (
+	defaultScrollbackRows = 2000
+	maxScrollbackRows     = 10_000
+)
 
 type Charset int
 
@@ -82,63 +95,73 @@ const (
 )
 
 type screenState struct {
-	cols, rows        int
-	cells             []Cell
-	rowWrapped        []bool
-	scrollback        []Cell
-	scrollbackWrapped []bool
-	scrollbackStart   int
-	scrollbackRows    int
-	displayOffset     int
-	cursorRow         int
-	cursorCol         int
-	wrapNext          bool
-	savedCursorRow    int
-	savedCursorCol    int
-	savedWrapNext     bool
-	hasSavedCursor    bool
-	scrollTop         int
-	scrollBottom      int
-	charsets          [2]Charset
-	activeCharset     int
+	cols, rows              int
+	cells                   []Cell
+	rowWrapped              []bool
+	scrollback              []Cell
+	scrollbackWrapped       []bool
+	scrollbackStart         int
+	scrollbackRows          int
+	scrollbackCapacity      int
+	displayOffset           int
+	cursorRow               int
+	cursorCol               int
+	wrapNext                bool
+	savedCursorRow          int
+	savedCursorCol          int
+	savedWrapNext           bool
+	hasSavedCursor          bool
+	scrollTop               int
+	scrollBottom            int
+	charsets                [2]Charset
+	activeCharset           int
+	hyperlinks              hyperlinkState
+	semanticKind            SemanticKind
+	semanticBoundaryPending bool
 }
 
 type Terminal struct {
-	cols, rows        int
-	cells             []Cell
-	rowWrapped        []bool
-	scrollback        []Cell
-	scrollbackWrapped []bool
-	scrollbackStart   int
-	scrollbackRows    int
-	displayOffset     int
-	cursorRow         int
-	cursorCol         int
-	wrapNext          bool
-	savedCursorRow    int
-	savedCursorCol    int
-	savedWrapNext     bool
-	hasSavedCursor    bool
-	attr              Attr
-	title             string
-	cwd               string
-	cwdSeq            int
-	bellCount         int
-	bracketedPaste    bool
-	alternateScreen   bool
-	primaryScreen     *screenState
-	scrollTop         int
-	scrollBottom      int
-	cursorVisible     bool
-	autoWrap          bool
-	applicationCursor bool
-	applicationKeypad bool
-	mouseMode         MouseMode
-	originMode        bool
-	insertMode        bool
-	tabStops          []bool
-	charsets          [2]Charset
-	activeCharset     int
-	cursorStyle       int
-	focusEvents       bool
+	cols, rows              int
+	cells                   []Cell
+	rowWrapped              []bool
+	scrollback              []Cell
+	scrollbackWrapped       []bool
+	scrollbackStart         int
+	scrollbackRows          int
+	scrollbackCapacity      int
+	displayOffset           int
+	cursorRow               int
+	cursorCol               int
+	wrapNext                bool
+	savedCursorRow          int
+	savedCursorCol          int
+	savedWrapNext           bool
+	hasSavedCursor          bool
+	attr                    Attr
+	paletteBase             PaletteBase
+	paletteOverrides        PaletteOverrides
+	title                   string
+	cwd                     string
+	cwdSeq                  int
+	bellCount               int
+	hyperlinks              hyperlinkState
+	semanticKind            SemanticKind
+	semanticBoundaryPending bool
+	bracketedPaste          bool
+	alternateScreen         bool
+	primaryScreen           *screenState
+	scrollTop               int
+	scrollBottom            int
+	cursorVisible           bool
+	autoWrap                bool
+	applicationCursor       bool
+	applicationKeypad       bool
+	mouseMode               MouseMode
+	originMode              bool
+	insertMode              bool
+	tabStops                []bool
+	charsets                [2]Charset
+	activeCharset           int
+	cursorStyle             CursorStyle
+	focusEvents             bool
 }

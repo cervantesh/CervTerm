@@ -12,18 +12,40 @@ func (t *Terminal) CopyView(dst []Cell) {
 	}
 
 	scrollbackRows := t.ScrollbackLines()
-	totalRows := scrollbackRows + t.rows
-	startRow := totalRows - t.rows - t.displayOffset
+	startRow := t.ViewportTopGlobalRow()
 	for row := 0; row < t.rows; row++ {
 		globalRow := startRow + row
 		if globalRow < scrollbackRows {
-			sourceRow := (t.scrollbackStart + globalRow) % maxScrollbackRows
+			sourceRow := (t.scrollbackStart + globalRow) % t.scrollbackCapacity
 			copy(dst[row*t.cols:(row+1)*t.cols], t.scrollback[sourceRow*t.cols:(sourceRow+1)*t.cols])
 			continue
 		}
 		currentRow := globalRow - scrollbackRows
 		copy(dst[row*t.cols:(row+1)*t.cols], t.cells[currentRow*t.cols:(currentRow+1)*t.cols])
 	}
+}
+
+// ViewportTopGlobalRow is the global (physical-row) index of the first row
+// visible in the viewport — the same startRow CopyView copies from. The viewport
+// shows global rows [ViewportTopGlobalRow(), ViewportTopGlobalRow()+Rows()-1].
+// Global indices match physicalRows and Resize: index 0 is the oldest scrollback
+// row, scrollbackRows+rows-1 is the last live row. This is the one place the
+// "scrollback minus display offset" arithmetic lives; search scroll-to-match and
+// the draw highlight both derive their viewport rows from it instead of
+// re-computing it by hand.
+func (t *Terminal) ViewportTopGlobalRow() int {
+	return t.scrollbackRows - t.displayOffset
+}
+
+// GlobalRowToViewport translates a global (physical-row) index to a 0-based
+// viewport row, returning ok=false when the row falls outside the visible
+// window. It is the inverse of ViewportTopGlobalRow.
+func (t *Terminal) GlobalRowToViewport(g int) (row int, ok bool) {
+	row = g - t.ViewportTopGlobalRow()
+	if row < 0 || row >= t.rows {
+		return 0, false
+	}
+	return row, true
 }
 
 // LineWrapped reports whether a row in the current viewport wraps into the
@@ -33,10 +55,10 @@ func (t *Terminal) LineWrapped(row int) (bool, bool) {
 		return false, false
 	}
 
-	globalRow := t.scrollbackRows - t.displayOffset + row
+	globalRow := t.ViewportTopGlobalRow() + row
 	if globalRow < t.scrollbackRows {
-		sourceRow := (t.scrollbackStart + globalRow) % maxScrollbackRows
-		if len(t.scrollbackWrapped) != maxScrollbackRows {
+		sourceRow := (t.scrollbackStart + globalRow) % t.scrollbackCapacity
+		if len(t.scrollbackWrapped) != t.scrollbackCapacity {
 			return false, true
 		}
 		return t.scrollbackWrapped[sourceRow], true
@@ -54,14 +76,7 @@ func (t *Terminal) PlainText() string {
 	b.Grow(t.rows * (t.cols + 1))
 	for r := 0; r < t.rows; r++ {
 		start := r * t.cols
-		end := start + t.cols
-		last := end - 1
-		for last >= start && isBlankCell(t.cells[last]) {
-			last--
-		}
-		for i := start; i <= last; i++ {
-			writeCellText(&b, t.cells[i])
-		}
+		b.WriteString(RowText(t.cells[start : start+t.cols]))
 		if r != t.rows-1 {
 			b.WriteByte('\n')
 		}
@@ -69,12 +84,14 @@ func (t *Terminal) PlainText() string {
 	return b.String()
 }
 
-func (t *Terminal) blank() Cell { return Cell{Rune: ' ', Attr: Attr{FG: DefaultFG, BG: DefaultBG}} }
+func (t *Terminal) blank() Cell {
+	return Cell{Rune: ' ', Attr: Attr{FG: DefaultColor(), BG: DefaultColor()}}
+}
 
 func isBlankRow(row []Cell) bool {
-	blankAttr := Attr{FG: DefaultFG, BG: DefaultBG}
+	blankAttr := Attr{FG: DefaultColor(), BG: DefaultColor()}
 	for _, cell := range row {
-		if (cell.Rune != 0 && cell.Rune != ' ') || cell.HasCombining() || cell.Attr != blankAttr || cell.WideContinuation {
+		if (cell.Rune != 0 && cell.Rune != ' ') || cell.HasCombining() || cell.Attr != blankAttr || cell.HyperlinkID != 0 || cell.SemanticKind != SemanticNone || cell.WideContinuation {
 			return false
 		}
 	}
@@ -87,10 +104,10 @@ func (t *Terminal) physicalRows() ([][]Cell, []bool) {
 	wrapped := make([]bool, 0, count)
 
 	for row := 0; row < t.scrollbackRows; row++ {
-		sourceRow := (t.scrollbackStart + row) % maxScrollbackRows
+		sourceRow := (t.scrollbackStart + row) % t.scrollbackCapacity
 		start := sourceRow * t.cols
 		rows = append(rows, cloneCellRow(t.scrollback[start:start+t.cols]))
-		if len(t.scrollbackWrapped) == maxScrollbackRows {
+		if len(t.scrollbackWrapped) == t.scrollbackCapacity {
 			wrapped = append(wrapped, t.scrollbackWrapped[sourceRow])
 		} else {
 			wrapped = append(wrapped, false)
@@ -107,26 +124,30 @@ func (t *Terminal) physicalRows() ([][]Cell, []bool) {
 
 func (t *Terminal) snapshotScreen() *screenState {
 	return &screenState{
-		cols:              t.cols,
-		rows:              t.rows,
-		cells:             cloneCellRow(t.cells),
-		rowWrapped:        cloneBoolRow(t.rowWrapped),
-		scrollback:        cloneCellRow(t.scrollback),
-		scrollbackWrapped: cloneBoolRow(t.scrollbackWrapped),
-		scrollbackStart:   t.scrollbackStart,
-		scrollbackRows:    t.scrollbackRows,
-		displayOffset:     t.displayOffset,
-		cursorRow:         t.cursorRow,
-		cursorCol:         t.cursorCol,
-		wrapNext:          t.wrapNext,
-		savedCursorRow:    t.savedCursorRow,
-		savedCursorCol:    t.savedCursorCol,
-		savedWrapNext:     t.savedWrapNext,
-		hasSavedCursor:    t.hasSavedCursor,
-		scrollTop:         t.scrollTop,
-		scrollBottom:      t.scrollBottom,
-		charsets:          t.charsets,
-		activeCharset:     t.activeCharset,
+		cols:                    t.cols,
+		rows:                    t.rows,
+		cells:                   cloneCellRow(t.cells),
+		rowWrapped:              cloneBoolRow(t.rowWrapped),
+		scrollback:              cloneCellRow(t.scrollback),
+		scrollbackWrapped:       cloneBoolRow(t.scrollbackWrapped),
+		scrollbackStart:         t.scrollbackStart,
+		scrollbackRows:          t.scrollbackRows,
+		scrollbackCapacity:      t.scrollbackCapacity,
+		displayOffset:           t.displayOffset,
+		cursorRow:               t.cursorRow,
+		cursorCol:               t.cursorCol,
+		wrapNext:                t.wrapNext,
+		savedCursorRow:          t.savedCursorRow,
+		savedCursorCol:          t.savedCursorCol,
+		savedWrapNext:           t.savedWrapNext,
+		hasSavedCursor:          t.hasSavedCursor,
+		scrollTop:               t.scrollTop,
+		scrollBottom:            t.scrollBottom,
+		charsets:                t.charsets,
+		activeCharset:           t.activeCharset,
+		hyperlinks:              t.hyperlinks.clone(),
+		semanticKind:            t.semanticKind,
+		semanticBoundaryPending: t.semanticBoundaryPending,
 	}
 }
 
@@ -139,6 +160,7 @@ func (t *Terminal) restoreScreen(s *screenState) {
 	t.scrollbackWrapped = cloneBoolRow(s.scrollbackWrapped)
 	t.scrollbackStart = s.scrollbackStart
 	t.scrollbackRows = s.scrollbackRows
+	t.scrollbackCapacity = s.scrollbackCapacity
 	t.displayOffset = min(s.displayOffset, s.scrollbackRows)
 	t.cursorRow = min(s.cursorRow, max(0, s.rows-1))
 	t.cursorCol = min(s.cursorCol, max(0, s.cols-1))
@@ -151,6 +173,9 @@ func (t *Terminal) restoreScreen(s *screenState) {
 	t.scrollBottom = min(s.scrollBottom, max(0, t.rows-1))
 	t.charsets = s.charsets
 	t.activeCharset = s.activeCharset
+	t.hyperlinks = s.hyperlinks.clone()
+	t.semanticKind = s.semanticKind
+	t.semanticBoundaryPending = s.semanticBoundaryPending
 	if t.scrollBottom <= t.scrollTop {
 		t.resetScrollRegion()
 	}
@@ -186,7 +211,7 @@ func cloneBoolRow(row []bool) []bool {
 }
 
 func isBlankCell(cell Cell) bool {
-	return cell.WideContinuation || cell.Rune == 0 || cell.Rune == ' '
+	return cell.HyperlinkID == 0 && cell.SemanticKind == SemanticNone && (cell.WideContinuation || cell.Rune == 0 || cell.Rune == ' ')
 }
 
 func writeCellText(b *strings.Builder, cell Cell) {
@@ -428,17 +453,21 @@ func (t *Terminal) scrollDownRegion(top, bottom, lines int) {
 }
 
 func (t *Terminal) appendScrollbackLine(line []Cell, wrapped bool) {
-	if len(t.scrollback) != maxScrollbackRows*t.cols {
-		t.scrollback = make([]Cell, maxScrollbackRows*t.cols)
-		t.scrollbackWrapped = make([]bool, maxScrollbackRows)
+	if t.alternateScreen || t.scrollbackCapacity == 0 {
+		t.displayOffset = 0
+		return
+	}
+	if len(t.scrollback) != t.scrollbackCapacity*t.cols {
+		t.scrollback = make([]Cell, t.scrollbackCapacity*t.cols)
+		t.scrollbackWrapped = make([]bool, t.scrollbackCapacity)
 		t.scrollbackStart = 0
 		t.scrollbackRows = 0
 	}
 
-	writeRow := (t.scrollbackStart + t.scrollbackRows) % maxScrollbackRows
-	if t.scrollbackRows == maxScrollbackRows {
+	writeRow := (t.scrollbackStart + t.scrollbackRows) % t.scrollbackCapacity
+	if t.scrollbackRows == t.scrollbackCapacity {
 		writeRow = t.scrollbackStart
-		t.scrollbackStart = (t.scrollbackStart + 1) % maxScrollbackRows
+		t.scrollbackStart = (t.scrollbackStart + 1) % t.scrollbackCapacity
 	} else {
 		t.scrollbackRows++
 	}

@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
+	"cervterm/internal/fontdesc"
 	"cervterm/internal/unicodecluster"
 
 	xdraw "golang.org/x/image/draw"
@@ -59,6 +61,7 @@ type GlyphInspection struct {
 }
 
 // Backend rasterizes Unicode codepoints and pre-shaped text clusters into metric-bearing glyph images.
+// Backends are owned by the frontend render thread; Rasterize, inspection, and Close must not be called concurrently.
 type Backend interface {
 	CellMetrics() (width int, height int, baseline int)
 	Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool)
@@ -67,7 +70,7 @@ type Backend interface {
 }
 
 type glyphRasterizer interface {
-	RasterizeGlyph(glyphID uint16, cellW, cellH, baseline, cellSpan int) (*image.RGBA, bool)
+	RasterizeGlyph(glyphID uint16, cellW, cellH, baseline, cellSpan int, advancePx float32) (*image.RGBA, bool)
 	Close()
 }
 
@@ -75,25 +78,29 @@ type OpenTypeBackend struct {
 	faces           []loadedFace
 	fallbackSpec    Spec // spec for lazily-loaded fallback faces
 	fallbacksLoaded bool
+	closed          bool // main-thread lifecycle flag
 	cellW           int
 	cellH           int
 	baseline        int
 	ppem            uint16
 	shaper          Shaper
+	features        fontdesc.FeatureSet
 	dwRaster        glyphRasterizer
 	subpixelText    bool
+	closeOnce       sync.Once
 }
 
 type loadedFace struct {
-	face       font.Face
-	sfnt       *sfnt.Font
-	tables     ColorTables
-	sbix       *sbixExtractor
-	cbdt       *cbdtExtractor
-	colr       *colrParser
-	svg        *svgExtractor
-	sourcePath string
-	faceIndex  int
+	face        font.Face
+	sfnt        *sfnt.Font
+	tables      ColorTables
+	sbix        *sbixExtractor
+	cbdt        *cbdtExtractor
+	colr        *colrParser
+	svg         *svgExtractor
+	sourcePath  string
+	faceIndex   int
+	cacheHandle *parsedFontHandle
 }
 
 func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
@@ -101,6 +108,10 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 	if err != nil {
 		return nil, err
 	}
+	return newOpenTypeBackendFromPrimary(spec, primary, metrics), nil
+}
+
+func newOpenTypeBackendFromPrimary(spec Spec, primary loadedFace, metrics font.Metrics) *OpenTypeBackend {
 	// Fallback faces (CJK, and the ~24 MB color-emoji font) are loaded lazily on
 	// the first glyph the primary font can't cover — most sessions never render
 	// one, so they never pay the memory. See ensureFallbacks.
@@ -116,11 +127,11 @@ func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
 	if !backend.subpixelText {
 		backend.dwRaster = newPlatformTextRasterizer(spec, primary)
 	}
-	return backend, nil
+	return backend
 }
 
 func embeddedGoMono(spec Spec) (loadedFace, font.Metrics, error) {
-	return loadCachedFaceIndex("embedded:gomono", 0, spec, func() ([]byte, error) { return gomono.TTF, nil })
+	return loadCachedFaceIndexKnownSize("embedded:gomono", 0, int64(len(gomono.TTF)), spec, func() ([]byte, error) { return gomono.TTF, nil })
 }
 
 func primaryFace(spec Spec) (loadedFace, font.Metrics, error) {
@@ -133,9 +144,7 @@ func primaryFace(spec Spec) (loadedFace, font.Metrics, error) {
 		return embeddedGoMono(spec)
 	}
 	log.Printf("configured font family %q resolved to %s face %d", spec.Family, resolution.Regular, resolution.FaceIndex)
-	face, metrics, err := loadCachedFaceIndex(resolution.Regular, resolution.FaceIndex, spec, func() ([]byte, error) {
-		return os.ReadFile(resolution.Regular)
-	})
+	face, metrics, err := loadCachedFileFaceIndex(resolution.Regular, resolution.FaceIndex, spec)
 	if err != nil {
 		log.Printf("configured font family %q could not be loaded/parsed from %s: %v; falling back to Go Mono", spec.Family, resolution.Regular, err)
 		return embeddedGoMono(spec)
@@ -169,10 +178,24 @@ func (b *OpenTypeBackend) CellMetrics() (width int, height int, baseline int) {
 }
 
 func (b *OpenTypeBackend) Close() {
-	if b != nil && b.dwRaster != nil {
-		b.dwRaster.Close()
-		b.dwRaster = nil
+	if b == nil {
+		return
 	}
+	b.closeOnce.Do(func() {
+		b.closed = true
+		for i := range b.faces {
+			if closer, ok := b.faces[i].face.(interface{ Close() error }); ok {
+				_ = closer.Close()
+			}
+			b.faces[i].face = nil
+			b.faces[i].cacheHandle.release()
+			b.faces[i].cacheHandle = nil
+		}
+		if b.dwRaster != nil {
+			b.dwRaster.Close()
+			b.dwRaster = nil
+		}
+	})
 }
 
 func (b *OpenTypeBackend) TextRasterEngine() string {
@@ -186,7 +209,7 @@ func (b *OpenTypeBackend) TextRasterEngine() string {
 }
 
 func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool) {
-	if r == 0 || r < 32 {
+	if b == nil || b.closed || r == 0 || r < 32 {
 		return RasterizedGlyph{}, false
 	}
 	lf, bounds, advance, ok := b.faceForRune(r)
@@ -203,6 +226,16 @@ func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool
 	if glyph, ok := b.rasterizeSVGColorGlyph(lf, r, cellSpan, advance); ok {
 		return glyph, true
 	}
+	if b.features.EnablesSingleGlyphSubstitution() && b.shaper != nil && lf.sfnt != nil {
+		if shaped, ok := shapeWithFeatures(b.shaper, string(r), lf, b.ppem, b.features); ok {
+			shaped = centerShapedGlyphsInCells(shaped, b.cellW*cellSpan)
+			if glyph, ok := b.rasterizeShapedCluster(lf, shaped, cellSpan); ok {
+				glyph.CellSpan = cellSpan
+				glyph.AdvanceX = float64(b.cellW * cellSpan)
+				return glyph, true
+			}
+		}
+	}
 	var sfntBuf sfnt.Buffer
 	glyphID, glyphIndexErr := lf.sfnt.GlyphIndex(&sfntBuf, r)
 	if b.subpixelText && glyphIndexErr == nil && glyphID != 0 {
@@ -216,7 +249,7 @@ func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool
 	}
 	if b.dwRaster != nil && lf.sfnt == b.faces[0].sfnt {
 		if glyphIndexErr == nil && glyphID != 0 {
-			if img, ok := b.dwRaster.RasterizeGlyph(uint16(glyphID), b.cellW, b.cellH, b.baseline, cellSpan); ok {
+			if img, ok := b.dwRaster.RasterizeGlyph(uint16(glyphID), b.cellW, b.cellH, b.baseline, cellSpan, float32(advance)/64); ok {
 				return RasterizedGlyph{
 					Image: img, Width: (bounds.Max.X - bounds.Min.X).Ceil(), Height: (bounds.Max.Y - bounds.Min.Y).Ceil(),
 					BearingX: bounds.Min.X.Ceil(), BearingY: -bounds.Min.Y.Ceil(), AdvanceX: float64(advance) / 64.0,
@@ -257,12 +290,15 @@ func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool
 }
 
 func (b *OpenTypeBackend) RasterizeCluster(cluster string, cellSpan int) (RasterizedGlyph, bool) {
+	if b == nil || b.closed {
+		return RasterizedGlyph{}, false
+	}
 	glyph, _, ok := b.rasterizeCluster(cluster, cellSpan)
 	return glyph, ok
 }
 
 func (b *OpenTypeBackend) rasterizeCluster(cluster string, cellSpan int) (RasterizedGlyph, loadedFace, bool) {
-	if cluster == "" {
+	if b == nil || b.closed || cluster == "" {
 		return RasterizedGlyph{}, loadedFace{}, false
 	}
 	if composed, ok := normalizeClusterToSingleRune(cluster); ok {
@@ -298,7 +334,7 @@ func (b *OpenTypeBackend) rasterizeCluster(cluster string, cellSpan int) (Raster
 
 func (b *OpenTypeBackend) rasterizeClusterWithFace(cluster string, cellSpan int, lf loadedFace) (RasterizedGlyph, bool) {
 	if b.shaper != nil && lf.sfnt != nil {
-		if shaped, ok := b.shaper.Shape(cluster, lf, b.ppem); ok {
+		if shaped, ok := shapeWithFeatures(b.shaper, cluster, lf, b.ppem, b.features); ok {
 			if glyph, ok := b.rasterizeShapedCluster(lf, shaped, max(1, cellSpan)); ok {
 				return glyph, true
 			}
@@ -332,6 +368,9 @@ func (b *OpenTypeBackend) rasterizeClusterWithFace(cluster string, cellSpan int,
 
 func (b *OpenTypeBackend) InspectClusterGlyph(cluster string, cellSpan int) GlyphInspection {
 	info := GlyphInspection{}
+	if b == nil || b.closed {
+		return info
+	}
 	glyph, face, ok := b.rasterizeCluster(cluster, cellSpan)
 	if !ok {
 		return info
@@ -412,6 +451,9 @@ func (b *OpenTypeBackend) rasterizeBitmapColorGlyph(lf loadedFace, r rune, cellS
 }
 
 func (b *OpenTypeBackend) faceForRune(r rune) (loadedFace, fixed.Rectangle26_6, fixed.Int26_6, bool) {
+	if b == nil || b.closed {
+		return loadedFace{}, fixed.Rectangle26_6{}, 0, false
+	}
 	if face, bounds, advance, ok := b.searchRune(r); ok {
 		return face, bounds, advance, true
 	}
@@ -443,7 +485,7 @@ func (b *OpenTypeBackend) searchRune(r rune) (loadedFace, fixed.Rectangle26_6, f
 // ensureFallbacks appends the fallback faces to b.faces on first use. Idempotent
 // and main-thread only (glyph lookup runs during draw prep on the loop thread).
 func (b *OpenTypeBackend) ensureFallbacks() {
-	if b.fallbacksLoaded {
+	if b == nil || b.closed || b.fallbacksLoaded {
 		return
 	}
 	b.fallbacksLoaded = true
@@ -465,6 +507,9 @@ func (b *OpenTypeBackend) faceHasColorGlyph(face loadedFace, r rune) bool {
 	return face.colr != nil || face.svg != nil
 }
 func (b *OpenTypeBackend) faceForCluster(cluster string) (loadedFace, bool) {
+	if b == nil || b.closed {
+		return loadedFace{}, false
+	}
 	for _, face := range b.clusterFaceCandidates(cluster) {
 		return face, true
 	}
@@ -479,14 +524,17 @@ func (b *OpenTypeBackend) faceForCluster(cluster string) (loadedFace, bool) {
 }
 
 func (b *OpenTypeBackend) clusterFaceCandidates(cluster string) []loadedFace {
+	if b == nil || b.closed {
+		return nil
+	}
 	var out []loadedFace
 	appendFace := func(face loadedFace, ok bool) {
 		if !ok {
 			return
 		}
-		key := strings.ToLower(filepath.Clean(face.sourcePath))
+		key := fontCacheKey(face.sourcePath, face.faceIndex)
 		for _, existing := range out {
-			if strings.ToLower(filepath.Clean(existing.sourcePath)) == key {
+			if fontCacheKey(existing.sourcePath, existing.faceIndex) == key {
 				return
 			}
 		}
@@ -599,7 +647,7 @@ func DiagnoseEmojiFonts() EmojiFontDiagnostics {
 func loadFallbackFaces(spec Spec) []loadedFace {
 	var faces []loadedFace
 	for _, path := range fallbackFontPaths() {
-		face, _, err := loadCachedFaceIndex(path, 0, spec, func() ([]byte, error) { return os.ReadFile(path) })
+		face, _, err := loadCachedFileFaceIndex(path, 0, spec)
 		if err != nil {
 			continue
 		}
@@ -642,6 +690,7 @@ func fallbackFontPaths() []string {
 	paths = append(paths,
 		filepath.Join(fontDir, "NotoColorEmoji.ttf"),
 		filepath.Join(fontDir, "seguiemj.ttf"),
+		filepath.Join(fontDir, "seguisym.ttf"),
 		filepath.Join(fontDir, "consola.ttf"),
 		filepath.Join(fontDir, "malgun.ttf"),
 		filepath.Join(fontDir, "simsunb.ttf"),

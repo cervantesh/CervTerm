@@ -2,28 +2,23 @@
 
 This roadmap captures the path from the current CervTerm prototype toward a minimum daily-driver terminal comparable in ambition to Alacritty, while borrowing configuration and UX lessons from WezTerm and Kitty where appropriate.
 
+**Current plan:** the original four-phase MVP roadmap below is retained as delivery history. New parity work follows [`docs/wezterm-parity-roadmap.md`](wezterm-parity-roadmap.md), with machine-readable status in [`docs/parity-support-matrix.json`](parity-support-matrix.json) and measurements in [`docs/parity-baseline.md`](parity-baseline.md). Renderer selection and local/SSH/WSL domains are excluded.
+
 ## Current baseline
 
 CervTerm already has:
 
-- Local Windows PTY via ConPTY and Unix PTY via `creack/pty` behind build tags.
-- GLFW/OpenGL frontend.
-- Renderer-neutral snapshots.
-- Scrollback with scrollable viewport.
-- Resize reflow that preserves scrollback and reflows auto-wrapped logical lines.
-- Word wrap enabled by default.
-- Selection, copy, paste, bracketed paste.
-- Alternate screen buffer support.
-- Cursor save/restore.
-- Correct cursor hiding while viewing scrollback.
-- VT parser with CSI cursor movement, erase modes, scroll regions, insert/delete operations, cursor/autowrap/application modes, SGR ANSI/bright/256/truecolor, SGR mouse modes, and OSC title.
-- Benchmarks for parser/render hot paths.
-- Parser fuzz smoke coverage, replay-style VT golden fixtures, and a vttest compatibility checklist.
-- Product rename to CervTerm.
-- Lua/Teal-oriented config model with validated defaults and a `--print-default-config` Lua template command.
-- Renderer-neutral color glyph backend covering bitmap color fonts, broad COLRv1 paint/composite/variation support, SVG glyph extraction/rasterization, and initial cluster handling.
+- Windows ConPTY and Unix PTY transports behind build tags.
+- GLFW/OpenGL frontend with damage-driven rendering.
+- Renderer-neutral snapshots, scrollback, selection, search, resize reflow, alternate screen, and wide/cluster-aware text.
+- Native in-process panes with draggable dividers, independent PTY/parser/core state, focused routing, deterministic close/collapse, and independent per-pane zoom.
+- ANSI/bright/256/truecolor VT parsing, keyboard/mouse reporting, OSC 7 CWD, OSC 52 clipboard, and detected hyperlinks.
+- Lua configuration, Teal check/gen, discovery/validation/templates, scripting callbacks/timers/status/overlays, and atomic single-file reload.
+- System font discovery, OpenType shaping/ligatures, lazy fallback, color glyphs, a bounded shared multi-size atlas, and DirectWrite coverage.
+- Phase 5 appearance/window controls: per-side padding, independent text/background opacity, bounded layered backgrounds, scrollbar modes/stable gutter/fade FPS, `render.max_fps`, and initial rows/columns plus native decoration/titlebar requests.
+- Parser/render benchmarks, fuzz/golden fixtures, daily-driver smoke, package smoke, CI, and release provenance.
 
-## Four-phase roadmap
+## Historical four-phase MVP roadmap
 
 ### Phase 1 — Daily-driver terminal correctness
 
@@ -226,23 +221,32 @@ Deliverable:
 
 - Cursor and text remain aligned for common non-ASCII content.
 
-### Milestone 4: Font/render slice
+### Milestone 4: Font/render slice (completed)
 
-1. Choose font rasterization library.
-2. Add configurable font descriptor model.
-3. Load default system monospace font.
-4. Replace static basicfont atlas with dynamic atlas.
-5. Preserve renderer hot-path benchmarks.
-6. Add visual smoke tests where feasible.
-7. Replace the temporary emoji workaround with a real color glyph pipeline:
-   - font fallback and glyph IDs/clusters
-   - baseline/bearing-aware raster metrics
-   - RGBA atlas entries for color glyphs
+1. Use bounded OpenType/DirectWrite-capable font rasterization behind the existing renderer seam.
+2. Support deterministic descriptors, real/synthetic styles, lazy whole-cluster fallback/rules, OpenType features, and fixed-grid metrics.
+3. Resolve system/per-user fonts plus embedded Go Mono fallback without unbounded discovery or parsed caches.
+4. Share a dynamic, generation-keyed two-page atlas across pane zoom/DPI contexts.
+5. Preserve renderer/parser allocation invariants and fixed-grid advances.
+6. Qualify installed Windows packaging with JetBrainsMono Nerd Font, Powerline/Nerd symbols, CJK/emoji system fallbacks, and redacted doctor diagnostics.
+7. Keep renderer selection explicitly outside the font feature.
    - no external browser/cmd.exe rasterization in the steady-state renderer.
 
 Deliverable:
 
 - CervTerm looks like a real terminal rather than a bitmap-font prototype.
+
+### Milestone 4.5: Appearance and window controls (completed, platform-qualified)
+
+1. Per-side padding participates in DPI-scaled layout and hit testing.
+2. Text/background opacity remains separate from validated whole-window opacity/blur.
+3. Solid, gradient, and image background layers are bounded by decode/cache/work budgets.
+4. Scrollbar modes, stable gutter, fade FPS, and `render.max_fps` preserve damage-driven idle behavior.
+5. Initial rows/columns and native decorations/titlebar are capability-aware startup controls.
+6. Renderer selection remains excluded; no cross-platform GUI parity is claimed without a recorded pass.
+
+Deliverable: Phase 5.1-5.6 is automated-test qualified; platform GUI pass/skip evidence is recorded in `docs/manual-verification.md`.
+
 
 ### Milestone 5: Config slice
 
@@ -271,6 +275,4 @@ Deliverable:
 
 ## Near-term recommendation
 
-The next engineering task should be **advanced shaping integration plus richer real-font fixture coverage**. The earlier terminal-correctness slice now has scroll regions, insert/delete operations, keyboard/mouse encoding, fuzz smoke coverage, golden replay coverage, a Shaper interface, a default pure-Go `SimpleShaper` for simple glyph-ID/advance shaping, Windows DirectWriteShaper selection scaffolding, redistributable Go-font real TTF fixture tests, and a licensed Noto Color Emoji subset fixture; DirectWrite TextAnalyzer `GetGlyphs`/`GetGlyphPlacements` mapping into `ShapedGlyph` with Arabic/Indic ligature/conjunct and emoji ZWJ smoke coverage, single- and multi-glyph shaped COLR color rendering, diagnostics logging, README screenshot capture, beta zip validation, release preflight checks, and a real MSYS2-built `vttest` startup capture; the largest remaining visible gap is broader real-world fixture coverage and deeper interactive `vttest` menu-path captures.
-
-After that, continue productization: app icon/metadata, release packaging, CI artifacts, and deeper documented manual `vttest` menu-path captures.
+Execute the parity roadmap sequentially. Phase 0 establishes contracts, baselines, the support matrix, guardrails, and Proposed ADR gates. The first product implementation is Phase 1's typed action engine after ADR-0003 is reviewed and accepted. Every later phase requires focused tests, full gates, validation evidence, and architecture drift review before merge.

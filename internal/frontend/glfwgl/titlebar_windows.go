@@ -14,13 +14,14 @@ var (
 	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
 )
 
-// applyDarkTitleBar asks DWM to render the native window title bar in dark mode
-// so it matches the terminal's dark theme instead of the light default. It is a
-// best-effort call: unsupported Windows builds simply return an error we ignore.
-func applyDarkTitleBar(w *glfw.Window) {
+// applyConfiguredTitlebar applies the requested mode and reports whether it was supported.
+func applyConfiguredTitlebar(w *glfw.Window, mode string) bool {
+	if mode == "system" {
+		return true
+	}
 	hwnd := uintptr(unsafe.Pointer(w.GetWin32Window()))
 	if hwnd == 0 {
-		return
+		return false
 	}
 	var enabled int32 = 1
 	// Attribute 20 (DWMWA_USE_IMMERSIVE_DARK_MODE) on Windows 10 2004+; older
@@ -29,7 +30,8 @@ func applyDarkTitleBar(w *glfw.Window) {
 		ret, _, _ := procDwmSetWindowAttribute.Call(hwnd, attr,
 			uintptr(unsafe.Pointer(&enabled)), unsafe.Sizeof(enabled))
 		if ret == 0 { // S_OK
-			return
+			return true
 		}
 	}
+	return false
 }
