@@ -173,6 +173,13 @@ local record cervterm
     osc52: string
   end
 
+  record BellConfig
+    mode: string
+    focus: string
+    throttle_ms: integer
+    visual_duration_ms: integer
+  end
+
   record RenderConfig
     bidi: boolean
     text_gamma: number
@@ -397,6 +404,13 @@ local record cervterm
     osc52: string | Unset
   end
 
+  record BellDocument
+    mode: string | Unset
+    focus: string | Unset
+    throttle_ms: integer | Unset
+    visual_duration_ms: integer | Unset
+  end
+
   record RenderDocument
     bidi: boolean | Unset
     text_gamma: number | Unset
@@ -491,6 +505,7 @@ local record cervterm
     tab_bar: TabBarDocument | Unset
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
+    bell: BellDocument | Unset
     render: RenderDocument | Unset
     shell: ShellDocument | Unset
     launch_menu: {LaunchTarget} | Unset | nil
@@ -521,6 +536,7 @@ local record cervterm
     tab_bar: TabBarDocument | Unset
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
+    bell: BellDocument | Unset
     render: RenderDocument | Unset
     shell: ShellDocument | Unset
     launch_menu: {LaunchTarget} | Unset | nil

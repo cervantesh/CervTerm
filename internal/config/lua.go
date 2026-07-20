@@ -143,6 +143,12 @@ func FromTable(cfg Config, root *lua.LTable) Config {
 	if tbl := tableField(root, "clipboard"); tbl != nil {
 		cfg.Clipboard.OSC52 = stringField(tbl, "osc52", cfg.Clipboard.OSC52)
 	}
+	if tbl := tableField(root, "bell"); tbl != nil {
+		cfg.Bell.Mode = stringField(tbl, "mode", cfg.Bell.Mode)
+		cfg.Bell.Focus = stringField(tbl, "focus", cfg.Bell.Focus)
+		cfg.Bell.ThrottleMS = intField(tbl, "throttle_ms", cfg.Bell.ThrottleMS)
+		cfg.Bell.VisualDurationMS = intField(tbl, "visual_duration_ms", cfg.Bell.VisualDurationMS)
+	}
 	if tbl := tableField(root, "render"); tbl != nil {
 		cfg.Render.Bidi = boolField(tbl, "bidi", cfg.Render.Bidi)
 		cfg.Render.TextGamma = numberField(tbl, "text_gamma", cfg.Render.TextGamma)

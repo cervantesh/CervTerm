@@ -27,6 +27,7 @@ type Config struct {
 	Scrollbar         ScrollbarConfig
 	Cursor            CursorConfig
 	Clipboard         ClipboardConfig
+	Bell              BellConfig
 	Render            RenderConfig
 	Shell             ShellConfig
 	QuickSelect       QuickSelectConfig
@@ -186,6 +187,7 @@ func Defaults() Config {
 		},
 		Cursor:    CursorConfig{Shape: "underline", Blink: true, BlinkIntervalMS: 1000, Thickness: 0.15},
 		Clipboard: ClipboardConfig{OSC52: "off"},
+		Bell:      BellConfig{Mode: "disabled", Focus: "unfocused", ThrottleMS: 250, VisualDurationMS: 120},
 		Render:    RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", ZoomInHotkey: "ctrl+equal", ZoomOutHotkey: "ctrl+minus", ZoomResetHotkey: "ctrl+0", VSync: true, MaxFPS: 0, Redraw: "on_demand", Damage: "rows"},
 		Shell:     ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
@@ -407,6 +409,7 @@ func (c Config) Validate() error {
 	if c.Clipboard.OSC52 != "write" && c.Clipboard.OSC52 != "off" {
 		errs = append(errs, fmt.Errorf("clipboard.osc52 %q must be write or off", c.Clipboard.OSC52))
 	}
+	errs = append(errs, validateBell(c.Bell)...)
 	if c.Render.TextGamma < 0.5 || c.Render.TextGamma > 3.0 {
 		errs = append(errs, errors.New("render.text_gamma must be between 0.5 and 3.0"))
 	}

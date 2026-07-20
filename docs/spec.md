@@ -156,6 +156,13 @@ go run -tags glfw ./cmd/cervterm
 
 `tab_bar.mode` is `multiple` (default), `always`, or `hidden`; `position` is `top` or `bottom`. Height, tab widths, and horizontal padding are bounded and reload live as one validated configuration. The retained bar reserves authoritative window geometry, keeps the active tab visible under overflow, and routes add/close/tab hits before terminal mouse input. The default one-tab window reserves no bar pixels.
 
+### Bell policy
+
+- Every BEL remains a monotonic pane-local core/mux event and fires one Lua `events.bell` callback; sink policy never coalesces observation.
+- Strict v2 `bell` configuration reloads live. Effects default to disabled and may select one audible, visual, or taskbar sink with an `always` or `unfocused` focus rule.
+- A bounded per-mode gate throttles only OS/visual effects. Visual expiry participates in the on-demand wake loop; native effects execute from frontend event dispatch on the locked OS thread.
+- Windows audible mode uses the system message bell. Unsupported native audible adapters fail closed without dropping the observable bell event.
+
 ## Native windows, workspaces, and saved layouts
 
 - One process mux owns ordered named workspaces, native-window models, tabs, pane trees, and all local sessions/readers; native hosts are projections owned by the locked OS thread.

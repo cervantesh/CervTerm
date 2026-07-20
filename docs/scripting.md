@@ -22,6 +22,8 @@ Repeatable `--config-override PATH=VALUE` inputs apply left-to-right after the s
 
 `--explain-config` and repeatable `--explain-config-field PATH` evaluate this same v2 composition in diagnostic-only mode, then print deterministic selection, graph, resolved values, application scopes, and provenance without activating callbacks or publishing Teal. Sensitive maps are redacted and callback bodies are never rendered.
 
+`bell` is a strict v2 live policy. `mode` is `disabled` (default), `audible`, `visual`, or `taskbar`; `focus` is `unfocused` (default) or `always`; `throttle_ms` is bounded to `0..60000`; and `visual_duration_ms` is bounded to `50..2000`. These settings throttle only frontend effects. Every BEL still increments the pane-local monotonic count and invokes `events.bell` once, even when effects are disabled, focus-suppressed, or throttled. Audible effects use the Windows system bell; unsupported platforms report capability failure without affecting the callback stream.
+
 ## Keybindings
 
 Add a `keys` array to the returned config table. Each entry has:

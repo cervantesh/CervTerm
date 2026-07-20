@@ -116,12 +116,13 @@ type App struct {
 	link              linkState
 	linkLauncher      urlLauncher
 	clipboardSetter   func(string)
-	hud               hudCache
-	fps               float64
-	fpsFrames         uint64
-	fpsTime           time.Time
-	skippedGlyph      []bool // reused per-row scratch buffer to avoid per-frame allocs
-	ligaturesActive   bool   // font.ligatures enabled AND the active shaper can substitute
+	bellState
+	hud             hudCache
+	fps             float64
+	fpsFrames       uint64
+	fpsTime         time.Time
+	skippedGlyph    []bool // reused per-row scratch buffer to avoid per-frame allocs
+	ligaturesActive bool   // font.ligatures enabled AND the active shaper can substitute
 
 	rowHashes, prevHashes, prevPrevHashes []uint64
 	lastCursorRow, prevCursorRow          int
@@ -179,6 +180,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 		paneUI:                 make(map[termmux.PaneID]*paneUIState),
 		pendingPaneScroll:      make(map[termmux.PaneID]int),
 		pendingPaneResize:      make(map[termmux.PaneID]termmux.PaneGeometry),
+		bellState:              bellState{bellDelivered: make(map[termmux.PaneID]int)},
 	}
 	app.linkLauncher = platformURLLauncher{}
 	app.configScope = app.runtimeScopes.NewScope()

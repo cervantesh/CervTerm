@@ -99,6 +99,12 @@
   "Clipboard": {
     "OSC52": "write"
   },
+  "Bell": {
+    "Mode": "disabled",
+    "Focus": "unfocused",
+    "ThrottleMS": 250,
+    "VisualDurationMS": 120
+  },
   "Render": {
     "Bidi": true,
     "TextGamma": 1.2,
