@@ -113,6 +113,16 @@ This document is the executable contract for the MVP. Implementation must follow
 - Initial `window.rows`/`window.cols` and native `decorations`/`titlebar` are startup/recreation controls with platform capability fallback.
 - Renderer selection is not a Phase 5 field and remains excluded.
 
+### Accessibility
+
+- Accessibility state is a detached, bounded semantic projection; no native provider reads mutable terminal, mux, render, or App state.
+- Text/range offsets follow logical grapheme order. Bounding rectangles follow rendered BiDi order, pane-local metrics, clipping, padding and zoom.
+- Initial privacy scope exposes only the active visible viewport and focused modal/search input. Scrollback, hidden tabs/windows/workspaces, hyperlink targets and process metadata are excluded.
+- A projection document is limited to 512 rows, 16,384 graphemes, 1 MiB UTF-8 and 256 nodes; truncation and generation staleness are explicit.
+- Focus precedence is modal, search, then focused terminal pane. Repaint-only changes emit no semantic event; changes coalesce once per projection cycle.
+- Windows UI Automation, future macOS NSAccessibility and future Linux AT-SPI remain separate frontend adapters over the same pure document.
+- Windows activation is restart-scoped and default-off until real Narrator/NVDA qualification passes.
+
 ### Visual theme
 
 - Default palette name is `cervterm dark`.
