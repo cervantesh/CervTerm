@@ -72,3 +72,52 @@ func TestRangeRejectsInvalidNodeAndEndpoints(t *testing.T) {
 		t.Fatalf("missing node err=%v", err)
 	}
 }
+
+func TestRangeUnitsMovementEndpointsAndFindText(t *testing.T) {
+	document := testDocument(t, 1)
+	_, pane := testIDs()
+	value, err := NewRange(document, pane, 1, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, err := value.Expand(document, TextUnitLine)
+	if err != nil || line.Span() != (Span{Start: 0, End: 3}) {
+		t.Fatalf("line=%#v err=%v", line.Span(), err)
+	}
+	character, err := value.Expand(document, TextUnitCharacter)
+	if err != nil || character.Span() != (Span{Start: 1, End: 2}) {
+		t.Fatalf("character=%#v err=%v", character.Span(), err)
+	}
+	documentRange, err := value.Expand(document, TextUnitDocument)
+	if err != nil || documentRange.Span() != (Span{Start: 0, End: 4}) {
+		t.Fatalf("document=%#v err=%v", documentRange.Span(), err)
+	}
+	moved, count, err := line.Move(document, TextUnitLine, 1)
+	if err != nil || count != 1 || moved.Span() != (Span{Start: 3, End: 4}) {
+		t.Fatalf("moved=%#v count=%d err=%v", moved.Span(), count, err)
+	}
+	moved, count, err = value.MoveEndpoint(document, true, TextUnitCharacter, 2)
+	if err != nil || count != 2 || moved.Span() != (Span{Start: 3, End: 3}) {
+		t.Fatalf("start moved=%#v count=%d err=%v", moved.Span(), count, err)
+	}
+	moved, count, err = value.MoveEndpoint(document, false, TextUnitCharacter, -2)
+	if err != nil || count != -2 || moved.Span() != (Span{Start: 1, End: 1}) {
+		t.Fatalf("end moved=%#v count=%d err=%v", moved.Span(), count, err)
+	}
+	target, _ := NewRange(document, pane, 3, 4)
+	moved, err = value.MoveEndpointTo(document, true, target, false)
+	if err != nil || moved.Span() != (Span{Start: 4, End: 4}) {
+		t.Fatalf("endpoint-to=%#v err=%v", moved.Span(), err)
+	}
+	found, ok, err := documentRange.FindText(document, "E\u0301", false, true)
+	if err != nil || !ok || found.Span() != (Span{Start: 3, End: 4}) {
+		t.Fatalf("found=%#v ok=%v err=%v", found.Span(), ok, err)
+	}
+	equal, err := found.Equal(document, target)
+	if err != nil || !equal {
+		t.Fatalf("equal=%v err=%v", equal, err)
+	}
+	if _, err := value.Expand(document, TextUnit(99)); !errors.Is(err, ErrInvalidRange) {
+		t.Fatalf("invalid unit err=%v", err)
+	}
+}
