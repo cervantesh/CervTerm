@@ -141,6 +141,19 @@ For PTY/rendering bugs, capture raw terminal output:
 
 Attach the `.vt` file, diagnostics log, `--doctor` output, and a screenshot to the issue when possible.
 
+## Experimental Windows IME opt-in
+
+Native Windows preedit/candidate integration is available for controlled testing but remains disabled by default because the full Japanese/Chinese/Korean qualification matrix is incomplete. Enable it only in a v2 configuration and restart CervTerm:
+
+```lua
+return {
+  config_version = 2,
+  ime = { enabled = true },
+}
+```
+
+If installation is unavailable or fails, CervTerm keeps the existing GLFW text-input path and displays a bounded fallback notice. Run `cervterm.exe --doctor --config <path>` to confirm configured intent and platform eligibility. See [`manual-verification.md`](manual-verification.md) before making a support claim.
+
 ## Known beta limitations
 
 - Windows binaries are currently unsigned unless a release explicitly says otherwise.
