@@ -64,18 +64,26 @@ func (coordinator *compositionCoordinator) update(generation uint64, update ime.
 }
 
 func (coordinator *compositionCoordinator) commit(generation uint64, units []uint16) error {
+	_, err := coordinator.commitText(generation, units)
+	return err
+}
+
+func (coordinator *compositionCoordinator) commitText(generation uint64, units []uint16) (string, error) {
 	if !coordinator.deliveryActive || coordinator.route == nil {
-		return errCompositionDeliveryInactive
+		return "", errCompositionDeliveryInactive
 	}
 	commit, err := coordinator.model.Commit(generation, units)
 	if err != nil {
 		if malformedCompositionError(err) {
 			_ = coordinator.cancel(ime.CancelMalformed)
 		}
-		return err
+		return "", err
 	}
 	coordinator.notifyChanged()
-	return coordinator.route(commit.Target, commit.Text)
+	if err := coordinator.route(commit.Target, commit.Text); err != nil {
+		return "", err
+	}
+	return commit.Text, nil
 }
 
 func (coordinator *compositionCoordinator) cancel(reason ime.CancelReason) error {
