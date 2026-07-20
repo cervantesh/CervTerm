@@ -8,6 +8,7 @@ import (
 )
 
 var errCandidateGeometryInvalid = errors.New("candidate geometry is invalid")
+var errCandidateGeometryCallbackPanic = errors.New("candidate geometry callback panic")
 
 type framebufferCaretRect struct {
 	x, y, width, height float64
@@ -83,6 +84,19 @@ func (publisher *candidateGeometryPublisher) setCallbacks(publish func(nativeCan
 	publisher.frame = 0
 	publisher.presented = 0
 	return nil
+}
+
+func (publisher *candidateGeometryPublisher) detachCallbacks() (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = errors.Join(err, errCandidateGeometryCallbackPanic)
+		}
+		publisher.publish, publisher.clear = nil, nil
+		publisher.last = nativeCandidateRect{}
+		publisher.valid, publisher.wasVisible = false, false
+		publisher.frame, publisher.presented = 0, 0
+	}()
+	return publisher.hide()
 }
 
 func (publisher *candidateGeometryPublisher) publishChanged(rect nativeCandidateRect) error {

@@ -48,8 +48,8 @@ func TestTypedDefaultTealExample(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("typed default should validate: %v", err)
 	}
-	if cfg.ColorScheme != "Shades of Purple" || cfg.Colors.Background != "#2D2B55" {
-		t.Fatalf("typed named scheme not selected: scheme=%q background=%q", cfg.ColorScheme, cfg.Colors.Background)
+	if cfg.ColorScheme != "Shades of Purple" || cfg.Colors.Background != "#2D2B55" || cfg.IME.Enabled {
+		t.Fatalf("typed defaults drifted: scheme=%q background=%q ime=%v", cfg.ColorScheme, cfg.Colors.Background, cfg.IME.Enabled)
 	}
 }
 
