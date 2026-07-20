@@ -137,3 +137,15 @@ Enable `layout_persistence`, use two monitors/DPI scales when available, and ver
 - Inject/induce a launch failure in one restored pane and confirm the entire candidate closes before the normal fresh-window fallback appears.
 
 Automated evidence is recorded at `docs/validation/phase-9-windows-workspaces-layout-persistence.md`. Windows GUI multi-monitor verification remains manual; Linux is headless-qualified and macOS/Linux GUI behavior is not claimed.
+
+## Phase 10 shell semantics and trusted effects qualification
+
+Use a shell integration that emits OSC 133 or OSC 633, plus a temporary v2 config that explicitly enables each desired bell/notification sink. Verify:
+
+- Prompt navigation, input/output copy, and viewport-safe selection follow the current shell cycle after scrollback, resize, soft wrap, and alternate-screen entry/exit.
+- OSC 8 and detected HTTP(S) links never open on output alone; a press/release on the same fresh region opens once. `file:`, `javascript:`, credentials, malformed authorities, and stale regions remain blocked.
+- Every BEL invokes the Lua callback even when native effects are disabled, focused, or throttled. Audible/visual/taskbar modes obey their configured focus and throttle policy.
+- With notifications at their default, OSC 9/777 produces no native effect. After explicit enablement, unfocused/focus-always and rate settings behave as configured; changing `enabled` back to false removes the projection-owned notification icon.
+- On Windows, accepted notifications use the native notification-area balloon, respect quiet time, truncate Unicode safely, and remove their icon on window close/rollback. Adapter errors must not reveal title/body.
+
+Automated cross-slice evidence is recorded at `docs/validation/phase-10-closeout.md`. Windows native API behavior still requires the manual checks above. Linux is headless-qualified; macOS and Linux GUI link/bell/notification behavior is explicitly skipped and no native notification support is claimed.

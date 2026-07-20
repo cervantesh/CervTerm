@@ -226,20 +226,24 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 **Rollback:** disable restore and fall back to one fresh window; persisted file is non-authoritative.
 
 ## Phase 10 — Shell Semantics, Links, Bell, and Notifications
-**Scope:** OSC 8, OSC 133/633, prompt navigation, command selection, custom links, trusted notifications.
+**Scope:** OSC 8, OSC 133/633, prompt navigation, command selection/copy, trusted HTTP(S) activation, bell policies, and trusted notifications.
+
+**Status:** Complete through Phase 10.6c and the final qualification recorded in [`docs/validation/phase-10-closeout.md`](validation/phase-10-closeout.md).
 
 **Work**
 - Accept ADR-0008.
-- Add OSC 8 hyperlink identity/lifetime and configurable safe hyperlink rules.
+- Add OSC 8 hyperlink identity/lifetime and a centralized safe HTTP(S) activation policy.
 - Add semantic prompt/command/output zones tied to logical rows and propagated via snapshots/events.
 - Add previous/next prompt, select command/output, copy command/output actions.
-- Add bell policies: disabled, audible, visual, taskbar, notification, with throttling.
-- Add native notification requests through allow/deny, rate-limit, focus, and URI validation policy.
+- Add bell policies: disabled, audible, visual, and taskbar, with focus filtering and throttling.
+- Add bounded OSC 9/777 notification requests behind default-off consent, rate-limit, focus, freshness, and native-adapter policy.
 - Expose read-only semantic metadata to Lua; terminal output cannot directly execute arbitrary commands.
 
 **Success:** metadata survives scroll/resize/alternate-screen rules; malicious OSC cannot launch arbitrary code or spam; existing OSC 7/52 behavior remains intact.
 
 **Tests:** BEL/ST parsing, malformed/oversized payloads, row mutations, alt screen, trust/rate limits, shell E2E on supported shells.
+
+**Evidence:** bounded OSC 8 and OSC 9/777 metadata, OSC 133/633 semantic history, typed prompt/copy/select actions, explicit HTTP(S) activation policy, lossless bell delivery with bounded sinks, default-off notification consent, Windows native notification lifecycle, cross-slice shell fixtures, malicious-output regression tests, and platform pass/skip boundaries are linked from the Phase 10 close-out report.
 
 **Rollback:** side effects default disabled or prompt-gated; semantic parsing can remain internal.
 
