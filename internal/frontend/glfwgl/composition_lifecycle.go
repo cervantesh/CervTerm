@@ -10,6 +10,8 @@ import (
 	termmux "cervterm/internal/mux"
 )
 
+var errCompositionCleanupPanic = errors.New("composition cleanup callback panic")
+
 func (a *App) openModal(mode modal.Mode, pane modal.PaneIdentity, focus modal.FocusIdentity, entries []modal.Entry) bool {
 	if !a.modal.Open(mode, pane, focus, entries) {
 		return false
@@ -93,11 +95,34 @@ func (coordinator *compositionBeforeUnbind) close() error {
 	// callers continue through unbind, resource closure, and HWND destruction.
 	var joined error
 	for _, step := range []func() error{coordinator.cancel, coordinator.deactivate, coordinator.restore, coordinator.release} {
-		if step != nil {
-			joined = errors.Join(joined, step())
-		}
+		joined = errors.Join(joined, callCompositionCleanupStep(step))
 	}
 	return joined
+}
+
+func callCompositionCleanupStep(step func() error) (err error) {
+	if step == nil {
+		return nil
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = errCompositionCleanupPanic
+		}
+	}()
+	return step()
+}
+
+func (coordinator *compositionBeforeUnbind) attachWndProcHost(host *windowsWndProcHost) error {
+	if coordinator == nil || coordinator.done || host == nil || coordinator.restore != nil || coordinator.release != nil {
+		return errWndProcHostInvalid
+	}
+	deactivate := coordinator.deactivate
+	coordinator.deactivate = func() error {
+		return errors.Join(callCompositionCleanupStep(deactivate), host.deactivate())
+	}
+	coordinator.restore = host.restore
+	coordinator.release = host.release
+	return nil
 }
 
 func newCompositionBeforeUnbind(app *App) *compositionBeforeUnbind {
