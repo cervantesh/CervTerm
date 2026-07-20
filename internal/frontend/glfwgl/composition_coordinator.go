@@ -123,7 +123,12 @@ func malformedCompositionError(err error) bool {
 
 func (a *App) initCompositionCoordinator() {
 	a.composition.bind(a.captureCommittedTextTarget, a.routeCommittedText)
-	a.composition.bindPresentation(func(ime.Snapshot) { a.requestRedraw() })
+	a.composition.bindPresentation(func(snapshot ime.Snapshot) {
+		if !snapshot.Active {
+			_ = a.candidateGeometry.hide()
+		}
+		a.requestRedraw()
+	})
 }
 
 func (a *App) cancelComposition(reason ime.CancelReason) error {

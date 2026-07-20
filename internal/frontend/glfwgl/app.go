@@ -106,6 +106,7 @@ type App struct {
 	charSuppression   charSuppression
 	textTarget        committedTextTargetState
 	composition       compositionCoordinator
+	candidateGeometry candidateGeometryPublisher
 	lastStats         time.Time
 	blinkStart        time.Time
 	showStats         bool
@@ -325,10 +326,16 @@ func (a *App) runWindow() error {
 
 func (a *App) installCallbacks() {
 	a.window.SetContentScaleCallback(func(_ *glfw.Window, scaleX, scaleY float32) {
+		a.invalidateCandidateGeometry()
 		a.rebuildForContentScale(scaleX, scaleY)
 		a.requestRedraw()
 	})
 	a.window.SetFramebufferSizeCallback(func(_ *glfw.Window, _, _ int) {
+		a.invalidateCandidateGeometry()
+		a.requestRedraw()
+	})
+	a.window.SetSizeCallback(func(_ *glfw.Window, _, _ int) {
+		a.invalidateCandidateGeometry()
 		a.requestRedraw()
 	})
 	a.window.SetCharCallback(func(_ *glfw.Window, char rune) {
