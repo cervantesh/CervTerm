@@ -8,7 +8,7 @@ func appendPaneNotificationEvents(events []Event, p *pane) []Event {
 		events = append(events, Event{Kind: PaneNotificationOverflow, Pane: p.id, Revision: latest})
 	}
 	for _, request := range requests {
-		events = append(events, Event{Kind: PaneNotificationRequested, Pane: p.id, Notification: request, Revision: request.Sequence})
+		events = append(events, Event{Kind: PaneNotificationRequested, Pane: p.id, Notification: request, Revision: request.Sequence, Fresh: true})
 	}
 	return events
 }

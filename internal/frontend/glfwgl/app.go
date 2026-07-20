@@ -117,6 +117,7 @@ type App struct {
 	linkLauncher      urlLauncher
 	clipboardSetter   func(string)
 	bellState
+	notificationState
 	hud             hudCache
 	fps             float64
 	fpsFrames       uint64

@@ -374,6 +374,7 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	oldTabBarHeight := a.effectiveTabBarHeight()
 	oldTabBarPosition := a.cfg.TabBar.Position
 	oldBell := a.cfg.Bell
+	oldNotification := a.cfg.Notification
 	a.mux.SetScrollbackCapacity(next.Scrolling.History)
 	a.mux.SetHideCursorWhenScrolled(next.Scrolling.HideCursorWhenScrolled)
 	a.syncFocusedProjection()
@@ -392,6 +393,13 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	a.cfg.Bell = next.Bell
 	if oldBell != a.cfg.Bell && a.bellGate != nil {
 		a.bellGate.Reset()
+	}
+	a.cfg.Notification = next.Notification
+	if oldNotification != a.cfg.Notification {
+		if a.notificationState.gate != nil {
+			a.notificationState.gate.Reset()
+		}
+		a.notificationState.unsupportedWarned = false
 	}
 	a.cfg.Render.MaxFPS = next.Render.MaxFPS
 	a.applyWindowAppearance()
