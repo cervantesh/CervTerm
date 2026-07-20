@@ -5,6 +5,7 @@ param(
   [Parameter(Mandatory = $true)][string]$DisabledConfig,
   [Parameter(Mandatory = $true)][string]$EnabledConfig,
   [string]$OutFile = "dist/accessibility-process-measurements.csv",
+  [string]$RuntimeMetricsDir = "",
   [ValidateRange(3, 20)][int]$Iterations = 3,
   [ValidateRange(1, 30)][int]$IdleSeconds = 3
 )
@@ -17,6 +18,16 @@ function Resolve-InputPath([string]$Path) {
 
 function Measure-CervTerm([string]$Name, [string]$Exe, [string]$Config) {
   1..$Iterations | ForEach-Object {
+    $run = $_
+	$priorMetricsOut = $env:CERVTERM_RUNTIME_METRICS_OUT
+	$priorMetricsDelay = $env:CERVTERM_RUNTIME_METRICS_DELAY
+	$metricsPath = $null
+	if ($RuntimeMetricsDir) {
+	  New-Item -ItemType Directory -Force -Path $RuntimeMetricsDir | Out-Null
+	  $metricsPath = Join-Path $RuntimeMetricsDir "$Name-$run.json"
+	  $env:CERVTERM_RUNTIME_METRICS_OUT = $metricsPath
+	  $env:CERVTERM_RUNTIME_METRICS_DELAY = "${IdleSeconds}s"
+	}
     $timer = [Diagnostics.Stopwatch]::StartNew()
     $process = Start-Process -FilePath $Exe -ArgumentList @("--config", $Config, "--log-file", "-") -PassThru
     try {
@@ -33,22 +44,33 @@ function Measure-CervTerm([string]$Name, [string]$Exe, [string]$Config) {
       if (-not $ready) { throw "$Name did not expose a responding window within 10 seconds" }
       $readyMS = $timer.Elapsed.TotalMilliseconds
       $cpuBefore = $process.TotalProcessorTime.TotalMilliseconds
-      Start-Sleep -Seconds $IdleSeconds
+      Start-Sleep -Milliseconds (($IdleSeconds * 1000) + $(if ($metricsPath) { 250 } else { 0 }))
       $process.Refresh()
+      $runtimeMetrics = $null
+	  if ($metricsPath) {
+	    if (-not (Test-Path -LiteralPath $metricsPath)) { throw "$Name runtime metrics were not written" }
+	    $runtimeMetrics = Get-Content -Raw -LiteralPath $metricsPath | ConvertFrom-Json
+	  }
       [pscustomobject]@{
         Name = $Name
-        Run = $_
+        Run = $run
         ReadyMS = [math]::Round($readyMS, 2)
         WorkingSetMiB = [math]::Round($process.WorkingSet64 / 1MB, 2)
         PrivateMiB = [math]::Round($process.PrivateMemorySize64 / 1MB, 2)
         IdleCPUms = [math]::Round($process.TotalProcessorTime.TotalMilliseconds - $cpuBefore, 2)
         IdleSeconds = $IdleSeconds
         Handles = $process.HandleCount
+        HeapMiB = $(if ($runtimeMetrics) { [math]::Round($runtimeMetrics.heap_alloc / 1MB, 2) } else { $null })
+		Wakes = $(if ($runtimeMetrics) { $runtimeMetrics.wakes } else { $null })
+		Frames = $(if ($runtimeMetrics) { $runtimeMetrics.frames } else { $null })
+		GoAllocs = $(if ($runtimeMetrics) { $runtimeMetrics.allocs } else { $null })
       }
     } finally {
       if (-not $process.HasExited) { $process.Kill() }
       $process.WaitForExit()
       $process.Dispose()
+      $env:CERVTERM_RUNTIME_METRICS_OUT = $priorMetricsOut
+	  $env:CERVTERM_RUNTIME_METRICS_DELAY = $priorMetricsDelay
     }
   }
 }

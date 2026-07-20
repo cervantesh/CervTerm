@@ -5,6 +5,7 @@ package glfwgl
 import (
 	"encoding/json"
 	"os"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,7 @@ func startRuntimeMetricsProbe(app *App) {
 	runtimeMetricsProbes.Store(app, probe)
 	go func() {
 		time.Sleep(delay)
+		runtime.GC()
 		snapshot := app.meter.Snapshot()
 		payload := struct {
 			DelayMS    int64  `json:"delay_ms"`
