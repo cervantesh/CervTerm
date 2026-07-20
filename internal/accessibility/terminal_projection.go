@@ -81,18 +81,42 @@ type terminalChunk struct {
 }
 
 func ProjectTerminal(input TerminalProjectionInput) (Document, error) {
-	if err := validateTerminalProjection(input); err != nil {
+	pane, truncated, err := projectTerminalNode(input)
+	if err != nil {
 		return Document{}, err
 	}
-	rowLimit := min(input.Rows, MaxRows)
+	return NewDocument(DocumentDraft{
+		ProviderID: input.ProviderID,
+		Generation: input.Generation,
+		Focus:      input.PaneID,
+		Truncated:  truncated,
+		Nodes: []NodeDraft{
+			{ID: input.RootID, Role: RoleWindow, Name: input.RootName},
+			pane,
+		},
+	})
+}
+
+func projectTerminalNode(input TerminalProjectionInput) (NodeDraft, bool, error) {
+	return projectTerminalNodeWithBudget(input, MaxRows, MaxUTF8Bytes-len(input.RootName)-len(input.PaneName), MaxGraphemes)
+}
+
+func projectTerminalNodeWithBudget(input TerminalProjectionInput, rowBudget, byteBudget, graphemeBudget int) (NodeDraft, bool, error) {
+	if err := validateTerminalProjection(input); err != nil {
+		return NodeDraft{}, false, err
+	}
+	if rowBudget < 0 || byteBudget < 0 || graphemeBudget < 0 {
+		return NodeDraft{}, false, ErrInvalidProjection
+	}
+	rowLimit := min(input.Rows, rowBudget)
 	truncated := input.Truncated || input.Rows > rowLimit
 	rows := make([]terminalRow, 0, rowLimit)
-	remainingBytes := MaxUTF8Bytes - len(input.RootName) - len(input.PaneName)
-	remainingGraphemes := MaxGraphemes
+	remainingBytes := byteBudget
+	remainingGraphemes := graphemeBudget
 	for rowIndex := 0; rowIndex < rowLimit; rowIndex++ {
 		projected, rowTruncated, err := projectTerminalRow(input, rowIndex, remainingBytes, remainingGraphemes)
 		if err != nil {
-			return Document{}, err
+			return NodeDraft{}, false, err
 		}
 		rows = append(rows, projected)
 		remainingBytes -= len(projected.text)
@@ -128,16 +152,7 @@ func ProjectTerminal(input TerminalProjectionInput) (Document, error) {
 		}
 		pane.Selection = &span
 	}
-	return NewDocument(DocumentDraft{
-		ProviderID: input.ProviderID,
-		Generation: input.Generation,
-		Focus:      input.PaneID,
-		Truncated:  truncated,
-		Nodes: []NodeDraft{
-			{ID: input.RootID, Role: RoleWindow, Name: input.RootName},
-			pane,
-		},
-	})
+	return pane, truncated, nil
 }
 
 func validateTerminalProjection(input TerminalProjectionInput) error {
