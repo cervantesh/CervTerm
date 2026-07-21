@@ -179,6 +179,19 @@ return {
 		enabled = %t,
 		scope = %q, -- visible is the only supported privacy scope
 	},
+	graphics = {
+		kitty = {
+			-- Dormant until the protocol/runtime activation slices; restart required.
+			enabled = %t,
+		},
+		limits = {
+			encoded_bytes_per_pane = %d,
+			decoded_bytes_per_pane = %d,
+			image_count_per_pane = %d,
+			placement_count_per_pane = %d,
+			gpu_bytes_per_context = %d,
+		},
+	},
   bell = {
     -- Sink effects are disabled by default; Lua bell callbacks remain lossless.
     mode = %q, -- disabled, audible, visual, or taskbar
@@ -307,6 +320,7 @@ return {
 		cfg.Clipboard.OSC52,
 		cfg.IME.Enabled,
 		cfg.Accessibility.Enabled, cfg.Accessibility.Scope,
+		cfg.Graphics.Kitty.Enabled, cfg.Graphics.Limits.EncodedBytesPerPane, cfg.Graphics.Limits.DecodedBytesPerPane, cfg.Graphics.Limits.ImageCountPerPane, cfg.Graphics.Limits.PlacementCountPerPane, cfg.Graphics.Limits.GPUBytesPerContext,
 		cfg.Bell.Mode, cfg.Bell.Focus, cfg.Bell.ThrottleMS, cfg.Bell.VisualDurationMS,
 		cfg.Notification.Enabled, cfg.Notification.Focus, cfg.Notification.RateLimitMS,
 		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.ZoomInHotkey, cfg.Render.ZoomOutHotkey, cfg.Render.ZoomResetHotkey, cfg.Render.VSync, cfg.Render.MaxFPS, cfg.Render.Redraw, cfg.Render.Damage, cfg.Render.Bidi,

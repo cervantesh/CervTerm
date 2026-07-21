@@ -91,6 +91,12 @@ func fullyDifferentConfig(base Config) Config {
 	value.IME.Enabled = !value.IME.Enabled
 	value.Accessibility.Enabled = !value.Accessibility.Enabled
 	value.Accessibility.Scope = "different"
+	value.Graphics.Kitty.Enabled = !value.Graphics.Kitty.Enabled
+	value.Graphics.Limits.EncodedBytesPerPane--
+	value.Graphics.Limits.DecodedBytesPerPane--
+	value.Graphics.Limits.ImageCountPerPane--
+	value.Graphics.Limits.PlacementCountPerPane--
+	value.Graphics.Limits.GPUBytesPerContext--
 	value.Bell.Mode = "visual"
 	value.Bell.Focus = "always"
 	value.Bell.ThrottleMS++
@@ -136,8 +142,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 106 {
-		t.Fatalf("config leaf count = %d, want 106", len(changes))
+	if len(changes) != 112 {
+		t.Fatalf("config leaf count = %d, want 112", len(changes))
 	}
 }
 
