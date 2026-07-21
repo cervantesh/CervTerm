@@ -145,13 +145,12 @@ func (m *Mux) PaneView(id PaneID) (PaneView, bool) {
 	view := PaneView{
 		ID: id, State: p.state, Geometry: p.geometry,
 		DesiredSize: p.desiredSize, AppliedSize: p.appliedSize, ResizeErr: p.resizeErr,
-		Snapshot:      p.snapshot,
+		Snapshot:      detachedPaneSnapshot(p.snapshot),
 		DisplayOffset: p.terminal.DisplayOffset(), ScrollbackLines: p.terminal.ScrollbackLines(),
 		AlternateScreen: p.terminal.AlternateScreenMode(), BracketedPaste: p.terminal.BracketedPasteMode(),
 		FocusEvents: p.terminal.FocusEventsMode(), ApplicationCursor: p.terminal.ApplicationCursorMode(),
 		MouseMode: p.terminal.MouseMode(),
 	}
-	view.Snapshot.Cells = append(view.Snapshot.Cells[:0:0], p.snapshot.Cells...)
 	return view, true
 }
 func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
