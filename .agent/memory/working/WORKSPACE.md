@@ -1,12 +1,14 @@
 # Workspace (live task state)
 
 ## Current task
-Execute CervTerm WezTerm-parity Phase 13 one slice at a time from local `dev`. Architecture gates are complete; begin with Slice 13.0a tracked architecture synchronization.
+Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.0b baseline/invariant harness is complete, validated, and independently approved; commit and local merge are next.
 
 ## Open files
-- `.architecture-ai-project-advisor/.asi/projects/cervterm/` (Slice 13.0a target)
-- External planning source: `.t50-project-flow/.asi/projects/cervterm/` in the primary workspace
-- Phase 13 accepted ADR 0014, feature design, and implementation plan
+- `docs/validation/phase-13-baseline.{md,txt}` and `phase-13-gl-baseline.txt`
+- `scripts/check-phase13-imports.go`
+- `scripts/compare-phase13-baseline.go`
+- `scripts/capture-phase13-benchmark.go`
+- Phase 13 benchmark tests in VT/render/GLFW and exact Cell invariant
 
 ## Active constraints
 - Preserve 32-byte text-only `core.Cell`.
@@ -17,9 +19,12 @@ Execute CervTerm WezTerm-parity Phase 13 one slice at a time from local `dev`. A
 
 ## Checkpoints
 - [x] Phase 13 preflight, ADR, design, plan, and independent PASS.
-- [x] Hermes-only Agentic Stack onboarding; doctor green.
-- [ ] Commit onboarding prerequisite to local `dev`.
-- [ ] Implement and merge Slice 13.0a.
+- [x] Hermes-only Agentic Stack onboarding merged into `dev`.
+- [x] Slice 13.0a architecture authority merged into `dev`.
+- [x] Slice 13.0b full/tagged/race/vet/fuzz/import/maturity gates run.
+- [x] Stable warmed single-P ten-sample baselines recorded; strict malformed/identity/allocation negative cases reject.
+- [x] Independent Slice 13.0b review reached PROCEED after all harness-identity blockers were closed.
+- [ ] Commit and locally merge Slice 13.0b.
 
 ## Next step
-Commit the approved Hermes-only onboarding on a dedicated branch, locally merge it into `dev`, then create the clean Slice 13.0a worktree from updated `dev`.
+Commit the approved Slice 13.0b, merge it into local `dev`, then begin bounded APC/DCS framing Slice 13.1 from the updated clean base.
