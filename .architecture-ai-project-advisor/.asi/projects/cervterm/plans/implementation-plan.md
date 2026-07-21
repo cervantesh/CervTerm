@@ -96,18 +96,19 @@ Success criteria: no production behavior diff; both exact baseline captures are 
 
 Branch: `feat/parity-phase-13-control-strings`
 
-Files: `internal/vt/parser.go`, `parser_esc.go`, new `parser_control_string.go`, tests/fuzz/absent-feature tests.
+Files: `internal/vt/parser.go`, `parser_esc.go`, new `parser_control_string.go`, `internal/core/vt_features.go`, tests/fuzz/retained corpus, control-string benchmarks, portable raw baseline/report, and the `control` capture-suite registration.
 
 API: `ControlStringKind`, borrowed `ControlStringEvent`, `SetControlStringSink`, `Parser.Reset`, `Parser.EndOfInput`.
 
-Work: dedicated APC/DCS/escape/discard states; 256 KiB frame and 16 KiB chunk; ST finalize, CAN/SUB cancel, overflow discard through terminator, nil sink discard, reset/EOF cancellation; preserve OSC.
+Work: dedicated APC/DCS/escape/discard states; 256 KiB frame and 16 KiB chunk; ST finalize, CAN/SUB cancel, overflow discard through terminator, nil sink discard, reset/EOF cancellation; preserve OSC; establish zero-allocation discard/overflow first-result baselines.
+- Mandatory parser fuzz findings are in-scope safety work: saturate CSI parameters at the supported `uint16` geometry limit and make forward/backward tab traversal stop at the terminal boundary instead of repeating no-op work.
 
 Success criteria:
 - Every split boundary, ESC/ST ambiguity, malformed/cancel/overflow/reset/EOF returns to ground text without payload leakage.
 - Existing OSC/VT tests byte-identical; disabled benchmark <=3% median regression and zero new allocation.
 - Fuzz `FuzzControlStringFraming` and existing parser fuzz >=60 s before merge.
 
-Rollback: remove inert framing/API.
+Rollback: remove inert framing/API; the independently qualified CSI overflow/loop hardening may remain.
 
 ## 13.2 — Bounded process/pane store foundations
 
@@ -329,6 +330,8 @@ go run ./scripts/capture-phase13-benchmark.go -suite text -out phase13-final.txt
 go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-baseline.txt phase13-final.txt
 go run ./scripts/capture-phase13-benchmark.go -suite glfw -out phase13-gl-final.txt
 go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-gl-baseline.txt phase13-gl-final.txt
+go run ./scripts/capture-phase13-benchmark.go -suite control -out phase13-control-final.txt
+go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-control-string-baseline.txt phase13-control-final.txt
 ```
 
 ## Required gates after every slice
@@ -347,6 +350,13 @@ git diff --check
 go test ./internal/vt -run '^$' -fuzz=FuzzParserAdvanceDoesNotPanic -fuzztime=5s
 go run ./scripts/capture-phase13-benchmark.go -suite text -out phase13-candidate.txt
 go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-baseline.txt phase13-candidate.txt
+```
+
+13.1 establishes the control-string baseline. Slices 13.2–13.15 also run:
+
+```text
+go run ./scripts/capture-phase13-benchmark.go -suite control -out phase13-control-candidate.txt
+go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-control-string-baseline.txt phase13-control-candidate.txt
 ```
 
 GLFW slices also run:
