@@ -1,14 +1,14 @@
 # Workspace (live task state)
 
 ## Current task
-Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.1 is implemented, fully validated, and independently approved; commit and local merge are next.
+Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.2 bounded termimage store foundations are implemented, independently approved, and awaiting isolated performance capture/commit/merge.
 
 ## Open files
-- `internal/vt/parser.go`, `parser_esc.go`, and `parser_control_string.go`
-- `internal/vt/parser_control_string_{test,benchmark_test}.go`
-- `docs/validation/phase-13-control-string-baseline.{md,txt}`
-- `scripts/capture-phase13-benchmark.go` control suite
-- Phase 13 implementation plan and portable baseline gates
+- New `internal/termimage/{doc,types,limits,budget,store}.go`
+- ADR 0014 hard caps and lower-only effective limits
+- Atomic process/pane reservations and exactly-once leases
+- Owner-thread store epochs, pending transfers, detached acquisitions
+- Phase 13 implementation plan and existing text/control performance gates
 
 ## Active constraints
 - Preserve 32-byte text-only `core.Cell`.
@@ -31,7 +31,13 @@ Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.1 is impl
 - [x] Independent reviews closed repeated-ESC, overlapping-ST, fuzz breadth, lazy-state, CSI geometry, and pending-wrap findings with final PROCEED.
 - [x] Final full/tagged/vet/race/maturity/import gates and both mandatory 60-second fuzz targets pass; minimized CSI corpus retained.
 - [x] Isolated text/control performance captures pass the 3% and worst-allocation gates; portable first-result control baselines are recorded.
-- [ ] Commit and locally merge Slice 13.1.
+- [x] Slice 13.1 merged into local `dev` at `fb97fd6`.
+- [x] Slice 13.2 normative limits, ownership, rollback, concurrency, and cross-slice API restraints analyzed.
+- [x] Hard/lower-only limits, atomic pane/process reservations, autonomous bounded transfer expiry/removal, detached acquisition, decoded candidate leases, epochs and generation preparation implemented.
+- [x] Independent review findings for unbounded pending retention, passive expiry, candidate lifecycle, generation mutation, exact placement caps, and source identity are closed with final PROCEED.
+- [x] Full/tagged/vet/race/maturity/import gates and both new 60-second termimage fuzz targets pass.
+- [x] Isolated text/control/store performance gates pass; store first-result baseline and documented control recalibration are recorded.
+- [ ] Commit and locally merge Slice 13.2.
 
 ## Next step
-Commit and merge Slice 13.1 into local `dev`, then advance automatically to bounded process/pane store foundations in Slice 13.2.
+Commit and merge Slice 13.2 into local `dev`, then advance automatically to dormant placement contracts and prepared transactions in Slice 13.3.
