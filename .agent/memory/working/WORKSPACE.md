@@ -1,13 +1,13 @@
 # Workspace (live task state)
 
 ## Current task
-Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.5 reflow/alternate/reset lifecycle and public core image API are implemented, independently reviewed to PROCEED, and ready to commit/local merge.
+Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.6 detached render/mux image projection and independent damage identity are implemented, independently reviewed to PROCEED, and ready to commit/local merge.
 
 ## Open files
-- Shared `reflowMap` for boundary, cursor, viewport and placement top-left mapping
-- Alternate top-anchor crop/exit cleanup and prepared RIS/store epoch reset
-- StoreOwner capability, tracked candidates and reset admission gate
-- Public Attach/Commit/Delete/Reset/Projection API with detached metadata
+- Reusable core placement/crop projection into renderer-neutral snapshots
+- Stable pane-object plus image-generation damage identity with text-only row hashes
+- Recursive public PaneView detachment including hidden scratch, combining cells and crops
+- Literal-nil/default text path with zero image allocations
 
 ## Active constraints
 - Preserve 32-byte text-only `core.Cell`.
@@ -50,6 +50,12 @@ Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.5 reflow/
 - [x] Public core image API is externally testable, owner-thread documented, detached and bounded; no production caller attaches it before mux/runtime slices.
 - [x] Independent review reached PROCEED after ownership bypass, reset race/zero-usage, padding mapping, shared boundary map, coverage and maturity findings were closed.
 - [x] Full/tagged/vet/race/maturity/import/fuzz-smoke and isolated text/store performance gates pass.
+- [x] Slice 13.5 committed at `284865e` and locally merged into `dev` at `4d08bec`.
+- [x] Slice 13.6 snapshots carry only pane-qualified placement/resource references and image generation; no pixels, stores, leases or GL handles.
+- [x] Render capture reuses placement/crop capacity; Mux PaneView recursively detaches every public slice and nested crop/combining value.
+- [x] Text row hashes remain image-free; pane-qualified image generation independently damages both back buffers without pinning redraw.
+- [x] Independent review reached PROCEED after buffer-age, pane identity, nil semantics, crop allocation and hidden scratch findings were closed.
+- [x] Full/tagged/vet/race/maturity/import and isolated text performance gates pass with 0 B/op and 0 allocs/op.
 
 ## Next step
-Commit Slice 13.5, merge it into local `dev`, then advance automatically to Slice 13.6 detached render/mux image projection.
+Commit Slice 13.6, merge it into local `dev`, then advance automatically to Slice 13.7 mux store lifecycle, resource acquisition and bounded shared replies.

@@ -68,14 +68,16 @@ func (t *Terminal) ResetImages() {
 	}
 }
 
-// ImageProjection returns detached active-screen metadata. Owner-thread only.
-func (t *Terminal) ImageProjection(viewportTop, rows int) termimage.Projection {
+// CopyImageProjection replaces detached active-screen metadata using reusable storage.
+// The returned crop slice backs any non-nil Placement.Crop pointers and must be retained.
+func (t *Terminal) CopyImageProjection(dst []termimage.Placement, crops []termimage.PixelRect, viewportTop, rows int) ([]termimage.Placement, []termimage.PixelRect, uint64) {
+	dst, crops = dst[:0], crops[:0]
 	if t == nil || t.imageSidecars == nil || rows <= 0 {
-		return termimage.Projection{}
+		return dst, crops, 0
 	}
 	rows = min(rows, t.rows)
 	if !t.alternateScreen && viewportTop < 0 {
-		return termimage.Projection{}
+		return dst, crops, 0
 	}
 	source := t.imageSidecars.primary
 	if t.alternateScreen {
@@ -83,10 +85,12 @@ func (t *Terminal) ImageProjection(viewportTop, rows int) termimage.Projection {
 	}
 	top := int64(viewportTop)
 	if top > math.MaxInt64-int64(rows) {
-		return termimage.Projection{}
+		return dst, crops, 0
+	}
+	if cap(crops) < len(source) {
+		crops = make([]termimage.PixelRect, 0, len(source))
 	}
 	viewport := imageCellRect{top: top, bottom: top + int64(rows), left: 0, right: uint32(t.cols)}
-	projection := termimage.Projection{Generation: t.imageSidecars.generation}
 	for _, entry := range source {
 		if !imageRectsIntersect(placementRect(entry.placement), viewport) {
 			continue
@@ -94,10 +98,16 @@ func (t *Terminal) ImageProjection(viewportTop, rows int) termimage.Projection {
 		placement := entry.placement
 		placement.Anchor.Row -= int64(viewportTop)
 		if placement.Crop != nil {
-			crop := *placement.Crop
-			placement.Crop = &crop
+			crops = append(crops, *placement.Crop)
+			placement.Crop = &crops[len(crops)-1]
 		}
-		projection.Placements = append(projection.Placements, placement)
+		dst = append(dst, placement)
 	}
-	return projection
+	return dst, crops, t.imageSidecars.generation
+}
+
+// ImageProjection returns detached active-screen metadata. Owner-thread only.
+func (t *Terminal) ImageProjection(viewportTop, rows int) termimage.Projection {
+	placements, _, generation := t.CopyImageProjection(nil, nil, viewportTop, rows)
+	return termimage.Projection{Placements: placements, Generation: generation}
 }

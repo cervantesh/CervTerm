@@ -112,3 +112,27 @@ func TestPreeditRevisionDamagesOnlyOnMutation(t *testing.T) {
 		t.Fatal("cancel must damage both back buffers without pinning redraw")
 	}
 }
+
+func TestImageGenerationIsIndependentGlobalDamageIdentity(t *testing.T) {
+	app := &App{contentScaleX: 1, contentScaleY: 1}
+	app.snap = render.Snapshot{Cols: 4, Rows: 2, Cells: make([]core.Cell, 8), ImageGeneration: 1}
+	background := color.RGBA{A: 0xff}
+	record := func() bool {
+		full, _ := app.prepareDamage(320, 160, 0, false, false, background)
+		app.recordDamageFrame(320, 160, 0, false, false, background, 0)
+		return full
+	}
+	record()
+	record()
+	if record() {
+		t.Fatal("stable image generation pinned global damage")
+	}
+	app.snap.ImageGeneration++
+	if !record() || !record() || record() {
+		t.Fatal("image generation must damage both back buffers without pinning redraw")
+	}
+	app.snap.PaneObject = 2
+	if !record() || !record() || record() {
+		t.Fatal("equal-generation pane switch did not damage both back buffers")
+	}
+}
