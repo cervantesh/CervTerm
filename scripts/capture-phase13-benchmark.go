@@ -138,9 +138,9 @@ func buildMetadata(root, suiteName string, suite benchmarkSuite, cpu string, war
 	if err != nil {
 		return phase13Metadata{}, err
 	}
-	harnessFiles := append([]string{}, suite.harness...)
-	harnessFiles = append(harnessFiles, "scripts/capture-phase13-benchmark.go", "scripts/compare-phase13-baseline.go")
-	digest, err := digestFiles(root, harnessFiles)
+	// The harness identity covers benchmark code and its local helpers. Capture and
+	// comparison tooling may grow new suites without invalidating prior results.
+	digest, err := digestFiles(root, append([]string(nil), suite.harness...))
 	if err != nil {
 		return phase13Metadata{}, err
 	}
@@ -170,7 +170,10 @@ func digestFiles(root string, paths []string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", path, err)
 		}
-		hash.Write([]byte(path))
+		// Git may materialize the same source as LF or CRLF. Harness identity is
+		// content-based rather than checkout-platform-based.
+		content = bytes.ReplaceAll(content, []byte("\r\n"), []byte("\n"))
+		hash.Write([]byte(filepath.ToSlash(path)))
 		hash.Write([]byte{0})
 		hash.Write(content)
 		hash.Write([]byte{0})
