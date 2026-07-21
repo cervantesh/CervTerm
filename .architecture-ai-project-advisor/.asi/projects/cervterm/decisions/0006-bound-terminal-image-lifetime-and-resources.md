@@ -1,10 +1,13 @@
 # ADR: Bound terminal image lifetime and resources
 
 ## Status
-Proposed
+Superseded
 
 ## Date
 2026-07-16
+
+## Superseded By
+ADR 0014 — Bound terminal image lifetime, transports, and resources. ADR 0014 accepts the concrete ownership, budget, lifecycle, parser, reply, decode, snapshot, GPU-cache, qualification, and rollback contracts required by this proposal.
 
 ## Context
 Kitty APC, Sixel DCS, and iTerm OSC image protocols can carry large compressed payloads and create placements that interact with scrolling, erasure, alternate screen, resize, pane clipping, damage, and GPU textures.
