@@ -1,14 +1,14 @@
 # Workspace (live task state)
 
 ## Current task
-Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.2 bounded termimage store foundations are implemented, independently approved, and awaiting isolated performance capture/commit/merge.
+Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.3 dormant placement contracts and prepared atomic transactions are implemented and validated; commit/local merge is next.
 
 ## Open files
-- New `internal/termimage/{doc,types,limits,budget,store}.go`
-- ADR 0014 hard caps and lower-only effective limits
-- Atomic process/pane reservations and exactly-once leases
-- Owner-thread store epochs, pending transfers, detached acquisitions
-- Phase 13 implementation plan and existing text/control performance gates
+- New `internal/core/images.go` and private terminal image sidecars
+- `internal/termimage` placement/crop/delete-selector contracts
+- Prepared complete store state plus complete sidecar slices
+- Fault-injected allocation/validation/reservation rollback seams
+- Infallible private old-or-new two-pointer publication
 
 ## Active constraints
 - Preserve 32-byte text-only `core.Cell`.
@@ -37,7 +37,10 @@ Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.2 bounded
 - [x] Independent review findings for unbounded pending retention, passive expiry, candidate lifecycle, generation mutation, exact placement caps, and source identity are closed with final PROCEED.
 - [x] Full/tagged/vet/race/maturity/import gates and both new 60-second termimage fuzz targets pass.
 - [x] Isolated text/control/store performance gates pass; store first-result baseline and documented control recalibration are recorded.
-- [ ] Commit and locally merge Slice 13.2.
+- [x] Slice 13.2 merged into local `dev` at `b98b526`.
+- [x] Slice 13.3 strict placement/crop/delete-selector contracts, primary/alternate sidecars, prepared complete store states, exact candidate/resource/placement ownership, owner-thread two-pointer publication, reset/close cleanup, and generation exhaustion are implemented.
+- [x] Adversarial reviews closed stale prepared state, candidate alias/close races, exact-cap placement replacement, CurrentScreen resource scope, reset/close placement leaks, and sidecar generation wrap; final independent verdict is GO.
+- [x] Full and focused race suites, placement/delete/store fuzz targets, import/Cell/default-dormancy checks, and isolated text/store performance gates pass; full vet reports only pre-existing DirectWrite unsafe.Pointer diagnostics.
 
 ## Next step
-Commit and merge Slice 13.2 into local `dev`, then advance automatically to dormant placement contracts and prepared transactions in Slice 13.3.
+Commit Slice 13.3, merge it into local `dev`, then advance automatically to the next approved Phase 13 slice.
