@@ -8,6 +8,7 @@ import (
 	"cervterm/internal/core"
 	"cervterm/internal/pty"
 	"cervterm/internal/render"
+	"cervterm/internal/termimage"
 )
 
 type Options struct {
@@ -16,6 +17,7 @@ type Options struct {
 	SetClipboard           func(PaneID, string)
 	ScrollbackCapacity     *int
 	HideCursorWhenScrolled *bool
+	ImageLimits            *termimage.Limits
 }
 
 type PaneView struct {
@@ -36,15 +38,18 @@ type PaneView struct {
 }
 
 type Mux struct {
-	sessions     *localSessionRegistry
-	options      Options
-	model        *Model
-	bootstrapped bool
-	bounds       PixelRect
-	paneMetrics  map[PaneID]CellMetrics
-	paletteBase  core.PaletteBase
-	windowFault  func(string) error // package-private deterministic failure injection
-	pending      *RestoreCandidate
+	sessions      *localSessionRegistry
+	options       Options
+	model         *Model
+	imageBudget   *termimage.ProcessBudget
+	imageLimits   termimage.Limits
+	imageSetupErr error
+	bootstrapped  bool
+	bounds        PixelRect
+	paneMetrics   map[PaneID]CellMetrics
+	paletteBase   core.PaletteBase
+	windowFault   func(string) error // package-private deterministic failure injection
+	pending       *RestoreCandidate
 }
 
 func New(factory SessionFactory, options Options) *Mux {
@@ -55,10 +60,20 @@ func New(factory SessionFactory, options Options) *Mux {
 		options.IngressCapacity = 256
 	}
 	sessions := newLocalSessionRegistry(factory, options.IngressCapacity, options.Wake)
-	return &Mux{
+	mux := &Mux{
 		sessions: sessions, options: options, model: NewModel(),
 		paneMetrics: make(map[PaneID]CellMetrics), paletteBase: core.DefaultPaletteBase(),
 	}
+	if options.ImageLimits != nil {
+		limits, err := termimage.ValidateLimits(*options.ImageLimits)
+		if err != nil {
+			mux.imageSetupErr = err
+		} else {
+			mux.imageLimits = limits
+			mux.imageBudget = termimage.NewProcessBudget()
+		}
+	}
+	return mux
 }
 
 func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) (TabID, PaneID, []Event, error) {
@@ -77,7 +92,7 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 		return 0, 0, nil, err
 	}
 	defer m.sessions.release(geometry.Pane)
-	p := newPane(geometry.Pane, geometry.Cols, geometry.Rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	p := m.createPane(geometry.Pane, geometry.Cols, geometry.Rows)
 	p.setFreshLaunch(spec)
 	p.terminal.SetPaletteBase(m.paletteBase)
 	p.geometry = geometry
@@ -85,6 +100,7 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 		p.parser.SetClipboard = func(text string) { m.options.SetClipboard(p.id, text) }
 	}
 	if err := m.sessions.register(p); err != nil {
+		_ = p.close()
 		return 0, 0, nil, err
 	}
 	m.bounds = content
@@ -114,6 +130,10 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 	p.appliedSize = p.desiredSize
 	p.capture()
 	if err := m.sessions.start(p.id); err != nil {
+		detached := m.sessions.detach(p.id)
+		if detached.owned {
+			_ = detached.pane.close()
+		}
 		return 0, 0, nil, err
 	}
 	return m.model.TabID(), p.id, []Event{
@@ -191,7 +211,7 @@ func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID,
 		return 0, nil, err
 	}
 	defer m.sessions.release(predictedID)
-	newPane := newPane(predictedID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	newPane := m.createPane(predictedID, cols, rows)
 	newPane.setFreshLaunch(spec)
 	newPane.terminal.SetPaletteBase(m.paletteBase)
 	if m.options.SetClipboard != nil {
@@ -203,6 +223,7 @@ func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID,
 		if session != nil {
 			_ = session.Close()
 		}
+		_ = newPane.close()
 		return 0, nil, fmt.Errorf("spawn split pane: %w", spawnErr)
 	}
 	newPane.session = session

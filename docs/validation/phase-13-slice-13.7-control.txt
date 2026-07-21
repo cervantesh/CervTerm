@@ -1,0 +1,27 @@
+# phase13-meta {"version":1,"suite":"control","go_version":"go version go1.25.8 windows/amd64","goos":"windows","goarch":"amd64","cpu":"AMD Ryzen 9 7940HX with Radeon Graphics","gomaxprocs":1,"benchtime":"2s","samples":10,"production_commit":"1caa3fc8062b89d7c8d9ef8d65d0b11a10be63a2","harness_sha256":"f14f6c84fd13e9a9b0177599d68b22d446a8505dfed9276051c2adf387598b7f","measured_source_sha256":"1e72e8bdaacb03b7d7cd87bf86180f3d2f952dd4c317f0923005cd05286abe4a","working_tree_dirty":true,"warm_command":["go","test","./internal/vt","-run","^$","-bench","^BenchmarkPhase13ControlString(Discard|Overflow)$","-benchmem","-benchtime","5s","-cpu","1","-count","1"],"record_command":["go","test","./internal/vt","-run","^$","-bench","^BenchmarkPhase13ControlString(Discard|Overflow)$","-benchmem","-benchtime","2s","-cpu","1","-count","10"]}
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/vt
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13ControlStringDiscard  	   16609	    161993 ns/op	 202.31 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringDiscard  	   13647	    191512 ns/op	 171.12 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringDiscard  	   12438	    203865 ns/op	 160.75 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringDiscard  	   12548	    188787 ns/op	 173.59 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringDiscard  	   10000	    204418 ns/op	 160.32 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringDiscard  	   12031	    195836 ns/op	 167.34 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringDiscard  	   12792	    198742 ns/op	 164.90 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringDiscard  	   12064	    204217 ns/op	 160.48 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringDiscard  	   12694	    192500 ns/op	 170.24 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringDiscard  	    9723	    205922 ns/op	 159.15 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringOverflow 	     951	   2500494 ns/op	 104.84 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringOverflow 	    1070	   2513032 ns/op	 104.32 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringOverflow 	     920	   2513395 ns/op	 104.30 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringOverflow 	     873	   2492408 ns/op	 105.18 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringOverflow 	    1033	   2444743 ns/op	 107.23 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringOverflow 	     990	   2430202 ns/op	 107.87 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringOverflow 	    1010	   2452588 ns/op	 106.89 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringOverflow 	     894	   2508618 ns/op	 104.50 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringOverflow 	    1045	   2509167 ns/op	 104.48 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13ControlStringOverflow 	     955	   2542817 ns/op	 103.09 MB/s	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/vt	66.435s

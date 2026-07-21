@@ -153,6 +153,11 @@ func (m *Mux) abortRestore(candidate *RestoreCandidate) error {
 				cleanup = append(cleanup, fmt.Errorf("pane %d close: %w", p.id, err))
 			}
 		}
+		if !detached.owned {
+			if err := p.close(); err != nil {
+				cleanup = append(cleanup, fmt.Errorf("pane %d close: %w", p.id, err))
+			}
+		}
 	}
 	return errors.Join(cleanup...)
 }
@@ -215,6 +220,15 @@ func buildRestoreCandidate(m *Mux, snapshot layoutrestore.Snapshot, geometries [
 		nextPaneID: m.model.nextPaneID, nextSplitID: m.model.nextSplitID,
 	}
 	candidate := &RestoreCandidate{owner: m, model: model, paneMetrics: make(map[PaneID]CellMetrics), paneWindows: make(map[PaneID]WindowID), paneTabs: make(map[PaneID]TabID)}
+	built := false
+	defer func() {
+		if built {
+			return
+		}
+		for _, pane := range candidate.panes {
+			_ = pane.close()
+		}
+	}()
 	var specs []SpawnSpec
 	geometryIndex := 0
 	for workspaceIndex, sourceWorkspace := range snapshot.Workspaces {
@@ -265,7 +279,7 @@ func buildRestoreCandidate(m *Mux, snapshot layoutrestore.Snapshot, geometries [
 					return restoreBuild{}, ErrSplitTooSmall
 				}
 				for _, paneGeometry := range layout.Panes {
-					p := newPane(paneGeometry.Pane, paneGeometry.Cols, paneGeometry.Rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+					p := m.createPane(paneGeometry.Pane, paneGeometry.Cols, paneGeometry.Rows)
 					p.terminal.SetPaletteBase(m.paletteBase)
 					p.geometry = paneGeometry
 					if m.options.SetClipboard != nil {
@@ -289,6 +303,7 @@ func buildRestoreCandidate(m *Mux, snapshot layoutrestore.Snapshot, geometries [
 	if err := model.CheckInvariants(); err != nil {
 		return restoreBuild{}, err
 	}
+	built = true
 	return restoreBuild{candidate: candidate, specs: specs}, nil
 }
 
