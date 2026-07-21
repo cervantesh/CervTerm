@@ -1,105 +1,49 @@
-# Architecture Preflight Check
+# Architecture Preflight — Phase 13 Bounded Image Model and Kitty Graphics
 
-## Proposed Feature
-Replace ad-hoc emoji/rune handling with generated Unicode property tables, grapheme/emoji cluster segmentation, cluster-level width calculation, and per-cluster emoji font fallback.
+Date: 2026-07-20
+Decision: **REQUIRES ADR + DESIGN + PLAN BEFORE CODE**
+Risk: **High** (untrusted compressed input, large memory, parser recovery, screen/reflow lifecycle, GPU ownership)
 
-## Context Baseline
-- Active project: CervTerm.
-- Relevant ADRs: ADR-0001 Use generated Unicode data and cluster-based emoji rendering.
-- Relevant guardrails: avoid per-emoji hardcoding; keep terminal semantics separate from font-specific rendering compatibility.
-- Assumptions:
-  - Windows/Segoe UI Emoji remains primary test target for current work.
-  - Generated Unicode tables may be committed if deterministic and documented.
-  - Existing Segoe COLRv0 compatibility can remain as a font-backend shim.
+## Trigger
 
-## Layer Impact
-- Behavior model:
-  - Terminal text rendering behavior shifts from rune-level decisions to cluster-level decisions.
-  - Display width is a property of a cluster, not only a single rune.
-- Decision model:
-  - Architecture rule: Unicode properties and cluster rules decide emoji behavior; individual user-reported emoji patches are discouraged.
-  - No business/security policy impact.
-- Execution model:
-  - Add generation step for Unicode data.
-  - Add/replace tests and update rendering path incrementally.
-- Infrastructure:
-  - No external service required.
-  - Optional build/generation script and committed generated Go files.
-- AI/tooling:
-  - No LLM runtime behavior; this is deterministic rendering logic.
+Phase 13 adds APC framing, protocol decoding, pane/global resource accounting, screen-adjacent placement state, renderer-neutral image references, GL textures and terminal-originated replies. It crosses VT/core/render/mux/frontend boundaries and creates a new resource/security boundary. Renderer selection remains excluded.
 
-## Required Commands / Handlers
-- Not a command-handler/domain feature.
-- Required developer commands/scripts:
-  - `go run ./scripts/generate-unicode-props.go` or equivalent.
-  - `go test ./...`.
-  - `go test -tags glfw ./internal/applog ./internal/fontglyph ./internal/frontend/glfwgl ./cmd/cervterm -count=1`.
-  - screenshot capture for visual verification.
+## Existing seams
 
-## Required Policies
-- No runtime authorization policies.
-- Architecture policy: raw Unicode emoji ranges should not proliferate outside generated data or documented compatibility shims.
+- `internal/vt` has bounded all-or-nothing OSC collection but no APC/DCS states; OSC’s 64 KiB accumulator is not a safe Kitty transport.
+- `core.Cell` is pinned at 32 bytes and must remain text-only.
+- Primary/history reflow and alternate-screen crop/restore are distinct; placements must explicitly join erase/edit/scroll/history eviction/reflow/reset lifecycle.
+- Each mux pane already owns one parser, terminal and reusable snapshot and survives tab/window transfer intact.
+- Render snapshots are renderer-neutral; row hashes cannot observe image-only mutations.
+- GLFW/OpenGL work is OS-thread/context-owned; textures must remain projection/context-local.
+- `internal/background` provides checked size math, bounded decode, leases/pins and deterministic unpinned LRU precedent, but terminal streams require stricter pane/global/time/chunk limits.
 
-## Required State Transitions / Invariants
-- Invariants:
-  - Combining marks, variation selectors, ZWJ, keycap combining mark, and emoji modifiers do not occupy their own display cells.
-  - Emoji presentation clusters occupy two terminal cells unless explicitly classified otherwise.
-  - Regional indicator pairs occupy two cells as one flag cluster.
-  - Font fallback is selected for the whole cluster.
-  - Terminal core must not depend on Windows-specific font names.
+## Mandatory architecture decisions
 
-## Side Effects and Reliability
-- Outbox needed? No.
-- Worker/job needed? No.
-- Idempotency needed? Generation should be deterministic; rerunning generator should produce no diff if Unicode version unchanged.
-- Retry/compensation needed? No.
+1. Protocol-neutral resource/store/placement ownership without enlarging `Cell`.
+2. APC/DCS framing, cancellation, overflow discard and normal-text recovery.
+3. Immutable hard caps plus user-lowerable operational caps for every encoded/decoded/pixel/count/time/CPU/GPU stage.
+4. Primary/history/alternate placement state machine for erase, insert/delete, scroll regions, eviction, resize/reflow, reset and pane close.
+5. Renderer-neutral snapshot identity and safe resource acquisition without mutable pixel aliases.
+6. Main-thread model commit/reply ordering versus bounded worker decode and late-result rejection.
+7. Projection/context-local texture cache, visible pins, deterministic eviction, pane transfer and teardown.
+8. Supported Kitty subset, fixed redacted replies and explicit rejection of file/temp/shared-memory transports.
 
-## AI Safety
-- LLM role: assist with implementation only.
-- Forbidden actions: no hidden network downloads during normal build/test; no bundling font assets without license review.
-- Human approval: required before bundling large fonts or changing Unicode version policy.
-- Audit events: not applicable.
+## Stop conditions
 
-## Tests / Fitness Functions
-- Unit:
-  - Unicode property lookup tests for representative codepoints.
-  - Cluster segmentation tests for `é`, `❤️`, `✍️`, `👩‍💻`, `🧑🏽‍🚀`, `1️⃣`, `🇦🇷`.
-  - Width tests for text, CJK, BMP emoji, astral emoji, modifiers, regional indicators.
-- Integration:
-  - Font backend tests for per-cluster Segoe fallback and color glyph rasterization.
-  - GLFW cluster collector tests until replaced by a proper segmenter.
-- Policy:
-  - Static/review check for new handwritten emoji ranges outside generated package.
-- AI evaluation:
-  - Not applicable.
-- Architecture fitness:
-  - AF-001 through AF-008 from `fitness.md`.
+- Any design adds image identity/pointers to `core.Cell`.
+- Encoded or decoded bytes can grow without both pane and process reservation.
+- A decoder can allocate from untrusted dimensions before checked bounds.
+- Parser overflow/cancellation can leak payload into text or partially commit resources/placements.
+- Worker or native code mutates terminal/mux/GL state off owner thread.
+- Snapshots expose mutable store backing or GL handles.
+- GPU resources cross GL contexts during pane transfer.
+- Disabled/default paths advertise Kitty support or change text-only allocation/frame cadence.
+- File/path/shared-memory transports or animation enter Phase 13 without a separate decision.
 
-## ADR Required?
-Yes. Created ADR-0001 because this changes the long-term Unicode rendering architecture and avoids a pattern of one-off emoji fixes.
+## Required gates
 
-## Recommendation
-Proceed with constraints.
-
-Recommended implementation slices:
-
-1. **Unicode data generator and package**
-   - Add generated `internal/unicodeprops` tables with provenance.
-   - Do not yet change rendering behavior except tests for lookup correctness.
-
-2. **Cluster segmentation API**
-   - Introduce a renderer-independent cluster model, e.g. `internal/unicodecluster`.
-   - Support combining marks, VS15/VS16, ZWJ, keycaps, modifiers, regional indicator pairs.
-
-3. **Cluster width API**
-   - Move width from rune-only to cluster-aware API.
-   - Keep `RuneWidth` for compatibility but make render paths use cluster width.
-
-4. **Replace handwritten checks**
-   - Update `internal/core/width.go`, `internal/frontend/glfwgl/cluster.go`, and `internal/fontglyph/backend.go` to use generated properties.
-
-5. **Verification hardening**
-   - Keep the 60+ emoji screenshot.
-   - Add category tests and static checks to prevent regression into per-emoji patches.
-
-Do not bundle a full emoji font in this slice. Treat that as a separate ADR if native fonts remain insufficient.
+- Accept a concrete successor to tracked proposed image ADR-0006 with budget and lifecycle tables.
+- Persist feature design and dependency-aware slice plan.
+- Independently review design/plan; no external-engine challenge is invoked without explicit user approval.
+- Every code/test slice runs full tests, tagged tests, race, vet, maturity, fuzz smoke and text-only performance comparison before local merge. Documentation-only Slice 13.0a runs its exact JSON/authority checks plus full, tagged, maturity and diff gates; it cannot run image fuzz/performance targets that do not exist yet.
