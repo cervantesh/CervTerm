@@ -1,26 +1,45 @@
 {
-  "slug": "cervterm",
-  "name": "CervTerm",
-  "stage": "MVP / pre-beta renderer hardening",
-  "domain": "terminal emulator",
-  "goal": "Robust Unicode and emoji rendering without per-emoji hardcoding",
-  "confirmedFacts": [
-    "Go terminal emulator",
-    "GLFW/OpenGL frontend",
-    "Windows DirectWrite shaping path",
-    "Current emoji fixes use ranges and Segoe UI Emoji COLRv0 compatibility"
+  "project_name": "CervTerm",
+  "stage": "plan",
+  "updated_at": "2026-07-20",
+  "phase": "13",
+  "objective": "Implement a protocol-neutral bounded pane-local image resource/placement model and a default-off direct-data Kitty APC subset.",
+  "baseline": {
+    "target_worktree": "C:/dev/golang-terminal-emulator-dev",
+    "target_branch": "dev",
+    "expected_commit": "65f90007b7b46b7a49c1a0c1fc1cdbb32df3ac4e",
+    "note": "Phase 13 Slice 13.0a starts after the mandatory Hermes-only Agentic Stack onboarding merge; the dirty primary worktree fix/windows-version-resource-from-tag must not be touched."
+  },
+  "in_scope": [
+    "bounded APC/DCS framing",
+    "pane/global image budgets and atomic transactions",
+    "primary/history/alternate placement lifecycle",
+    "detached render projection and mux resource acquisition",
+    "direct RGB/RGBA/zlib/PNG Kitty subset",
+    "context-local OpenGL texture cache and drawing",
+    "strict v2 default-off restart-scoped configuration",
+    "security, fuzz, performance and manual qualification"
   ],
-  "architectureDirection": [
-    "Generated Unicode property tables",
-    "Grapheme cluster segmentation",
-    "Cluster display width",
-    "Per-cluster font fallback",
-    "Visual regression coverage"
+  "excluded": [
+    "renderer selection",
+    "Sixel",
+    "iTerm images",
+    "animation",
+    "file, temp, shared-memory transport",
+    "persistent image cache",
+    "default-on activation"
   ],
-  "risks": [
-    "Manual Unicode range drift",
-    "Host font limitations for national flags",
-    "Complex emoji ZWJ/VS16 handling"
+  "authority": [
+    "Phase 13 preflight",
+    "ADR 0014",
+    "Phase 13 guardrails",
+    "reviewed Phase 13 feature design",
+    "Phase 13 implementation plan after review"
   ],
-  "updatedAt": "2026-07-10"
+  "invariants": [
+    "core.Cell stays text-only and exactly 32 bytes",
+    "owner-thread parser/core/mux/GL publication",
+    "detached snapshots contain no pixels, stores or GL handles",
+    "disabled/default/v1 creates no image infrastructure or idle cadence"
+  ]
 }

@@ -1,44 +1,43 @@
-# Architecture Guardrails
+# CervTerm Phase 13 Guardrails — Terminal Images
 
-Project: CervTerm  
-Updated: 2026-07-16
+Date: 2026-07-20
 
-## Unicode / Emoji Rendering Guardrails
+## Required
 
-- [ ] Do not add one-off emoji codepoint patches unless they are documented as temporary compatibility shims with a failing regression test.
-- [ ] Unicode emoji behavior must be derived from generated Unicode property tables or a vetted Unicode library.
-- [ ] Grapheme/emoji cluster segmentation must happen before font fallback and glyph rasterization.
-- [ ] Display width decisions for emoji presentation sequences must be made at cluster level, not solely at single-rune level.
-- [ ] Font fallback must select an emoji font for the whole emoji cluster; do not mix monospace and emoji fonts inside one cluster.
-- [ ] Font-specific compatibility hacks, such as Segoe UI Emoji COLRv0 preference, must stay inside `internal/fontglyph` and not leak into terminal core semantics.
-- [ ] Generated Unicode data must include source URLs, Unicode version, and deterministic regeneration instructions.
-- [ ] Unicode version upgrades must update tests and be mentioned in release notes or changelog.
+- [ ] `core.Cell` remains text-only and exactly 32 bytes.
+- [ ] Every encoded/decoded/pixel/image/placement/chunk/reply/worker/CPU/GPU resource has immutable hard caps and exact rollback ownership.
+- [ ] User configuration can lower but never raise hard caps and is restart-scoped.
+- [ ] APC/DCS overflow/cancel/reset/EOF discards candidates atomically and returns to ordinary text without payload leakage.
+- [ ] Resource plus optional placement commit is one owner-thread transaction with one success/failure reply outcome.
+- [ ] Worker decode mutates no parser/core/mux/session/GL state; stale/late results only release reservations.
+- [ ] Primary/history and alternate placements are separate and every edit/erase/scroll/evict/reflow/reset/close mutation has tested semantics.
+- [ ] Render/mux snapshots expose only detached descriptors and stable IDs/generations, never pixel aliases/store pointers/GL handles.
+- [ ] GL texture caches are projection/context local; visible refs pin for one frame; upload/delete occurs with the owning context current.
+- [ ] Disabled/default/v1 paths allocate no store/workers/cache, advertise no Kitty support and add no idle wake/frame cadence.
+- [ ] Direct-data transport only; diagnostics/replies never echo payload/metadata values.
+- [ ] Every slice is independently testable, reviewed, committed and locally merged before the next.
 
-## Rendering Verification Guardrails
+## Forbidden without new ADR/design
 
-- [ ] `go test ./...` must pass before claiming emoji-rendering completion.
-- [ ] GLFW-tagged rendering/font tests must pass before claiming visual rendering completion.
-- [ ] The emoji visual screenshot must cover categories, not just reported examples: faces, hands/modifiers, BMP+VS16, food, transport, symbols, ZWJ, keycaps, flags, and combining text.
-- [ ] Known host-font limitations, such as national flags on Windows Segoe UI Emoji, must be documented rather than hidden as renderer failures.
+- [ ] Renderer/backend selection changes.
+- [ ] Image fields/pointers/IDs in `core.Cell`.
+- [ ] Filesystem, temp-file, shared-memory or arbitrary-path Kitty transport.
+- [ ] Animation/frame composition, Sixel or iTerm adapter activation.
+- [ ] Forced in-process decoder preemption claims; bounds/concurrency and late-result rejection are the security mechanism.
+- [ ] GPU handles crossing panes’ destination projections/contexts.
+- [ ] Partial resource publication, reply-before-commit, or replacement of prior generation on failed decode/upload.
 
-## General Project Guardrails
+## Merge gates
 
-- [ ] Keep terminal semantics in `internal/core` independent from platform font names.
-- [ ] Keep platform/font compatibility in `internal/fontglyph`.
-- [ ] Avoid architecture-heavy dependencies unless they replace enough handwritten Unicode logic to reduce long-term maintenance.
-- [ ] Decisions with durable architecture impact require an ADR.
+- [ ] Focused tests and fuzz for the touched boundary.
+- [ ] `go test ./... -count=1`; `go test -tags glfw ./... -count=1`.
+- [ ] `go vet -unsafeptr=false ./...`; tagged equivalent.
+- [ ] `go test -race ./... -count=1`; tagged focused race for GLFW slices.
+- [ ] `go run ./scripts/check-maturity-gates.go`; `git diff --check`.
+- [ ] Touched production files remain within maturity line limits.
+- [ ] Text-only benchmark/allocation/idle comparison stays within the approved ceiling.
+- [ ] Independent slice review has no unresolved blocker.
 
-## WezTerm-Inspired Parity Guardrails
+## Stop conditions
 
-- [ ] Do not add renderer-backend selection or make backend migration a prerequisite.
-- [ ] Do not introduce local, SSH, WSL, serial, or remote domain abstractions.
-- [ ] Do not add a daemon, live detach/reattach, or persistence of running processes.
-- [ ] Keep mux ownership of pane/tab identity, topology, focus, geometry, and lifecycle out of GLFW.
-- [ ] Keep GLFW and OpenGL calls on the OS thread.
-- [ ] Every public config field updates Go schema, Lua mapping, Teal types, template, validation, reload semantics, tests, and docs together.
-- [ ] Invalid reload candidates must preserve the last valid config, bindings, and runtime.
-- [ ] Terminal-originated data cannot cause external side effects without validation and explicit policy.
-- [ ] IME preedit remains frontend state; only committed text reaches the PTY.
-- [ ] Terminal image transfers require bounded encoded bytes, decoded bytes, pixels, objects, processing time, and cache memory.
-- [ ] Workspaces may persist layout and launch descriptors only, never live processes, PTY handles, credentials, or claimed session continuity.
-- [ ] Each roadmap phase requires focused tests, full gates, validation evidence, and architecture drift review before merge.
+Stop for architecture review on unchecked dimension math, unbounded queue/retention, undefined lifecycle transition, off-thread model/GL mutation, mutable snapshot alias, hidden support advertisement, or any requirement to weaken ADR 0014.

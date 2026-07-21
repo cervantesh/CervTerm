@@ -1,6 +1,8 @@
 {
   "slug": "cervterm",
   "name": "CervTerm",
-  "stage": "MVP / pre-beta renderer hardening",
-  "updatedAt": "2026-07-11"
+  "stage": "plan",
+  "phase": "13",
+  "objective": "Implement a bounded protocol-neutral image model and default-off direct-data Kitty graphics.",
+  "updatedAt": "2026-07-20"
 }
