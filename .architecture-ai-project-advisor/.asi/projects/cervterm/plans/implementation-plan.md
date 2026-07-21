@@ -81,16 +81,16 @@ Rollback: revert documentation/state commit only.
 
 Branch: `test/parity-phase-13-image-baseline`
 
-Files: `internal/core/attr_test.go`, new `internal/vt/parser_benchmark_test.go`, `internal/render/snapshot_test.go`, new disabled-draw benchmark under `internal/frontend/glfwgl`, new `scripts/check-phase13-imports.go`, new `scripts/compare-phase13-baseline.go`, raw `docs/validation/phase-13-baseline.txt`, raw `docs/validation/phase-13-gl-baseline.txt`, and explanatory `docs/validation/phase-13-baseline.md`.
+Files: `internal/core/attr_test.go`, new `internal/vt/parser_benchmark_test.go`, `internal/render/snapshot_test.go`, new row-grid disabled-draw benchmark under `internal/frontend/glfwgl`, new `scripts/check-phase13-imports.go`, new `scripts/capture-phase13-benchmark.go`, new `scripts/compare-phase13-baseline.go`, raw `docs/validation/phase-13-baseline.txt`, raw `docs/validation/phase-13-gl-baseline.txt`, and explanatory `docs/validation/phase-13-baseline.md`.
 
 Work:
 - Assert `unsafe.Sizeof(core.Cell{}) == 32`.
-- Add repeatable text-only parser/core/snapshot benchmarks and disabled idle/frame measurement procedure.
-- Run and record the exact ten-sample untagged and `-tags glfw` disabled-draw benchmark commands into the two `.txt` baseline artifacts; record commit, OS/CPU, Go version, `GOMAXPROCS`, sample count and disabled idle/frame evidence in the Markdown report.
+- Add repeatable text-only parser/core/snapshot benchmarks, a context-free row-grid draw benchmark, and a disabled idle/frame measurement procedure. The frame-level disabled-image dispatch seam does not exist yet and is introduced and baselined in 13.14.
+- Use `capture-phase13-benchmark.go` to warm and record the exact ten-sample untagged and `-tags glfw` commands into the two `.txt` artifacts with a machine-readable method/environment/source-harness digest; record production baseline commit, OS/CPU, Go version, `GOMAXPROCS`, sample count and disabled idle/frame evidence in the Markdown report.
 - Enforce with non-optional `check-phase13-imports.go`: `termimage` may not import core/render/mux/frontend and non-frontend packages may not import GLFW/OpenGL once the package exists.
-- `compare-phase13-baseline.go` consumes ten-sample Go benchmark output, runs `benchstat`, and fails any matching disabled/text-only benchmark above 3% median or with new allocations.
+- `compare-phase13-baseline.go` consumes exactly ten samples per benchmark, computes the mandatory median/allocations gate itself, fails any matching disabled/text-only benchmark above 3% median or with new allocations, and additionally invokes installed `benchstat` when available. Absence of that optional presentation tool cannot weaken or bypass the self-contained hard gate; installing it requires separate user approval.
 
-Success criteria: no production diff; both exact baseline commands and idle measurement are recorded and reproducible; both raw `.txt` artifacts parse through the comparison script; the GL-disabled benchmark runs without requiring a live window/context; the import script passes before `termimage` exists and automatically starts enforcing it when added; no existing test expectation changes.
+Success criteria: no production behavior diff; both exact baseline captures are recorded and reproducible; idle evidence is either freshly captured or explicitly carried forward only when `cmd/` and `internal/` are proven byte-identical to the source evidence commit; both raw `.txt` artifacts parse through the comparison script; the row-grid GL benchmark runs without requiring a live window/context; the import script passes before `termimage` exists and automatically starts enforcing production imports when added; no existing test expectation changes.
 
 ## 13.1 — Generic bounded APC/DCS framing
 
@@ -281,7 +281,7 @@ Order: background -> negative-z images -> text -> zero/positive-z images -> curs
 
 Work: use existing pane clip, crop and opacity; conservative affected-pane damage on generation change; upload completion damages only references; missing texture deterministic omission.
 
-Success criteria: z-order/clip/multi-pane goldens; image-only repaint with unchanged row hashes; disabled draw no cache lookup/allocation/idle cadence and <=3% regression.
+Success criteria: z-order/clip/multi-pane goldens; image-only repaint with unchanged row hashes; introduce a context-free frame-level `BenchmarkPhase13DisabledFrame` at the actual image-dispatch seam and establish its first-result budget; disabled frame dispatch has no cache lookup/allocation/idle cadence, while the carried row-grid draw benchmark remains <=3%.
 
 ## 13.15 — Default-off transactional activation
 
@@ -325,9 +325,9 @@ go test ./internal/vt -run '^$' -fuzz=FuzzControlStringFraming -fuzztime=60s
 go test ./internal/vt -run '^$' -fuzz=FuzzParserAdvanceDoesNotPanic -fuzztime=60s
 go test ./internal/kitty -run '^$' -fuzz=FuzzKittyAdapter -fuzztime=60s
 go test ./internal/kitty -run '^$' -fuzz=FuzzKittyDecode -fuzztime=60s
-go test ./internal/vt ./internal/core ./internal/render -run '^$' -bench 'BenchmarkPhase13(TextOnly|Disabled)' -benchmem -count=10 > phase13-final.txt
+go run ./scripts/capture-phase13-benchmark.go -suite text -out phase13-final.txt
 go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-baseline.txt phase13-final.txt
-go test -tags glfw ./internal/frontend/glfwgl -run '^$' -bench 'BenchmarkPhase13DisabledDraw' -benchmem -count=10 > phase13-gl-final.txt
+go run ./scripts/capture-phase13-benchmark.go -suite glfw -out phase13-gl-final.txt
 go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-gl-baseline.txt phase13-gl-final.txt
 ```
 
@@ -345,7 +345,7 @@ go run ./scripts/check-maturity-gates.go
 go run ./scripts/check-phase13-imports.go
 git diff --check
 go test ./internal/vt -run '^$' -fuzz=FuzzParserAdvanceDoesNotPanic -fuzztime=5s
-go test ./internal/vt ./internal/core ./internal/render -run '^$' -bench 'BenchmarkPhase13(TextOnly|Disabled)' -benchmem -count=10 > phase13-candidate.txt
+go run ./scripts/capture-phase13-benchmark.go -suite text -out phase13-candidate.txt
 go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-baseline.txt phase13-candidate.txt
 ```
 
@@ -353,7 +353,7 @@ GLFW slices also run:
 
 ```text
 go test -race -tags glfw ./internal/frontend/glfwgl ./internal/frontend/gpu ./internal/mux -count=1
-go test -tags glfw ./internal/frontend/glfwgl -run '^$' -bench 'BenchmarkPhase13DisabledDraw' -benchmem -count=10 > phase13-gl-candidate.txt
+go run ./scripts/capture-phase13-benchmark.go -suite glfw -out phase13-gl-candidate.txt
 go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-gl-baseline.txt phase13-gl-candidate.txt
 ```
 
@@ -361,7 +361,7 @@ A slice adds focused tests/fuzz for its boundary; new fuzz targets run >=10 s du
 
 ## Performance gate
 
-13.0b records existing text-only parser/core/snapshot/GL-disabled baselines. APC discard/rejected-overflow baselines begin in 13.1 and compare against that slice for later regressions. New enabled-only benchmarks establish a first-result budget in their introducing slice, then become regression baselines. Same machine/toolchain/config/`GOMAXPROCS`, ten samples and `benchstat` are mandatory.
+13.0b records existing text-only parser/core/snapshot/GL-disabled baselines. APC discard/rejected-overflow baselines begin in 13.1 and compare against that slice for later regressions. New enabled-only benchmarks establish a first-result budget in their introducing slice, then become regression baselines. The same machine/toolchain/config, a fixed `-cpu=1`, a 5 s warm-up, 2 s benchmark intervals, ten samples, and the self-contained median/allocation gate are mandatory; installed `benchstat` adds supplemental evidence but is not allowed to bypass or weaken the hard gate.
 
 Hard acceptance: `core.Cell` exactly 32 bytes; disabled steady-state zero image allocations; matching disabled parser/core/snapshot/draw median regression <=3%; disabled idle wake/frame count no increase; CPU/GPU/count reservations never exceed ADR/config caps.
 

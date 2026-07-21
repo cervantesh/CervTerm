@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"testing"
+	"unsafe"
+)
 
 func TestAttrExplicitColorsUseLogicalKind(t *testing.T) {
 	if (Attr{BG: DefaultColor()}).HasExplicitBG() {
@@ -17,5 +20,12 @@ func TestAttrExplicitColorsUseLogicalKind(t *testing.T) {
 	}
 	if !(Attr{BG: RGBColor(DefaultBG)}).HasExplicitBG() {
 		t.Fatal("RGB literal equal to physical default background must remain explicit")
+	}
+}
+
+func TestCellSizeInvariant(t *testing.T) {
+	const want = uintptr(32)
+	if got := unsafe.Sizeof(Cell{}); got != want {
+		t.Fatalf("Cell size = %d bytes, want exactly %d", got, want)
 	}
 }
