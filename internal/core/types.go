@@ -168,5 +168,6 @@ type Terminal struct {
 	cursorStyle             CursorStyle
 	focusEvents             bool
 	imageStore              *termimage.Store
+	imageOwner              *termimage.StoreOwner
 	imageSidecars           *imageSidecars
 }

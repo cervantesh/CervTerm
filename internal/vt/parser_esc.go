@@ -40,6 +40,7 @@ func (p *Parser) dispatchESC(t *core.Terminal, b byte) {
 	case '>':
 		t.SetApplicationKeypadMode(false)
 	case 'c':
+		p.Reset()
 		t.Reset()
 	}
 }

@@ -15,14 +15,18 @@ type Store struct {
 	now     func() time.Time
 	after   func(time.Duration, func()) timerStopper
 
-	epoch  atomic.Uint64
-	closed atomic.Bool
+	epoch     atomic.Uint64
+	closed    atomic.Bool
+	owner     atomic.Pointer[StoreOwner]
+	resetting atomic.Bool
 
 	pendingMu   sync.Mutex
 	pending     map[TransferID]*CandidateTransfer
 	state       *storeState
 	prepared    *PreparedStoreState
 	placementMu sync.Mutex
+	candidateMu sync.Mutex
+	candidates  map[*DecodedCandidate]struct{}
 	placements  map[*PlacementReservation]struct{}
 }
 
@@ -52,12 +56,70 @@ func NewStore(process *ProcessBudget, limits Limits) *Store {
 			return time.AfterFunc(delay, callback)
 		},
 		pending:    make(map[TransferID]*CandidateTransfer),
+		candidates: make(map[*DecodedCandidate]struct{}),
 		state:      &storeState{resources: make(map[ImageID]*resource)},
 		placements: make(map[*PlacementReservation]struct{}),
 	}
 	store.epoch.Store(1)
 	return store
 }
+
+type StoreOwner struct {
+	store    *Store
+	released atomic.Bool
+}
+
+func (s *Store) ClaimOwner() *StoreOwner {
+	if s == nil || s.closed.Load() || s.resetting.Load() || s.prepared != nil {
+		return nil
+	}
+	owner := &StoreOwner{store: s}
+	if !s.owner.CompareAndSwap(nil, owner) {
+		return nil
+	}
+	return owner
+}
+
+func (o *StoreOwner) valid() bool {
+	return o != nil && !o.released.Load() && o.store != nil && o.store.owner.Load() == o && !o.store.closed.Load()
+}
+
+func (o *StoreOwner) PrepareCandidate(candidate *DecodedCandidate) (*PreparedStoreState, ResourceRef, error) {
+	if !o.valid() {
+		return nil, ResourceRef{}, ErrClosed
+	}
+	return o.store.prepareCandidate(candidate)
+}
+
+func (o *StoreOwner) PrepareResourceRemoval(refs []ResourceRef) (*PreparedStoreState, error) {
+	if !o.valid() {
+		return nil, ErrClosed
+	}
+	return o.store.prepareResourceRemoval(refs)
+}
+
+func (o *StoreOwner) PrepareReset() (*PreparedStoreState, error) {
+	if !o.valid() {
+		return nil, ErrClosed
+	}
+	return o.store.prepareReset()
+}
+
+func (o *StoreOwner) PublishPrepared(prepared *PreparedStoreState) {
+	if !o.valid() {
+		panic(ErrPreparedState)
+	}
+	o.store.publishPrepared(prepared)
+}
+
+func (o *StoreOwner) Close() {
+	if o == nil || !o.released.CompareAndSwap(false, true) {
+		return
+	}
+	o.store.closeOwned(o)
+}
+
+func (s *Store) Closed() bool { return s == nil || s.closed.Load() }
 
 func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 	if s == nil {
@@ -68,7 +130,7 @@ func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 	}
 	s.pendingMu.Lock()
 	defer s.pendingMu.Unlock()
-	if s.closed.Load() {
+	if s.closed.Load() || s.resetting.Load() {
 		return nil, ErrClosed
 	}
 	if s.pending[header.Transfer] != nil {
@@ -106,6 +168,23 @@ func (s *Store) takePending() []*CandidateTransfer {
 	return result
 }
 
+func (s *Store) takeCandidates() []*DecodedCandidate {
+	s.candidateMu.Lock()
+	result := make([]*DecodedCandidate, 0, len(s.candidates))
+	for candidate := range s.candidates {
+		result = append(result, candidate)
+	}
+	s.candidates = make(map[*DecodedCandidate]struct{})
+	s.candidateMu.Unlock()
+	return result
+}
+
+func (s *Store) unregisterCandidate(candidate *DecodedCandidate) {
+	s.candidateMu.Lock()
+	delete(s.candidates, candidate)
+	s.candidateMu.Unlock()
+}
+
 func (s *Store) Acquire(ref ResourceRef) (DetachedResource, bool) {
 	if s == nil || ref.Image == 0 || ref.Generation == 0 {
 		return DetachedResource{}, false
@@ -125,53 +204,34 @@ func (s *Store) Acquire(ref ResourceRef) (DetachedResource, bool) {
 	}, true
 }
 
-// NewDecodedCandidate reserves pane/process residency before allocating pixels.
-// RGBA is worker-owned until candidate close or a later owner-thread transaction.
-func (s *Store) NewDecodedCandidate(image ImageID, width, height uint32) (*DecodedCandidate, error) {
-	if s == nil || s.closed.Load() {
-		return nil, ErrClosed
-	}
-	epoch := s.epoch.Load()
-	if image == 0 {
-		return nil, ErrInvalidID
-	}
-	stride, size, err := CheckedRGBABytes(width, height)
-	if err != nil {
-		return nil, err
-	}
-	lease, err := reserve(s.process, &s.pane, Usage{DecodedBytes: size, Images: 1})
-	if err != nil {
-		return nil, err
-	}
-	pixels := make([]byte, int(size))
-	if s.closed.Load() || s.epoch.Load() != epoch {
-		lease.Close()
-		return nil, ErrClosed
-	}
-	return &DecodedCandidate{
-		store: s, epoch: StoreEpoch(epoch), image: image,
-		width: width, height: height, stride: stride,
-		rgba: pixels, lease: lease,
-	}, nil
-}
-
 func (s *Store) Reset() {
-	if s == nil || s.closed.Load() {
+	if s == nil || s.closed.Load() || s.owner.Load() != nil {
 		return
 	}
 	s.resetState()
 }
 
 func (s *Store) Close() {
-	if s == nil || !s.closed.CompareAndSwap(false, true) {
+	if s == nil || s.owner.Load() != nil || !s.closed.CompareAndSwap(false, true) {
 		return
 	}
 	s.resetState()
 }
 
+func (s *Store) closeOwned(owner *StoreOwner) {
+	if s == nil || s.owner.Load() != owner || !s.closed.CompareAndSwap(false, true) {
+		return
+	}
+	s.resetState()
+	s.owner.CompareAndSwap(owner, nil)
+}
+
 func (s *Store) resetState() {
 	s.closePlacementReservations()
 	s.abortPrepared()
+	for _, candidate := range s.takeCandidates() {
+		candidate.Close()
+	}
 	for _, transfer := range s.takePending() {
 		transfer.Close()
 	}
@@ -182,9 +242,11 @@ func (s *Store) resetState() {
 	currentEpoch := s.epoch.Load()
 	if currentEpoch == math.MaxUint64 {
 		s.closed.Store(true)
+		s.resetting.Store(false)
 		return
 	}
 	s.epoch.Store(currentEpoch + 1)
+	s.resetting.Store(false)
 }
 
 func (s *Store) Epoch() StoreEpoch {
@@ -319,101 +381,4 @@ func (t *CandidateTransfer) closeLocked() {
 	t.chunks, t.leases, t.encoded = nil, nil, 0
 	t.closed.Store(true)
 	t.store.removeTransfer(t)
-}
-
-type DecodedCandidate struct {
-	store                 *Store
-	epoch                 StoreEpoch
-	image                 ImageID
-	width, height, stride uint32
-	mu                    sync.Mutex
-	rgba                  []byte
-	lease                 *reservation
-	closed                bool
-	claimed               bool
-}
-
-func (c *DecodedCandidate) Image() ImageID {
-	if c == nil {
-		return 0
-	}
-	return c.image
-}
-
-func (c *DecodedCandidate) Epoch() StoreEpoch {
-	if c == nil {
-		return 0
-	}
-	return c.epoch
-}
-
-func (c *DecodedCandidate) Dimensions() (uint32, uint32, uint32) {
-	if c == nil {
-		return 0, 0, 0
-	}
-	return c.width, c.height, c.stride
-}
-
-// WriteRGBAAt copies decoded bytes into candidate-owned storage.
-func (c *DecodedCandidate) WriteRGBAAt(offset int, data []byte) error {
-	if c == nil {
-		return ErrCandidateInvalid
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed || c.claimed || offset < 0 || offset > len(c.rgba) || len(data) > len(c.rgba)-offset {
-		return ErrCandidateInvalid
-	}
-	copy(c.rgba[offset:], data)
-	return nil
-}
-
-// RGBA returns a detached diagnostic copy, never mutable candidate storage.
-func (c *DecodedCandidate) RGBA() []byte {
-	if c == nil {
-		return nil
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed || c.claimed {
-		return nil
-	}
-	return append([]byte(nil), c.rgba...)
-}
-
-func (c *DecodedCandidate) ValidFor(store *Store) bool {
-	if c == nil {
-		return false
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return !c.closed && !c.claimed && store == c.store && !store.closed.Load() && c.epoch == StoreEpoch(store.epoch.Load())
-}
-
-func (c *DecodedCandidate) Close() {
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	if c.closed || c.claimed {
-		c.mu.Unlock()
-		return
-	}
-	c.closed = true
-	lease := c.lease
-	c.rgba, c.lease = nil, nil
-	c.mu.Unlock()
-	lease.Close()
-}
-
-func (c *DecodedCandidate) claimOwnership() ([]byte, *reservation, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed || c.claimed {
-		return nil, nil, false
-	}
-	c.claimed, c.closed = true, true
-	pixels, lease := c.rgba, c.lease
-	c.rgba, c.lease = nil, nil
-	return pixels, lease, true
 }

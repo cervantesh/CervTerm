@@ -46,6 +46,11 @@ type Placement struct {
 	Opacity  uint8
 }
 
+type Projection struct {
+	Placements []Placement
+	Generation uint64
+}
+
 type PlacementSpec struct {
 	ID      PlacementID
 	Anchor  CellAnchor

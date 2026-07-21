@@ -7,7 +7,7 @@ import (
 	"cervterm/internal/termimage"
 )
 
-var errImageStateUnavailable = errors.New("terminal image state unavailable")
+var ErrImageStateUnavailable = errors.New("terminal image state unavailable")
 
 type imagePlacement struct {
 	placement termimage.Placement
@@ -64,11 +64,11 @@ func (t *Terminal) commitImage(commit imageCommit) (imageCommitResult, error) {
 
 func (t *Terminal) prepareImageCommit(commit imageCommit, fault imagePrepareFault) (_ *preparedImageMutation, _ imageCommitResult, err error) {
 	candidate := commit.candidate
-	if t == nil || t.imageStore == nil || t.imageSidecars == nil || candidate == nil || !candidate.ValidFor(t.imageStore) {
+	if t == nil || t.imageStore == nil || t.imageOwner == nil || t.imageSidecars == nil || candidate == nil || !candidate.ValidFor(t.imageStore) {
 		if candidate != nil {
 			candidate.Close()
 		}
-		return nil, imageCommitResult{}, errImageStateUnavailable
+		return nil, imageCommitResult{}, ErrImageStateUnavailable
 	}
 	failed := true
 	defer func() {
@@ -138,7 +138,7 @@ func (t *Terminal) prepareImageCommit(commit imageCommit, fault imagePrepareFaul
 		}
 		return nil, imageCommitResult{}, err
 	}
-	storePrepared, ref, err := t.imageStore.PrepareCandidate(candidate)
+	storePrepared, ref, err := t.imageOwner.PrepareCandidate(candidate)
 	if err != nil {
 		if newLease != nil {
 			newLease.Close()
@@ -180,7 +180,7 @@ func (t *Terminal) publishPreparedImage(prepared *preparedImageMutation) {
 		t.abortPreparedImage(prepared)
 		panic(termimage.ErrPreparedState)
 	}
-	t.imageStore.PublishPrepared(prepared.store)
+	t.imageOwner.PublishPrepared(prepared.store)
 	t.imageSidecars = prepared.sidecars
 	prepared.published = true
 	prepared.store.Finalize()
@@ -212,16 +212,33 @@ func (t *Terminal) resetImages() {
 	if t.imageSidecars != nil {
 		nextGeneration = t.imageSidecars.generation + 1
 	}
-	t.imageStore.Reset()
-	t.imageSidecars = &imageSidecars{generation: nextGeneration}
+	if t.imageOwner == nil {
+		t.closeImages()
+		return
+	}
+	storePrepared, err := t.imageOwner.PrepareReset()
+	if err != nil {
+		t.closeImages()
+		return
+	}
+	prepared := &preparedImageMutation{
+		terminal: t, store: storePrepared, baseSidecars: t.imageSidecars,
+		sidecars: &imageSidecars{generation: nextGeneration},
+	}
+	t.publishPreparedImage(prepared)
 }
 
 func (t *Terminal) closeImages() {
 	if t == nil || t.imageStore == nil {
 		return
 	}
-	t.imageStore.Close()
+	if t.imageOwner != nil {
+		t.imageOwner.Close()
+	} else {
+		t.imageStore.Close()
+	}
 	t.imageStore = nil
+	t.imageOwner = nil
 	t.imageSidecars = nil
 }
 
@@ -235,8 +252,8 @@ func (t *Terminal) deleteImages(selector termimage.DeleteSelector) (int, error) 
 }
 
 func (t *Terminal) prepareImageDelete(selector termimage.DeleteSelector, fault imagePrepareFault) (*preparedImageMutation, int, error) {
-	if t == nil || t.imageStore == nil || t.imageSidecars == nil {
-		return nil, 0, errImageStateUnavailable
+	if t == nil || t.imageStore == nil || t.imageOwner == nil || t.imageSidecars == nil {
+		return nil, 0, ErrImageStateUnavailable
 	}
 	if t.imageSidecars.generation == math.MaxUint64 {
 		return nil, 0, termimage.ErrGenerationExhausted
@@ -328,7 +345,7 @@ func (t *Terminal) prepareImageDelete(selector termimage.DeleteSelector, fault i
 	if err = runImageFault(fault, imagePrepareStore); err != nil {
 		return nil, 0, err
 	}
-	storePrepared, err := t.imageStore.PrepareResourceRemoval(removeRefs)
+	storePrepared, err := t.imageOwner.PrepareResourceRemoval(removeRefs)
 	if err != nil {
 		return nil, 0, err
 	}
