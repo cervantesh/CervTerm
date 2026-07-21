@@ -173,7 +173,11 @@ func (t *Terminal) prepareImageCommit(commit imageCommit, fault imagePrepareFaul
 }
 
 func (t *Terminal) publishPreparedImage(prepared *preparedImageMutation) {
-	if prepared == nil || prepared.terminal != t || prepared.published || t.imageStore == nil || t.imageSidecars != prepared.baseSidecars {
+	if prepared == nil || prepared.terminal != t || prepared.published {
+		panic(termimage.ErrPreparedState)
+	}
+	if t.imageStore == nil || t.imageSidecars != prepared.baseSidecars {
+		t.abortPreparedImage(prepared)
 		panic(termimage.ErrPreparedState)
 	}
 	t.imageStore.PublishPrepared(prepared.store)

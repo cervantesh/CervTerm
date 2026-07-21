@@ -9,6 +9,13 @@ func (t *Terminal) SetScrollbackCapacity(capacity int) {
 	} else if capacity > maxScrollbackRows {
 		capacity = maxScrollbackRows
 	}
+	oldRows := t.scrollbackRows
+	if t.primaryScreen != nil {
+		oldRows = t.primaryScreen.scrollbackRows
+	}
+	if t.imageSidecars != nil {
+		t.imagesSetScrollbackCapacity(oldRows, min(oldRows, capacity))
+	}
 	if t.primaryScreen != nil {
 		p := t.primaryScreen
 		tmp := &Terminal{cols: p.cols, scrollback: p.scrollback, scrollbackWrapped: p.scrollbackWrapped, scrollbackStart: p.scrollbackStart, scrollbackRows: p.scrollbackRows, scrollbackCapacity: p.scrollbackCapacity, displayOffset: p.displayOffset}
