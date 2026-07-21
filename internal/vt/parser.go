@@ -19,6 +19,8 @@ type Parser struct {
 	osc          []byte
 	oscTruncated bool
 
+	control *controlStringState
+
 	utf8Buf [utf8.UTFMax]byte
 	utf8Len int
 
@@ -36,11 +38,27 @@ const (
 	stateOSCEsc
 	stateEscG0
 	stateEscG1
+	stateAPC
+	stateAPCEsc
+	stateAPCDiscard
+	stateAPCDiscardEsc
+	stateDCS
+	stateDCSEsc
+	stateDCSDiscard
+	stateDCSDiscardEsc
 )
+
+const maxCSIParam = 1<<16 - 1
 
 func (p *Parser) Advance(t *core.Terminal, data []byte) {
 	for len(data) > 0 {
 		if p.utf8Len > 0 {
+			// A control/ASCII byte cannot continue UTF-8. Drop the malformed pending
+			// rune and reprocess this byte so an ESC introducer is never swallowed.
+			if data[0] < utf8.RuneSelf || data[0] > 0xbf {
+				p.utf8Len = 0
+				continue
+			}
 			p.appendPendingUTF8(t, data[0])
 			data = data[1:]
 			continue
@@ -117,7 +135,12 @@ func (p *Parser) advanceByte(t *core.Terminal, b byte) {
 			return
 		}
 		if b >= '0' && b <= '9' {
-			p.cur = p.cur*10 + int(b-'0')
+			if p.cur < maxCSIParam {
+				p.cur = p.cur*10 + int(b-'0')
+				if p.cur > maxCSIParam {
+					p.cur = maxCSIParam
+				}
+			}
 			p.hasCur = true
 			return
 		}
@@ -162,6 +185,10 @@ func (p *Parser) advanceByte(t *core.Terminal, b byte) {
 	case stateEscG1:
 		p.designateCharset(t, 1, b)
 		p.state = stateGround
+	default:
+		// Keep the hot legacy state switch compact; control framing is dormant
+		// unless an APC/DCS introducer selected one of its dedicated states.
+		p.advanceControlState(b)
 	}
 }
 

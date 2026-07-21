@@ -1,14 +1,14 @@
 # Workspace (live task state)
 
 ## Current task
-Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.0b is merged; a portability repair closes LF/CRLF harness identity drift before Slice 13.1 continues.
+Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.1 is implemented, fully validated, and independently approved; commit and local merge are next.
 
 ## Open files
-- `docs/validation/phase-13-baseline.{md,txt}` and `phase-13-gl-baseline.txt`
-- `scripts/check-phase13-imports.go`
-- `scripts/compare-phase13-baseline.go`
-- `scripts/capture-phase13-benchmark.go`
-- Phase 13 benchmark tests in VT/render/GLFW and exact Cell invariant
+- `internal/vt/parser.go`, `parser_esc.go`, and `parser_control_string.go`
+- `internal/vt/parser_control_string_{test,benchmark_test}.go`
+- `docs/validation/phase-13-control-string-baseline.{md,txt}`
+- `scripts/capture-phase13-benchmark.go` control suite
+- Phase 13 implementation plan and portable baseline gates
 
 ## Active constraints
 - Preserve 32-byte text-only `core.Cell`.
@@ -26,7 +26,12 @@ Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.0b is mer
 - [x] Independent Slice 13.0b review reached PROCEED after all harness-identity blockers were closed.
 - [x] Slice 13.0b merged into local `dev` at `4abc9f8`.
 - [x] Baseline portability repair normalizes source identity, regenerates both baselines, and has independent PROCEED.
-- [ ] Commit and locally merge the portability repair, then rebase the in-flight Slice 13.1 worktree.
+- [x] Baseline portability repair merged into local `dev` at `1650bc6`; Slice 13.1 rebased successfully.
+- [x] APC/DCS framing, bounds, reset/EOF, split/overflow tests, fuzz smoke, and zero-allocation first-result benchmarks implemented.
+- [x] Independent reviews closed repeated-ESC, overlapping-ST, fuzz breadth, lazy-state, CSI geometry, and pending-wrap findings with final PROCEED.
+- [x] Final full/tagged/vet/race/maturity/import gates and both mandatory 60-second fuzz targets pass; minimized CSI corpus retained.
+- [x] Isolated text/control performance captures pass the 3% and worst-allocation gates; portable first-result control baselines are recorded.
+- [ ] Commit and locally merge Slice 13.1.
 
 ## Next step
-Commit and merge `fix/phase-13-baseline-portability`, rebase Slice 13.1 onto updated `dev`, and continue APC/DCS framing without skipping its validation gates.
+Commit and merge Slice 13.1 into local `dev`, then advance automatically to bounded process/pane store foundations in Slice 13.2.
