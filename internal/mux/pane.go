@@ -66,7 +66,7 @@ func newPane(id PaneID, cols, rows int, scrollbackCapacity *int, hideCursorWhenS
 		id:             id,
 		state:          PaneStateStarting,
 		terminal:       terminal,
-		captureOptions: render.CaptureOptions{HideCursorWhenScrolled: hideCursor},
+		captureOptions: render.CaptureOptions{HideCursorWhenScrolled: hideCursor, PaneObject: uint64(id)},
 		done:           make(chan struct{}),
 	}
 	p.parser.Reply = func(data []byte) {
