@@ -3,25 +3,26 @@ package vt
 import "cervterm/internal/core"
 
 func (p *Parser) dispatchESC(t *core.Terminal, b byte) {
-	if b == '[' {
+	p.state = stateGround
+	switch b {
+	case 0x1b:
+		// ESC restarts an escape sequence; repeated introducers must not return
+		// to ground and expose a following control-string payload as text.
+		p.state = stateEsc
+	case '[':
 		p.resetCSI()
 		p.state = stateCSI
-		return
-	}
-	if b == ']' {
+	case ']':
 		p.resetOSC()
 		p.state = stateOSC
-		return
-	}
-	if b == '(' {
+	case '_':
+		p.startControlString(ControlStringAPC)
+	case 'P':
+		p.startControlString(ControlStringDCS)
+	case '(':
 		p.state = stateEscG0
-		return
-	}
-	if b == ')' {
+	case ')':
 		p.state = stateEscG1
-		return
-	}
-	switch b {
 	case '7':
 		t.SaveCursor()
 	case '8':
@@ -41,7 +42,6 @@ func (p *Parser) dispatchESC(t *core.Terminal, b byte) {
 	case 'c':
 		t.Reset()
 	}
-	p.state = stateGround
 }
 
 func (p *Parser) designateCharset(t *core.Terminal, slot int, b byte) {

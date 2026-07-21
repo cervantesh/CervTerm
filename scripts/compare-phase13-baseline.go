@@ -23,19 +23,20 @@ const (
 )
 
 type metadata struct {
-	Version          int      `json:"version"`
-	Suite            string   `json:"suite"`
-	GoVersion        string   `json:"go_version"`
-	GOOS             string   `json:"goos"`
-	GOARCH           string   `json:"goarch"`
-	CPU              string   `json:"cpu"`
-	GOMAXPROCS       int      `json:"gomaxprocs"`
-	BenchTime        string   `json:"benchtime"`
-	Samples          int      `json:"samples"`
-	ProductionCommit string   `json:"production_commit"`
-	HarnessSHA256    string   `json:"harness_sha256"`
-	WarmCommand      []string `json:"warm_command"`
-	RecordCommand    []string `json:"record_command"`
+	Version              int      `json:"version"`
+	Suite                string   `json:"suite"`
+	GoVersion            string   `json:"go_version"`
+	GOOS                 string   `json:"goos"`
+	GOARCH               string   `json:"goarch"`
+	CPU                  string   `json:"cpu"`
+	GOMAXPROCS           int      `json:"gomaxprocs"`
+	BenchTime            string   `json:"benchtime"`
+	Samples              int      `json:"samples"`
+	ProductionCommit     string   `json:"production_commit"`
+	HarnessSHA256        string   `json:"harness_sha256"`
+	MeasuredSourceSHA256 string   `json:"measured_source_sha256,omitempty"`
+	WarmCommand          []string `json:"warm_command"`
+	RecordCommand        []string `json:"record_command"`
 }
 
 type sample struct{ ns, bytes, allocs float64 }
@@ -242,6 +243,9 @@ func normalizeName(name string, expectedCPU int) (string, int, error) {
 func validateMetadata(m metadata) error {
 	if m.Version != 1 || m.Suite == "" || m.GoVersion == "" || m.GOOS == "" || m.GOARCH == "" || m.CPU == "" || m.ProductionCommit == "" || m.HarnessSHA256 == "" {
 		return fmt.Errorf("metadata incomplete or unsupported")
+	}
+	if m.Suite == "control" && m.MeasuredSourceSHA256 == "" {
+		return fmt.Errorf("control metadata lacks measured source identity")
 	}
 	if m.GOMAXPROCS != 1 || m.BenchTime != "2s" || m.Samples != wantSamples {
 		return fmt.Errorf("method is %d/%s/%d, want 1/2s/%d", m.GOMAXPROCS, m.BenchTime, m.Samples, wantSamples)
