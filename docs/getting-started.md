@@ -169,6 +169,25 @@ Only the active workspace/window, active tab, visible pane viewports, active mod
 
 Run `cervterm.exe --doctor --config <path>` to confirm configured intent and platform eligibility. A passing automated suite is not a Narrator/NVDA support claim; complete the matrix in [`manual-verification.md`](manual-verification.md) and record evidence in `docs/validation/phase-12-accessibility-qualification.md`.
 
+## Dormant Kitty graphics configuration
+
+CervTerm v2 configuration now reserves strict, restart-scoped `graphics.kitty` intent and sibling `graphics.limits` namespaces. They remain disconnected from the mux, parser, decoder, and renderer. Setting `kitty.enabled = true` records future intent only; `--doctor` reports activation as `dormant`.
+
+```lua
+graphics = {
+  kitty = { enabled = false },
+  limits = {
+    encoded_bytes_per_pane = 8388608,
+    decoded_bytes_per_pane = 67108864,
+    image_count_per_pane = 256,
+    placement_count_per_pane = 1024,
+    gpu_bytes_per_context = 268435456,
+  },
+},
+```
+
+Every limit must be positive and may not exceed its built-in hard cap; the values shown above are those caps and may be lowered. Changes are classified as restart-required, and a raised or invalid value rejects the entire candidate configuration without partially activating it.
+
 ## Known beta limitations
 
 - Windows binaries are currently unsigned unless a release explicitly says otherwise.

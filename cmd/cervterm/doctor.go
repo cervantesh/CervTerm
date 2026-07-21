@@ -114,6 +114,9 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 		fmt.Println("  accessibility-platform-capability: unsupported")
 	}
 	fmt.Println("  accessibility-activation: unavailable (no active frontend in diagnostic mode)")
+	fmt.Printf("  graphics-kitty-enabled: %t\n", report.Config.Graphics.Kitty.Enabled)
+	fmt.Println("  graphics-kitty-activation: dormant (restart-scoped; runtime wiring not installed)")
+	fmt.Printf("  graphics-kitty-limits: encoded-per-pane=%d decoded-per-pane=%d images-per-pane=%d placements-per-pane=%d gpu-bytes-per-context=%d\n", report.Config.Graphics.Limits.EncodedBytesPerPane, report.Config.Graphics.Limits.DecodedBytesPerPane, report.Config.Graphics.Limits.ImageCountPerPane, report.Config.Graphics.Limits.PlacementCountPerPane, report.Config.Graphics.Limits.GPUBytesPerContext)
 	fmt.Println("  background-formats: png,jpeg,gif-static")
 	fmt.Printf("  background-budget: cpu=%d gpu=%d encoded-per-image=%d encoded-aggregate=%d\n", backgroundcore.MaxAggregateCPUBytes, backgroundcore.MaxAggregateGPUBytes, backgroundcore.MaxEncodedBytesPerImage, backgroundcore.MaxAggregateEncodedBytes)
 	fmt.Printf("  background-layers: %d\n", len(report.Config.Background.Layers))
