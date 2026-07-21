@@ -222,10 +222,10 @@ func TestAcquireIsGenerationCheckedAndDetached(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if store.nextGeneration != 0 || !store.consumePreparedRef(ref) {
+	if store.state.nextGeneration != 0 || !store.consumePreparedRef(ref) {
 		t.Fatal("prepared generation mutated early or failed publication consumption")
 	}
-	store.resources[7] = &resource{ref: ref, width: 1, height: 1, stride: 4, rgba: []byte{1, 2, 3, 4}, lease: lease}
+	store.state.resources[7] = &resource{ref: ref, width: 1, height: 1, stride: 4, rgba: []byte{1, 2, 3, 4}, lease: lease}
 	if _, ok := store.Acquire(ResourceRef{Image: 7, Generation: ref.Generation + 1}); ok {
 		t.Fatal("stale generation acquired")
 	}
@@ -292,7 +292,7 @@ func TestStoreIdentityAndCounterExhaustion(t *testing.T) {
 	if ref1 != ref2 {
 		t.Fatalf("pane-local numeric identities may match: %#v %#v", ref1, ref2)
 	}
-	first.nextGeneration = ResourceGeneration(math.MaxUint64)
+	first.state.nextGeneration = ResourceGeneration(math.MaxUint64)
 	if _, err := first.prepareNextRef(1); err != ErrGenerationExhausted {
 		t.Fatalf("generation exhaustion error = %v", err)
 	}

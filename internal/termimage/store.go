@@ -15,13 +15,15 @@ type Store struct {
 	now     func() time.Time
 	after   func(time.Duration, func()) timerStopper
 
-	epoch          atomic.Uint64
-	nextGeneration ResourceGeneration
-	closed         atomic.Bool
+	epoch  atomic.Uint64
+	closed atomic.Bool
 
-	pendingMu sync.Mutex
-	pending   map[TransferID]*CandidateTransfer
-	resources map[ImageID]*resource
+	pendingMu   sync.Mutex
+	pending     map[TransferID]*CandidateTransfer
+	state       *storeState
+	prepared    *PreparedStoreState
+	placementMu sync.Mutex
+	placements  map[*PlacementReservation]struct{}
 }
 
 type resource struct {
@@ -30,6 +32,11 @@ type resource struct {
 	stride        uint32
 	rgba          []byte
 	lease         *reservation
+}
+
+type storeState struct {
+	resources      map[ImageID]*resource
+	nextGeneration ResourceGeneration
 }
 
 func NewStore(process *ProcessBudget, limits Limits) *Store {
@@ -44,15 +51,16 @@ func NewStore(process *ProcessBudget, limits Limits) *Store {
 		after: func(delay time.Duration, callback func()) timerStopper {
 			return time.AfterFunc(delay, callback)
 		},
-		pending:   make(map[TransferID]*CandidateTransfer),
-		resources: make(map[ImageID]*resource),
+		pending:    make(map[TransferID]*CandidateTransfer),
+		state:      &storeState{resources: make(map[ImageID]*resource)},
+		placements: make(map[*PlacementReservation]struct{}),
 	}
 	store.epoch.Store(1)
 	return store
 }
 
 func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
-	if s == nil || s.closed.Load() {
+	if s == nil {
 		return nil, ErrClosed
 	}
 	if header.Transfer == 0 || header.Image == 0 {
@@ -60,6 +68,9 @@ func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 	}
 	s.pendingMu.Lock()
 	defer s.pendingMu.Unlock()
+	if s.closed.Load() {
+		return nil, ErrClosed
+	}
 	if s.pending[header.Transfer] != nil {
 		return nil, ErrDuplicateTransfer
 	}
@@ -96,10 +107,14 @@ func (s *Store) takePending() []*CandidateTransfer {
 }
 
 func (s *Store) Acquire(ref ResourceRef) (DetachedResource, bool) {
-	if s == nil || s.closed.Load() || ref.Image == 0 || ref.Generation == 0 {
+	if s == nil || ref.Image == 0 || ref.Generation == 0 {
 		return DetachedResource{}, false
 	}
-	stored := s.resources[ref.Image]
+	resources := s.state.resources
+	if len(resources) == 0 {
+		return DetachedResource{}, false
+	}
+	stored := resources[ref.Image]
 	if stored == nil || stored.ref != ref {
 		return DetachedResource{}, false
 	}
@@ -155,13 +170,15 @@ func (s *Store) Close() {
 }
 
 func (s *Store) resetState() {
+	s.closePlacementReservations()
+	s.abortPrepared()
 	for _, transfer := range s.takePending() {
 		transfer.Close()
 	}
-	for _, stored := range s.resources {
+	for _, stored := range s.state.resources {
 		stored.lease.Close()
 	}
-	s.resources = make(map[ImageID]*resource)
+	s.state = &storeState{resources: make(map[ImageID]*resource), nextGeneration: s.state.nextGeneration}
 	currentEpoch := s.epoch.Load()
 	if currentEpoch == math.MaxUint64 {
 		s.closed.Store(true)
@@ -188,17 +205,17 @@ func (s *Store) prepareNextRef(image ImageID) (ResourceRef, error) {
 	if image == 0 {
 		return ResourceRef{}, ErrInvalidID
 	}
-	if s.nextGeneration == ResourceGeneration(math.MaxUint64) {
+	if s.state.nextGeneration == ResourceGeneration(math.MaxUint64) {
 		return ResourceRef{}, ErrGenerationExhausted
 	}
-	return ResourceRef{Image: image, Generation: s.nextGeneration + 1}, nil
+	return ResourceRef{Image: image, Generation: s.state.nextGeneration + 1}, nil
 }
 
 func (s *Store) consumePreparedRef(ref ResourceRef) bool {
-	if ref.Image == 0 || ref.Generation == 0 || ref.Generation != s.nextGeneration+1 {
+	if ref.Image == 0 || ref.Generation == 0 || ref.Generation != s.state.nextGeneration+1 {
 		return false
 	}
-	s.nextGeneration = ref.Generation
+	s.state.nextGeneration = ref.Generation
 	return true
 }
 
@@ -309,9 +326,11 @@ type DecodedCandidate struct {
 	epoch                 StoreEpoch
 	image                 ImageID
 	width, height, stride uint32
+	mu                    sync.Mutex
 	rgba                  []byte
 	lease                 *reservation
-	closed                atomic.Bool
+	closed                bool
+	claimed               bool
 }
 
 func (c *DecodedCandidate) Image() ImageID {
@@ -320,12 +339,14 @@ func (c *DecodedCandidate) Image() ImageID {
 	}
 	return c.image
 }
+
 func (c *DecodedCandidate) Epoch() StoreEpoch {
 	if c == nil {
 		return 0
 	}
 	return c.epoch
 }
+
 func (c *DecodedCandidate) Dimensions() (uint32, uint32, uint32) {
 	if c == nil {
 		return 0, 0, 0
@@ -333,20 +354,66 @@ func (c *DecodedCandidate) Dimensions() (uint32, uint32, uint32) {
 	return c.width, c.height, c.stride
 }
 
-// RGBA returns worker-owned mutable storage. It must not outlive the candidate.
+// WriteRGBAAt copies decoded bytes into candidate-owned storage.
+func (c *DecodedCandidate) WriteRGBAAt(offset int, data []byte) error {
+	if c == nil {
+		return ErrCandidateInvalid
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed || c.claimed || offset < 0 || offset > len(c.rgba) || len(data) > len(c.rgba)-offset {
+		return ErrCandidateInvalid
+	}
+	copy(c.rgba[offset:], data)
+	return nil
+}
+
+// RGBA returns a detached diagnostic copy, never mutable candidate storage.
 func (c *DecodedCandidate) RGBA() []byte {
-	if c == nil || c.closed.Load() {
+	if c == nil {
 		return nil
 	}
-	return c.rgba
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed || c.claimed {
+		return nil
+	}
+	return append([]byte(nil), c.rgba...)
 }
+
 func (c *DecodedCandidate) ValidFor(store *Store) bool {
-	return c != nil && !c.closed.Load() && store == c.store && !store.closed.Load() && c.epoch == StoreEpoch(store.epoch.Load())
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return !c.closed && !c.claimed && store == c.store && !store.closed.Load() && c.epoch == StoreEpoch(store.epoch.Load())
 }
+
 func (c *DecodedCandidate) Close() {
-	if c == nil || !c.closed.CompareAndSwap(false, true) {
+	if c == nil {
 		return
 	}
-	c.rgba = nil
-	c.lease.Close()
+	c.mu.Lock()
+	if c.closed || c.claimed {
+		c.mu.Unlock()
+		return
+	}
+	c.closed = true
+	lease := c.lease
+	c.rgba, c.lease = nil, nil
+	c.mu.Unlock()
+	lease.Close()
+}
+
+func (c *DecodedCandidate) claimOwnership() ([]byte, *reservation, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed || c.claimed {
+		return nil, nil, false
+	}
+	c.claimed, c.closed = true, true
+	pixels, lease := c.rgba, c.lease
+	c.rgba, c.lease = nil, nil
+	return pixels, lease, true
 }
