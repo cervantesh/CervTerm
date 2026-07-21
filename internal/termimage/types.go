@@ -25,6 +25,46 @@ type DetachedResource struct {
 	RGBA          []byte
 }
 
+type PixelRect struct {
+	X, Y          uint32
+	Width, Height uint32
+}
+
+type CellAnchor struct {
+	Row int64
+	Col uint32
+}
+
+type Placement struct {
+	ID       PlacementID
+	Resource ResourceRef
+	Anchor   CellAnchor
+	Cols     uint16
+	Rows     uint16
+	Crop     *PixelRect
+	Z        int16
+	Opacity  uint8
+}
+
+type PlacementSpec struct {
+	ID      PlacementID
+	Anchor  CellAnchor
+	Cols    uint16
+	Rows    uint16
+	Crop    *PixelRect
+	Z       int16
+	Opacity uint8
+}
+
+type DeleteSelector struct {
+	Placement      *PlacementID
+	Image          *ImageID
+	All            bool
+	CurrentScreen  bool
+	UnderCursor    bool
+	DeleteResource bool
+}
+
 type Usage struct {
 	EncodedBytes     uint64
 	DecodedBytes     uint64
@@ -44,4 +84,9 @@ var (
 	ErrTooManyChunks       = errors.New("termimage transfer chunk limit exceeded")
 	ErrInvalidChunk        = errors.New("termimage transfer chunk is invalid")
 	ErrGenerationExhausted = errors.New("termimage resource generation exhausted")
+	ErrInvalidPlacement    = errors.New("termimage placement is invalid")
+	ErrInvalidCrop         = errors.New("termimage crop is invalid")
+	ErrInvalidSelector     = errors.New("termimage delete selector is invalid")
+	ErrCandidateInvalid    = errors.New("termimage decoded candidate is invalid")
+	ErrPreparedState       = errors.New("termimage prepared state is invalid")
 )
