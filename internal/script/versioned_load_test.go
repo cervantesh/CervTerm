@@ -208,6 +208,12 @@ func TestLoadVersionedFailureEvidenceIncludesSuccessfulGraphPaths(t *testing.T) 
 			want:    "font size",
 		},
 		{
+			name:    "graphics limit validation",
+			primary: `return {config_version=2, includes={"base.lua"}, graphics={limits={gpu_bytes_per_context=268435457}}}`,
+			options: func() CandidateOptions { return CandidateOptions{} },
+			want:    "graphics.limits.gpu_bytes_per_context",
+		},
+		{
 			name:    "composition",
 			primary: `return {config_version=2, includes={"base.lua"}}`,
 			options: func() CandidateOptions {

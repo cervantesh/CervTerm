@@ -101,6 +101,16 @@ local config: cervterm.Config = {
   ime = {
     enabled = false,
   },
+  graphics = {
+    kitty = { enabled = false },
+    limits = {
+      encoded_bytes_per_pane = 8388608,
+      decoded_bytes_per_pane = 67108864,
+      image_count_per_pane = 256,
+      placement_count_per_pane = 1024,
+      gpu_bytes_per_context = 268435456,
+    },
+  },
   render = {
     bidi = false,
     text_gamma = 1.15,

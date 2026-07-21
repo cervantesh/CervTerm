@@ -48,8 +48,8 @@ func TestTypedDefaultTealExample(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("typed default should validate: %v", err)
 	}
-	if cfg.ColorScheme != "Shades of Purple" || cfg.Colors.Background != "#2D2B55" || cfg.IME.Enabled || cfg.Accessibility.Enabled || cfg.Accessibility.Scope != "visible" {
-		t.Fatalf("typed defaults drifted: scheme=%q background=%q ime=%v accessibility=%#v", cfg.ColorScheme, cfg.Colors.Background, cfg.IME.Enabled, cfg.Accessibility)
+	if cfg.ColorScheme != "Shades of Purple" || cfg.Colors.Background != "#2D2B55" || cfg.IME.Enabled || cfg.Accessibility.Enabled || cfg.Accessibility.Scope != "visible" || cfg.Graphics.Kitty.Enabled || cfg.Graphics.Limits.GPUBytesPerContext != 268435456 {
+		t.Fatalf("typed defaults drifted: scheme=%q background=%q ime=%v accessibility=%#v graphics=%#v", cfg.ColorScheme, cfg.Colors.Background, cfg.IME.Enabled, cfg.Accessibility, cfg.Graphics)
 	}
 }
 

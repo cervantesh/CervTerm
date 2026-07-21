@@ -152,6 +152,7 @@ func FromDocument(base Config, document Document) Config {
 			cfg.Font.GlyphOffsetY = numberField(font, "glyph_offset_y", cfg.Font.GlyphOffsetY)
 		}
 		decodeV2PlatformConfig(document, &cfg)
+		decodeV2GraphicsConfig(document, &cfg)
 	}
 	if quick := tableField(document.Root, "quick_select"); quick != nil {
 		cfg.QuickSelect.Rules = quickSelectRuleListField(quick, "rules", cfg.QuickSelect.Rules)
@@ -230,6 +231,14 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	{name: "clipboard", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "osc52", kind: KindString}}},
 	{name: "ime", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "enabled", kind: KindBoolean}}},
 	{name: "accessibility", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "enabled", kind: KindBoolean}, {name: "scope", kind: KindString}}},
+	{name: "graphics", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
+		{name: "kitty", kind: KindTable, children: []fieldSchema{{name: "enabled", kind: KindBoolean}}},
+		{name: "limits", kind: KindTable, children: []fieldSchema{
+			{name: "encoded_bytes_per_pane", kind: KindInteger}, {name: "decoded_bytes_per_pane", kind: KindInteger},
+			{name: "image_count_per_pane", kind: KindInteger}, {name: "placement_count_per_pane", kind: KindInteger},
+			{name: "gpu_bytes_per_context", kind: KindInteger},
+		}},
+	}},
 	{name: "bell", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
 		{name: "mode", kind: KindString}, {name: "focus", kind: KindString},
 		{name: "throttle_ms", kind: KindInteger}, {name: "visual_duration_ms", kind: KindInteger},
@@ -274,6 +283,10 @@ func isV2OnlyPath(path string) bool {
 		"bell", "bell.mode", "bell.focus", "bell.throttle_ms", "bell.visual_duration_ms",
 		"notification", "notification.enabled", "notification.focus", "notification.rate_limit_ms",
 		"ime", "ime.enabled", "accessibility", "accessibility.enabled", "accessibility.scope",
+		"graphics", "graphics.kitty", "graphics.kitty.enabled", "graphics.limits",
+		"graphics.limits.encoded_bytes_per_pane", "graphics.limits.decoded_bytes_per_pane",
+		"graphics.limits.image_count_per_pane", "graphics.limits.placement_count_per_pane",
+		"graphics.limits.gpu_bytes_per_context",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true
 	default:
@@ -355,6 +368,9 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 	}
 	if version == 1 && root.RawGetString("accessibility") != lua.LNil {
 		return Document{}, documentError(source, "accessibility", "requires config_version = 2")
+	}
+	if version == 1 && root.RawGetString("graphics") != lua.LNil {
+		return Document{}, documentError(source, "graphics", "requires config_version = 2")
 	}
 	if unsetPath := findUnsetPath(root, rootSchema, ""); unsetPath != "" {
 		if version == 1 {
