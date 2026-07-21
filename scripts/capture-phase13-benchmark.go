@@ -46,11 +46,11 @@ type benchmarkSuite struct {
 }
 
 func main() {
-	suiteName := flag.String("suite", "", "benchmark suite: text, glfw, or control")
+	suiteName := flag.String("suite", "", "benchmark suite: text, glfw, control, or store")
 	outPath := flag.String("out", "", "raw benchmark output path")
 	flag.Parse()
-	if *outPath == "" || (*suiteName != "text" && *suiteName != "glfw" && *suiteName != "control") {
-		fatalf("usage: go run ./scripts/capture-phase13-benchmark.go -suite text|glfw|control -out PATH")
+	if *outPath == "" || (*suiteName != "text" && *suiteName != "glfw" && *suiteName != "control" && *suiteName != "store") {
+		fatalf("usage: go run ./scripts/capture-phase13-benchmark.go -suite text|glfw|control|store -out PATH")
 	}
 	root, err := repositoryRoot()
 	if err != nil {
@@ -124,6 +124,20 @@ func suiteFor(name string) benchmarkSuite {
 				"internal/vt/parser.go",
 				"internal/vt/parser_esc.go",
 				"internal/vt/parser_control_string.go",
+			},
+		}
+	case "store":
+		return benchmarkSuite{
+			packages: []string{"./internal/termimage"},
+			pattern:  "^Benchmark(ProcessBudget|Store)",
+			harness: []string{
+				"internal/termimage/store_benchmark_test.go",
+			},
+			measured: []string{
+				"internal/termimage/types.go",
+				"internal/termimage/limits.go",
+				"internal/termimage/budget.go",
+				"internal/termimage/store.go",
 			},
 		}
 	default:

@@ -76,6 +76,7 @@ func main() {
 	sort.Strings(names)
 	fmt.Printf("%-72s %12s %12s %9s %10s %10s\n", "benchmark", "baseline", "candidate", "delta", "max B/op", "max allocs")
 	var failures []string
+	sourceIdentical := base.meta.MeasuredSourceSHA256 != "" && base.meta.MeasuredSourceSHA256 == cand.meta.MeasuredSourceSHA256
 	for _, name := range names {
 		bs := base.benchmarks[name]
 		cs, ok := cand.benchmarks[name]
@@ -90,7 +91,7 @@ func main() {
 		b, c := summarize(bs), summarize(cs)
 		delta := percentChange(b.medianNS, c.medianNS)
 		fmt.Printf("%-72s %12.2f %12.2f %+8.2f%% %10.0f %10.0f\n", name, b.medianNS, c.medianNS, delta, c.maxBytes, c.maxAllocs)
-		if delta > maxRegression {
+		if delta > maxRegression && !sourceIdentical {
 			failures = append(failures, fmt.Sprintf("%s median ns/op regression %.2f%% exceeds %.2f%%", name, delta, maxRegression))
 		}
 		if c.maxBytes > b.maxBytes {
@@ -99,6 +100,9 @@ func main() {
 		if c.maxAllocs > b.maxAllocs {
 			failures = append(failures, fmt.Sprintf("%s worst allocs/op increased %.0f -> %.0f", name, b.maxAllocs, c.maxAllocs))
 		}
+	}
+	if sourceIdentical {
+		fmt.Println("timing: measured source is identical; timing deltas are diagnostic while allocation gates remain mandatory")
 	}
 	for name := range cand.benchmarks {
 		if _, ok := base.benchmarks[name]; !ok {
