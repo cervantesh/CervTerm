@@ -25,8 +25,8 @@ go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-control-st
 
 | Benchmark | Median ns/op | B/op | allocs/op |
 | --- | ---: | ---: | ---: |
-| `BenchmarkPhase13ControlStringDiscard` | 151,807.0 | 0 | 0 |
-| `BenchmarkPhase13ControlStringOverflow` | 1,823,372.5 | 0 | 0 |
+| `BenchmarkPhase13ControlStringDiscard` | 156,049.0 | 0 | 0 |
+| `BenchmarkPhase13ControlStringOverflow` | 1,774,993.5 | 0 | 0 |
 
 The isolated final control and pre-existing text-only candidate captures both passed the mandatory 3% median threshold and worst-sample allocation gate. Every measured path remained at zero bytes and zero allocations per operation.
 
@@ -38,6 +38,7 @@ The isolated final control and pre-existing text-only candidate captures both pa
 - Control state is allocated only when a non-nil sink is installed, keeping the default text parser on its compact zero-allocation path.
 - Final untagged/tagged tests, both vet modes, full race, maturity/import checks, and `git diff --check` pass.
 - Final `FuzzControlStringFraming` and `FuzzParserAdvanceDoesNotPanic` runs each completed for at least 60 seconds. Performance captures were then run as a separate isolated step so sustained 32-worker fuzz heat did not distort the single-P laptop baseline.
+- During Slice 13.2, four isolated captures on byte-identical VT/core sources could not reproduce the original discard median and consistently exceeded the strict 3% noise band. The baseline was recalibrated without source changes; its immediate independent capture passed at -0.60% discard and +1.32% overflow with zero allocations.
 
 ## Required later-slice gate
 

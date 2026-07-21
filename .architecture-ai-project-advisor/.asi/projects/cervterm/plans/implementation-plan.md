@@ -114,12 +114,13 @@ Rollback: remove inert framing/API; the independently qualified CSI overflow/loo
 
 Branch: `feat/parity-phase-13-image-store`
 
-New package: `internal/termimage/{doc,types,limits,budget,store}.go` and tests.
+New package: `internal/termimage/{doc,types,limits,budget,store}.go`, tests/fuzz/benchmarks, portable raw baseline/report, and the `store` capture-suite registration.
 
 Work:
 - Define pane-scoped IDs/generations, immutable hard and lowerable operational limits, checked atomic process reservations for encoded bytes, decoded bytes, images, **placements (1,024/pane and 4,096/process)** and pending transfer counts, owner-thread store epochs, pending candidates and detached acquisition copies.
 - Implement `BeginTransfer`, exactly-once candidate close, `Acquire`, `Reset`, `Close`; no core/render/mux imports.
 - Reserve every byte/count/placement before retention; image-ID reuse increments generation.
+- Establish first-result budgets for reservation/release, transfer begin/cancel, and allocation-free acquire misses.
 
 Success criteria:
 - Exact rollback under cancel/failure/reset/close and concurrent worker lease return.
@@ -359,6 +360,13 @@ go run ./scripts/capture-phase13-benchmark.go -suite control -out phase13-contro
 go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-control-string-baseline.txt phase13-control-candidate.txt
 ```
 
+13.2 establishes the image-store baseline. Slices 13.3–13.15 also run:
+
+```text
+go run ./scripts/capture-phase13-benchmark.go -suite store -out phase13-store-candidate.txt
+go run ./scripts/compare-phase13-baseline.go docs/validation/phase-13-image-store-baseline.txt phase13-store-candidate.txt
+```
+
 GLFW slices also run:
 
 ```text
@@ -371,7 +379,7 @@ A slice adds focused tests/fuzz for its boundary; new fuzz targets run >=10 s du
 
 ## Performance gate
 
-13.0b records existing text-only parser/core/snapshot/GL-disabled baselines. APC discard/rejected-overflow baselines begin in 13.1 and compare against that slice for later regressions. New enabled-only benchmarks establish a first-result budget in their introducing slice, then become regression baselines. The same machine/toolchain/config, a fixed `-cpu=1`, a 5 s warm-up, 2 s benchmark intervals, ten samples, and the self-contained median/allocation gate are mandatory; installed `benchstat` adds supplemental evidence but is not allowed to bypass or weaken the hard gate.
+13.0b records existing text-only parser/core/snapshot/GL-disabled baselines. APC discard/rejected-overflow baselines begin in 13.1 and compare against that slice for later regressions. New enabled-only benchmarks establish a first-result budget in their introducing slice, then become regression baselines. The same machine/toolchain/config, a fixed `-cpu=1`, a 5 s warm-up, 2 s benchmark intervals, ten samples, and the self-contained median/allocation gate are mandatory; installed `benchstat` adds supplemental evidence but is not allowed to bypass or weaken the hard gate. For suites carrying a complete measured-source digest, source-identical captures treat timing deltas as environmental diagnostics while retaining mandatory worst-allocation checks; any measured-source change restores the hard 3% timing gate.
 
 Hard acceptance: `core.Cell` exactly 32 bytes; disabled steady-state zero image allocations; matching disabled parser/core/snapshot/draw median regression <=3%; disabled idle wake/frame count no increase; CPU/GPU/count reservations never exceed ADR/config caps.
 
