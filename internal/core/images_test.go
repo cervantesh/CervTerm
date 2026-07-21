@@ -11,6 +11,7 @@ import (
 func newImageTerminalForTest(cols, rows, history int, store *termimage.Store) *Terminal {
 	terminal := NewTerminalWithHistory(cols, rows, history)
 	terminal.imageStore = store
+	terminal.imageOwner = store.ClaimOwner()
 	terminal.imageSidecars = &imageSidecars{}
 	return terminal
 }

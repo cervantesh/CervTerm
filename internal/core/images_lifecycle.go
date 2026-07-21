@@ -196,6 +196,38 @@ func (t *Terminal) imagesSetScrollbackCapacity(oldRows, newRows int) {
 	t.dropPrimaryImageRows(oldRows - newRows)
 }
 
+func (t *Terminal) imagesReflowPrimary(mapping reflowMap, evicted, cols int) {
+	if t.imageSidecars == nil {
+		return
+	}
+	t.mutateImagePlacements(false, func(placement termimage.Placement) (termimage.Placement, bool) {
+		row, col, ok := mapping.mapCell(int(placement.Anchor.Row), int(placement.Anchor.Col))
+		if !ok || row < evicted || col < 0 {
+			return placement, false
+		}
+		col = min(col, cols-1)
+		placement.Anchor.Row = int64(row - evicted)
+		placement.Anchor.Col = uint32(col)
+		return placement, true
+	})
+}
+
+func (t *Terminal) imagesCropAlternate(cols, rows int) {
+	if t.imageSidecars == nil {
+		return
+	}
+	t.mutateImagePlacements(true, func(placement termimage.Placement) (termimage.Placement, bool) {
+		return placement, placement.Anchor.Row >= 0 && placement.Anchor.Row < int64(rows) && placement.Anchor.Col < uint32(cols)
+	})
+}
+
+func (t *Terminal) imagesDiscardAlternate() {
+	if t.imageSidecars == nil {
+		return
+	}
+	t.mutateImagePlacements(true, func(placement termimage.Placement) (termimage.Placement, bool) { return placement, false })
+}
+
 func (t *Terminal) imageViewportPlacements(dst []termimage.Placement) []termimage.Placement {
 	dst = dst[:0]
 	if t == nil || t.imageSidecars == nil {

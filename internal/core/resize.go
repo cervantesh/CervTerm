@@ -41,41 +41,34 @@ func (t *Terminal) resizePrimary(cols, rows int) {
 	cLine, cStart := physicalAnchor(livePre, livePreW, t.cursorRow)
 	cChar := cStart + t.cursorCol
 
-	// Boundary anchor (where the live screen begins) and, if scrolled up, the
-	// viewport-top anchor — in COMBINED logical coordinates.
-	boundLine, boundChar := physicalAnchor(combined, combinedW, sbCount)
+	// Preserve whether the user is viewing history while the shared map remaps it.
 	anchored := oldOffset > 0
-	var topLine, topChar int
-	if anchored {
-		topLine, topChar = physicalAnchor(combined, combinedW, sbCount-oldOffset)
-	}
 
 	reflowed, reflowedW := combined, combinedW
 	if cols != oldCols {
 		reflowed, reflowedW = reflowLogicalRows(logicalRowsFromPhysical(combined, combinedW), cols)
 	}
 
-	// Split reflowed into history / live at the boundary anchor.
-	b := physicalForAnchor(reflowed, reflowedW, boundLine, boundChar)
+	// Split reflowed into history/live at the boundary through the shared cell map.
+	initialMapping := newReflowMap(combined, combinedW, reflowed, reflowedW)
+	b, boundaryCol, boundaryOK := initialMapping.mapCell(sbCount, 0)
+	if !boundaryOK {
+		b, boundaryCol = 0, 0
+	}
 	sb := append([][]Cell(nil), reflowed[:b]...)
 	sbW := append([]bool(nil), reflowedW[:b]...)
 	live := append([][]Cell(nil), reflowed[b:]...)
 	liveW := append([]bool(nil), reflowedW[b:]...)
 	straddle := false
-	if b < len(reflowed) {
-		if bLine, bStart := physicalAnchor(reflowed, reflowedW, b); bLine == boundLine && bStart < boundChar {
-			// A line straddles the boundary: split row b at the char. The head goes to
-			// history, kept wrapped so it rejoins the tail on a later reflow, and padded
-			// with ZERO cells (Rune==0) so its ring-width padding is dropped on re-read
-			// instead of spliced mid-word (real alignment spaces are Rune==' ').
-			straddle = true
-			head, tail := splitRowAt(reflowed[b], boundChar-bStart)
-			headFull := make([]Cell, cols)
-			copy(headFull, head)
-			sb = append(sb, headFull)
-			sbW = append(sbW, true)
-			live[0] = tail
-		}
+	if b < len(reflowed) && boundaryCol > 0 {
+		// A line straddles the boundary: its head remains history and tail remains live.
+		straddle = true
+		head, tail := splitRowAt(reflowed[b], boundaryCol)
+		headFull := make([]Cell, cols)
+		copy(headFull, head)
+		sb = append(sb, headFull)
+		sbW = append(sbW, true)
+		live[0] = tail
 	}
 	if straddle {
 		// Re-reflow the live group so the short tail merges into clean rows: a short
@@ -113,6 +106,21 @@ func (t *Terminal) resizePrimary(cols, rows int) {
 		curRow -= push
 	}
 
+	finalRows, finalWrapped := concatRows(sb, live), concatBools(sbW, liveW)
+	mapping := newReflowMap(combined, combinedW, finalRows, finalWrapped)
+	evicted := max(0, len(sb)-t.scrollbackCapacity)
+	if t.imageSidecars != nil {
+		t.imagesReflowPrimary(mapping, evicted, cols)
+	}
+	if mappedRow, mappedCol, ok := mapping.mapCell(sbCount+t.cursorRow, t.cursorCol); ok {
+		curRow = mappedRow - len(sb)
+		curCol = mappedCol
+	}
+	mappedTop, topMapped := 0, false
+	if anchored {
+		mappedTop, _, topMapped = mapping.mapCell(sbCount-oldOffset, 0)
+	}
+
 	t.rebuildScreen(cols, rows, sb, sbW, live, liveW)
 
 	t.cursorRow = max(0, min(rows-1, curRow))
@@ -121,9 +129,8 @@ func (t *Terminal) resizePrimary(cols, rows int) {
 	t.resetScrollRegion()
 	t.resizeTabStops(oldCols, cols)
 
-	if anchored {
-		newTop := physicalForAnchor(concatRows(sb, live), concatBools(sbW, liveW), topLine, topChar)
-		t.displayOffset = max(0, min(len(sb)-newTop, t.ScrollbackLines()))
+	if anchored && topMapped {
+		t.displayOffset = max(0, min(len(sb)-mappedTop, t.ScrollbackLines()))
 	} else {
 		t.displayOffset = 0
 	}
@@ -136,6 +143,9 @@ func (t *Terminal) resizePrimary(cols, rows int) {
 func (t *Terminal) resizeAlt(cols, rows int) {
 	oldCols, oldRows := t.cols, t.rows
 	oldCells, oldWrapped := t.cells, t.rowWrapped
+	if t.imageSidecars != nil {
+		t.imagesCropAlternate(cols, rows)
+	}
 	t.cols, t.rows = cols, rows
 	t.cells = make([]Cell, cols*rows)
 	t.rowWrapped = make([]bool, rows)
@@ -166,15 +176,19 @@ func (t *Terminal) rebuildScreen(cols, rows int, sb [][]Cell, sbW []bool, live [
 	t.cells = make([]Cell, cols*rows)
 	t.rowWrapped = make([]bool, rows)
 	t.fillBlank(t.cells)
+	t.scrollbackStart, t.displayOffset = 0, 0
+	t.scrollbackRows = min(len(sb), t.scrollbackCapacity)
 	t.scrollback = nil
 	t.scrollbackWrapped = nil
-	t.scrollbackStart = 0
-	t.scrollbackRows = 0
-	t.displayOffset = 0
-
 	blank := t.blank()
-	for i := range sb {
-		t.appendScrollbackLine(paddedCellRow(sb[i], cols, blank), i < len(sbW) && sbW[i])
+	if t.scrollbackCapacity > 0 {
+		t.scrollback = make([]Cell, t.scrollbackCapacity*cols)
+		t.scrollbackWrapped = make([]bool, t.scrollbackCapacity)
+		first := len(sb) - t.scrollbackRows
+		for row := 0; row < t.scrollbackRows; row++ {
+			copy(t.scrollback[row*cols:(row+1)*cols], paddedCellRow(sb[first+row], cols, blank))
+			t.scrollbackWrapped[row] = first+row < len(sbW) && sbW[first+row]
+		}
 	}
 	for i := 0; i < len(live) && i < rows; i++ {
 		copy(t.cells[i*cols:(i+1)*cols], paddedCellRow(live[i], cols, blank))

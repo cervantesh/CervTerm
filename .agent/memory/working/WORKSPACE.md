@@ -1,13 +1,13 @@
 # Workspace (live task state)
 
 ## Current task
-Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.4 dormant edit/scroll/history image lifecycle is implemented, independently reviewed to PROCEED, and ready to commit/local merge.
+Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.5 reflow/alternate/reset lifecycle and public core image API are implemented, independently reviewed to PROCEED, and ready to commit/local merge.
 
 ## Open files
-- `internal/core/images_lifecycle.go` private placement erase/move/drop/projection helpers
-- Core erase/edit/scroll/history/capacity mutation seams and exact reservation retirement
-- Exhaustive lifecycle boundaries, ring wrap, viewport pinning, stale preparation and 1,024-placement tests
-- Nil/default production dormancy and text/store performance gates
+- Shared `reflowMap` for boundary, cursor, viewport and placement top-left mapping
+- Alternate top-anchor crop/exit cleanup and prepared RIS/store epoch reset
+- StoreOwner capability, tracked candidates and reset admission gate
+- Public Attach/Commit/Delete/Reset/Projection API with detached metadata
 
 ## Active constraints
 - Preserve 32-byte text-only `core.Cell`.
@@ -44,6 +44,12 @@ Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.4 dormant
 - [x] Slice 13.4 whole-placement overwrite/erase/edit/scroll/history/ED3/capacity lifecycle and scrolled-back projection are implemented while creation remains private/unreachable.
 - [x] Independent reviews closed horizontal clipping, combining-cell/right-margin/wide-span lifecycle, stale preparation cleanup, lazy no-op allocation, boundary/entry coverage and bounded 1,024-placement findings with final PROCEED.
 - [x] Full/tagged/vet/race/maturity/import/fuzz smoke and isolated text/store performance gates pass; ASCII width and repeated-blank fast paths keep disabled text operation allocation-free and below baseline.
+- [x] Slice 13.4 committed at `0f43543` and locally merged into `dev` at `c45fa52`.
+- [x] Slice 13.5 deterministic primary reflow, padding-anchor retention, callback-free ring rebuild, alternate crop/exit and RIS reset are implemented.
+- [x] StoreOwner gates every prepared mutation/publication; reset atomically drains resources, transfers, placements and loose decoded candidates with no insertion race.
+- [x] Public core image API is externally testable, owner-thread documented, detached and bounded; no production caller attaches it before mux/runtime slices.
+- [x] Independent review reached PROCEED after ownership bypass, reset race/zero-usage, padding mapping, shared boundary map, coverage and maturity findings were closed.
+- [x] Full/tagged/vet/race/maturity/import/fuzz-smoke and isolated text/store performance gates pass.
 
 ## Next step
-Commit Slice 13.4, merge it into local `dev`, then advance automatically to Slice 13.5 reflow/alternate/reset lifecycle and public core image API review.
+Commit Slice 13.5, merge it into local `dev`, then advance automatically to Slice 13.6 detached render/mux image projection.
