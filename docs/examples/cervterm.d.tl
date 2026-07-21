@@ -428,6 +428,23 @@ local record cervterm
     scope: string | Unset
   end
 
+  record KittyGraphicsDocument
+    enabled: boolean | Unset
+  end
+
+  record GraphicsLimitsDocument
+    encoded_bytes_per_pane: integer | Unset
+    decoded_bytes_per_pane: integer | Unset
+    image_count_per_pane: integer | Unset
+    placement_count_per_pane: integer | Unset
+    gpu_bytes_per_context: integer | Unset
+  end
+
+  record GraphicsDocument
+    kitty: KittyGraphicsDocument | Unset
+    limits: GraphicsLimitsDocument | Unset
+  end
+
   record BellDocument
     mode: string | Unset
     focus: string | Unset
@@ -537,6 +554,7 @@ local record cervterm
     clipboard: ClipboardDocument | Unset
     ime: IMEDocument | Unset
     accessibility: AccessibilityDocument | Unset
+    graphics: GraphicsDocument | Unset
     bell: BellDocument | Unset
     notification: NotificationDocument | Unset
     render: RenderDocument | Unset
@@ -571,6 +589,7 @@ local record cervterm
     clipboard: ClipboardDocument | Unset
     ime: IMEDocument | Unset
     accessibility: AccessibilityDocument | Unset
+    graphics: GraphicsDocument | Unset
     bell: BellDocument | Unset
     notification: NotificationDocument | Unset
     render: RenderDocument | Unset

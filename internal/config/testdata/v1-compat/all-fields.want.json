@@ -117,6 +117,18 @@
     "Focus": "unfocused",
     "RateLimitMS": 5000
   },
+  "Graphics": {
+    "Kitty": {
+      "Enabled": false
+    },
+    "Limits": {
+      "EncodedBytesPerPane": 8388608,
+      "DecodedBytesPerPane": 67108864,
+      "ImageCountPerPane": 256,
+      "PlacementCountPerPane": 1024,
+      "GPUBytesPerContext": 268435456
+    }
+  },
   "Render": {
     "Bidi": true,
     "TextGamma": 1.2,

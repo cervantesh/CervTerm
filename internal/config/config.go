@@ -30,6 +30,7 @@ type Config struct {
 	Accessibility     AccessibilityConfig
 	Bell              BellConfig
 	Notification      NotificationConfig
+	Graphics          GraphicsConfig
 	Render            RenderConfig
 	Shell             ShellConfig
 	QuickSelect       QuickSelectConfig
@@ -193,6 +194,7 @@ func Defaults() Config {
 		Accessibility: AccessibilityConfig{Enabled: false, Scope: "visible"},
 		Bell:          BellConfig{Mode: "disabled", Focus: "unfocused", ThrottleMS: 250, VisualDurationMS: 120},
 		Notification:  NotificationConfig{Enabled: false, Focus: "unfocused", RateLimitMS: 5000},
+		Graphics:      defaultGraphicsConfig(),
 		Render:        RenderConfig{Bidi: false, TextGamma: 1.15, TextDarken: 0.0, TextRaster: "go", StatsHotkey: "ctrl+shift+i", ZoomInHotkey: "ctrl+equal", ZoomOutHotkey: "ctrl+minus", ZoomResetHotkey: "ctrl+0", VSync: true, MaxFPS: 0, Redraw: "on_demand", Damage: "rows"},
 		Shell:         ShellConfig{Args: []string{}, Env: map[string]string{}},
 	}
@@ -464,6 +466,9 @@ func (c Config) Validate() error {
 	}
 	if c.EffectiveBackgroundAlpha() < 0xff && c.Window.Opacity < 1 {
 		errs = append(errs, errors.New("translucent terminal background and window.opacity < 1 cannot be enabled together"))
+	}
+	if err := c.Graphics.Limits.validate(); err != nil {
+		errs = append(errs, err)
 	}
 	if err := c.Accessibility.validate(); err != nil {
 		errs = append(errs, err)
