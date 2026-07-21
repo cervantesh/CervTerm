@@ -10,6 +10,8 @@
 .DS_Store
 Thumbs.db
 *.log
+__pycache__/
+*.pyc
 
 # Pi/RPIV local planning artifacts
 .rpiv/
