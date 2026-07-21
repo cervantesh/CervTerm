@@ -68,6 +68,13 @@ func (t *Terminal) ResetImages() {
 	}
 }
 
+// CloseImageStore releases the terminal's attached image owner exactly once.
+func (t *Terminal) CloseImageStore() {
+	if t != nil {
+		t.closeImages()
+	}
+}
+
 // CopyImageProjection replaces detached active-screen metadata using reusable storage.
 // The returned crop slice backs any non-nil Placement.Crop pointers and must be retained.
 func (t *Terminal) CopyImageProjection(dst []termimage.Placement, crops []termimage.PixelRect, viewportTop, rows int) ([]termimage.Placement, []termimage.PixelRect, uint64) {
