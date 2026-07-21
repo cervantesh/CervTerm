@@ -2,7 +2,7 @@
 
 Date: 2026-07-21
 Slice: 13.0b
-Production baseline commit: `a5ae0c61ce94d18a507fb4d5116275f4124ff5da`
+Production behavior baseline: `a5ae0c61ce94d18a507fb4d5116275f4124ff5da`; portable recapture revision: `4abc9f8`. The intervening commits add architecture documents and the baseline harness only, with no production behavior change.
 
 ## Environment
 
@@ -10,7 +10,7 @@ Production baseline commit: `a5ae0c61ce94d18a507fb4d5116275f4124ff5da`
 - CPU: AMD Ryzen 9 7940HX with Radeon Graphics, 32 logical processors.
 - Go: `go1.25.8 windows/amd64`.
 - Host `GOMAXPROCS` is unset. Recorded benchmarks use `-cpu=1`; Go omits a CPU suffix when the sole CPU list is one.
-- The dedicated Slice 13.0b worktree contains only harness/docs/memory changes over the production baseline. Each raw artifact embeds the production commit plus a SHA-256 of its exact benchmark/capture/comparison sources, so the measured source bundle is reproducible before the slice commit exists.
+- Each raw artifact embeds its capture commit plus a checkout-portable SHA-256 of the exact benchmark source/helper bundle. CRLF and LF checkouts hash identically; capture/comparison tooling may add suites without invalidating an earlier benchmark identity.
 
 ## Pinned invariants
 
@@ -31,10 +31,10 @@ Median results computed by the authoritative self-contained comparison gate:
 
 | Benchmark | Median ns/op | B/op | allocs/op |
 | --- | ---: | ---: | ---: |
-| `BenchmarkPhase13TextOnlyParser` | 35,683.5 | 0 | 0 |
-| `BenchmarkPhase13TextOnlyCoreReuse` | 36,097.5 | 0 | 0 |
-| `BenchmarkPhase13TextOnlySnapshot` | 9,813.5 | 0 | 0 |
-| `BenchmarkPhase13DisabledDraw` | 43,380.0 | 0 | 0 |
+| `BenchmarkPhase13TextOnlyParser` | 36,085.0 | 0 | 0 |
+| `BenchmarkPhase13TextOnlyCoreReuse` | 35,954.0 | 0 | 0 |
+| `BenchmarkPhase13TextOnlySnapshot` | 9,808.0 | 0 | 0 |
+| `BenchmarkPhase13DisabledDraw` | 43,100.5 | 0 | 0 |
 
 The untagged and tagged raw Go benchmark outputs are tracked beside this document. Their metadata identifies Go/OS/architecture/CPU/method, package-qualified benchmark identity, production revision, and exact harness digest. Capture and validate candidate output with:
 
