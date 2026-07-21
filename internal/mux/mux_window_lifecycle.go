@@ -43,6 +43,7 @@ func (m *Mux) CreateWindow(spec SpawnSpec, content PixelRect, metrics CellMetric
 			if detached := m.sessions.abort(paneID, p); detached.owned {
 				_ = detached.pane.close()
 			}
+			_ = p.close()
 		}
 		if reserved {
 			m.sessions.release(paneID)
@@ -51,7 +52,7 @@ func (m *Mux) CreateWindow(spec SpawnSpec, content PixelRect, metrics CellMetric
 		m.model.AbortWindow(token)
 	}
 
-	p = newPane(paneID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	p = m.createPane(paneID, cols, rows)
 	p.setFreshLaunch(spec)
 	p.terminal.SetPaletteBase(m.paletteBase)
 	p.geometry = effectiveGeometry(PaneGeometry{Pane: paneID, Pixels: content, Cols: cols, Rows: rows})
