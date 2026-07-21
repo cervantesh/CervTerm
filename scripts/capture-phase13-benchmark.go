@@ -20,20 +20,21 @@ import (
 const phase13MetadataPrefix = "# phase13-meta "
 
 type phase13Metadata struct {
-	Version          int      `json:"version"`
-	Suite            string   `json:"suite"`
-	GoVersion        string   `json:"go_version"`
-	GOOS             string   `json:"goos"`
-	GOARCH           string   `json:"goarch"`
-	CPU              string   `json:"cpu"`
-	GOMAXPROCS       int      `json:"gomaxprocs"`
-	BenchTime        string   `json:"benchtime"`
-	Samples          int      `json:"samples"`
-	ProductionCommit string   `json:"production_commit"`
-	HarnessSHA256    string   `json:"harness_sha256"`
-	WorkingTreeDirty bool     `json:"working_tree_dirty"`
-	WarmCommand      []string `json:"warm_command"`
-	RecordCommand    []string `json:"record_command"`
+	Version              int      `json:"version"`
+	Suite                string   `json:"suite"`
+	GoVersion            string   `json:"go_version"`
+	GOOS                 string   `json:"goos"`
+	GOARCH               string   `json:"goarch"`
+	CPU                  string   `json:"cpu"`
+	GOMAXPROCS           int      `json:"gomaxprocs"`
+	BenchTime            string   `json:"benchtime"`
+	Samples              int      `json:"samples"`
+	ProductionCommit     string   `json:"production_commit"`
+	HarnessSHA256        string   `json:"harness_sha256"`
+	MeasuredSourceSHA256 string   `json:"measured_source_sha256,omitempty"`
+	WorkingTreeDirty     bool     `json:"working_tree_dirty"`
+	WarmCommand          []string `json:"warm_command"`
+	RecordCommand        []string `json:"record_command"`
 }
 
 type benchmarkSuite struct {
@@ -41,14 +42,15 @@ type benchmarkSuite struct {
 	pattern   string
 	buildTags string
 	harness   []string
+	measured  []string
 }
 
 func main() {
-	suiteName := flag.String("suite", "", "benchmark suite: text or glfw")
+	suiteName := flag.String("suite", "", "benchmark suite: text, glfw, or control")
 	outPath := flag.String("out", "", "raw benchmark output path")
 	flag.Parse()
-	if *outPath == "" || (*suiteName != "text" && *suiteName != "glfw") {
-		fatalf("usage: go run ./scripts/capture-phase13-benchmark.go -suite text|glfw -out PATH")
+	if *outPath == "" || (*suiteName != "text" && *suiteName != "glfw" && *suiteName != "control") {
+		fatalf("usage: go run ./scripts/capture-phase13-benchmark.go -suite text|glfw|control -out PATH")
 	}
 	root, err := repositoryRoot()
 	if err != nil {
@@ -111,6 +113,19 @@ func suiteFor(name string) benchmarkSuite {
 			buildTags: "glfw",
 			harness:   []string{"internal/frontend/glfwgl/phase13_benchmark_test.go"},
 		}
+	case "control":
+		return benchmarkSuite{
+			packages: []string{"./internal/vt"},
+			pattern:  "^BenchmarkPhase13ControlString(Discard|Overflow)$",
+			harness: []string{
+				"internal/vt/parser_control_string_benchmark_test.go",
+			},
+			measured: []string{
+				"internal/vt/parser.go",
+				"internal/vt/parser_esc.go",
+				"internal/vt/parser_control_string.go",
+			},
+		}
 	default:
 		panic("validated suite")
 	}
@@ -144,21 +159,29 @@ func buildMetadata(root, suiteName string, suite benchmarkSuite, cpu string, war
 	if err != nil {
 		return phase13Metadata{}, err
 	}
+	var measuredDigest string
+	if len(suite.measured) != 0 {
+		measuredDigest, err = digestFiles(root, append([]string(nil), suite.measured...))
+		if err != nil {
+			return phase13Metadata{}, err
+		}
+	}
 	return phase13Metadata{
-		Version:          1,
-		Suite:            suiteName,
-		GoVersion:        strings.TrimSpace(string(goVersionOutput)),
-		GOOS:             runtime.GOOS,
-		GOARCH:           runtime.GOARCH,
-		CPU:              cpu,
-		GOMAXPROCS:       1,
-		BenchTime:        "2s",
-		Samples:          10,
-		ProductionCommit: strings.TrimSpace(string(commitOutput)),
-		HarnessSHA256:    digest,
-		WorkingTreeDirty: len(bytes.TrimSpace(statusOutput)) != 0,
-		WarmCommand:      append([]string{"go"}, warmArgs...),
-		RecordCommand:    append([]string{"go"}, recordArgs...),
+		Version:              1,
+		Suite:                suiteName,
+		GoVersion:            strings.TrimSpace(string(goVersionOutput)),
+		GOOS:                 runtime.GOOS,
+		GOARCH:               runtime.GOARCH,
+		CPU:                  cpu,
+		GOMAXPROCS:           1,
+		BenchTime:            "2s",
+		Samples:              10,
+		ProductionCommit:     strings.TrimSpace(string(commitOutput)),
+		HarnessSHA256:        digest,
+		MeasuredSourceSHA256: measuredDigest,
+		WorkingTreeDirty:     len(bytes.TrimSpace(statusOutput)) != 0,
+		WarmCommand:          append([]string{"go"}, warmArgs...),
+		RecordCommand:        append([]string{"go"}, recordArgs...),
 	}, nil
 }
 
