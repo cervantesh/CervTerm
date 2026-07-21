@@ -56,6 +56,7 @@ func (t *Terminal) Clear() {
 }
 
 func (t *Terminal) Reset() {
+	t.ResetImages()
 	t.Clear()
 	t.ResetAttr()
 	t.ResetScrollRegion()
@@ -406,6 +407,9 @@ func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearO
 
 	cols, rows := t.cols, t.rows
 	primary := t.primaryScreen
+	if t.imageSidecars != nil {
+		t.imagesDiscardAlternate()
+	}
 	t.alternateScreen = false
 	t.primaryScreen = nil
 	if primary == nil {

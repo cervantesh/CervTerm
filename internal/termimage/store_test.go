@@ -266,8 +266,8 @@ func TestDecodedCandidateReservesBeforeAllocationAndReturnsLeaseOnce(t *testing.
 	if candidate.ValidFor(store) {
 		t.Fatal("pre-reset candidate remained valid")
 	}
-	if got := process.Usage(); got.DecodedBytes != 24 || got.Images != 1 {
-		t.Fatalf("reset released worker-owned pixels early: %#v", got)
+	if got := process.Usage(); got != (Usage{}) || store.Usage() != (Usage{}) {
+		t.Fatalf("reset retained worker candidate process=%#v pane=%#v", got, store.Usage())
 	}
 	var group sync.WaitGroup
 	for i := 0; i < 16; i++ {
