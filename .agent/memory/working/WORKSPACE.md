@@ -1,14 +1,13 @@
 # Workspace (live task state)
 
 ## Current task
-Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.3 dormant placement contracts and prepared atomic transactions are implemented and validated; commit/local merge is next.
+Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.4 dormant edit/scroll/history image lifecycle is implemented, independently reviewed to PROCEED, and ready to commit/local merge.
 
 ## Open files
-- New `internal/core/images.go` and private terminal image sidecars
-- `internal/termimage` placement/crop/delete-selector contracts
-- Prepared complete store state plus complete sidecar slices
-- Fault-injected allocation/validation/reservation rollback seams
-- Infallible private old-or-new two-pointer publication
+- `internal/core/images_lifecycle.go` private placement erase/move/drop/projection helpers
+- Core erase/edit/scroll/history/capacity mutation seams and exact reservation retirement
+- Exhaustive lifecycle boundaries, ring wrap, viewport pinning, stale preparation and 1,024-placement tests
+- Nil/default production dormancy and text/store performance gates
 
 ## Active constraints
 - Preserve 32-byte text-only `core.Cell`.
@@ -41,6 +40,10 @@ Execute CervTerm WezTerm-parity Phase 13 one slice at a time. Slice 13.3 dormant
 - [x] Slice 13.3 strict placement/crop/delete-selector contracts, primary/alternate sidecars, prepared complete store states, exact candidate/resource/placement ownership, owner-thread two-pointer publication, reset/close cleanup, and generation exhaustion are implemented.
 - [x] Adversarial reviews closed stale prepared state, candidate alias/close races, exact-cap placement replacement, CurrentScreen resource scope, reset/close placement leaks, and sidecar generation wrap; final independent verdict is GO.
 - [x] Full and focused race suites, placement/delete/store fuzz targets, import/Cell/default-dormancy checks, and isolated text/store performance gates pass; full vet reports only pre-existing DirectWrite unsafe.Pointer diagnostics.
+- [x] Slice 13.3 committed at `d49fa47` and locally merged into `dev` at `053f8a0`.
+- [x] Slice 13.4 whole-placement overwrite/erase/edit/scroll/history/ED3/capacity lifecycle and scrolled-back projection are implemented while creation remains private/unreachable.
+- [x] Independent reviews closed horizontal clipping, combining-cell/right-margin/wide-span lifecycle, stale preparation cleanup, lazy no-op allocation, boundary/entry coverage and bounded 1,024-placement findings with final PROCEED.
+- [x] Full/tagged/vet/race/maturity/import/fuzz smoke and isolated text/store performance gates pass; ASCII width and repeated-blank fast paths keep disabled text operation allocation-free and below baseline.
 
 ## Next step
-Commit Slice 13.3, merge it into local `dev`, then advance automatically to the next approved Phase 13 slice.
+Commit Slice 13.4, merge it into local `dev`, then advance automatically to Slice 13.5 reflow/alternate/reset lifecycle and public core image API review.

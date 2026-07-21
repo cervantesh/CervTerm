@@ -38,6 +38,9 @@ func (t *Terminal) BellCount() int { return t.bellCount }
 func (t *Terminal) Bell()          { t.bellCount++ }
 
 func (t *Terminal) Clear() {
+	if t.imageSidecars != nil {
+		t.eraseImageLiveRect(0, t.rows, 0, t.cols)
+	}
 	blank := t.blank()
 	for i := range t.cells {
 		t.cells[i] = blank
@@ -80,87 +83,6 @@ func (t *Terminal) Reset() {
 	t.semanticKind = SemanticNone
 }
 
-func (t *Terminal) ClearLine(row int) {
-	if row < 0 || row >= t.rows {
-		return
-	}
-	blank := t.blank()
-	start := row * t.cols
-	for c := 0; c < t.cols; c++ {
-		t.cells[start+c] = blank
-	}
-	t.rowWrapped[row] = false
-}
-
-func (t *Terminal) ClearToEndOfLine() {
-	blank := t.blank()
-	start := t.cursorRow*t.cols + t.cursorCol
-	end := (t.cursorRow + 1) * t.cols
-	for i := start; i < end; i++ {
-		t.cells[i] = blank
-	}
-	t.rowWrapped[t.cursorRow] = false
-}
-
-func (t *Terminal) ClearToBeginningOfLine() {
-	blank := t.blank()
-	start := t.cursorRow * t.cols
-	end := start + t.cursorCol
-	for i := start; i <= end; i++ {
-		t.cells[i] = blank
-	}
-	if t.cursorCol == t.cols-1 {
-		t.rowWrapped[t.cursorRow] = false
-	}
-}
-
-// EraseChars replaces n character positions at and after the cursor with blanks
-// without shifting the remaining cells or moving the cursor (ECMA-48 ECH).
-func (t *Terminal) EraseChars(n int) {
-	if n <= 0 {
-		n = 1
-	}
-	startCol := t.cursorCol
-	endCol := min(t.cols, startCol+n)
-	if startCol >= endCol {
-		return
-	}
-	startCol, endCol = t.expandWideCellRange(t.cursorRow, startCol, endCol)
-
-	blank := Cell{Rune: ' ', Attr: t.attr}
-	rowStart := t.cursorRow * t.cols
-	for col := startCol; col < endCol; col++ {
-		t.cells[rowStart+col] = blank
-	}
-	t.repairWideCells(t.cursorRow, blank)
-	if endCol == t.cols {
-		t.rowWrapped[t.cursorRow] = false
-	}
-	t.wrapNext = false
-}
-
-func (t *Terminal) ClearToEndOfScreen() {
-	t.ClearToEndOfLine()
-	for row := t.cursorRow + 1; row < t.rows; row++ {
-		t.ClearLine(row)
-	}
-}
-
-func (t *Terminal) ClearToBeginningOfScreen() {
-	for row := 0; row < t.cursorRow; row++ {
-		t.ClearLine(row)
-	}
-	t.ClearToBeginningOfLine()
-}
-
-func (t *Terminal) ClearScrollback() {
-	t.scrollback = nil
-	t.scrollbackWrapped = nil
-	t.scrollbackStart = 0
-	t.scrollbackRows = 0
-	t.displayOffset = 0
-}
-
 func (t *Terminal) PutRune(r rune) {
 	if r == 0 || r == '\uFFFD' {
 		return
@@ -199,8 +121,11 @@ func (t *Terminal) PutRune(r rune) {
 	}
 
 	t.repairWideCells(t.cursorRow, eraseBlank)
+	if t.imageSidecars != nil {
+		t.eraseImageLiveRect(t.cursorRow, t.cursorRow+1, eraseStart, eraseEnd)
+	}
 	if t.cursorCol+width >= t.cols {
-		t.wrapNext = t.autoWrap
+		t.wrapNext = true
 		t.cursorCol = t.cols - 1
 		return
 	}
@@ -209,6 +134,9 @@ func (t *Terminal) PutRune(r rune) {
 
 func (t *Terminal) addCombiningRune(r rune) {
 	row, col := t.cursorRow, t.cursorCol-1
+	if t.wrapNext {
+		col = t.cursorCol
+	}
 	if col < 0 {
 		if row == 0 {
 			return
@@ -219,9 +147,17 @@ func (t *Terminal) addCombiningRune(r rune) {
 	idx := row*t.cols + col
 	if t.cells[idx].WideContinuation && col > 0 {
 		idx--
+		col--
 	}
 	if t.cells[idx].Rune == 0 || t.cells[idx].Rune == ' ' {
 		return
+	}
+	span := 1
+	if col+1 < t.cols && t.cells[idx+1].WideContinuation {
+		span = 2
+	}
+	if t.imageSidecars != nil {
+		t.eraseImageLiveRect(row, row+1, col, col+span)
 	}
 	t.cells[idx].AppendCombining(r)
 }
@@ -331,6 +267,9 @@ func (t *Terminal) InsertChars(n int) {
 	if n <= 0 {
 		return
 	}
+	if t.imageSidecars != nil {
+		t.editImageChars(true, t.cursorRow, t.cursorCol, n)
+	}
 	rowStart := t.cursorRow * t.cols
 	start := rowStart + t.cursorCol
 	end := rowStart + t.cols
@@ -353,6 +292,9 @@ func (t *Terminal) DeleteChars(n int) {
 	}
 	if n <= 0 {
 		return
+	}
+	if t.imageSidecars != nil {
+		t.editImageChars(false, t.cursorRow, t.cursorCol, n)
 	}
 	rowStart := t.cursorRow * t.cols
 	start := rowStart + t.cursorCol
