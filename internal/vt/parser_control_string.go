@@ -11,6 +11,7 @@ type ControlStringKind uint8
 const (
 	ControlStringAPC ControlStringKind = iota + 1
 	ControlStringDCS
+	ControlStringOSC1337
 )
 
 // ControlStringEvent is delivered synchronously while parsing a control string.
@@ -24,7 +25,7 @@ type ControlStringEvent struct {
 	Overflow  bool
 }
 
-// ControlStringSink receives borrowed APC/DCS chunks. It must not retain Chunk
+// ControlStringSink receives borrowed selected control-string chunks. It must not retain Chunk
 // without copying it and must not call Parser methods reentrantly.
 type ControlStringSink func(ControlStringEvent)
 
@@ -38,9 +39,9 @@ type controlStringState struct {
 	chunk       [maxControlStringChunk]byte
 }
 
-// SetControlStringSink installs the sink captured by subsequently opened APC/DCS
-// frames. Installing a non-nil sink allocates one reusable bounded state block
-// outside the text-only parse path. A nil sink consumes and discards frames.
+// SetControlStringSink installs the sink captured by subsequently opened selected
+// control-string frames. Installing a non-nil sink allocates one reusable bounded
+// state block outside the text-only parse path. A nil sink consumes and discards frames.
 func (p *Parser) SetControlStringSink(sink ControlStringSink) {
 	if sink != nil && p.control == nil {
 		p.control = new(controlStringState)
@@ -50,8 +51,8 @@ func (p *Parser) SetControlStringSink(sink ControlStringSink) {
 	}
 }
 
-// Reset cancels one open APC/DCS candidate, drops all partial parser state, and
-// returns to ground. Parser callbacks remain installed.
+// Reset cancels one open selected control-string candidate, drops all partial
+// parser state, and returns to ground. Parser callbacks remain installed.
 func (p *Parser) Reset() {
 	if kind, ok := p.activeControlKind(); ok {
 		p.cancelControlString(kind, false)
@@ -77,9 +78,12 @@ func (p *Parser) startControlString(kind ControlStringKind) {
 		return
 	}
 	p.control.activeSink = p.control.sink
-	if kind == ControlStringDCS {
+	switch kind {
+	case ControlStringDCS:
 		p.state = stateDCSPreamble
-	} else {
+	case ControlStringOSC1337:
+		p.state = stateOSC1337
+	default:
 		p.state = stateAPC
 	}
 }
@@ -98,6 +102,21 @@ func (p *Parser) advanceControlState(b byte) {
 		p.advanceControlDiscard(b)
 	case stateAPCDiscardEsc, stateDCSDiscardEsc:
 		p.advanceControlDiscardEscape(b)
+	default:
+		p.advanceOSC1337State(b)
+	}
+}
+
+func (p *Parser) advanceOSC1337State(b byte) {
+	switch p.state {
+	case stateOSC1337:
+		p.advanceOSC1337Payload(b)
+	case stateOSC1337Esc:
+		p.advanceOSC1337Escape(b)
+	case stateOSC1337Discard:
+		p.advanceOSC1337Discard(b)
+	case stateOSC1337DiscardEsc:
+		p.advanceOSC1337DiscardEscape(b)
 	default:
 		p.state = stateGround
 	}
@@ -142,6 +161,38 @@ func (p *Parser) advanceControlEscape(b byte) {
 		if p.appendControlByte(kind, 0x1b) && p.appendControlByte(kind, b) {
 			p.state = controlPayloadState(kind)
 		}
+	}
+}
+
+func (p *Parser) advanceOSC1337Payload(b byte) {
+	switch b {
+	case 0x07:
+		p.finishControlString(ControlStringOSC1337)
+	case 0x18, 0x1a:
+		p.cancelControlString(ControlStringOSC1337, false)
+	case 0x1b:
+		p.state = stateOSC1337Esc
+	default:
+		p.appendOSC1337Byte(b)
+	}
+}
+
+func (p *Parser) advanceOSC1337Escape(b byte) {
+	switch b {
+	case '\\':
+		p.finishControlString(ControlStringOSC1337)
+	case 0x07:
+		p.appendOSC1337Byte(0x1b)
+		p.finishControlString(ControlStringOSC1337)
+	case 0x18, 0x1a:
+		p.cancelControlString(ControlStringOSC1337, false)
+	case 0x1b:
+		p.appendOSC1337Byte(0x1b)
+		p.state = stateOSC1337Esc
+	default:
+		p.appendOSC1337Byte(0x1b)
+		p.appendOSC1337Byte(b)
+		p.state = stateOSC1337
 	}
 }
 
@@ -226,6 +277,15 @@ func (p *Parser) appendControlByte(kind ControlStringKind, b byte) bool {
 	return true
 }
 
+func (p *Parser) appendOSC1337Byte(b byte) {
+	control := p.control
+	if control.chunkLen == len(control.chunk) {
+		p.emitControlChunk(ControlStringOSC1337)
+	}
+	control.chunk[control.chunkLen] = b
+	control.chunkLen++
+}
+
 func (p *Parser) emitControlChunk(kind ControlStringKind) {
 	control := p.control
 	chunk := control.chunk[:control.chunkLen]
@@ -295,6 +355,26 @@ func (p *Parser) advanceControlDiscardEscape(b byte) {
 	}
 }
 
+func (p *Parser) advanceOSC1337Discard(b byte) {
+	switch b {
+	case 0x07, 0x18, 0x1a:
+		p.state = stateGround
+	case 0x1b:
+		p.state = stateOSC1337DiscardEsc
+	}
+}
+
+func (p *Parser) advanceOSC1337DiscardEscape(b byte) {
+	switch b {
+	case '\\', 0x07, 0x18, 0x1a:
+		p.state = stateGround
+	case 0x1b:
+		p.state = stateOSC1337DiscardEsc
+	default:
+		p.state = stateOSC1337Discard
+	}
+}
+
 func (p *Parser) clearControlString() {
 	if p.control == nil {
 		return
@@ -311,6 +391,8 @@ func (p *Parser) activeControlKind() (ControlStringKind, bool) {
 		return ControlStringAPC, true
 	case stateDCS, stateDCSEsc, stateDCSPreamble, stateDCSPreambleEsc:
 		return ControlStringDCS, true
+	case stateOSC1337, stateOSC1337Esc:
+		return ControlStringOSC1337, true
 	default:
 		return 0, false
 	}
@@ -322,35 +404,53 @@ func (p *Parser) discardControlKind() (ControlStringKind, bool) {
 		return ControlStringAPC, true
 	case stateDCSDiscard, stateDCSDiscardEsc:
 		return ControlStringDCS, true
+	case stateOSC1337Discard, stateOSC1337DiscardEsc:
+		return ControlStringOSC1337, true
 	default:
 		return 0, false
 	}
 }
 
 func controlPayloadState(kind ControlStringKind) byte {
-	if kind == ControlStringAPC {
+	switch kind {
+	case ControlStringAPC:
 		return stateAPC
+	case ControlStringOSC1337:
+		return stateOSC1337
+	default:
+		return stateDCS
 	}
-	return stateDCS
 }
 
 func controlEscapeState(kind ControlStringKind) byte {
-	if kind == ControlStringAPC {
+	switch kind {
+	case ControlStringAPC:
 		return stateAPCEsc
+	case ControlStringOSC1337:
+		return stateOSC1337Esc
+	default:
+		return stateDCSEsc
 	}
-	return stateDCSEsc
 }
 
 func controlDiscardState(kind ControlStringKind) byte {
-	if kind == ControlStringAPC {
+	switch kind {
+	case ControlStringAPC:
 		return stateAPCDiscard
+	case ControlStringOSC1337:
+		return stateOSC1337Discard
+	default:
+		return stateDCSDiscard
 	}
-	return stateDCSDiscard
 }
 
 func controlDiscardEscapeState(kind ControlStringKind) byte {
-	if kind == ControlStringAPC {
+	switch kind {
+	case ControlStringAPC:
 		return stateAPCDiscardEsc
+	case ControlStringOSC1337:
+		return stateOSC1337DiscardEsc
+	default:
+		return stateDCSDiscardEsc
 	}
-	return stateDCSDiscardEsc
 }

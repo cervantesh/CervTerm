@@ -27,6 +27,15 @@ func (p *Parser) appendOSC(b byte) {
 	p.osc = append(p.osc, b)
 }
 
+func (p *Parser) selectOSC1337() bool {
+	if len(p.osc) != 5 || p.osc[0] != '1' || p.osc[1] != '3' || p.osc[2] != '3' || p.osc[3] != '7' || p.osc[4] != ';' {
+		return false
+	}
+	p.resetOSC()
+	p.startControlString(ControlStringOSC1337)
+	return true
+}
+
 func (p *Parser) dispatchOSC(t *core.Terminal) {
 	if p.oscTruncated {
 		// A truncated string must be dropped whole, never half-decoded.
