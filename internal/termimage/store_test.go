@@ -163,24 +163,11 @@ func TestTransferExpiryResetCloseAndLateConcurrentReturn(t *testing.T) {
 	}
 }
 
-type fakeTimer struct{ stopped bool }
-
-func (t *fakeTimer) Stop() bool {
-	wasRunning := !t.stopped
-	t.stopped = true
-	return wasRunning
-}
-
-func TestTransferTimerAutonomouslyClosesAndRemovesPending(t *testing.T) {
+func TestTransferOwnerExpiryClosesAndRemovesPending(t *testing.T) {
 	process := NewProcessBudget()
 	store := NewStore(process, DefaultLimits())
 	now := time.Unix(100, 0)
 	store.now = func() time.Time { return now }
-	var expire func()
-	store.after = func(_ time.Duration, callback func()) timerStopper {
-		expire = callback
-		return &fakeTimer{}
-	}
 	transfer, err := store.BeginTransfer(Header{Transfer: 1, Image: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -189,9 +176,11 @@ func TestTransferTimerAutonomouslyClosesAndRemovesPending(t *testing.T) {
 		t.Fatal(err)
 	}
 	now = now.Add(HardTransferLifetime)
-	expire()
+	if !transfer.Expire(now) || transfer.Expire(now) {
+		t.Fatal("owner expiry was not exact and idempotent")
+	}
 	if !transfer.Closed() || process.Usage() != (Usage{}) || store.Usage() != (Usage{}) {
-		t.Fatalf("timer close leaked process=%#v pane=%#v", process.Usage(), store.Usage())
+		t.Fatalf("owner expiry leaked process=%#v pane=%#v", process.Usage(), store.Usage())
 	}
 	store.pendingMu.Lock()
 	pending := len(store.pending)
@@ -321,28 +310,20 @@ func TestTransferSlidingSilenceDeadlineAndSeal(t *testing.T) {
 	store := NewStore(process, DefaultLimits())
 	now := time.Unix(1000, 0)
 	store.now = func() time.Time { return now }
-	var callbacks []func()
-	store.after = func(_ time.Duration, callback func()) timerStopper {
-		callbacks = append(callbacks, callback)
-		return &fakeTimer{}
-	}
 	transfer, err := store.BeginTransfer(Header{Transfer: 1, Image: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := callbacks[0]
 	now = now.Add(5 * time.Second)
 	if err = transfer.Append([]byte("held")); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(5 * time.Second)
-	old()
-	if transfer.Closed() {
-		t.Fatal("stale timer closed touched transfer")
+	if transfer.Expire(now) || transfer.Closed() {
+		t.Fatal("owner expired a touched transfer before its sliding deadline")
 	}
 	now = now.Add(5 * time.Second)
-	callbacks[len(callbacks)-1]()
-	if !transfer.Closed() || process.Usage() != (Usage{}) {
+	if !transfer.Expire(now) || !transfer.Closed() || process.Usage() != (Usage{}) {
 		t.Fatalf("expiry leaked usage=%#v", process.Usage())
 	}
 
