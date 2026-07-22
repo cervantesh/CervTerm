@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"cervterm/internal/pty"
+	"cervterm/internal/termimage"
 )
 
 func addRuntimeTestWindow(t *testing.T, m *Mux, metrics CellMetrics) (WindowView, *fakeSession) {
@@ -100,5 +101,39 @@ func TestMuxCrossWindowWholeTabMoveDoesNotTouchSessions(t *testing.T) {
 	}
 	if len(events) < 3 || events[0].Kind != TabMoved || events[0].Window != 2 || events[0].SourceWindow != 1 {
 		t.Fatalf("events=%#v", events)
+	}
+}
+
+func TestMuxWholeTabTransferPreservesInternalImageIDAllocator(t *testing.T) {
+	m, _, _ := newKittyRuntimeMux(t, true)
+	metrics := tabMetrics()
+	addRuntimeTestWindow(t, m, metrics)
+	p, ok := m.sessions.lookup(1)
+	if !ok || p.imageStore == nil {
+		t.Fatal("source image store unavailable")
+	}
+	store := p.imageStore
+	image, err := store.AllocateInternalImageID()
+	if err != nil || image != termimage.MinInternalImageID {
+		t.Fatalf("image=%#x err=%v", image, err)
+	}
+	placement, err := store.AllocateInternalPlacementID()
+	if err != nil || placement != termimage.MinInternalPlacementID {
+		t.Fatalf("placement=%#x err=%v", placement, err)
+	}
+	if _, err := m.TransferTabBetweenWindows(TabTransferRequest{SourceWindow: 1, DestinationWindow: 2, Tab: 1, Position: 1, SourceBounds: PixelRect{Width: 800, Height: 480}, DestinationBounds: PixelRect{Width: 600, Height: 360}, Resolve: m.resolveMetrics}); err != nil {
+		t.Fatal(err)
+	}
+	after, ok := m.sessions.lookup(1)
+	if !ok || after != p || after.imageStore != store {
+		t.Fatal("tab transfer replaced pane image ownership")
+	}
+	nextImage, err := store.AllocateInternalImageID()
+	if err != nil || nextImage != image+1 {
+		t.Fatalf("next image=%#x err=%v", nextImage, err)
+	}
+	nextPlacement, err := store.AllocateInternalPlacementID()
+	if err != nil || nextPlacement != placement+1 {
+		t.Fatalf("next placement=%#x err=%v", nextPlacement, err)
 	}
 }

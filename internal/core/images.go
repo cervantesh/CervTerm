@@ -320,6 +320,9 @@ func (t *Terminal) prepareImageDelete(selector termimage.DeleteSelector, fault i
 		if validated.CurrentScreen && alternateSide != t.alternateScreen {
 			return false
 		}
+		if validated.WireIDsOnly && !termimage.IsWireImageID(entry.placement.Resource.Image) {
+			return false
+		}
 		placement := entry.placement
 		switch {
 		case validated.All:
@@ -351,7 +354,9 @@ func (t *Terminal) prepareImageDelete(selector termimage.DeleteSelector, fault i
 	if validated.DeleteResource && !validated.CurrentScreen {
 		if validated.All {
 			for _, ref := range t.imageStore.ResourceRefs() {
-				refs[ref] = struct{}{}
+				if !validated.WireIDsOnly || termimage.IsWireImageID(ref.Image) {
+					refs[ref] = struct{}{}
+				}
 			}
 		}
 		if validated.Image != nil {
