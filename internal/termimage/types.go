@@ -8,6 +8,16 @@ type TransferID uint32
 type ResourceGeneration uint64
 type StoreEpoch uint64
 
+const (
+	MaxWireImageID         ImageID     = 0x7fffffff
+	MinInternalImageID     ImageID     = 0x80000000
+	MaxWirePlacementID     PlacementID = 0x7fffffff
+	MinInternalPlacementID PlacementID = 0x80000000
+)
+
+func IsWireImageID(id ImageID) bool         { return id > 0 && id <= MaxWireImageID }
+func IsWirePlacementID(id PlacementID) bool { return id > 0 && id <= MaxWirePlacementID }
+
 type ResourceRef struct {
 	Image      ImageID
 	Generation ResourceGeneration
@@ -68,6 +78,7 @@ type DeleteSelector struct {
 	CurrentScreen  bool
 	UnderCursor    bool
 	DeleteResource bool
+	WireIDsOnly    bool
 }
 
 type Usage struct {
@@ -94,4 +105,5 @@ var (
 	ErrInvalidSelector     = errors.New("termimage delete selector is invalid")
 	ErrCandidateInvalid    = errors.New("termimage decoded candidate is invalid")
 	ErrPreparedState       = errors.New("termimage prepared state is invalid")
+	ErrInternalIDExhausted = errors.New("termimage internal identity namespace exhausted")
 )
