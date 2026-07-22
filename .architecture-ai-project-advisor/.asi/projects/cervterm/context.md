@@ -1,12 +1,12 @@
-# CervTerm Phase 13 Context — Bounded Image Model and Kitty Graphics
+# CervTerm Phase 14 Context — Bounded Sixel and iTerm Inline Images
 
-Date: 2026-07-20
-Baseline intent: Phase 12 closed at `e1ed32c`; Phase 13 Slice 13.0a starts from clean local `dev` at `65f9000` after mandatory Hermes-only Agentic Stack onboarding. The dirty primary `fix/windows-version-resource-from-tag` worktree at `61ece0e` remains untouched.
+Date: 2026-07-23
+Baseline: Phase 13 closed at local `dev` commit `be30c58`. Slice 14.0 uses a clean dedicated worktree. The user's dirty primary `fix/windows-version-resource-from-tag` worktree remains untouched.
 
-Objective: implement a protocol-neutral bounded pane-local image resource/placement model and a default-off direct-data Kitty APC subset while preserving text-only `core.Cell`, mux pane identity, detached render snapshots, owner-thread terminal/mux/GL mutation, and the OpenGL-only renderer direction.
+Objective: add independently enabled experimental static Sixel DCS and iTerm OSC 1337 direct-inline PNG adapters over the accepted Phase 13 image model while preserving text-only `core.Cell`, pane identity, detached snapshots, owner-thread terminal/mux publication, context-local OpenGL ownership and renderer-selection exclusion.
 
-In scope: bounded APC/DCS framing; pane/global budgets and atomic image transactions; primary/history/alternate placement lifecycle; detached image projection/acquisition; bounded direct RGB/RGBA/zlib/PNG Kitty transmit/place/delete/query; context-local GL cache/drawing; strict v2 default-off restart-scoped config; security/fuzz/performance/manual qualification.
+In scope: canonical anchors; internal ID partition; ephemeral final-placement retirement; exact selected DCS and streaming selected OSC; pure bounded protocol adapters/workers; one shared scheduler; strict-v2 restart-scoped default-off config; transactional any-protocol activation; security/fuzz/performance/manual qualification.
 
-Excluded: renderer selection, Sixel, iTerm, animation, filesystem/temp/shared-memory transport, persistent image cache, default-on activation.
+Excluded: C1 control forms, cursor effects, protocol replies, external file/path/URL/download/write modes, animation, broad protocol formats, renderer/backend selection, stable support claims before qualification.
 
-Authority: Phase 13 preflight, accepted ADR 0014, Phase 13 guardrails, reviewed feature design, and the independently reviewed implementation plan. Tracked proposed ADR-0006 is superseded in substance by accepted ADR 0014.
+Authority: ADR-0014 and accepted ADR-0016; Phase 14 preflight/guardrails; independently verified feature design and implementation plan.

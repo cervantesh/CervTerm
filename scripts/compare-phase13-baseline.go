@@ -35,6 +35,7 @@ type metadata struct {
 	ProductionCommit     string   `json:"production_commit"`
 	HarnessSHA256        string   `json:"harness_sha256"`
 	MeasuredSourceSHA256 string   `json:"measured_source_sha256,omitempty"`
+	WorkingTreeDirty     bool     `json:"working_tree_dirty"`
 	WarmCommand          []string `json:"warm_command"`
 	RecordCommand        []string `json:"record_command"`
 }
@@ -52,11 +53,11 @@ func main() {
 	if len(os.Args) != 3 {
 		fatalf("usage: go run ./scripts/compare-phase13-baseline.go BASELINE CANDIDATE")
 	}
-	base, err := parseFile(os.Args[1])
+	base, err := parseFile(os.Args[1], false)
 	if err != nil {
 		fatalf("baseline: %v", err)
 	}
-	cand, err := parseFile(os.Args[2])
+	cand, err := parseFile(os.Args[2], true)
 	if err != nil {
 		fatalf("candidate: %v", err)
 	}
@@ -119,7 +120,7 @@ func main() {
 	fmt.Println("phase 13 baseline gate passed")
 }
 
-func parseFile(path string) (benchmarkFile, error) {
+func parseFile(path string, requireClean bool) (benchmarkFile, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return benchmarkFile{}, err
@@ -185,7 +186,7 @@ func parseFile(path string) (benchmarkFile, error) {
 	if !haveMeta {
 		return benchmarkFile{}, fmt.Errorf("missing metadata preamble")
 	}
-	if err := validateMetadata(result.meta); err != nil {
+	if err := validateMetadata(result.meta, requireClean); err != nil {
 		return benchmarkFile{}, err
 	}
 	if goos != result.meta.GOOS || goarch != result.meta.GOARCH || cpu != result.meta.CPU {
@@ -244,9 +245,12 @@ func normalizeName(name string, expectedCPU int) (string, int, error) {
 	return match[1], cpu, nil
 }
 
-func validateMetadata(m metadata) error {
+func validateMetadata(m metadata, requireClean bool) error {
 	if m.Version != 1 || m.Suite == "" || m.GoVersion == "" || m.GOOS == "" || m.GOARCH == "" || m.CPU == "" || m.ProductionCommit == "" || m.HarnessSHA256 == "" {
 		return fmt.Errorf("metadata incomplete or unsupported")
+	}
+	if requireClean && m.WorkingTreeDirty {
+		return fmt.Errorf("metadata reports a dirty working tree")
 	}
 	if m.Suite == "control" && m.MeasuredSourceSHA256 == "" {
 		return fmt.Errorf("control metadata lacks measured source identity")

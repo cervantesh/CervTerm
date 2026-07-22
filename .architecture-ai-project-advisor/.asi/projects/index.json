@@ -3,8 +3,8 @@
     "slug": "cervterm",
     "name": "CervTerm",
     "stage": "plan",
-    "phase": "13",
-    "objective": "Implement a bounded protocol-neutral image model and default-off direct-data Kitty graphics.",
-    "lastUpdated": "2026-07-20"
+    "phase": "14",
+    "objective": "Add bounded default-off Sixel and iTerm inline image adapters over the Phase 13 image model.",
+    "lastUpdated": "2026-07-23"
   }
 ]

@@ -1,49 +1,40 @@
-# Architecture Preflight — Phase 13 Bounded Image Model and Kitty Graphics
+# Architecture Preflight — Phase 14 Bounded Sixel and iTerm Inline Images
 
-Date: 2026-07-20
-Decision: **REQUIRES ADR + DESIGN + PLAN BEFORE CODE**
-Risk: **High** (untrusted compressed input, large memory, parser recovery, screen/reflow lifecycle, GPU ownership)
+Date: 2026-07-23
+Decision: **PROCEED ONLY THROUGH ADR 0016, DESIGN, PLAN AND SEQUENTIAL GATES**
+Risk: **High** (untrusted raster/base64/PNG input, parser recovery, CPU/memory bounds, asynchronous ownership)
 
-## Trigger
+## Smallest safe scope
 
-Phase 13 adds APC framing, protocol decoding, pane/global resource accounting, screen-adjacent placement state, renderer-neutral image references, GL textures and terminal-originated replies. It crosses VT/core/render/mux/frontend boundaries and creates a new resource/security boundary. Renderer selection remains excluded.
+- Static Sixel DCS `q`: exact raster declaration, RGB palette, repeats, carriage/new-band commands; 256 KiB wire frame.
+- iTerm `OSC 1337;File=`: inline=1 direct strict-base64 PNG, exact size, at most one cell dimension; no external I/O.
+- Cursor-neutral placement and no Phase 14 replies.
+- Phase 13 owner/store/budgets/lifecycle/snapshots/GL cache only; no `core.Cell` or renderer change.
+- Independent restart-scoped default-off flags.
 
-## Existing seams
+## Required architecture changes
 
-- `internal/vt` has bounded all-or-nothing OSC collection but no APC/DCS states; OSC’s 64 KiB accumulator is not a safe Kitty transport.
-- `core.Cell` is pinned at 32 bytes and must remain text-only.
-- Primary/history reflow and alternate-screen crop/restore are distinct; placements must explicitly join erase/edit/scroll/history eviction/reflow/reset lifecycle.
-- Each mux pane already owns one parser, terminal and reusable snapshot and survives tab/window transfer intact.
-- Render snapshots are renderer-neutral; row hashes cannot observe image-only mutations.
-- GLFW/OpenGL work is OS-thread/context-owned; textures must remain projection/context-local.
-- `internal/background` provides checked size math, bounded decode, leases/pins and deterministic unpinned LRU precedent, but terminal streams require stricter pane/global/time/chunk limits.
+1. Canonical owner anchor and collision-proof internal ID namespace.
+2. Atomic ephemeral final-placement resource retirement.
+3. Exact selected DCS and streaming selected OSC parser seams with recovery tests.
+4. Protocol-neutral scheduler with complete Kitty migration before new jobs.
+5. Pure Sixel and iTerm leaf packages plus one shared bounded PNG codec.
+6. Test-only mux routing before public config, and dormant config before atomic production activation.
 
-## Mandatory architecture decisions
+## Risks and controls
 
-1. Protocol-neutral resource/store/placement ownership without enlarging `Cell`.
-2. APC/DCS framing, cancellation, overflow discard and normal-text recovery.
-3. Immutable hard caps plus user-lowerable operational caps for every encoded/decoded/pixel/count/time/CPU/GPU stage.
-4. Primary/history/alternate placement state machine for erase, insert/delete, scroll regions, eviction, resize/reflow, reset and pane close.
-5. Renderer-neutral snapshot identity and safe resource acquisition without mutable pixel aliases.
-6. Main-thread model commit/reply ordering versus bounded worker decode and late-result rejection.
-7. Projection/context-local texture cache, visible pins, deterministic eviction, pane transfer and teardown.
-8. Supported Kitty subset, fixed redacted replies and explicit rejection of file/temp/shared-memory transports.
+- Raster/PNG bombs: checked dimensions, pixels, bytes, repeats and operation count before growth/allocation.
+- CPU denial: two shared workers, one outstanding job/pane, bounded queue and late-commit rejection; no preemption claim.
+- Parser leakage: discard through BEL/ST/CAN/SUB/EOF/reset with fuzz at every split.
+- Resource leak: ephemeral resource retires atomically with its final placement.
+- ID collision: Kitty low-half and internal high-half partition with exhaustion tests.
+- External effects: import/static gate forbids filesystem, process, network and unsafe leaves.
+- GL/model safety: workers return candidates only; owner commits; GL remains context-local.
 
 ## Stop conditions
 
-- Any design adds image identity/pointers to `core.Cell`.
-- Encoded or decoded bytes can grow without both pane and process reservation.
-- A decoder can allocate from untrusted dimensions before checked bounds.
-- Parser overflow/cancellation can leak payload into text or partially commit resources/placements.
-- Worker or native code mutates terminal/mux/GL state off owner thread.
-- Snapshots expose mutable store backing or GL handles.
-- GPU resources cross GL contexts during pane transfer.
-- Disabled/default paths advertise Kitty support or change text-only allocation/frame cadence.
-- File/path/shared-memory transports or animation enter Phase 13 without a separate decision.
+External file/path/URL/write access; unchecked arithmetic; off-owner model/GL mutation; delayed cursor effects; payload logging/leakage; internal-ID replacement; resource/reservation leak; multiplied/widened hard caps; `core.Cell` widening; renderer selection; default-on or implicit advertisement.
 
 ## Required gates
 
-- Accept a concrete successor to tracked proposed image ADR-0006 with budget and lifecycle tables.
-- Persist feature design and dependency-aware slice plan.
-- Independently review design/plan; no external-engine challenge is invoked without explicit user approval.
-- Every code/test slice runs full tests, tagged tests, race, vet, maturity, fuzz smoke and text-only performance comparison before local merge. Documentation-only Slice 13.0a runs its exact JSON/authority checks plus full, tagged, maturity and diff gates; it cannot run image fuzz/performance targets that do not exist yet.
+ADR-0016, feature design, implementation plan, independent design/plan verification, portable baseline, parser/adapter/decoder fuzz, lifecycle and mixed-scheduler race tests, all-disabled nil benchmarks, activation rollback review, final security/drift review and honest manual qualification.

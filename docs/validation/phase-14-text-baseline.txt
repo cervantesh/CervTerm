@@ -1,0 +1,45 @@
+# phase13-meta {"version":1,"suite":"text","go_version":"go version go1.25.8 windows/amd64","goos":"windows","goarch":"amd64","cpu":"AMD Ryzen 9 7940HX with Radeon Graphics","gomaxprocs":1,"benchtime":"2s","samples":10,"production_commit":"b1eec1335aaad55cffbec9b15c610e3aebbc24dd","harness_sha256":"7997496ee147c253b4a38e9c5f2d439cede13eca619fdeb3ce42c0ceed5d215a","working_tree_dirty":false,"warm_command":["go","test","./internal/vt","./internal/core","./internal/render","-run","^$","-bench","BenchmarkPhase13(TextOnly|Disabled)","-benchmem","-benchtime","5s","-cpu","1","-count","1"],"record_command":["go","test","./internal/vt","./internal/core","./internal/render","-run","^$","-bench","BenchmarkPhase13(TextOnly|Disabled)","-benchmem","-benchtime","2s","-cpu","1","-count","10"]}
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/vt
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlyParser    	  861829	      2911 ns/op	   7.56 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyParser    	  802916	      2936 ns/op	   7.49 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyParser    	  802260	      2916 ns/op	   7.54 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyParser    	  821174	      3029 ns/op	   7.26 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyParser    	  821220	      3151 ns/op	   6.98 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyParser    	  787915	      2969 ns/op	   7.41 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyParser    	  785798	      2969 ns/op	   7.41 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyParser    	  792937	      3005 ns/op	   7.32 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyParser    	  817003	      3017 ns/op	   7.29 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyParser    	  806124	      2960 ns/op	   7.43 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyCoreReuse 	  816212	      2998 ns/op	   4.34 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyCoreReuse 	  797652	      2932 ns/op	   4.43 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyCoreReuse 	  794037	      2958 ns/op	   4.39 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyCoreReuse 	  808420	      3038 ns/op	   4.28 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyCoreReuse 	  822181	      3201 ns/op	   4.06 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyCoreReuse 	  777730	      2964 ns/op	   4.39 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyCoreReuse 	  796782	      2930 ns/op	   4.44 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyCoreReuse 	  813354	      2933 ns/op	   4.43 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyCoreReuse 	  806346	      3006 ns/op	   4.32 MB/s	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlyCoreReuse 	  840380	      2895 ns/op	   4.49 MB/s	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/vt	82.568s
+PASS
+ok  	cervterm/internal/core	0.206s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  290271	      8491 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlySnapshot 	  284050	      9071 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlySnapshot 	  252476	      8990 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlySnapshot 	  257161	      8960 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlySnapshot 	  258919	      8973 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlySnapshot 	  285954	      9108 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlySnapshot 	  258198	      8999 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlySnapshot 	  283647	      8962 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlySnapshot 	  254974	      9032 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13TextOnlySnapshot 	  260178	      8986 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/render	25.152s

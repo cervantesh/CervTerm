@@ -46,11 +46,11 @@ type benchmarkSuite struct {
 }
 
 func main() {
-	suiteName := flag.String("suite", "", "benchmark suite: text, glfw, control, or store")
+	suiteName := flag.String("suite", "", "benchmark suite: text, glfw, glfwframe, control, or store")
 	outPath := flag.String("out", "", "raw benchmark output path")
 	flag.Parse()
-	if *outPath == "" || (*suiteName != "text" && *suiteName != "glfw" && *suiteName != "control" && *suiteName != "store") {
-		fatalf("usage: go run ./scripts/capture-phase13-benchmark.go -suite text|glfw|control|store -out PATH")
+	if *outPath == "" || (*suiteName != "text" && *suiteName != "glfw" && *suiteName != "glfwframe" && *suiteName != "control" && *suiteName != "store") {
+		fatalf("usage: go run ./scripts/capture-phase13-benchmark.go -suite text|glfw|glfwframe|control|store -out PATH")
 	}
 	root, err := repositoryRoot()
 	if err != nil {
@@ -112,6 +112,16 @@ func suiteFor(name string) benchmarkSuite {
 			pattern:   "^BenchmarkPhase13DisabledDraw$",
 			buildTags: "glfw",
 			harness:   []string{"internal/frontend/glfwgl/phase13_benchmark_test.go"},
+		}
+	case "glfwframe":
+		return benchmarkSuite{
+			packages:  []string{"./internal/frontend/glfwgl"},
+			pattern:   "^BenchmarkPhase13DisabledFrame$",
+			buildTags: "glfw",
+			harness:   []string{"internal/frontend/glfwgl/phase13_frame_benchmark_test.go"},
+			measured: []string{
+				"internal/frontend/glfwgl/terminal_image_draw.go",
+			},
 		}
 	case "control":
 		return benchmarkSuite{
