@@ -4,6 +4,8 @@ import (
 	"errors"
 	"image"
 	"image/color"
+
+	"cervterm/internal/termimage"
 )
 
 // errNotImplemented is returned by the stub backends (Vulkan, Metal, WebGPU)
@@ -58,6 +60,31 @@ type BackgroundSurface interface {
 type BackgroundSurfaceRenderer interface {
 	PrepareBackgroundSurface(*image.RGBA) (BackgroundSurface, error)
 	ReplaceBackgroundRect(BackgroundSurface, ClipRect) error
+}
+
+// ImageRect is a top-left-origin rectangle. Destination rectangles use
+// framebuffer pixels; source rectangles use texture pixels.
+type ImageRect struct {
+	X, Y, Width, Height float32
+}
+
+// ImageTextureKey identifies one pane-object-scoped exact resource generation.
+type ImageTextureKey struct {
+	PaneObject uint64
+	Resource   termimage.ResourceRef
+}
+
+// ImageTexture is a renderer-owned standalone terminal-image texture.
+// Close must run while the texture's owning rendering context is current.
+type ImageTexture interface {
+	Close() error
+}
+
+// TerminalImageRenderer is an optional capability adjacent to Renderer.
+// Only the OpenGL backend implements it; terminal images never use glyph-atlas pages.
+type TerminalImageRenderer interface {
+	PrepareTerminalImage(ImageTextureKey, termimage.DetachedResource) (ImageTexture, error)
+	DrawTerminalImage(ImageTexture, ImageRect, ImageRect, float32) error
 }
 
 // Renderer is the backend-neutral GPU contract for one terminal frame. The

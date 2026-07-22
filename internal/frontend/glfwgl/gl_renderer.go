@@ -35,6 +35,7 @@ import (
 // enable/disable pattern's net effect.
 var _ gpu.Renderer = (*glRenderer)(nil)
 var _ gpu.BackgroundSurfaceRenderer = (*glRenderer)(nil)
+var _ gpu.TerminalImageRenderer = (*glRenderer)(nil)
 
 type glBackgroundSurface struct {
 	renderer      *glRenderer
@@ -58,8 +59,9 @@ type glRenderer struct {
 	win          *glfw.Window
 	pages        []uint32 // atlas page textures
 	atlasSizePx  int      // per-side size the pages were configured with (ConfigureAtlas)
-	boundTexture uint32   // currently bound page texture (0 = none)
+	boundTexture uint32   // currently bound renderer texture (0 = none)
 	texEnabled   bool     // tracks gl.Enable/Disable(TEXTURE_2D) to skip redundant toggles
+	imageGL      terminalImageGL
 	widthPx      int
 	heightPx     int
 	clipStack    []gpu.ClipRect
