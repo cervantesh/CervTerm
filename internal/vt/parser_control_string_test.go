@@ -28,7 +28,11 @@ func TestControlStringsFrameAPCAndDCS(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			input := append([]byte{0x1b, test.introducer}, []byte("alpha\a\x1bxomega\x1b\\OK")...)
+			preamble := ""
+			if test.kind == ControlStringDCS {
+				preamble = "q"
+			}
+			input := append([]byte{0x1b, test.introducer}, []byte(preamble+"alpha\a\x1bxomega\x1b\\OK")...)
 			events, text := parseControlInput(t, input, nil)
 			if len(events) != 1 {
 				t.Fatalf("events = %#v, want one", events)
@@ -66,6 +70,9 @@ func TestControlStringEverySplitMatchesUnsplit(t *testing.T) {
 func TestRepeatedESCStillIntroducesControlString(t *testing.T) {
 	for _, introducer := range []byte{'_', 'P'} {
 		input := []byte{0x1b, 0x1b, introducer}
+		if introducer == 'P' {
+			input = append(input, 'q')
+		}
 		input = append(input, []byte("secret\x1b\\OK")...)
 		events, text := parseControlInput(t, input, nil)
 		if len(events) != 1 || string(events[0].Chunk) != "secret" || !events[0].Final {
@@ -78,7 +85,7 @@ func TestRepeatedESCStillIntroducesControlString(t *testing.T) {
 }
 
 func TestExactCapOverlappingSTOverflowRecoversAcrossSplits(t *testing.T) {
-	input := append([]byte("\x1bP"), bytes.Repeat([]byte{'x'}, maxControlStringLen)...)
+	input := append([]byte("\x1bPq"), bytes.Repeat([]byte{'x'}, maxControlStringLen-1)...)
 	input = append(input, 0x1b, 0x1b, '\\', 'O', 'K')
 	wantEvents, wantText := parseControlInput(t, input, nil)
 	if len(wantEvents) == 0 || !wantEvents[len(wantEvents)-1].Overflow || !strings.HasPrefix(wantText, "OK") {
@@ -122,7 +129,7 @@ func TestControlStringChunkAndFrameBoundaries(t *testing.T) {
 
 func TestControlStringOverflowCancelsOnceAndDiscardsThroughST(t *testing.T) {
 	payload := bytes.Repeat([]byte{'x'}, maxControlStringLen+1)
-	input := append([]byte("\x1bP"), payload...)
+	input := append([]byte("\x1bPq"), payload...)
 	input = append(input, []byte("hidden\x1b\\OK")...)
 	events, text := parseControlInput(t, input, nil)
 	terminal := 0
@@ -170,7 +177,7 @@ func TestControlStringOverflowDiscardTerminatorsAndResetDoNotDuplicate(t *testin
 	var parser Parser
 	var events []capturedControlEvent
 	parser.SetControlStringSink(captureControlEvents(&events))
-	input := append([]byte("\x1bP"), payload...)
+	input := append([]byte("\x1bPq"), payload...)
 	parser.Advance(term, input)
 	parser.Reset()
 	parser.EndOfInput()
@@ -192,7 +199,7 @@ func TestControlStringOverflowDiscardTerminatorsAndResetDoNotDuplicate(t *testin
 func TestControlStringCANAndSUBCancelFromPayloadAndEscape(t *testing.T) {
 	for _, input := range [][]byte{
 		[]byte("\x1b_partial\x18OK"),
-		[]byte("\x1bPpartial\x1b\x1aOK"),
+		[]byte("\x1bPqpartial\x1b\x1aOK"),
 	} {
 		events, text := parseControlInput(t, input, nil)
 		if len(events) != 1 || !events[0].Final || !events[0].Cancelled || events[0].Overflow {
@@ -340,7 +347,11 @@ func FuzzControlStringFraming(f *testing.F) {
 		// Raw binary input exercises ESC/ST ambiguity, cancellation, malformed UTF-8,
 		// and discard recovery. Arbitrary splitting must not change the event stream
 		// or terminal projection.
-		raw := append([]byte{0x1b, introducer}, source...)
+		prefix := []byte{0x1b, introducer}
+		if introducer == 'P' {
+			prefix = append(prefix, 'q')
+		}
+		raw := append(prefix, source...)
 		raw = append(raw, 0x1b, '\\', 'Z')
 		wantEvents, wantText := parseControlInput(t, raw, nil)
 		point := int(uint64(split) % uint64(len(raw)+1))
@@ -356,7 +367,11 @@ func FuzzControlStringFraming(f *testing.F) {
 		for i, value := range source {
 			payload[i] = 0x20 + value%0x5f
 		}
-		safe := append([]byte{0x1b, introducer}, payload...)
+		prefix = []byte{0x1b, introducer}
+		if introducer == 'P' {
+			prefix = append(prefix, 'q')
+		}
+		safe := append(prefix, payload...)
 		safe = append(safe, 0x1b, '\\', 'Z')
 		wantEvents, wantText = parseControlInput(t, safe, nil)
 		point = int(uint64(split) % uint64(len(safe)+1))

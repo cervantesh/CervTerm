@@ -23,7 +23,7 @@ func BenchmarkPhase13ControlStringDiscard(b *testing.B) {
 
 func BenchmarkPhase13ControlStringOverflow(b *testing.B) {
 	payload := bytes.Repeat([]byte{'x'}, maxControlStringLen+1)
-	input := append([]byte("\x1bP"), payload...)
+	input := append([]byte("\x1bPq"), payload...)
 	input = append(input, 0x1b, '\\')
 	term := core.NewTerminal(80, 24)
 	var parser Parser
