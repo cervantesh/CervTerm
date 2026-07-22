@@ -36,6 +36,7 @@ type resource struct {
 	stride        uint32
 	rgba          []byte
 	lease         *reservation
+	retention     ResourceRetention
 }
 
 type storeState struct {

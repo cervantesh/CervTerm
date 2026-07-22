@@ -7,6 +7,14 @@ type PlacementID uint32
 type TransferID uint32
 type ResourceGeneration uint64
 type StoreEpoch uint64
+type ResourceRetention uint8
+
+const (
+	ResourceDurable ResourceRetention = iota
+	ResourceEphemeral
+)
+
+func (r ResourceRetention) Valid() bool { return r == ResourceDurable || r == ResourceEphemeral }
 
 const (
 	MaxWireImageID         ImageID     = 0x7fffffff
@@ -106,4 +114,5 @@ var (
 	ErrCandidateInvalid    = errors.New("termimage decoded candidate is invalid")
 	ErrPreparedState       = errors.New("termimage prepared state is invalid")
 	ErrInternalIDExhausted = errors.New("termimage internal identity namespace exhausted")
+	ErrInvalidRetention    = errors.New("termimage resource retention is invalid")
 )

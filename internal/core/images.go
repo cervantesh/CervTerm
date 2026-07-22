@@ -23,6 +23,7 @@ type imageSidecars struct {
 type imageCommit struct {
 	candidate *termimage.DecodedCandidate
 	placement *termimage.PlacementSpec
+	retention termimage.ResourceRetention
 }
 
 type imageCommitResult struct {
@@ -128,7 +129,13 @@ func (t *Terminal) prepareImageCommit(commit imageCommit, fault imagePrepareFaul
 	if width == 0 || height == 0 || stride == 0 {
 		return nil, imageCommitResult{}, termimage.ErrCandidateInvalid
 	}
+	if !commit.retention.Valid() || (commit.retention == termimage.ResourceEphemeral && commit.placement == nil) {
+		return nil, imageCommitResult{}, termimage.ErrInvalidRetention
+	}
 	oldRef, replacing := t.imageStore.ResourceRef(candidate.Image())
+	if commit.retention == termimage.ResourceEphemeral && replacing {
+		return nil, imageCommitResult{}, termimage.ErrInvalidRetention
+	}
 	if err := runImageFault(fault, imagePreparePrimaryCopy); err != nil {
 		return nil, imageCommitResult{}, err
 	}
@@ -180,7 +187,7 @@ func (t *Terminal) prepareImageCommit(commit imageCommit, fault imagePrepareFaul
 		}
 		return nil, imageCommitResult{}, err
 	}
-	storePrepared, ref, err := t.imageOwner.PrepareCandidate(candidate)
+	storePrepared, ref, err := t.imageOwner.PrepareCandidateWithRetention(candidate, commit.retention)
 	if err != nil {
 		if newLease != nil {
 			newLease.Close()
@@ -365,7 +372,7 @@ func (t *Terminal) prepareImageDelete(selector termimage.DeleteSelector, fault i
 			}
 		}
 	}
-	var retired []*termimage.PlacementReservation
+	var retiredEntries []imagePlacement
 	filter := func(source []imagePlacement, alternateSide bool) []imagePlacement {
 		result := source[:0]
 		for _, entry := range source {
@@ -374,7 +381,7 @@ func (t *Terminal) prepareImageDelete(selector termimage.DeleteSelector, fault i
 				_, remove = refs[entry.placement.Resource]
 			}
 			if remove {
-				retired = append(retired, entry.lease)
+				retiredEntries = append(retiredEntries, entry)
 			} else {
 				result = append(result, entry)
 			}
@@ -383,11 +390,18 @@ func (t *Terminal) prepareImageDelete(selector termimage.DeleteSelector, fault i
 	}
 	primary = filter(primary, false)
 	alternate = filter(alternate, true)
-	removeRefs := make([]termimage.ResourceRef, 0, len(refs))
+	removeSet := make(map[termimage.ResourceRef]struct{})
 	if validated.DeleteResource {
 		for ref := range refs {
-			removeRefs = append(removeRefs, ref)
+			removeSet[ref] = struct{}{}
 		}
+	}
+	for _, ref := range t.finalEphemeralResourceRefs(retiredEntries, primary, alternate) {
+		removeSet[ref] = struct{}{}
+	}
+	removeRefs := make([]termimage.ResourceRef, 0, len(removeSet))
+	for ref := range removeSet {
+		removeRefs = append(removeRefs, ref)
 	}
 	if err = runImageFault(fault, imagePrepareStore); err != nil {
 		return nil, 0, err
@@ -396,11 +410,15 @@ func (t *Terminal) prepareImageDelete(selector termimage.DeleteSelector, fault i
 	if err != nil {
 		return nil, 0, err
 	}
+	retired := make([]*termimage.PlacementReservation, 0, len(retiredEntries))
+	for _, entry := range retiredEntries {
+		retired = append(retired, entry.lease)
+	}
 	return &preparedImageMutation{
 		terminal: t, store: storePrepared, baseSidecars: t.imageSidecars,
 		sidecars: &imageSidecars{primary: primary, alternate: alternate, generation: t.imageSidecars.generation + 1},
 		retired:  retired,
-	}, len(retired), nil
+	}, len(retiredEntries), nil
 }
 
 func cloneImagePlacements(source []imagePlacement, replaced termimage.ResourceRef, remove bool) ([]imagePlacement, []*termimage.PlacementReservation) {

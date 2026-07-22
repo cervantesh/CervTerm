@@ -27,22 +27,31 @@ func imageRectContains(outer, inner imageCellRect) bool {
 }
 
 func (t *Terminal) mutateImagePlacements(alternate bool, transform func(termimage.Placement) (termimage.Placement, bool)) bool {
-	if t == nil || t.imageStore == nil || t.imageSidecars == nil {
-		return false
+	changed, err := t.mutateImagePlacementsWithFault(alternate, transform, nil)
+	if err != nil {
+		t.closeImages()
+		return true
+	}
+	return changed
+}
+
+func (t *Terminal) mutateImagePlacementsWithFault(alternate bool, transform func(termimage.Placement) (termimage.Placement, bool), fault imagePrepareFault) (bool, error) {
+	if t == nil || t.imageStore == nil || t.imageOwner == nil || t.imageSidecars == nil {
+		return false, nil
 	}
 	if t.imageSidecars.generation == math.MaxUint64 {
 		t.closeImages()
-		return true
+		return true, nil
 	}
 	source := t.imageSidecars.primary
 	if alternate {
 		source = t.imageSidecars.alternate
 	}
 	if len(source) == 0 {
-		return false
+		return false, nil
 	}
 	var next []imagePlacement
-	var retired []*termimage.PlacementReservation
+	var retiredEntries []imagePlacement
 	for index, entry := range source {
 		placement, keep := transform(entry.placement)
 		changed := !keep || placement != entry.placement
@@ -54,29 +63,72 @@ func (t *Terminal) mutateImagePlacements(alternate bool, transform func(termimag
 			continue
 		}
 		if !keep {
-			retired = append(retired, entry.lease)
+			retiredEntries = append(retiredEntries, entry)
 			continue
 		}
 		entry.placement = placement
 		next = append(next, entry)
 	}
 	if next == nil {
-		return false
+		return false, nil
 	}
-	sidecars := &imageSidecars{
-		primary: t.imageSidecars.primary, alternate: t.imageSidecars.alternate,
-		generation: t.imageSidecars.generation + 1,
-	}
+	sidecars := &imageSidecars{primary: t.imageSidecars.primary, alternate: t.imageSidecars.alternate, generation: t.imageSidecars.generation + 1}
 	if alternate {
 		sidecars.alternate = next
 	} else {
 		sidecars.primary = next
 	}
-	t.imageSidecars = sidecars
-	for _, lease := range retired {
-		lease.Close()
+	if len(retiredEntries) == 0 {
+		t.imageSidecars = sidecars
+		return true, nil
 	}
-	return true
+	removeRefs := t.finalEphemeralResourceRefs(retiredEntries, sidecars.primary, sidecars.alternate)
+	if len(removeRefs) == 0 {
+		t.imageSidecars = sidecars
+		for _, entry := range retiredEntries {
+			entry.lease.Close()
+		}
+		return true, nil
+	}
+	if err := runImageFault(fault, imagePrepareStore); err != nil {
+		return false, err
+	}
+	storePrepared, err := t.imageOwner.PrepareResourceRemoval(removeRefs)
+	if err != nil {
+		return false, err
+	}
+	retired := make([]*termimage.PlacementReservation, 0, len(retiredEntries))
+	for _, entry := range retiredEntries {
+		retired = append(retired, entry.lease)
+	}
+	prepared := &preparedImageMutation{terminal: t, store: storePrepared, sidecars: sidecars, baseSidecars: t.imageSidecars, retired: retired}
+	t.publishPreparedImage(prepared)
+	return true, nil
+}
+
+func (t *Terminal) finalEphemeralResourceRefs(retired []imagePlacement, primary, alternate []imagePlacement) []termimage.ResourceRef {
+	remaining := make(map[termimage.ResourceRef]struct{}, len(primary)+len(alternate))
+	for _, entry := range primary {
+		remaining[entry.placement.Resource] = struct{}{}
+	}
+	for _, entry := range alternate {
+		remaining[entry.placement.Resource] = struct{}{}
+	}
+	selected := make(map[termimage.ResourceRef]struct{})
+	for _, entry := range retired {
+		ref := entry.placement.Resource
+		if _, exists := remaining[ref]; exists {
+			continue
+		}
+		if retention, ok := t.imageStore.ResourceRetention(ref); ok && retention == termimage.ResourceEphemeral {
+			selected[ref] = struct{}{}
+		}
+	}
+	refs := make([]termimage.ResourceRef, 0, len(selected))
+	for ref := range selected {
+		refs = append(refs, ref)
+	}
+	return refs
 }
 
 func (t *Terminal) activeImageGlobalRow(liveRow int) int64 {
