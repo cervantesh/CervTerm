@@ -1,6 +1,10 @@
 package mux
 
-import "cervterm/internal/termimage"
+import (
+	"cervterm/internal/kitty"
+	"cervterm/internal/termimage"
+	"cervterm/internal/vt"
+)
 
 func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
 	pane := newPane(id, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
@@ -16,6 +20,19 @@ func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
 		return pane
 	}
 	pane.imageStore = store
+	if m.kittyScheduler != nil {
+		pane.kittyAdapter = kitty.NewAdapter(store)
+		pane.parser.SetControlStringSink(func(event vt.ControlStringEvent) {
+			if event.Kind != vt.ControlStringAPC {
+				return
+			}
+			outcome := pane.kittyAdapter.Advance(m.options.Now(), kitty.APCEvent{Data: event.Chunk, Final: event.Final, Cancelled: event.Cancelled, Overflow: event.Overflow})
+			if outcome.Command != nil || outcome.Failure != kitty.ReplyNone {
+				pane.kittyOutcomes = append(pane.kittyOutcomes, outcome)
+				pane.kittyEvents = append(pane.kittyEvents, m.processKittyOutcomes(pane)...)
+			}
+		})
+	}
 	pane.capture()
 	return pane
 }

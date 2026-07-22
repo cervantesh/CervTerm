@@ -154,6 +154,14 @@ func (a *App) tickProjection() {
 
 func (a *App) processNextWakeTimeout(now time.Time) time.Duration {
 	wake := maxWake
+	if a.mux != nil {
+		if deadline, ok := a.mux.NextImageDeadline(); ok {
+			candidate := max(minWake, deadline.Sub(now))
+			if candidate < wake {
+				wake = candidate
+			}
+		}
+	}
 	for _, id := range a.controller.projectionIDs() {
 		projection := a.controller.projectionApp(id)
 		if projection == nil || !a.controller.projectionVisible(id) {
