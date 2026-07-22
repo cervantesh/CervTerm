@@ -2,6 +2,7 @@ package mux
 
 import (
 	"cervterm/internal/core"
+	"cervterm/internal/itermimage"
 	"cervterm/internal/kitty"
 	"cervterm/internal/termimage"
 	"time"
@@ -106,10 +107,37 @@ func (m *Mux) applyImageCompletion(completion imageDecodeCompletion) []Event {
 	case imageDecodeSixel:
 		sixelCompletion, ok := decodeSixelCompletion(completion)
 		if !ok {
+			startedAt := time.Time{}
+			if owner, ownerOK := completion.Owner.value.(sixelDecodeOwner); ownerOK {
+				if pendingOwner, pending := m.sixelPending[owner.token]; !pending || pendingOwner != owner {
+					completion.Close()
+					return nil
+				}
+				delete(m.sixelPending, owner.token)
+				startedAt = owner.startedAt
+			}
 			completion.Close()
+			m.emitImageDiagnosticNow(ImageDiagnosticProtocolSixel, ImageDiagnosticReasonFailed, startedAt)
 			return nil
 		}
 		return m.applySixelCompletion(sixelCompletion)
+	case imageDecodeITerm:
+		itermCompletion, ok := decodeITermCompletion(completion)
+		if !ok {
+			startedAt := time.Time{}
+			if owner, ownerOK := completion.Owner.value.(itermDecodeOwner); ownerOK {
+				if pendingOwner, pending := m.itermPending[owner.token]; !pending || pendingOwner != owner {
+					completion.Close()
+					return nil
+				}
+				delete(m.itermPending, owner.token)
+				startedAt = owner.startedAt
+			}
+			completion.Close()
+			m.emitImageDiagnosticNow(ImageDiagnosticProtocolITerm, ImageDiagnosticReasonFailed, startedAt)
+			return nil
+		}
+		return m.applyITermCompletion(itermCompletion)
 	default:
 		completion.Close()
 		return nil
@@ -197,6 +225,11 @@ func (m *Mux) NextImageDeadline() (time.Time, bool) {
 				earliest, found = deadline, true
 			}
 		}
+		if p.itermAdapter != nil {
+			if deadline, ok := p.itermAdapter.NextExpiry(); ok && (!found || deadline.Before(earliest)) {
+				earliest, found = deadline, true
+			}
+		}
 	}
 	for _, owner := range m.kittyPending {
 		if !found || owner.acceptUntil.Before(earliest) {
@@ -204,6 +237,11 @@ func (m *Mux) NextImageDeadline() (time.Time, bool) {
 		}
 	}
 	for _, owner := range m.sixelPending {
+		if !found || owner.acceptUntil.Before(earliest) {
+			earliest, found = owner.acceptUntil, true
+		}
+	}
+	for _, owner := range m.itermPending {
 		if !found || owner.acceptUntil.Before(earliest) {
 			earliest, found = owner.acceptUntil, true
 		}
@@ -237,6 +275,13 @@ func (m *Mux) expireImages(now time.Time) []Event {
 				m.processSixelOutcomes(p)
 			}
 		}
+		if p.itermAdapter != nil {
+			outcome := p.itermAdapter.Expire(now)
+			if outcome.Command != nil || outcome.Failure != itermimage.FailureNone {
+				p.itermOutcomes = append(p.itermOutcomes, outcome)
+				m.processITermOutcomes(p)
+			}
+		}
 	}
 	for token, owner := range m.kittyPending {
 		if now.Before(owner.acceptUntil) {
@@ -259,6 +304,17 @@ func (m *Mux) expireImages(now time.Time) []Event {
 			continue
 		}
 		delete(m.sixelPending, token)
+		m.emitImageDiagnostic(ImageDiagnosticProtocolSixel, ImageDiagnosticReasonTimeout, owner.startedAt, now)
+	}
+	for token, owner := range m.itermPending {
+		if now.Before(owner.acceptUntil) {
+			continue
+		}
+		if m.imageCompletionBefore(owner.paneID, owner.acceptUntil) {
+			continue
+		}
+		delete(m.itermPending, token)
+		m.emitImageDiagnostic(ImageDiagnosticProtocolITerm, ImageDiagnosticReasonTimeout, owner.startedAt, now)
 	}
 	return m.ResolveEventAddresses(events)
 }

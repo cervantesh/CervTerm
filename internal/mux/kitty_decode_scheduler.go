@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"cervterm/internal/itermimage"
 	"cervterm/internal/kitty"
 	"cervterm/internal/sixel"
 	"cervterm/internal/termimage"
@@ -31,6 +32,7 @@ type imageDecodeProtocol uint8
 const (
 	imageDecodeKitty imageDecodeProtocol = iota + 1
 	imageDecodeSixel
+	imageDecodeITerm
 )
 
 type imageDecodeOwner struct {
@@ -79,6 +81,26 @@ type sixelDecodeOwner struct {
 	image           termimage.ImageID
 	placement       termimage.PlacementID
 	raster          sixel.Raster
+	startedAt       time.Time
+	acceptUntil     time.Time
+	anchor          termimage.CellAnchor
+}
+
+type itermDecodeOwner struct {
+	paneID          PaneID
+	pane            *pane
+	model           *Model
+	store           *termimage.Store
+	storeEpoch      termimage.StoreEpoch
+	imageGeneration uint64
+	reflowGen       uint64
+	anchorGen       uint64
+	token           uint64
+	metrics         CellMetrics
+	image           termimage.ImageID
+	placement       termimage.PlacementID
+	metadata        itermimage.Metadata
+	startedAt       time.Time
 	acceptUntil     time.Time
 	anchor          termimage.CellAnchor
 }
@@ -132,6 +154,33 @@ type sixelDecodeCompletion struct {
 }
 
 func (c *sixelDecodeCompletion) Close() {
+	if c != nil && c.Result != nil {
+		c.Result.Close()
+	}
+}
+
+type itermDecodeJob interface {
+	Run(context.Context) *itermimage.DecodeResult
+	Close()
+}
+
+type itermDecodeJobAdapter struct{ job itermDecodeJob }
+
+func (j *itermDecodeJobAdapter) Run(ctx context.Context) workscheduler.Result { return j.job.Run(ctx) }
+func (j *itermDecodeJobAdapter) Close()                                       { j.job.Close() }
+
+type itermDecodeWork struct {
+	owner itermDecodeOwner
+	job   itermDecodeJob
+}
+
+type itermDecodeCompletion struct {
+	Owner      itermDecodeOwner
+	Result     *itermimage.DecodeResult
+	FinishedAt time.Time
+}
+
+func (c *itermDecodeCompletion) Close() {
 	if c != nil && c.Result != nil {
 		c.Result.Close()
 	}
@@ -191,6 +240,22 @@ func (s *imageDecodeScheduler) submitSixel(work sixelDecodeWork) error {
 	})
 }
 
+func (s *imageDecodeScheduler) submitITerm(work itermDecodeWork) error {
+	if s == nil {
+		if work.job != nil {
+			work.job.Close()
+		}
+		return errKittyDecodeSchedulerClosed
+	}
+	if work.job == nil {
+		return errKittyDecodeInvalidWork
+	}
+	adapter := &itermDecodeJobAdapter{job: work.job}
+	return s.inner.Submit(workscheduler.Work[PaneID, imageDecodeOwner, workscheduler.Result]{
+		Key: work.owner.paneID, Owner: imageDecodeOwner{protocol: imageDecodeITerm, value: work.owner}, Job: adapter,
+	})
+}
+
 func (s *imageDecodeScheduler) ready() <-chan struct{} {
 	if s == nil {
 		return nil
@@ -233,6 +298,21 @@ func decodeSixelCompletion(completion imageDecodeCompletion) (sixelDecodeComplet
 		return sixelDecodeCompletion{}, false
 	}
 	return sixelDecodeCompletion{Owner: owner, Result: result, FinishedAt: completion.FinishedAt}, true
+}
+
+func decodeITermCompletion(completion imageDecodeCompletion) (itermDecodeCompletion, bool) {
+	if completion.Owner.protocol != imageDecodeITerm {
+		return itermDecodeCompletion{}, false
+	}
+	owner, ok := completion.Owner.value.(itermDecodeOwner)
+	if !ok {
+		return itermDecodeCompletion{}, false
+	}
+	result, ok := completion.Result.(*itermimage.DecodeResult)
+	if !ok {
+		return itermDecodeCompletion{}, false
+	}
+	return itermDecodeCompletion{Owner: owner, Result: result, FinishedAt: completion.FinishedAt}, true
 }
 
 func (s *imageDecodeScheduler) finish(paneID PaneID) {

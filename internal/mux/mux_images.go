@@ -1,6 +1,7 @@
 package mux
 
 import (
+	"cervterm/internal/itermimage"
 	"cervterm/internal/kitty"
 	"cervterm/internal/sixel"
 	"cervterm/internal/termimage"
@@ -27,7 +28,10 @@ func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
 	if m.options.SixelEnabled {
 		pane.sixelAdapter = sixel.NewAdapter(store)
 	}
-	if pane.kittyAdapter != nil || pane.sixelAdapter != nil {
+	if m.options.ITermEnabled {
+		pane.itermAdapter = itermimage.NewAdapter(store)
+	}
+	if pane.kittyAdapter != nil || pane.sixelAdapter != nil || pane.itermAdapter != nil {
 		pane.parser.SetControlStringSink(func(event vt.ControlStringEvent) {
 			switch event.Kind {
 			case vt.ControlStringAPC:
@@ -47,6 +51,15 @@ func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
 				if outcome.Command != nil || outcome.Failure != sixel.FailureNone {
 					pane.sixelOutcomes = append(pane.sixelOutcomes, outcome)
 					m.processSixelOutcomes(pane)
+				}
+			case vt.ControlStringOSC1337:
+				if pane.itermAdapter == nil {
+					return
+				}
+				outcome := pane.itermAdapter.Advance(m.options.Now(), itermimage.OSCEvent{Data: event.Chunk, Final: event.Final, Cancelled: event.Cancelled, Overflow: event.Overflow})
+				if outcome.Command != nil || outcome.Failure != itermimage.FailureNone {
+					pane.itermOutcomes = append(pane.itermOutcomes, outcome)
+					m.processITermOutcomes(pane)
 				}
 			}
 		})
