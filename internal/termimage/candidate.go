@@ -49,6 +49,7 @@ type DecodedCandidate struct {
 	lease                 *reservation
 	closed                bool
 	claimed               bool
+	sealed                bool
 }
 
 func (c *DecodedCandidate) Image() ImageID {
@@ -77,11 +78,66 @@ func (c *DecodedCandidate) WriteRGBAAt(offset int, data []byte) error {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.closed || c.claimed || offset < 0 || offset > len(c.rgba) || len(data) > len(c.rgba)-offset {
+	if c.closed || c.claimed || c.sealed || offset < 0 || offset > len(c.rgba) || len(data) > len(c.rgba)-offset {
 		return ErrCandidateInvalid
 	}
 	copy(c.rgba[offset:], data)
 	return nil
+}
+
+func (c *DecodedCandidate) SealWrites() error {
+	if c == nil {
+		return ErrCandidateInvalid
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed || c.claimed || c.sealed {
+		return ErrCandidateInvalid
+	}
+	c.sealed = true
+	return nil
+}
+
+func (c *DecodedCandidate) WritesSealed() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.sealed && !c.closed && !c.claimed
+}
+
+type DecodeScratchLease struct {
+	lease *reservation
+	once  sync.Once
+}
+
+func (s *Store) ReserveDecodeScratch(bytes uint64) (*DecodeScratchLease, error) {
+	if s == nil || bytes == 0 || s.closed.Load() || s.resetting.Load() {
+		return nil, ErrClosed
+	}
+	epoch := s.epoch.Load()
+	lease, err := reserve(s.process, &s.pane, Usage{DecodedBytes: bytes})
+	if err != nil {
+		return nil, err
+	}
+	if s.closed.Load() || s.resetting.Load() || s.epoch.Load() != epoch {
+		lease.Close()
+		return nil, ErrClosed
+	}
+	return &DecodeScratchLease{lease: lease}, nil
+}
+
+func (l *DecodeScratchLease) Close() {
+	if l == nil {
+		return
+	}
+	l.once.Do(func() {
+		if l.lease != nil {
+			l.lease.Close()
+			l.lease = nil
+		}
+	})
 }
 
 // RGBA returns a detached diagnostic copy, never mutable candidate storage.
