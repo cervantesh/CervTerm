@@ -122,7 +122,8 @@ func TestSixelRuntimeSuccessCapturesAnchorPaletteAndNoReply(t *testing.T) {
 	if owner.pane != p || owner.model != m.model || owner.store != p.imageStore || owner.storeEpoch != p.imageStore.Epoch() ||
 		owner.imageGeneration != p.terminal.ImageGeneration() || owner.anchor != wantAnchor || owner.anchorGen != p.terminal.ImageAnchorGeneration() ||
 		owner.metrics != (CellMetrics{CellWidth: 8, CellHeight: 16}) || owner.image != termimage.MinInternalImageID ||
-		owner.placement != termimage.MinInternalPlacementID || owner.raster != (sixel.Raster{Width: 2, Height: 6}) {
+		owner.placement != termimage.MinInternalPlacementID || owner.raster != (sixel.Raster{Width: 2, Height: 6}) ||
+		owner.startedAt.IsZero() || owner.acceptUntil.Sub(owner.startedAt) != termimage.HardAcceptanceDeadline {
 		t.Fatalf("captured owner=%#v", owner)
 	}
 	p.terminal.SetPaletteIndex(1, core.RGB{R: 90, G: 91, B: 92})
@@ -450,6 +451,8 @@ func TestSixelAtomicCommitRollbackAndEphemeralLifecycle(t *testing.T) {
 		limits := termimage.DefaultLimits()
 		limits.Placements = 1
 		m, session, wakes := newSixelRuntimeMux(t, false, true, &limits, nil)
+		var diagnostics []ImageDiagnostic
+		m.options.ImageDiagnostic = func(diagnostic ImageDiagnostic) { diagnostics = append(diagnostics, diagnostic) }
 		p, _ := m.sessions.lookup(1)
 		candidate, err := p.imageStore.NewDecodedCandidate(1, 1, 1)
 		if err != nil {
@@ -469,6 +472,7 @@ func TestSixelAtomicCommitRollbackAndEphemeralLifecycle(t *testing.T) {
 		if events := drainSixelCompletion(t, m, wakes); len(events) != 0 {
 			t.Fatalf("failed commit events=%#v", events)
 		}
+		assertImageDiagnostic(t, diagnostics, ImageDiagnosticProtocolSixel, ImageDiagnosticReasonFailed)
 		if _, ok := p.imageStore.ResourceRef(owner.image); ok || p.imageStore.Usage() != beforeUsage || p.terminal.ImageGeneration() != beforeGeneration {
 			t.Fatalf("rollback resource=%v usage=%#v generation=%d", ok, p.imageStore.Usage(), p.terminal.ImageGeneration())
 		}

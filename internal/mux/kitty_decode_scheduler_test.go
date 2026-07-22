@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"cervterm/internal/itermimage"
 	"cervterm/internal/kitty"
 	"cervterm/internal/sixel"
 	"cervterm/internal/termimage"
@@ -406,6 +407,37 @@ func (j *sixelSchedulerTestJob) Run(ctx context.Context) *sixel.DecodeResult {
 
 func (j *sixelSchedulerTestJob) Close() { j.closes.Add(1) }
 
+type itermSchedulerTestJob struct {
+	started chan<- struct{}
+	release <-chan struct{}
+	active  *atomic.Int32
+	maximum *atomic.Int32
+	runs    atomic.Int32
+	closes  atomic.Int32
+}
+
+func (j *itermSchedulerTestJob) Run(ctx context.Context) *itermimage.DecodeResult {
+	j.runs.Add(1)
+	if j.active != nil {
+		active := j.active.Add(1)
+		updateAtomicMaximum(j.maximum, active)
+		defer j.active.Add(-1)
+	}
+	if j.started != nil {
+		j.started <- struct{}{}
+	}
+	if j.release != nil {
+		select {
+		case <-j.release:
+		case <-ctx.Done():
+			return &itermimage.DecodeResult{Failure: itermimage.FailureCancelled}
+		}
+	}
+	return &itermimage.DecodeResult{Failure: itermimage.FailureFailed}
+}
+
+func (j *itermSchedulerTestJob) Close() { j.closes.Add(1) }
+
 func awaitImageSchedulerCompletion(t *testing.T, scheduler *imageDecodeScheduler) imageDecodeCompletion {
 	t.Helper()
 	select {
@@ -433,10 +465,14 @@ func TestSharedImageSchedulerUsesOnePaneKeyAcrossProtocols(t *testing.T) {
 	awaitSchedulerSignals(t, started, 1)
 	sixelDuplicate := &sixelSchedulerTestJob{}
 	if err := scheduler.submitSixel(sixelDecodeWork{owner: sixelDecodeOwner{paneID: 7}, job: sixelDuplicate}); !errors.Is(err, errKittyDecodePaneActive) {
-		t.Fatalf("cross-protocol duplicate error=%v", err)
+		t.Fatalf("Sixel cross-protocol duplicate error=%v", err)
 	}
-	if sixelDuplicate.runs.Load() != 0 || sixelDuplicate.closes.Load() != 1 {
-		t.Fatalf("duplicate runs=%d closes=%d", sixelDuplicate.runs.Load(), sixelDuplicate.closes.Load())
+	itermDuplicate := &itermSchedulerTestJob{}
+	if err := scheduler.submitITerm(itermDecodeWork{owner: itermDecodeOwner{paneID: 7}, job: itermDuplicate}); !errors.Is(err, errKittyDecodePaneActive) {
+		t.Fatalf("iTerm cross-protocol duplicate error=%v", err)
+	}
+	if sixelDuplicate.runs.Load() != 0 || sixelDuplicate.closes.Load() != 1 || itermDuplicate.runs.Load() != 0 || itermDuplicate.closes.Load() != 1 {
+		t.Fatalf("duplicates sixel runs=%d closes=%d iterm runs=%d closes=%d", sixelDuplicate.runs.Load(), sixelDuplicate.closes.Load(), itermDuplicate.runs.Load(), itermDuplicate.closes.Load())
 	}
 	close(release)
 	completion := awaitImageSchedulerCompletion(t, scheduler)
@@ -448,10 +484,21 @@ func TestSharedImageSchedulerUsesOnePaneKeyAcrossProtocols(t *testing.T) {
 
 	sixelJob := &sixelSchedulerTestJob{}
 	if err := scheduler.submitSixel(sixelDecodeWork{owner: sixelDecodeOwner{paneID: 7}, job: sixelJob}); err != nil {
-		t.Fatalf("pane key not released after Finish: %v", err)
+		t.Fatalf("pane key not released for Sixel after Finish: %v", err)
 	}
 	completion = awaitImageSchedulerCompletion(t, scheduler)
 	if completion.Owner.protocol != imageDecodeSixel {
+		t.Fatalf("protocol=%d", completion.Owner.protocol)
+	}
+	completion.Close()
+	scheduler.finish(completion.Key)
+
+	itermJob := &itermSchedulerTestJob{}
+	if err := scheduler.submitITerm(itermDecodeWork{owner: itermDecodeOwner{paneID: 7}, job: itermJob}); err != nil {
+		t.Fatalf("pane key not released for iTerm after Finish: %v", err)
+	}
+	completion = awaitImageSchedulerCompletion(t, scheduler)
+	if completion.Owner.protocol != imageDecodeITerm {
 		t.Fatalf("protocol=%d", completion.Owner.protocol)
 	}
 	completion.Close()
@@ -466,14 +513,14 @@ func TestSharedImageSchedulerBoundsMixedProtocolConcurrency(t *testing.T) {
 	defer scheduler.close()
 	kittyOne := &decodeSchedulerTestJob{started: started, release: release, active: &active, maximum: &maximum}
 	sixelTwo := &sixelSchedulerTestJob{started: started, release: release, active: &active, maximum: &maximum}
-	kittyThree := &decodeSchedulerTestJob{started: started, release: release, active: &active, maximum: &maximum}
+	itermThree := &itermSchedulerTestJob{started: started, release: release, active: &active, maximum: &maximum}
 	if err := scheduler.submitKitty(kittyDecodeWork{owner: kittyDecodeOwner{paneID: 1}, job: kittyOne}); err != nil {
 		t.Fatal(err)
 	}
 	if err := scheduler.submitSixel(sixelDecodeWork{owner: sixelDecodeOwner{paneID: 2}, job: sixelTwo}); err != nil {
 		t.Fatal(err)
 	}
-	if err := scheduler.submitKitty(kittyDecodeWork{owner: kittyDecodeOwner{paneID: 3}, job: kittyThree}); err != nil {
+	if err := scheduler.submitITerm(itermDecodeWork{owner: itermDecodeOwner{paneID: 3}, job: itermThree}); err != nil {
 		t.Fatal(err)
 	}
 	awaitSchedulerSignals(t, started, imageDecodeWorkerCount)
@@ -491,7 +538,63 @@ func TestSharedImageSchedulerBoundsMixedProtocolConcurrency(t *testing.T) {
 	if maximum.Load() != int32(imageDecodeWorkerCount) {
 		t.Fatalf("maximum=%d want=%d", maximum.Load(), imageDecodeWorkerCount)
 	}
-	if kittyOne.runs.Load() != 1 || sixelTwo.runs.Load() != 1 || kittyThree.runs.Load() != 1 {
-		t.Fatalf("runs kitty1=%d sixel2=%d kitty3=%d", kittyOne.runs.Load(), sixelTwo.runs.Load(), kittyThree.runs.Load())
+	if kittyOne.runs.Load() != 1 || sixelTwo.runs.Load() != 1 || itermThree.runs.Load() != 1 {
+		t.Fatalf("runs kitty=%d sixel=%d iterm=%d", kittyOne.runs.Load(), sixelTwo.runs.Load(), itermThree.runs.Load())
+	}
+}
+
+func TestSharedImageSchedulerMixedFIFOWithTwoWorkers(t *testing.T) {
+	kittyStarted := make(chan struct{}, 1)
+	sixelStarted := make(chan struct{}, 1)
+	itermStarted := make(chan struct{}, 1)
+	laterKittyStarted := make(chan struct{}, 1)
+	kittyRelease := make(chan struct{})
+	sixelRelease := make(chan struct{})
+	itermRelease := make(chan struct{})
+	laterKittyRelease := make(chan struct{})
+	scheduler := newImageDecodeScheduler(nil)
+	defer scheduler.close()
+
+	if err := scheduler.submitKitty(kittyDecodeWork{owner: kittyDecodeOwner{paneID: 1}, job: &decodeSchedulerTestJob{started: kittyStarted, release: kittyRelease}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := scheduler.submitSixel(sixelDecodeWork{owner: sixelDecodeOwner{paneID: 2}, job: &sixelSchedulerTestJob{started: sixelStarted, release: sixelRelease}}); err != nil {
+		t.Fatal(err)
+	}
+	awaitSchedulerSignals(t, kittyStarted, 1)
+	awaitSchedulerSignals(t, sixelStarted, 1)
+	if err := scheduler.submitITerm(itermDecodeWork{owner: itermDecodeOwner{paneID: 3}, job: &itermSchedulerTestJob{started: itermStarted, release: itermRelease}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := scheduler.submitKitty(kittyDecodeWork{owner: kittyDecodeOwner{paneID: 4}, job: &decodeSchedulerTestJob{started: laterKittyStarted, release: laterKittyRelease}}); err != nil {
+		t.Fatal(err)
+	}
+	close(kittyRelease)
+	awaitSchedulerSignals(t, itermStarted, 1)
+	select {
+	case <-laterKittyStarted:
+		t.Fatal("later Kitty work overtook queued iTerm work")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(itermRelease)
+	awaitSchedulerSignals(t, laterKittyStarted, 1)
+	close(sixelRelease)
+	close(laterKittyRelease)
+	for range 4 {
+		completion := awaitImageSchedulerCompletion(t, scheduler)
+		completion.Close()
+		scheduler.finish(completion.Key)
+	}
+}
+
+func TestSharedImageSchedulerITermSubmitAfterCloseCleansJob(t *testing.T) {
+	scheduler := newImageDecodeScheduler(nil)
+	scheduler.close()
+	job := &itermSchedulerTestJob{}
+	if err := scheduler.submitITerm(itermDecodeWork{owner: itermDecodeOwner{paneID: 1}, job: job}); !errors.Is(err, errKittyDecodeSchedulerClosed) {
+		t.Fatalf("closed submit error=%v", err)
+	}
+	if job.runs.Load() != 0 || job.closes.Load() != 1 {
+		t.Fatalf("closed submit runs=%d closes=%d", job.runs.Load(), job.closes.Load())
 	}
 }

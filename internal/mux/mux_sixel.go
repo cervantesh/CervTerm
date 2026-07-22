@@ -17,6 +17,7 @@ func (m *Mux) processSixelOutcomes(p *pane) {
 			if outcome.Command != nil {
 				outcome.Command.Close()
 			}
+			m.emitImageDiagnostic(ImageDiagnosticProtocolSixel, sixelDiagnosticReason(outcome.Failure), time.Time{}, time.Time{})
 			continue
 		}
 		if outcome.Command != nil {
@@ -30,13 +31,26 @@ func (m *Mux) submitSixelDecode(p *pane, outcome sixel.Outcome) {
 		return
 	}
 	command := *outcome.Command
+	startedAt := m.options.Now()
 	if m.imageScheduler == nil || p == nil || p.imageStore == nil {
 		command.Close()
+		m.emitImageDiagnosticNow(ImageDiagnosticProtocolSixel, ImageDiagnosticReasonFailed, startedAt)
 		return
 	}
 	metrics, ok := m.resolveMetrics(p.id)
-	if !ok || validateCellMetrics(metrics) != nil || uint64(metrics.CellWidth) > math.MaxUint32 || uint64(metrics.CellHeight) > math.MaxUint32 {
+	if !ok {
 		command.Close()
+		m.emitImageDiagnosticNow(ImageDiagnosticProtocolSixel, ImageDiagnosticReasonFailed, startedAt)
+		return
+	}
+	if validateCellMetrics(metrics) != nil {
+		command.Close()
+		m.emitImageDiagnosticNow(ImageDiagnosticProtocolSixel, ImageDiagnosticReasonInvalid, startedAt)
+		return
+	}
+	if uint64(metrics.CellWidth) > math.MaxUint32 || uint64(metrics.CellHeight) > math.MaxUint32 {
+		command.Close()
+		m.emitImageDiagnosticNow(ImageDiagnosticProtocolSixel, ImageDiagnosticReasonLimit, startedAt)
 		return
 	}
 	palette := detachedSixelPalette(p.terminal)
@@ -44,6 +58,7 @@ func (m *Mux) submitSixelDecode(p *pane, outcome sixel.Outcome) {
 		CellPixelWidth: uint32(metrics.CellWidth), CellPixelHeight: uint32(metrics.CellHeight), Palette: palette,
 	})
 	if failure != sixel.FailureNone {
+		m.emitImageDiagnosticNow(ImageDiagnosticProtocolSixel, sixelDiagnosticReason(failure), startedAt)
 		return
 	}
 	m.sixelNextToken++
@@ -52,9 +67,10 @@ func (m *Mux) submitSixelDecode(p *pane, outcome sixel.Outcome) {
 		paneID: p.id, pane: p, model: m.model, store: p.imageStore, storeEpoch: p.imageStore.Epoch(),
 		imageGeneration: p.terminal.ImageGeneration(), reflowGen: p.reflowGen, anchorGen: p.terminal.ImageAnchorGeneration(),
 		token: m.sixelNextToken, metrics: metrics, image: command.Image, placement: command.Placement,
-		raster: command.Raster, acceptUntil: m.options.Now().Add(termimage.HardAcceptanceDeadline), anchor: anchor,
+		raster: command.Raster, startedAt: startedAt, acceptUntil: startedAt.Add(termimage.HardAcceptanceDeadline), anchor: anchor,
 	}
 	if err := m.imageScheduler.submitSixel(sixelDecodeWork{owner: owner, job: job}); err != nil {
+		m.emitImageDiagnosticNow(ImageDiagnosticProtocolSixel, ImageDiagnosticReasonBusy, startedAt)
 		return
 	}
 	m.sixelPending[owner.token] = owner
@@ -83,10 +99,11 @@ func (m *Mux) applySixelCompletion(completion sixelDecodeCompletion) []Event {
 		return nil
 	}
 	delete(m.sixelPending, owner.token)
-	if !m.sixelCompletionCurrent(owner, result, completion.FinishedAt) {
+	if reason, failed := m.sixelCompletionFailure(owner, result, completion.FinishedAt); failed {
 		if result != nil {
 			result.Close()
 		}
+		m.emitImageDiagnostic(ImageDiagnosticProtocolSixel, reason, owner.startedAt, completion.FinishedAt)
 		return nil
 	}
 	placement := termimage.PlacementSpec{
@@ -98,34 +115,72 @@ func (m *Mux) applySixelCompletion(completion sixelDecodeCompletion) []Event {
 	})
 	result.Candidate = nil // CommitImage consumes the candidate on success and failure.
 	if err != nil {
+		m.emitImageDiagnosticNow(ImageDiagnosticProtocolSixel, ImageDiagnosticReasonFailed, owner.startedAt)
 		return nil
 	}
 	owner.pane.capture()
 	return m.ResolveEventAddresses([]Event{{Kind: PaneDirty, Pane: owner.paneID}})
 }
 
-func (m *Mux) sixelCompletionCurrent(owner sixelDecodeOwner, result *sixel.DecodeResult, finishedAt time.Time) bool {
+func (m *Mux) sixelCompletionFailure(owner sixelDecodeOwner, result *sixel.DecodeResult, finishedAt time.Time) (ImageDiagnosticReason, bool) {
+	if finishedAt.IsZero() {
+		return ImageDiagnosticReasonFailed, true
+	}
+	if !owner.startedAt.IsZero() && finishedAt.Before(owner.startedAt) {
+		return ImageDiagnosticReasonStale, true
+	}
+	if !finishedAt.Before(owner.acceptUntil) {
+		return ImageDiagnosticReasonTimeout, true
+	}
+	if result == nil {
+		return ImageDiagnosticReasonFailed, true
+	}
+	if result.Failure != sixel.FailureNone {
+		return sixelDiagnosticReason(result.Failure), true
+	}
+	if result.Candidate == nil {
+		return ImageDiagnosticReasonFailed, true
+	}
 	p, ok := m.sessions.lookup(owner.paneID)
 	if !ok || p != owner.pane || m.model != owner.model || m.model.tabForPane(owner.paneID) == nil ||
 		p.imageStore != owner.store || owner.store == nil || owner.store.Closed() || owner.store.Epoch() != owner.storeEpoch ||
-		p.terminal.ImageGeneration() != owner.imageGeneration || p.terminal.ImageAnchorGeneration() != owner.anchorGen || p.reflowGen != owner.reflowGen ||
-		finishedAt.IsZero() || !finishedAt.Before(owner.acceptUntil) || result == nil || result.Failure != sixel.FailureNone || result.Candidate == nil {
-		return false
+		p.terminal.ImageGeneration() != owner.imageGeneration || p.terminal.ImageAnchorGeneration() != owner.anchorGen || p.reflowGen != owner.reflowGen {
+		return ImageDiagnosticReasonStale, true
 	}
 	metrics, ok := m.resolveMetrics(owner.paneID)
 	if !ok || metrics != owner.metrics {
-		return false
+		return ImageDiagnosticReasonStale, true
 	}
 	if owner.image < termimage.MinInternalImageID || owner.placement < termimage.MinInternalPlacementID ||
 		result.Candidate.Image() != owner.image || result.Candidate.Epoch() != owner.storeEpoch || !result.Candidate.ValidFor(owner.store) || !result.Candidate.WritesSealed() {
-		return false
+		return ImageDiagnosticReasonFailed, true
 	}
 	width, height, stride := result.Candidate.Dimensions()
 	if width != owner.raster.Width || height != owner.raster.Height || uint64(stride) != uint64(width)*4 {
-		return false
+		return ImageDiagnosticReasonFailed, true
 	}
 	span, ok := expectedSixelSpan(owner.raster, owner.metrics)
-	return ok && result.Span == span
+	if !ok || result.Span != span {
+		return ImageDiagnosticReasonFailed, true
+	}
+	return "", false
+}
+
+func sixelDiagnosticReason(failure sixel.Failure) ImageDiagnosticReason {
+	switch failure {
+	case sixel.FailureInvalid:
+		return ImageDiagnosticReasonInvalid
+	case sixel.FailureUnsupported:
+		return ImageDiagnosticReasonUnsupported
+	case sixel.FailureLimit:
+		return ImageDiagnosticReasonLimit
+	case sixel.FailureTimeout:
+		return ImageDiagnosticReasonTimeout
+	case sixel.FailureCancelled:
+		return ImageDiagnosticReasonCancelled
+	default:
+		return ImageDiagnosticReasonFailed
+	}
 }
 
 func expectedSixelSpan(raster sixel.Raster, metrics CellMetrics) (sixel.Span, bool) {

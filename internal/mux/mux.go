@@ -23,6 +23,12 @@ type Options struct {
 	// SixelEnabled is a programmatic, test-only runtime seam. Public config and
 	// frontend activation remain intentionally disabled until later Phase 14 slices.
 	SixelEnabled bool
+	// ITermEnabled is a programmatic, test-only runtime seam. Public config and
+	// frontend activation remain intentionally disabled until later Phase 14 slices.
+	ITermEnabled bool
+	// ImageDiagnostic receives fixed privacy-safe Sixel and iTerm failure data.
+	// Callback panics are contained and never change runtime failure handling.
+	ImageDiagnostic func(ImageDiagnostic)
 	// Now may be called by decode workers and must be safe for concurrent use.
 	Now func() time.Time
 }
@@ -56,6 +62,8 @@ type Mux struct {
 	kittyNextToken uint64
 	sixelPending   map[uint64]sixelDecodeOwner
 	sixelNextToken uint64
+	itermPending   map[uint64]itermDecodeOwner
+	itermNextToken uint64
 	bootstrapped   bool
 	bounds         PixelRect
 	paneMetrics    map[PaneID]CellMetrics
@@ -86,13 +94,16 @@ func New(factory SessionFactory, options Options) *Mux {
 		} else {
 			mux.imageLimits = limits
 			mux.imageBudget = termimage.NewProcessBudget()
-			if options.KittyEnabled || options.SixelEnabled {
+			if options.KittyEnabled || options.SixelEnabled || options.ITermEnabled {
 				mux.imageScheduler = newImageDecodeScheduler(options.Wake, options.Now)
 				if options.KittyEnabled {
 					mux.kittyPending = make(map[uint64]kittyDecodeOwner)
 				}
 				if options.SixelEnabled {
 					mux.sixelPending = make(map[uint64]sixelDecodeOwner)
+				}
+				if options.ITermEnabled {
+					mux.itermPending = make(map[uint64]itermDecodeOwner)
 				}
 			}
 		}
@@ -398,10 +409,15 @@ func (m *Mux) Drain(limit int) []Event {
 					p.sixelAdapter.Close()
 					p.sixelAdapter = nil
 				}
+				if p.itermAdapter != nil {
+					p.itermAdapter.Close()
+					p.itermAdapter = nil
+				}
 				events = append(events, p.kittyEvents...)
 				p.kittyEvents = nil
 				events = append(events, m.processKittyOutcomes(p)...)
 				m.processSixelOutcomes(p)
+				m.processITermOutcomes(p)
 				p.state = PaneStateExited
 				tab := m.model.tabForPane(p.id)
 				exit := Event{Kind: PaneExited, Pane: p.id}
@@ -472,14 +488,4 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 		}
 	}
 	return m.ResolveEventAddresses(events), errors.Join(closeErr, resizeErr)
-}
-
-func (m *Mux) Shutdown() error {
-	if m.imageScheduler != nil {
-		m.imageScheduler.close()
-		m.imageScheduler = nil
-	}
-	clear(m.kittyPending)
-	clear(m.sixelPending)
-	return m.sessions.shutdownRegistry()
 }

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"cervterm/internal/core"
+	"cervterm/internal/itermimage"
 	"cervterm/internal/kitty"
 	"cervterm/internal/pty"
 	"cervterm/internal/render"
@@ -36,6 +37,8 @@ type pane struct {
 	kittyEvents    []Event
 	sixelAdapter   *sixel.Adapter
 	sixelOutcomes  []sixel.Outcome
+	itermAdapter   *itermimage.Adapter
+	itermOutcomes  []itermimage.Outcome
 	session        pty.Session
 	launch         FreshLaunch
 	snapshot       render.Snapshot
@@ -147,14 +150,23 @@ func (p *pane) close() error {
 		if p.sixelAdapter != nil {
 			p.sixelAdapter.Close()
 		}
+		if p.itermAdapter != nil {
+			p.itermAdapter.Close()
+		}
 		for index := range p.sixelOutcomes {
 			if p.sixelOutcomes[index].Command != nil {
 				p.sixelOutcomes[index].Command.Close()
 			}
 		}
+		for index := range p.itermOutcomes {
+			if p.itermOutcomes[index].Command != nil {
+				p.itermOutcomes[index].Command.Close()
+			}
+		}
 		p.kittyOutcomes = nil
 		p.kittyEvents = nil
 		p.sixelOutcomes = nil
+		p.itermOutcomes = nil
 		p.terminal.CloseImageStore()
 		p.clearReplies()
 		if p.session != nil {
