@@ -76,6 +76,24 @@ func TestAdapterExpiryIsPureBoundedAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestAdapterExpiryClearsExternallyClosedTransfer(t *testing.T) {
+	a, store, _ := testAdapter(t)
+	now := time.Now()
+	a.Advance(now, APCEvent{Data: []byte("Ga=t,i=4,s=1,v=1,m=1;AAAA"), Final: true})
+	deadline, ok := a.NextExpiry()
+	if !ok {
+		t.Fatal("missing deadline")
+	}
+	a.active.Close()
+	out := a.Expire(deadline)
+	if out.Failure != ReplyCancelled || store.Usage() != (termimage.Usage{}) {
+		t.Fatalf("out=%#v usage=%#v", out, store.Usage())
+	}
+	if deadline, ok = a.NextExpiry(); ok || !deadline.IsZero() {
+		t.Fatalf("stale deadline=%v ok=%v", deadline, ok)
+	}
+}
+
 func TestAdapterFragmentationAndCancellation(t *testing.T) {
 	a, store, _ := testAdapter(t)
 	now := time.Unix(40, 0)

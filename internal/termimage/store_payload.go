@@ -19,7 +19,7 @@ func (t *CandidateTransfer) TakeSealedPayload(store *Store) (*SealedEncodedPaylo
 		return nil, ErrTransferClosed
 	}
 	t.mu.Lock()
-	if t.closing.Load() || t.timer != nil || t.store != store || store.closed.Load() || store.resetting.Load() || t.epoch != StoreEpoch(store.epoch.Load()) || !t.closing.CompareAndSwap(false, true) {
+	if t.closing.Load() || t.open || t.store != store || store.closed.Load() || store.resetting.Load() || t.epoch != StoreEpoch(store.epoch.Load()) || !t.closing.CompareAndSwap(false, true) {
 		t.mu.Unlock()
 		return nil, ErrTransferClosed
 	}
