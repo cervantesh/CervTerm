@@ -17,14 +17,17 @@ type Store struct {
 	owner     atomic.Pointer[StoreOwner]
 	resetting atomic.Bool
 
-	pendingMu   sync.Mutex
-	pending     map[TransferID]*CandidateTransfer
-	state       *storeState
-	prepared    *PreparedStoreState
-	placementMu sync.Mutex
-	candidateMu sync.Mutex
-	candidates  map[*DecodedCandidate]struct{}
-	placements  map[*PlacementReservation]struct{}
+	pendingMu             sync.Mutex
+	pending               map[TransferID]*CandidateTransfer
+	state                 *storeState
+	prepared              *PreparedStoreState
+	placementMu           sync.Mutex
+	candidateMu           sync.Mutex
+	candidates            map[*DecodedCandidate]struct{}
+	placements            map[*PlacementReservation]struct{}
+	identityMu            sync.Mutex
+	nextInternalImage     ImageID
+	nextInternalPlacement PlacementID
 }
 
 type resource struct {
@@ -46,13 +49,15 @@ func NewStore(process *ProcessBudget, limits Limits) *Store {
 		return nil
 	}
 	store := &Store{
-		process:    process,
-		pane:       paneBudget{limits: effective},
-		now:        time.Now,
-		pending:    make(map[TransferID]*CandidateTransfer),
-		candidates: make(map[*DecodedCandidate]struct{}),
-		state:      &storeState{resources: make(map[ImageID]*resource)},
-		placements: make(map[*PlacementReservation]struct{}),
+		process:               process,
+		pane:                  paneBudget{limits: effective},
+		now:                   time.Now,
+		pending:               make(map[TransferID]*CandidateTransfer),
+		candidates:            make(map[*DecodedCandidate]struct{}),
+		state:                 &storeState{resources: make(map[ImageID]*resource)},
+		placements:            make(map[*PlacementReservation]struct{}),
+		nextInternalImage:     MinInternalImageID - 1,
+		nextInternalPlacement: MinInternalPlacementID - 1,
 	}
 	store.epoch.Store(1)
 	return store
@@ -231,6 +236,8 @@ func (s *Store) closeOwned(owner *StoreOwner) {
 }
 
 func (s *Store) resetState() {
+	s.identityMu.Lock()
+	defer s.identityMu.Unlock()
 	s.closePlacementReservations()
 	s.abortPrepared()
 	for _, candidate := range s.takeCandidates() {

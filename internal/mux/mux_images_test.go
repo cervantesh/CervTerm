@@ -182,6 +182,11 @@ func TestMuxRestoreAbortClosesEveryDetachedPaneStore(t *testing.T) {
 				t.Fatal("restore panes share store")
 			}
 		}
+		image, imageErr := stores[i].AllocateInternalImageID()
+		placement, placementErr := stores[i].AllocateInternalPlacementID()
+		if imageErr != nil || placementErr != nil || image != termimage.MinInternalImageID || placement != termimage.MinInternalPlacementID {
+			t.Fatalf("pane %d fresh IDs image=%#x placement=%#x imageErr=%v placementErr=%v", pane.id, image, placement, imageErr, placementErr)
+		}
 	}
 	if err = m.AbortRestore(candidate); err != nil {
 		t.Fatal(err)

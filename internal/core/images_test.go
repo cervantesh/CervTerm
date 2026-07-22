@@ -313,3 +313,49 @@ func TestImageResetGenerationExhaustionClosesState(t *testing.T) {
 		t.Fatal("generation exhaustion wrapped or retained state")
 	}
 }
+
+func TestWireOnlyDeleteCannotAddressInternalNamespace(t *testing.T) {
+	store := termimage.NewStore(termimage.NewProcessBudget(), termimage.DefaultLimits())
+	terminal := newImageTerminalForTest(4, 2, 0, store)
+	low, err := terminal.CommitImage(ImageCommit{Candidate: decodedCandidateForTest(t, store, termimage.MaxWireImageID, 1, 1), Placement: &termimage.PlacementSpec{ID: termimage.MaxWirePlacementID, Cols: 1, Rows: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	internalImage, err := store.AllocateInternalImageID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	internalPlacement, err := store.AllocateInternalPlacementID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	high, err := terminal.CommitImage(ImageCommit{Candidate: decodedCandidateForTest(t, store, internalImage, 1, 1), Placement: &termimage.PlacementSpec{ID: internalPlacement, Anchor: termimage.CellAnchor{Col: 1}, Cols: 1, Rows: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	removed, err := terminal.DeleteImages(termimage.DeleteSelector{All: true, DeleteResource: true, WireIDsOnly: true})
+	if err != nil || removed != 1 {
+		t.Fatalf("removed=%d err=%v", removed, err)
+	}
+	if _, ok := store.Acquire(low.Resource); ok {
+		t.Fatal("wire resource survived wire-only delete")
+	}
+	if _, ok := store.Acquire(high.Resource); !ok {
+		t.Fatal("internal resource was Kitty-addressable")
+	}
+	terminal.SetCursor(0, 1)
+	removed, err = terminal.DeleteImages(termimage.DeleteSelector{UnderCursor: true, DeleteResource: true, WireIDsOnly: true})
+	if err != nil || removed != 0 {
+		t.Fatalf("under-cursor removed=%d err=%v", removed, err)
+	}
+	if _, ok := store.Acquire(high.Resource); !ok {
+		t.Fatal("wire-only under-cursor deleted internal resource")
+	}
+	projection := terminal.ImageProjection(0, terminal.Rows())
+	if len(projection.Placements) != 1 || projection.Placements[0].ID != internalPlacement {
+		t.Fatalf("projection=%#v", projection)
+	}
+	if usage := store.Usage(); usage.Images != 1 || usage.Placements != 1 {
+		t.Fatalf("usage=%#v", usage)
+	}
+}
