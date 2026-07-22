@@ -35,6 +35,8 @@ type kittyDecodeOwner struct {
 	paneID      PaneID
 	pane        *pane
 	generation  uint64
+	reflowGen   uint64
+	anchorGen   uint64
 	token       uint64
 	replySlot   replySlot
 	hasSlot     bool

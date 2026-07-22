@@ -378,6 +378,7 @@ func (t *Terminal) SetAlternateScreenModeWithOptions(enabled, saveCursor, clearO
 	if enabled == t.alternateScreen {
 		return
 	}
+	t.invalidateImageCursorAnchors()
 	if enabled {
 		if saveCursor {
 			t.SaveCursor()

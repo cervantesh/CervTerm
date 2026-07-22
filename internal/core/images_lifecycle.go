@@ -86,10 +86,17 @@ func (t *Terminal) activeImageGlobalRow(liveRow int) int64 {
 	return int64(t.scrollbackRows + liveRow)
 }
 
+func (t *Terminal) invalidateImageCursorAnchors() {
+	if t != nil && t.imageSidecars != nil {
+		t.imageAnchorGeneration++
+	}
+}
+
 func (t *Terminal) eraseImageLiveRect(top, bottom, left, right int) {
 	if top >= bottom || left >= right {
 		return
 	}
+	t.invalidateImageCursorAnchors()
 	rect := imageCellRect{top: t.activeImageGlobalRow(top), bottom: t.activeImageGlobalRow(bottom), left: uint32(left), right: uint32(right)}
 	t.mutateImagePlacements(t.alternateScreen, func(placement termimage.Placement) (termimage.Placement, bool) {
 		return placement, !imageRectsIntersect(placementRect(placement), rect)
@@ -97,6 +104,7 @@ func (t *Terminal) eraseImageLiveRect(top, bottom, left, right int) {
 }
 
 func (t *Terminal) moveImagesInRect(alternate bool, affected, movable imageCellRect, rowDelta int64, colDelta int32) {
+	t.invalidateImageCursorAnchors()
 	t.mutateImagePlacements(alternate, func(placement termimage.Placement) (termimage.Placement, bool) {
 		rect := placementRect(placement)
 		if !imageRectsIntersect(rect, affected) {
@@ -133,6 +141,7 @@ func (t *Terminal) editImageChars(insert bool, row, col, count int) {
 }
 
 func (t *Terminal) moveImagesInLiveRows(top, bottom, sourceTop, sourceBottom, delta int) {
+	t.invalidateImageCursorAnchors()
 	base := int64(0)
 	if !t.alternateScreen {
 		base = int64(t.scrollbackRows)
@@ -156,6 +165,7 @@ func (t *Terminal) dropPrimaryImageRows(count int) {
 	if count <= 0 {
 		return
 	}
+	t.invalidateImageCursorAnchors()
 	boundary := int64(count)
 	t.mutateImagePlacements(false, func(placement termimage.Placement) (termimage.Placement, bool) {
 		if placement.Anchor.Row < boundary {
@@ -200,6 +210,7 @@ func (t *Terminal) imagesReflowPrimary(mapping reflowMap, evicted, cols int) {
 	if t.imageSidecars == nil {
 		return
 	}
+	t.invalidateImageCursorAnchors()
 	t.mutateImagePlacements(false, func(placement termimage.Placement) (termimage.Placement, bool) {
 		row, col, ok := mapping.mapCell(int(placement.Anchor.Row), int(placement.Anchor.Col))
 		if !ok || row < evicted || col < 0 {
@@ -216,6 +227,7 @@ func (t *Terminal) imagesCropAlternate(cols, rows int) {
 	if t.imageSidecars == nil {
 		return
 	}
+	t.invalidateImageCursorAnchors()
 	t.mutateImagePlacements(true, func(placement termimage.Placement) (termimage.Placement, bool) {
 		return placement, placement.Anchor.Row >= 0 && placement.Anchor.Row < int64(rows) && placement.Anchor.Col < uint32(cols)
 	})
@@ -225,6 +237,7 @@ func (t *Terminal) imagesDiscardAlternate() {
 	if t.imageSidecars == nil {
 		return
 	}
+	t.invalidateImageCursorAnchors()
 	t.mutateImagePlacements(true, func(placement termimage.Placement) (termimage.Placement, bool) { return placement, false })
 }
 
