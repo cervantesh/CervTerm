@@ -49,6 +49,16 @@ func (t *Terminal) ImageAnchorGeneration() uint64 {
 	return t.imageAnchorGeneration
 }
 
+// ImageGeneration returns the current owner-thread image sidecar generation.
+// Unlike a render snapshot, this accessor reflects commits and resets performed
+// since the pane's last capture.
+func (t *Terminal) ImageGeneration() uint64 {
+	if t == nil || t.imageSidecars == nil {
+		return 0
+	}
+	return t.imageSidecars.generation
+}
+
 // AttachImageStore installs the pane-owned store. Terminal mutations are owner-thread only.
 func (t *Terminal) AttachImageStore(store *termimage.Store) error {
 	if t == nil || store == nil || store.Closed() {

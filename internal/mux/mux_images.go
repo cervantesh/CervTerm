@@ -2,6 +2,7 @@ package mux
 
 import (
 	"cervterm/internal/kitty"
+	"cervterm/internal/sixel"
 	"cervterm/internal/termimage"
 	"cervterm/internal/vt"
 )
@@ -20,16 +21,33 @@ func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
 		return pane
 	}
 	pane.imageStore = store
-	if m.imageScheduler != nil {
+	if m.options.KittyEnabled {
 		pane.kittyAdapter = kitty.NewAdapter(store)
+	}
+	if m.options.SixelEnabled {
+		pane.sixelAdapter = sixel.NewAdapter(store)
+	}
+	if pane.kittyAdapter != nil || pane.sixelAdapter != nil {
 		pane.parser.SetControlStringSink(func(event vt.ControlStringEvent) {
-			if event.Kind != vt.ControlStringAPC {
-				return
-			}
-			outcome := pane.kittyAdapter.Advance(m.options.Now(), kitty.APCEvent{Data: event.Chunk, Final: event.Final, Cancelled: event.Cancelled, Overflow: event.Overflow})
-			if outcome.Command != nil || outcome.Failure != kitty.ReplyNone {
-				pane.kittyOutcomes = append(pane.kittyOutcomes, outcome)
-				pane.kittyEvents = append(pane.kittyEvents, m.processKittyOutcomes(pane)...)
+			switch event.Kind {
+			case vt.ControlStringAPC:
+				if pane.kittyAdapter == nil {
+					return
+				}
+				outcome := pane.kittyAdapter.Advance(m.options.Now(), kitty.APCEvent{Data: event.Chunk, Final: event.Final, Cancelled: event.Cancelled, Overflow: event.Overflow})
+				if outcome.Command != nil || outcome.Failure != kitty.ReplyNone {
+					pane.kittyOutcomes = append(pane.kittyOutcomes, outcome)
+					pane.kittyEvents = append(pane.kittyEvents, m.processKittyOutcomes(pane)...)
+				}
+			case vt.ControlStringDCS:
+				if pane.sixelAdapter == nil {
+					return
+				}
+				outcome := pane.sixelAdapter.Advance(m.options.Now(), sixel.DCSEvent{Data: event.Chunk, Final: event.Final, Cancelled: event.Cancelled, Overflow: event.Overflow})
+				if outcome.Command != nil || outcome.Failure != sixel.FailureNone {
+					pane.sixelOutcomes = append(pane.sixelOutcomes, outcome)
+					m.processSixelOutcomes(pane)
+				}
 			}
 		})
 	}
