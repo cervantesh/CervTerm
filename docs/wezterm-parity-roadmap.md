@@ -284,36 +284,40 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 **Rollback:** native adapter is optional; snapshot model remains testable.
 
 ## Phase 13 — Image Model and Kitty Graphics
-**Scope:** bounded protocol-neutral image store/placements plus Kitty APC implementation.
+**Scope:** bounded protocol-neutral image storage/placements plus a constrained Kitty APC adapter and OpenGL projection.
 
-**Work**
-- Accept ADR-0006.
-- Add streaming APC/DCS support with hard encoded/decoded byte, pixel, count, time, and per-pane/global budgets.
-- Keep `core.Cell` text-only; store image resources/placements adjacent to screen state.
-- Define IDs, placement anchors, scroll/erase/resize/alternate-screen/delete/z-order semantics.
-- Add renderer-neutral snapshot references and pane-clipped GPU texture cache/damage.
-- Implement Kitty transmit/place/delete/query/replies incrementally; defer animation unless explicitly accepted.
+**Status:** Delivered as **experimental and default-off** through Phase 13.16. `graphics.kitty.enabled` is strict-v2 and restart-scoped; disabled remains the compatibility path. Automated parser, budget, lifecycle, worker, snapshot, mux, cache, GL-fake, draw and performance evidence exists, but the Phase 13 Windows/OpenGL manual matrix is still UNRUN. This status is not a stable support or default-on claim.
 
-**Success:** protocol fixtures render correctly; scroll/erase/resize behavior is deterministic; oversized/malformed input cannot cause unbounded allocation or UI stalls; text-only workloads show negligible regression.
+**Delivered**
+- Accepted ADR-0014 while keeping `core.Cell` text-only and renderer selection excluded.
+- Added bounded APC/DCS framing, pane/process image budgets, pane-owned stores, placement lifecycle, atomic owner-thread commits and sequenced fixed replies.
+- Added the Kitty direct-data subset: transmit, transmit-and-place, place, delete and query for bounded RGB24/RGBA32/PNG, raw zlib, chunking, crop, cell span and z-order.
+- Added two process-wide decode workers with one active job per pane, deadline/store/generation revalidation, exact cancellation and rollback.
+- Added detached placement snapshots and exact-generation mux acquisition; pixels, stores and GPU handles never enter snapshots.
+- Added projection/GL-context-local texture caches with visible pins, bounded unpinned LRU, bounded upload retry, pane clipping and below/above-text layer ordering.
+- Activated startup, child-window and restored-window ownership transactionally only when opted in; disabled nil behavior creates no image owner, worker, cache, draw work or idle deadline.
 
-**Tests:** parser golden/fuzz, budget/timeout/decompression-bomb tests, placement lifecycle, snapshots, clipping/damage/cache eviction, performance benchmarks.
+**Normative exclusions:** no file/path/temporary/shared-memory transport, animation/frame composition, Unicode placeholders, Sixel, iTerm OSC 1337, renderer selector, remote I/O, or support advertisement while disabled. Unknown Kitty fields/actions are rejected rather than treated as implied parity.
 
-**Rollback:** protocol disabled by default until conformance/security gates pass; parser safely ignores unsupported commands.
+**Qualification boundary:** automated gates do not replace the manual matrix in `docs/manual-verification.md`. Windows real-OpenGL, Windows arm64, Linux GUI and macOS GUI rows remain unrun/unqualified; the feature must stay experimental/default-off until recorded evidence supports a separate status decision.
+
+**Rollback:** restart with `graphics.kitty.enabled=false`. Activation failure closes projection/context caches before mux ownership; late/failed decode closes candidates without replacing prior state; upload failure omits/retries without rolling back the terminal model or blocking input.
 
 ## Phase 14 — Sixel and iTerm Inline Images
-**Scope:** adapters onto the Phase 13 shared model.
+**Status:** Planned; no Phase 14 protocol support is delivered or implied by Phase 13.
 
-**Work**
-- Implement streaming Sixel decoder/palette/raster attributes with limits.
-- Implement iTerm OSC 1337 inline-file image subset; reject unsafe file/path operations and unsupported metadata clearly.
-- Normalize decoded images and placements into the shared store.
-- Publish supported-subset documentation and fixtures.
+**Scope:** independent Sixel DCS and iTerm OSC 1337 adapters onto the accepted Phase 13 ownership, lifecycle, snapshot and cache model.
 
-**Success:** both protocols share lifecycle/cache/budgets; text parsing recovers after malformed/truncated streams; no remote file read or arbitrary write is possible.
+**Planned work**
+- Define and approve the precise Sixel and iTerm normative subsets before parser/runtime activation.
+- Implement a streaming Sixel decoder/palette/raster-attribute adapter under existing byte/pixel/time/concurrency limits.
+- Implement an iTerm OSC 1337 inline-data subset; reject file/path reads, unsafe metadata and arbitrary writes.
+- Normalize decoded resources and placements into the shared owner-thread transaction and detached snapshot path.
+- Add protocol-specific feature flags, fixtures, fuzz/truncation tests, cross-protocol lifecycle parity and honest platform qualification.
 
-**Tests:** reference fixtures, fuzz/truncation, palette/size/aspect cases, budget enforcement, cross-protocol placement parity.
+**Success:** both adapters reuse Phase 13 ownership/cache/budgets without widening `core.Cell`, renderer selection or external-I/O trust; text parsing recovers after malformed/truncated streams; no file read or arbitrary write is possible.
 
-**Rollback:** independent feature flags per protocol.
+**Rollback:** independent default-off flags per protocol; Phase 13 Kitty behavior and model remain unchanged.
 
 ## Phase 15 — Integration, Performance, Migration, and Release
 **Scope:** cross-feature hardening and staged delivery.
@@ -362,4 +366,4 @@ Stop and return to architecture review if:
 - renderer selection becomes a prerequisite.
 
 ## Immediate Next Action
-Implement Phase 11 Slice 11.1 only: the pure bounded `internal/ime` composition state, UTF-16/attribute normalization and detached snapshots. Do not wire frontend callbacks or native APIs until that foundation passes.
+Keep Phase 14 planned. Before implementation, define the bounded Sixel and iTerm subsets and confirm they fit ADR-0014 ownership, budget, parser-recovery and no-external-I/O guardrails; do not infer Phase 14 support from the delivered Phase 13 model.

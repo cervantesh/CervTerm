@@ -181,7 +181,7 @@ return {
 	},
 	graphics = {
 		kitty = {
-			-- Dormant until the protocol/runtime activation slices; restart required.
+			-- Experimental direct-data Kitty subset; default off and restart required.
 			enabled = %t,
 		},
 		limits = {

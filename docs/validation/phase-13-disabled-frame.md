@@ -19,4 +19,4 @@ Environment: Windows/amd64, Go 1.25.8, AMD Ryzen 9 7940HX with Radeon Graphics.
 - Memory: **0 B/op, 0 allocs/op** in every sample
 - Initial acceptance budget: median **<= 8.0 ns/op**, worst allocations **0 B/op / 0 allocs/op**
 
-The paired `TestPhase13DisabledFrameIsAllocationAndMutationFree` and `TestPhase13DisabledFrameAddsNoRedrawOrIdleCadence` make the semantic requirements hard gates. `BenchmarkPhase13DisabledDraw` remains the independent row-grid gate; its candidate median was 44,022 ns/op versus the carried 43,100.5 ns/op baseline (+2.14%, within the 3% limit).
+The paired `TestPhase13DisabledFrameIsAllocationAndMutationFree` and `TestPhase13DisabledFrameAddsNoRedrawOrIdleCadence` make the semantic requirements hard gates. `BenchmarkPhase13DisabledDraw` remains the independent row-grid gate; the introducing-slice candidate median was 44,022 ns/op versus the carried 43,100.5 ns/op baseline (+2.14%, within 3%). The final close-out capture is recorded separately in `phase-13-closeout.md`.

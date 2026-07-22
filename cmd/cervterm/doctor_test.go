@@ -40,7 +40,7 @@ func TestRunDoctorPrintsActionableSections(t *testing.T) {
 		"accessibility-scope: visible",
 		"accessibility-activation: unavailable",
 		"graphics-kitty-enabled: false",
-		"graphics-kitty-activation: dormant",
+		"graphics-kitty-activation: unavailable (diagnostic mode has no live frontend; configured intent applies after restart)",
 		"graphics-kitty-limits: encoded-per-pane=8388608 decoded-per-pane=67108864 images-per-pane=256 placements-per-pane=1024 gpu-bytes-per-context=268435456",
 		"background-formats: png,jpeg,gif-static",
 		"background-budget: cpu=134217728 gpu=134217728",
