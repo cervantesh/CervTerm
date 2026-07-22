@@ -53,6 +53,7 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Bounded quick select for visible HTTP(S) links and compiled custom regex rules, with prefix-free labels, copy/open actions, and stale-generation rejection.
 - A bounded retained launch menu with argv-only local process descriptors, sensitive environment provenance, deterministic environment merging, and spawn-before-topology commit.
 - Experimental default-off Windows UI Automation integration with immutable visible-only terminal/modal/IME documents, stable provider identity, coalesced generation updates, shared WndProc ownership, strict v2/Teal configuration, privacy-safe diagnostics, fail-closed per-window fallback, allocation ceilings, and explicit no-support qualification evidence.
+- Experimental default-off, restart-scoped direct-data Kitty graphics subset for the GLFW/OpenGL frontend: bounded `t`/`T`/`p`/`d`/`q` actions, RGB24/RGBA32/PNG decoding, raw RGB/RGBA zlib compression, chunk/resource/reply/GPU caps, and fixed value-free diagnostics; no full conformance, animation, external transports, Unicode placeholders, Sixel, or iTerm support claim.
 
 ### Fixed
 

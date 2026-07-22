@@ -103,6 +103,27 @@ Accessibility uses a separate bounded semantic-document capability. The GLFW own
 
 The Windows UIA adapter is production-wired only behind strict restart-scoped `accessibility.enabled`; it remains visible-only, default-off and experimental. Semantic changes coalesce once per projection cycle, native events are listener-gated, and capture/publication/event failures disconnect that window's provider while preserving terminal input and rendering.
 
+## Phase 13 bounded terminal-image path and ownership
+
+Terminal graphics remain a restart-scoped, experimental opt-in. When `graphics.kitty.enabled=true`, the only production path is bounded and one-way:
+
+```text
+PTY bytes -> VT APC framing -> Kitty command adapter -> bounded decode worker
+          -> mux/terminal owner-thread commit -> detached render/mux snapshot
+          -> exact-generation detached acquisition -> projection/GL-context cache -> pane-clipped draw
+```
+
+`internal/vt` frames APC/DCS incrementally, discards through ST after overflow, and never turns control payload back into text. A pane-local `internal/kitty.Adapter` accepts only Kitty `APC G` commands, owns encoded-transfer leases, and hands sealed direct-data jobs to the mux-owned scheduler. At most one job per pane and two process-wide workers decode into candidate RGBA storage already charged to pane/process budgets. A worker owns only the job, sealed payload and candidate; it cannot mutate terminal, mux, snapshots or OpenGL state.
+
+Worker completion returns to the serialized mux/terminal owner. The owner revalidates pane object, store epoch/image generation and the 250 ms acceptance deadline before `core.Terminal.CommitImage` prepares and publishes resource plus placement state atomically. Rejection or late completion closes the candidate and its leases, preserves the prior generation/placements, and emits no success reply. Protocol replies use the sequenced pane reply queue only after owner-thread disposition. Decode timeout is an acceptance deadline, not a claim of forced CPU preemption.
+
+`render.Snapshot` and `Mux.PaneView` contain detached placement descriptors and stable `(PaneObject, ImageID, ResourceGeneration)` references, never pixels, stores, workers, textures or GL handles. A cache miss may call `Mux.AcquireImageResource`, which revalidates the live pane and exact generation and returns a detached RGBA copy. Each native projection owns a separate cache for its current GL context; visible keys are pinned for the frame, unpinned entries are deterministically LRU-evicted, and pane transfer causes destination-context upload rather than GL-handle transfer. Negative z-order draws below text; zero/positive draws above text and below cursor/application overlays, always inside the pane clip.
+
+Disabled behavior is deliberately nil, not a partially initialized mode. With the default `graphics.kitty.enabled=false`, mux options carry no image limits or Kitty activation, no process image budget, pane store, adapter, scheduler, worker, deadline, context cache, texture or image damage state is created, and support is not advertised. APC/DCS framing still consumes bounded control strings safely; the nil frame/cache branches perform no mux lookup, cache access, draw, redraw request, idle deadline, mutation or allocation.
+
+Ownership unwinds in acquisition order. Startup first validates/creates the mux image owner, then creates one cache only after its projection renderer/atlas and current GL context exist, and commits startup configuration last. Any activation, child-window, restore or bind failure closes candidate context caches before rolling back projections and mux ownership. Projection close deletes that context's textures while current; pane close/reset cancels pending transfers and invalidates CPU generations; mux shutdown closes workers before pane/session stores. Upload failure never rolls model state back or blocks input: the image is omitted and retries are bounded. Operational limits may only lower ADR-0014 hard caps; rollback is restart with Kitty disabled, retaining inert parser/model code and the unchanged text-only `core.Cell`.
+
+
 ## Verifiable measurements
 
 Run parser/core allocation checks:

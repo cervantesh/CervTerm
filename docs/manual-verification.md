@@ -182,3 +182,33 @@ Accessibility remains experimental, restart-scoped, visible-only, and default-of
 Record Windows build, CervTerm commit, architecture, screen-reader/version, config, and PASS/SKIP/FAIL per row in `docs/validation/phase-12-accessibility-qualification.md`. Automated ABI/projection/privacy tests do not replace this matrix and do not establish a support claim.
 
 Automated performance, process-sample, gate and tool-availability evidence is recorded in `docs/validation/phase-12-accessibility-closeout.md`. Its assistive-technology rows are explicit SKIP and do not replace this manual matrix.
+
+## Phase 13 experimental Kitty images — Windows/OpenGL qualification
+
+Phase 13 is delivered as a restart-scoped, default-off experiment, not as a stable support claim. Use a strict v2 temporary config with `graphics.kitty.enabled=true`, keep all configured limits at or below their built-in caps, restart for every enabled/disabled comparison, and record the exact Windows build, GPU/driver, OpenGL vendor/renderer/version, Go architecture, CervTerm commit, test application/fixture and config. A row not personally exercised is **UNRUN**, never PASS.
+
+Before enabling, run the normal build gates above plus the focused Phase 13 automated suites. Those suites cover bounded framing/decoding, atomic model lifecycle, detached snapshots, mux ownership, cache/GL fakes, clipping/layer order and disabled-frame allocation/idle behavior; they do not replace a real Windows/OpenGL run.
+
+| Windows 11 / OpenGL manual check | Result | Required evidence |
+|---|---|---|
+| Default-off launch, Kitty query and malformed/oversized APC remain visually inert; ordinary UTF-8 input, idle cadence and text rendering are unchanged | UNRUN | config, query bytes/tool, screenshot or trace, idle observation |
+| Opt-in direct RGB24, RGBA32 and PNG transmit-and-place render with correct colors/alpha; raw zlib and multi-APC chunking complete once | UNRUN | fixture hashes/commands and screenshots |
+| Separate transmit then place, query reply policy (`q=0/1/2`), delete all/image/under-cursor variants and generation replacement behave deterministically | UNRUN | captured replies plus before/after screenshots |
+| Cell spans, source crop and negative versus nonnegative z-order render in the documented layers; cursor and application overlays remain above images | UNRUN | screenshots for crop and both z bands |
+| Images remain clipped to their pane through splits, independent zoom, divider drag, scrollback, erase, insert/delete line/char, resize/reflow and alternate-screen enter/exit | UNRUN | scripted sequence and screenshots/video |
+| Moving a pane/tab between native windows and workspaces preserves CPU image identity but uploads independently in the destination GL context; closing the source window does not invalidate the moved image | UNRUN | two-window trace/screenshots and cache counters if available |
+| Repeated image replacement plus window create/close exercises cache bounds, deterministic omission/eviction and bounded upload retry without input stalls or cross-context texture reuse | UNRUN | GPU/debug trace, responsiveness notes, final resource counts |
+| Timeout, cancellation, malformed base64/PNG/zlib, over-budget payload and close-during-decode produce no partial placement/success reply and leave the prior image usable | UNRUN | fixture command, reply capture and before/after state |
+| RIS, pane close, failed child-window/restore preparation and application shutdown release pending work, CPU reservations and context textures without crash or stale redraw | UNRUN | failure-injection or reproducible sequence and teardown trace |
+
+### Phase 13 platform disposition
+
+| Platform row | Result | Claim boundary |
+|---|---|---|
+| Windows 11 `windows/amd64`, real GLFW/OpenGL GUI | UNRUN | Automated Windows tests/benchmarks exist, but no Phase 13.16 real-GUI matrix was recorded; Kitty remains experimental/default-off. |
+| Windows 11 `windows/arm64`, real GLFW/OpenGL GUI | UNRUN | No run or support claim recorded. |
+| Linux, headless/non-GL tests | UNRUN for this closeout | Prior slice evidence is not a fresh Phase 13.16 platform run. |
+| Linux, real GLFW/OpenGL GUI | UNRUN | No GUI qualification or Kitty support claim recorded. |
+| macOS, real GLFW/OpenGL GUI | UNRUN | No GUI qualification or Kitty support claim recorded. |
+
+Record any future run in a dedicated validation artifact before changing these rows, `docs/parity-support-matrix.json`, release notes, or the default. Partial completion stays experimental/default-off; a failed security, ownership, rollback or context-isolation row blocks a support/default-on proposal.

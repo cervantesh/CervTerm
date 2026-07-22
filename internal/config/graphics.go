@@ -6,7 +6,7 @@ import (
 	"cervterm/internal/termimage"
 )
 
-// GraphicsConfig contains dormant, restart-scoped terminal graphics policy.
+// GraphicsConfig contains default-off, restart-scoped terminal graphics policy.
 type GraphicsConfig struct {
 	Kitty  KittyGraphicsConfig
 	Limits GraphicsLimitsConfig
