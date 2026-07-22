@@ -20,7 +20,7 @@ func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
 		return pane
 	}
 	pane.imageStore = store
-	if m.kittyScheduler != nil {
+	if m.imageScheduler != nil {
 		pane.kittyAdapter = kitty.NewAdapter(store)
 		pane.parser.SetControlStringSink(func(event vt.ControlStringEvent) {
 			if event.Kind != vt.ControlStringAPC {

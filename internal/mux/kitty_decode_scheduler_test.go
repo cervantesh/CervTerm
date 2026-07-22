@@ -22,7 +22,7 @@ type decodeSchedulerTestJob struct {
 	closes  atomic.Int32
 }
 
-func (j *decodeSchedulerTestJob) Run(ctx context.Context) kitty.DecodeResult {
+func (j *decodeSchedulerTestJob) Run(ctx context.Context) *kitty.DecodeResult {
 	j.runs.Add(1)
 	if j.active != nil {
 		active := j.active.Add(1)
@@ -36,10 +36,10 @@ func (j *decodeSchedulerTestJob) Run(ctx context.Context) kitty.DecodeResult {
 		select {
 		case <-j.release:
 		case <-ctx.Done():
-			return kitty.DecodeResult{Failure: kitty.ReplyCancelled}
+			return &kitty.DecodeResult{Failure: kitty.ReplyCancelled}
 		}
 	}
-	return kitty.DecodeResult{Failure: kitty.ReplyFailed}
+	return &kitty.DecodeResult{Failure: kitty.ReplyFailed}
 }
 
 func (j *decodeSchedulerTestJob) Close() { j.closes.Add(1) }
@@ -68,17 +68,26 @@ func awaitSchedulerSignals(t *testing.T, signals <-chan struct{}, count int) {
 	}
 }
 
-func awaitSchedulerCompletion(t *testing.T, completions <-chan kittyDecodeCompletion) kittyDecodeCompletion {
+func awaitSchedulerCompletion(t *testing.T, scheduler *kittyDecodeScheduler) kittyDecodeCompletion {
 	t.Helper()
-	select {
-	case completion, ok := <-completions:
-		if !ok {
-			t.Fatal("scheduler completion channel closed early")
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+	for {
+		select {
+		case <-scheduler.ready():
+			if completion, ok := scheduler.takeCompletion(); ok {
+				kittyCompletion, valid := decodeKittyCompletion(completion)
+				if !valid {
+					completion.Close()
+					scheduler.finish(completion.Key)
+					t.Fatal("non-Kitty completion in Kitty scheduler test")
+				}
+				return kittyCompletion
+			}
+		case <-deadline.C:
+			t.Fatal("timed out waiting for scheduler completion")
+			return kittyDecodeCompletion{}
 		}
-		return completion
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for scheduler completion")
-		return kittyDecodeCompletion{}
 	}
 }
 
@@ -104,10 +113,10 @@ func TestKittyDecodeSchedulerBoundsProcessConcurrency(t *testing.T) {
 	}
 	close(release)
 	for range jobs {
-		completion := awaitSchedulerCompletion(t, scheduler.completions())
-		completion.close()
+		completion := awaitSchedulerCompletion(t, scheduler)
+		completion.Close()
 	}
-	if got := maximum.Load(); got != kittyDecodeWorkerCount {
+	if got := maximum.Load(); got != int32(kittyDecodeWorkerCount) {
 		t.Fatalf("maximum concurrent jobs = %d, want %d", got, kittyDecodeWorkerCount)
 	}
 	for index, job := range jobs {
@@ -136,8 +145,8 @@ func TestKittyDecodeSchedulerRejectsDuplicatePane(t *testing.T) {
 		t.Fatalf("duplicate runs=%d closes=%d", duplicate.runs.Load(), duplicate.closes.Load())
 	}
 	close(release)
-	completion := awaitSchedulerCompletion(t, scheduler.completions())
-	completion.close()
+	completion := awaitSchedulerCompletion(t, scheduler)
+	completion.Close()
 }
 
 func TestKittyDecodeSchedulerRejectsSaturatedQueue(t *testing.T) {
@@ -192,12 +201,12 @@ func TestKittyDecodeSchedulerRetainsOwnerMetadataAndWakes(t *testing.T) {
 	if err := scheduler.submit(kittyDecodeWork{owner: owner, job: job}); err != nil {
 		t.Fatal(err)
 	}
-	completion := awaitSchedulerCompletion(t, scheduler.completions())
-	defer completion.close()
+	completion := awaitSchedulerCompletion(t, scheduler)
+	defer completion.Close()
 	awaitSchedulerSignals(t, wakes, 1)
-	if completion.owner.paneID != owner.paneID || completion.owner.pane != paneToken || completion.owner.generation != 42 ||
-		completion.owner.replySlot != slot || !completion.owner.hasSlot {
-		t.Fatalf("completion owner = %#v, want %#v", completion.owner, owner)
+	if completion.Owner.paneID != owner.paneID || completion.Owner.pane != paneToken || completion.Owner.generation != 42 ||
+		completion.Owner.replySlot != slot || !completion.Owner.hasSlot {
+		t.Fatalf("completion owner = %#v, want %#v", completion.Owner, owner)
 	}
 	if job.runs.Load() != 1 {
 		t.Fatalf("runs = %d", job.runs.Load())
@@ -236,8 +245,8 @@ func TestKittyDecodeSchedulerCloseSubmitRaceCleansEveryJobExactlyOnce(t *testing
 			t.Fatalf("job %d runs=%d closes=%d", index, runs, closes)
 		}
 	}
-	if _, ok := <-scheduler.completions(); ok {
-		t.Fatal("completion channel remains open after close")
+	if _, ok := scheduler.takeCompletion(); ok {
+		t.Fatal("completion remains after close")
 	}
 }
 
@@ -334,5 +343,33 @@ func assertNoImageOwnership(t *testing.T, process *termimage.ProcessBudget, stor
 	}
 	if got := store.Usage(); got != (termimage.Usage{}) {
 		t.Fatalf("pane ownership leaked: %#v", got)
+	}
+}
+
+type mismatchedImageResult struct{ closes atomic.Int32 }
+
+func (r *mismatchedImageResult) Close() {
+	if r != nil {
+		r.closes.Add(1)
+	}
+}
+
+func TestSharedImageSchedulerRejectsNilKittyJob(t *testing.T) {
+	scheduler := newImageDecodeScheduler(nil)
+	defer scheduler.close()
+	if err := scheduler.submitKitty(kittyDecodeWork{owner: kittyDecodeOwner{paneID: 1}}); !errors.Is(err, errKittyDecodeInvalidWork) {
+		t.Fatalf("nil job error=%v", err)
+	}
+}
+
+func TestSharedImageSchedulerClosesMismatchedErasedResult(t *testing.T) {
+	m, _, _ := newKittyRuntimeMux(t, true)
+	result := &mismatchedImageResult{}
+	completion := imageDecodeCompletion{Key: 1, Owner: imageDecodeOwner{protocol: imageDecodeKitty, value: kittyDecodeOwner{paneID: 1}}, Result: result}
+	if events := m.applyImageCompletion(completion); len(events) != 0 {
+		t.Fatalf("mismatched completion events=%#v", events)
+	}
+	if result.closes.Load() != 1 {
+		t.Fatalf("mismatched result closes=%d", result.closes.Load())
 	}
 }
