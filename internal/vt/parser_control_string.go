@@ -29,11 +29,13 @@ type ControlStringEvent struct {
 type ControlStringSink func(ControlStringEvent)
 
 type controlStringState struct {
-	sink       ControlStringSink
-	activeSink ControlStringSink
-	total      int
-	chunkLen   int
-	chunk      [maxControlStringChunk]byte
+	sink        ControlStringSink
+	activeSink  ControlStringSink
+	total       int
+	chunkLen    int
+	dcsPreamble [6]byte
+	dcsLen      int
+	chunk       [maxControlStringChunk]byte
 }
 
 // SetControlStringSink installs the sink captured by subsequently opened APC/DCS
@@ -75,7 +77,11 @@ func (p *Parser) startControlString(kind ControlStringKind) {
 		return
 	}
 	p.control.activeSink = p.control.sink
-	p.state = controlPayloadState(kind)
+	if kind == ControlStringDCS {
+		p.state = stateDCSPreamble
+	} else {
+		p.state = stateAPC
+	}
 }
 
 func (p *Parser) advanceControlState(b byte) {
@@ -84,6 +90,10 @@ func (p *Parser) advanceControlState(b byte) {
 		p.advanceControlPayload(b)
 	case stateAPCEsc, stateDCSEsc:
 		p.advanceControlEscape(b)
+	case stateDCSPreamble:
+		p.advanceDCSPreamble(b)
+	case stateDCSPreambleEsc:
+		p.advanceUnselectedDCSEscape(b)
 	case stateAPCDiscard, stateDCSDiscard:
 		p.advanceControlDiscard(b)
 	case stateAPCDiscardEsc, stateDCSDiscardEsc:
@@ -132,6 +142,72 @@ func (p *Parser) advanceControlEscape(b byte) {
 		if p.appendControlByte(kind, 0x1b) && p.appendControlByte(kind, b) {
 			p.state = controlPayloadState(kind)
 		}
+	}
+}
+
+func (p *Parser) advanceDCSPreamble(b byte) {
+	switch b {
+	case 0x18, 0x1a:
+		p.abandonUnselectedDCS(stateGround)
+		return
+	case 0x1b:
+		p.state = stateDCSPreambleEsc
+		return
+	}
+	control := p.control
+	if control.dcsLen >= len(control.dcsPreamble) {
+		p.abandonUnselectedDCS(stateDCSDiscard)
+		return
+	}
+	control.dcsPreamble[control.dcsLen] = b
+	control.dcsLen++
+	control.total++
+	selected, prefix := classifyDCSPreamble(control.dcsPreamble[:control.dcsLen])
+	if selected {
+		p.state = stateDCS
+		return
+	}
+	if !prefix {
+		p.abandonUnselectedDCS(stateDCSDiscard)
+	}
+}
+
+func classifyDCSPreamble(value []byte) (selected, prefix bool) {
+	switch len(value) {
+	case 1:
+		return value[0] == 'q', value[0] == '0'
+	case 2:
+		return value[0] == '0' && value[1] == 'q', value[0] == '0' && value[1] == ';'
+	case 3:
+		return false, value[0] == '0' && value[1] == ';' && value[2] == '0'
+	case 4:
+		return value[0] == '0' && value[1] == ';' && value[2] == '0' && value[3] == 'q', value[0] == '0' && value[1] == ';' && value[2] == '0' && value[3] == ';'
+	case 5:
+		return false, value[0] == '0' && value[1] == ';' && value[2] == '0' && value[3] == ';' && value[4] == '0'
+	case 6:
+		return value[0] == '0' && value[1] == ';' && value[2] == '0' && value[3] == ';' && value[4] == '0' && value[5] == 'q', false
+	default:
+		return false, false
+	}
+}
+
+func (p *Parser) advanceUnselectedDCSEscape(b byte) {
+	switch b {
+	case '\\', 0x18, 0x1a:
+		p.abandonUnselectedDCS(stateGround)
+	case 0x1b:
+		p.abandonUnselectedDCS(stateDCSDiscardEsc)
+	default:
+		p.abandonUnselectedDCS(stateDCSDiscard)
+	}
+}
+
+func (p *Parser) abandonUnselectedDCS(next byte) {
+	sink := p.control.activeSink
+	p.clearControlString()
+	p.state = next
+	if sink != nil {
+		sink(ControlStringEvent{Kind: ControlStringDCS, Final: true, Cancelled: true})
 	}
 }
 
@@ -226,13 +302,14 @@ func (p *Parser) clearControlString() {
 	p.control.activeSink = nil
 	p.control.total = 0
 	p.control.chunkLen = 0
+	p.control.dcsLen = 0
 }
 
 func (p *Parser) activeControlKind() (ControlStringKind, bool) {
 	switch p.state {
 	case stateAPC, stateAPCEsc:
 		return ControlStringAPC, true
-	case stateDCS, stateDCSEsc:
+	case stateDCS, stateDCSEsc, stateDCSPreamble, stateDCSPreambleEsc:
 		return ControlStringDCS, true
 	default:
 		return 0, false

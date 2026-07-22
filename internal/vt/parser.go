@@ -46,6 +46,8 @@ const (
 	stateDCSEsc
 	stateDCSDiscard
 	stateDCSDiscardEsc
+	stateDCSPreamble
+	stateDCSPreambleEsc
 )
 
 const maxCSIParam = 1<<16 - 1
