@@ -97,7 +97,7 @@ func parseCompleteFrame(frame []byte, continuation bool) (parsedFrame, *parseFai
 		return parsedFrame{}, &parseFailure{ReplyInvalid, reply}
 	}
 	reply.quiet = Quiet(quiet)
-	image, ok := parseUnsigned(fields, 'i', 1, uint64(^uint32(0)), 0)
+	image, ok := parseUnsigned(fields, 'i', 1, uint64(termimage.MaxWireImageID), 0)
 	if !ok || (action != ActionDelete && image == 0) || (action == ActionDelete && (fields['d'] == "i" || fields['d'] == "I") && image == 0) {
 		return parsedFrame{}, &parseFailure{ReplyInvalid, reply}
 	}
@@ -190,7 +190,7 @@ func allowedFields(action Action) map[byte]bool {
 }
 
 func parsePlacement(fields map[byte]string) (*PlacementRequest, ReplyCode) {
-	id, ok := parseUnsigned(fields, 'p', 1, uint64(^uint32(0)), 0)
+	id, ok := parseUnsigned(fields, 'p', 1, uint64(termimage.MaxWirePlacementID), 0)
 	if !ok || id == 0 {
 		return nil, ReplyInvalid
 	}
@@ -233,7 +233,7 @@ func parseDelete(fields map[byte]string, image termimage.ImageID) (*termimage.De
 	if image != 0 && mode != "i" && mode != "I" {
 		return nil, ReplyInvalid
 	}
-	selector := &termimage.DeleteSelector{CurrentScreen: true}
+	selector := &termimage.DeleteSelector{CurrentScreen: true, WireIDsOnly: true}
 	switch mode {
 	case "a":
 		selector.All = true
