@@ -10,12 +10,16 @@ import (
 )
 
 func (a *App) closeUnadoptedProjectionResources() {
+	if a != nil && a.window != nil {
+		a.window.MakeContextCurrent()
+	}
 	if a != nil {
 		_ = a.cancelComposition(ime.CancelTeardown)
 		a.composition.deactivateDelivery()
 		a.charSuppression.clear()
 	}
 	a.closeDividerCursors()
+	_ = a.closeTerminalImageCache()
 	if a.atlas != nil {
 		a.atlas.close()
 		a.atlas = nil
@@ -61,6 +65,7 @@ func (a *App) adoptInitialProjection(window *glfw.Window) error {
 				}
 				return nil
 			}),
+			projectionResourceFunc(a.closeTerminalImageCache),
 			projectionResourceFunc(a.closeNotificationEffectSink),
 		},
 	}

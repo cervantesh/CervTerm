@@ -159,17 +159,17 @@ func (c *windowController) createProjection(id termmux.WindowID) error {
 	}
 	bundle, err := c.factory.Create(id)
 	if err != nil {
-		if rollbackErr := bundle.close(); rollbackErr != nil {
+		if rollbackErr := closeProjectionBundleWithCurrent(bundle); rollbackErr != nil {
 			return errors.Join(err, rollbackErr)
 		}
 		return err
 	}
 	if bundle == nil || bundle.host == nil || bundle.handle == nil {
-		rollbackErr := bundle.close()
+		rollbackErr := closeProjectionBundleWithCurrent(bundle)
 		return errors.Join(errWindowProjectionMissing, rollbackErr)
 	}
 	if err := c.attachApp(id, bundle.host, bundle.app, bundle.handle); err != nil {
-		return errors.Join(err, bundle.close())
+		return errors.Join(err, closeProjectionBundleWithCurrent(bundle))
 	}
 	c.windows[id].bundle = bundle
 	return nil

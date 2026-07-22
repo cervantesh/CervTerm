@@ -212,6 +212,7 @@ func TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublic
 			for _, opened := range projectionStages()[:fail] {
 				want = append(want, "open:"+opened)
 			}
+			want = append(want, "current:2")
 			for i := fail - 1; i >= 0; i-- {
 				want = append(want, "close:"+projectionStages()[i])
 			}
@@ -347,7 +348,7 @@ func TestWindowControllerRuntimeCreateRollsBackMuxBeforeNativeOnBindFailure(t *t
 	if _, err := c.createRuntimeProjection(); !errors.Is(err, factory.bind) {
 		t.Fatalf("err=%v", err)
 	}
-	want := []string{"prepare-native", "create-runtime", "bind:2", "rollback-runtime:2", "close-resource", "destroy:two"}
+	want := []string{"prepare-native", "create-runtime", "bind:2", "rollback-runtime:2", "current:two", "close-resource", "destroy:two"}
 	if !reflect.DeepEqual(log, want) {
 		t.Fatalf("log=%v want=%v", log, want)
 	}
