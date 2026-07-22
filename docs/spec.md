@@ -68,6 +68,28 @@ This document is the executable contract for the MVP. Implementation must follow
 - Does not alias terminal cells after capture.
 - Steady-state capture benchmark must report `0 B/op` and `0 allocs/op`.
 
+### Phase 13 experimental Kitty terminal graphics
+
+This is the normative Phase 13 subset. It is available only through strict v2, restart-scoped `graphics.kitty.enabled=true`, remains experimental, and defaults to `false`. Enabled startup must fail closed if image budgets, mux ownership, the renderer image capability, or a projection/context cache cannot be prepared; no partially enabled mux or projection may be published.
+
+Supported wire behavior is limited to Kitty `APC G` with:
+
+- actions transmit (`a=t`), transmit-and-place (`a=T`), place (`a=p`), delete (`a=d`), and query (`a=q`);
+- direct payload transport only (`t=d`, or omitted equivalent);
+- raw RGB24 (`f=24`), raw RGBA32 (`f=32`), and PNG (`f=100`); zlib (`o=z`) only for raw RGB/RGBA;
+- bounded base64 chunks (`m=0|1`), pane-scoped nonzero image IDs, and fixed value-free replies honoring `q=0|1|2`;
+- current-cursor cell anchoring, paired cell spans (`c`/`r`), optional paired source crop (`x`,`y`,`w`,`h`), signed 16-bit z-order, and nonzero placement IDs; placement does not move the terminal cursor; and
+- current-screen delete selectors all/all-and-resource (`d=a|A`), image/image-and-resource (`d=i|I`), and under-cursor/under-cursor-and-resource (`d=c|C`).
+
+Unknown, duplicate, conflicting, malformed, cancelled, truncated, oversized, stale, late, or over-budget input must commit nothing. Replies are bounded fixed codes and never echo payload, pixels, paths, or raw metadata. Resource/placement replacement and deletion are owner-thread transactions: failure preserves the prior resource generation and placement set, and a success reply follows commit rather than precedes it.
+
+The subset excludes file, path, temporary-file and shared-memory transports; remote reads/writes; Kitty animation/frame composition; Unicode placeholders and other unlisted Kitty keys/actions/delete selectors; protocol advertisement while disabled; Sixel DCS; iTerm OSC 1337; renderer selection; and any image bytes or handles in `core.Cell`. Sixel and iTerm adapters remain Phase 14 planned work and may not widen Phase 13 ownership or hard caps silently.
+
+Pane/process limits are bounded by ADR-0014 (8/32 pending transfers, 8/32 MiB encoded, 64/256 MiB decoded residency, 256/1,024 images, 1,024/4,096 placements, one/two decode workers). Each GL context additionally owns at most 512 textures and 256 MiB; configured values may only lower the applicable hard cap. Decode results are accepted only after pane/store/generation/deadline revalidation. Snapshots expose detached placement metadata, and a GL-context cache acquires detached exact-generation RGBA only on a miss.
+
+With Kitty disabled, nil is normative: no image budget/store/adapter/scheduler/cache/deadline/draw/damage state is created; bounded APC/DCS input is consumed without image replies or text leakage; the frame seam performs no image mutation, allocation, redraw, or idle scheduling. Rollback is restart with `graphics.kitty.enabled=false`. This delivered subset is not a stable support claim: the Windows/OpenGL manual matrix in `docs/manual-verification.md` remains required, and unrun macOS/Linux GUI rows remain unqualified.
+
+
 ### Scrollback and selection
 
 - Core keeps a bounded scrollback buffer and exposes a scrollable viewport.

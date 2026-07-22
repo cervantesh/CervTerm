@@ -169,24 +169,41 @@ Only the active workspace/window, active tab, visible pane viewports, active mod
 
 Run `cervterm.exe --doctor --config <path>` to confirm configured intent and platform eligibility. A passing automated suite is not a Narrator/NVDA support claim; complete the matrix in [`manual-verification.md`](manual-verification.md) and record evidence in `docs/validation/phase-12-accessibility-qualification.md`.
 
-## Dormant Kitty graphics configuration
+## Experimental Kitty graphics opt-in
 
-CervTerm v2 configuration now reserves strict, restart-scoped `graphics.kitty` intent and sibling `graphics.limits` namespaces. They remain disconnected from the mux, parser, decoder, and renderer. Setting `kitty.enabled = true` records future intent only; `--doctor` reports activation as `dormant`.
+CervTerm has a deliberately narrow direct-data Kitty graphics subset for controlled testing. It is experimental, disabled by default, restart-scoped, and rendered only by the GLFW/OpenGL frontend. Enable it only in an explicit v2 configuration, then restart CervTerm:
 
 ```lua
-graphics = {
-  kitty = { enabled = false },
-  limits = {
-    encoded_bytes_per_pane = 8388608,
-    decoded_bytes_per_pane = 67108864,
-    image_count_per_pane = 256,
-    placement_count_per_pane = 1024,
-    gpu_bytes_per_context = 268435456,
+return {
+  config_version = 2,
+  graphics = {
+    kitty = { enabled = true },
+    limits = {
+      encoded_bytes_per_pane = 8388608,
+      decoded_bytes_per_pane = 67108864,
+      image_count_per_pane = 256,
+      placement_count_per_pane = 1024,
+      gpu_bytes_per_context = 268435456,
+    },
   },
-},
+}
 ```
 
-Every limit must be positive and may not exceed its built-in hard cap; the values shown above are those caps and may be lowered. Changes are classified as restart-required, and a raised or invalid value rejects the entire candidate configuration without partially activating it.
+The values shown are the built-in configurable caps. Every value must be positive; configuration may lower but not raise a cap. Changing `graphics.kitty.enabled` or any graphics limit requires a restart. To roll back operationally, set `graphics.kitty.enabled = false` and restart.
+
+The accepted protocol surface is exact:
+
+- direct data only (`t=d` or the default direct transport);
+- actions `t` (transmit), `T` (transmit and place), `p` (place), `d` (delete), and `q` (query);
+- RGB24 (`f=24`), RGBA32 (`f=32`), and PNG (`f=100`);
+- `o=z` zlib compression only for raw RGB24/RGBA32 payloads, not PNG;
+- bounded continuation chunking, with atomic rejection rather than partial image or placement updates.
+
+Hard caps include a 256 KiB APC/DCS frame; 4 KiB Kitty header and 4 KiB Kitty payload per continuation frame; 4,096 frames and a 10-second lifetime per transfer; 8 pending transfers/8 MiB encoded per pane and 32 transfers/32 MiB process-wide; 64 MiB decoded per image and per pane, 256 MiB decoded process-wide, 4,096 x 4,096/16,777,216 pixels; 256 images and 1,024 placements per pane (1,024/4,096 process-wide); a 256-cell placement span per axis; one decode worker per pane/two process-wide with a 250 ms acceptance deadline; 512-byte replies/64 KiB pending replies per pane; and 512 textures/256 MiB per OpenGL context.
+
+Replies are fixed, bounded, and value-free: `OK`, `EINVAL` (invalid request), `ENOTSUP` (unsupported action/key/format/transport), `ENOSPC` (cap reached), `ETIME` (transfer timeout), `ECANCELED` (cancelled), `ENOENT` (not found), and `EIO` (internal/runtime failure). They do not echo payload bytes, pixels, paths, or raw metadata. Kitty `q=1` suppresses success replies and `q=2` suppresses all replies.
+
+This is not a full Kitty conformance claim. Animation/frame composition, external file/path/temporary-file/shared-memory transports, Unicode placeholders, Sixel, iTerm inline images, and non-OpenGL rendering are explicitly unsupported. `--doctor` can report configured intent and limits, but its one-shot diagnostic process does not prove live frontend activation.
 
 ## Known beta limitations
 
