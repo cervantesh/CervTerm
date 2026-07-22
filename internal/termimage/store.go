@@ -145,7 +145,7 @@ func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 		deadline: s.now().Add(HardTransferLifetime), base: lease,
 	}
 	s.pending[header.Transfer] = transfer
-	transfer.timer = s.after(HardTransferLifetime, transfer.Close)
+	transfer.timer = s.after(HardTransferLifetime, transfer.expire)
 	return transfer, nil
 }
 
@@ -291,10 +291,78 @@ type CandidateTransfer struct {
 
 	mu      sync.Mutex
 	closing atomic.Bool
-	closed  atomic.Bool
 	chunks  [][]byte
 	leases  []*reservation
 	encoded uint64
+}
+
+func (t *CandidateTransfer) Touch() error {
+	if t == nil {
+		return ErrTransferClosed
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closing.Load() || t.timer == nil {
+		return ErrTransferClosed
+	}
+	now := t.store.now()
+	if !now.Before(t.deadline) {
+		t.closeLocked()
+		return ErrTransferExpired
+	}
+	t.deadline = now.Add(HardTransferLifetime)
+	if t.timer != nil {
+		t.timer.Stop()
+	}
+	t.timer = t.store.after(HardTransferLifetime, t.expire)
+	return nil
+}
+
+func (t *CandidateTransfer) Deadline() (time.Time, bool) {
+	if t == nil {
+		return time.Time{}, false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closing.Load() || t.timer == nil {
+		return time.Time{}, false
+	}
+	return t.deadline, true
+}
+
+func (t *CandidateTransfer) Seal() error {
+	if t == nil {
+		return ErrTransferClosed
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closing.Load() || t.timer == nil {
+		return ErrTransferClosed
+	}
+	if !t.store.now().Before(t.deadline) {
+		t.closeLocked()
+		return ErrTransferExpired
+	}
+	t.timer.Stop()
+	t.timer = nil
+	return nil
+}
+
+func (t *CandidateTransfer) expire() {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closing.Load() || t.timer == nil {
+		return
+	}
+	delay := t.deadline.Sub(t.store.now())
+	if delay > 0 {
+		t.timer = t.store.after(delay, t.expire)
+		return
+	}
+	t.closeLocked()
 }
 
 func (t *CandidateTransfer) Append(chunk []byte) error {
@@ -303,7 +371,7 @@ func (t *CandidateTransfer) Append(chunk []byte) error {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.closing.Load() {
+	if t.closing.Load() || t.timer == nil {
 		return ErrTransferClosed
 	}
 	if !t.store.now().Before(t.deadline) {
@@ -321,6 +389,11 @@ func (t *CandidateTransfer) Append(chunk []byte) error {
 	t.chunks = append(t.chunks, copyOfChunk)
 	t.leases = append(t.leases, lease)
 	t.encoded += uint64(len(copyOfChunk))
+	t.deadline = t.store.now().Add(HardTransferLifetime)
+	if t.timer != nil {
+		t.timer.Stop()
+	}
+	t.timer = t.store.after(HardTransferLifetime, t.expire)
 	return nil
 }
 
@@ -333,7 +406,7 @@ func (t *CandidateTransfer) EncodedCopy() ([]byte, error) {
 	if t.closing.Load() {
 		return nil, ErrTransferClosed
 	}
-	if !t.store.now().Before(t.deadline) {
+	if t.timer != nil && !t.store.now().Before(t.deadline) {
 		t.closeLocked()
 		return nil, ErrTransferExpired
 	}
@@ -379,6 +452,5 @@ func (t *CandidateTransfer) closeLocked() {
 	}
 	t.base.Close()
 	t.chunks, t.leases, t.encoded = nil, nil, 0
-	t.closed.Store(true)
 	t.store.removeTransfer(t)
 }
