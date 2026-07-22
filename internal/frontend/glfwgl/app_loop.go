@@ -204,6 +204,9 @@ func (a *App) redrawWanted(now time.Time) bool {
 	if a.needsRedraw {
 		return true
 	}
+	if a.terminalImageDamage.pending() {
+		return true
+	}
 	if a.terminalImageCache.retryDue(now) {
 		return true
 	}

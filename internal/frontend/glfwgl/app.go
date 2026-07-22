@@ -66,6 +66,8 @@ type App struct {
 	controller                *windowController
 	r                         gpu.Renderer
 	terminalImageCache        *terminalImageCache
+	terminalImages            terminalImageFrame
+	terminalImageDamage       terminalImageDamageState
 	backgroundSurface         gpu.BackgroundSurface
 	backgroundSurfaceWidth    int
 	backgroundSurfaceHeight   int
