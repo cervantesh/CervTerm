@@ -42,9 +42,9 @@ func TestRunDoctorPrintsActionableSections(t *testing.T) {
 		"graphics-kitty-enabled: false",
 		"graphics-kitty-activation: unavailable (diagnostic mode has no live frontend; configured intent applies after restart)",
 		"graphics-sixel-enabled: false",
-		"graphics-sixel-activation: dormant (configured intent only; frontend activation is not wired)",
+		"graphics-sixel-activation: unavailable (diagnostic mode has no live frontend; configured intent applies after restart)",
 		"graphics-iterm-enabled: false",
-		"graphics-iterm-activation: dormant (configured intent only; frontend activation is not wired)",
+		"graphics-iterm-activation: unavailable (diagnostic mode has no live frontend; configured intent applies after restart)",
 		"graphics-kitty-limits: encoded-per-pane=8388608 decoded-per-pane=67108864 images-per-pane=256 placements-per-pane=1024 gpu-bytes-per-context=268435456",
 		"background-formats: png,jpeg,gif-static",
 		"background-budget: cpu=134217728 gpu=134217728",
@@ -57,7 +57,7 @@ func TestRunDoctorPrintsActionableSections(t *testing.T) {
 	}
 }
 
-func TestRunDoctorReportsDormantSixelAndITermConfiguredIntent(t *testing.T) {
+func TestRunDoctorReportsExperimentalSixelAndITermConfiguredIntent(t *testing.T) {
 	path := writeDiagnosticConfig(t, `return {config_version=2,graphics={sixel={enabled=true},iterm={enabled=true}}}`)
 	output := captureStdout(t, func() {
 		if code := runDoctor(doctorOptions{ConfigPath: path, LogPath: "-"}); code != 0 {
@@ -67,9 +67,9 @@ func TestRunDoctorReportsDormantSixelAndITermConfiguredIntent(t *testing.T) {
 	for _, want := range []string{
 		"graphics-kitty-enabled: false",
 		"graphics-sixel-enabled: true",
-		"graphics-sixel-activation: dormant (configured intent only; frontend activation is not wired)",
+		"graphics-sixel-activation: unavailable (diagnostic mode has no live frontend; configured intent applies after restart)",
 		"graphics-iterm-enabled: true",
-		"graphics-iterm-activation: dormant (configured intent only; frontend activation is not wired)",
+		"graphics-iterm-activation: unavailable (diagnostic mode has no live frontend; configured intent applies after restart)",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("doctor output missing %q\n%s", want, output)

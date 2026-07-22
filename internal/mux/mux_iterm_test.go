@@ -97,28 +97,51 @@ func TestITermProgrammaticOptionAllProtocolCombinations(t *testing.T) {
 		kittyEnabled := mask&1 != 0
 		sixelEnabled := mask&2 != 0
 		itermEnabled := mask&4 != 0
+		imagesEnabled := kittyEnabled || sixelEnabled || itermEnabled
 		t.Run(fmt.Sprintf("mask-%d", mask), func(t *testing.T) {
-			m, session, _ := newITermRuntimeMux(t, kittyEnabled, sixelEnabled, itermEnabled, &limits, nil)
+			m, session, wakes := newITermRuntimeMux(t, kittyEnabled, sixelEnabled, itermEnabled, &limits, nil)
 			p, _ := m.sessions.lookup(1)
-			wantScheduler := kittyEnabled || sixelEnabled || itermEnabled
-			if (m.imageScheduler != nil) != wantScheduler || p.imageStore == nil ||
-				(p.kittyAdapter != nil) != kittyEnabled || (p.sixelAdapter != nil) != sixelEnabled || (p.itermAdapter != nil) != itermEnabled {
-				t.Fatalf("scheduler=%v store=%v kitty=%v sixel=%v iterm=%v", m.imageScheduler != nil, p.imageStore != nil, p.kittyAdapter != nil, p.sixelAdapter != nil, p.itermAdapter != nil)
+			if m.options.KittyEnabled != kittyEnabled || m.options.SixelEnabled != sixelEnabled || m.options.ITermEnabled != itermEnabled {
+				t.Fatalf("options=%#v", m.options)
+			}
+			if (m.options.ImageLimits != nil) != imagesEnabled || (m.imageBudget != nil) != imagesEnabled ||
+				(m.imageScheduler != nil) != imagesEnabled || (p.imageStore != nil) != imagesEnabled {
+				t.Fatalf("limits=%v budget=%v scheduler=%v store=%v", m.options.ImageLimits != nil, m.imageBudget != nil, m.imageScheduler != nil, p.imageStore != nil)
+			}
+			if imagesEnabled && (m.imageLimits != limits || *m.options.ImageLimits != limits) {
+				t.Fatalf("image limits=%#v options=%#v want=%#v", m.imageLimits, *m.options.ImageLimits, limits)
+			}
+			if !imagesEnabled && m.imageLimits != (termimage.Limits{}) {
+				t.Fatalf("disabled image limits=%#v", m.imageLimits)
+			}
+			if (p.kittyAdapter != nil) != kittyEnabled || (p.sixelAdapter != nil) != sixelEnabled || (p.itermAdapter != nil) != itermEnabled ||
+				(m.kittyPending != nil) != kittyEnabled || (m.sixelPending != nil) != sixelEnabled || (m.itermPending != nil) != itermEnabled {
+				t.Fatalf("adapters kitty=%v sixel=%v iterm=%v pending=%v/%v/%v", p.kittyAdapter != nil, p.sixelAdapter != nil, p.itermAdapter != nil, m.kittyPending != nil, m.sixelPending != nil, m.itermPending != nil)
 			}
 			if !itermEnabled {
 				raw, _ := itermRuntimePNG(t, 1, 1)
 				m.advancePane(p, []byte(itermRuntimeFrame(raw, "", 0x07)))
-				if p.imageStore.Usage() != (termimage.Usage{}) || len(session.written()) != 0 {
-					t.Fatalf("disabled iTerm retained or replied: usage=%#v wire=%q", p.imageStore.Usage(), session.written())
+				if p.imageStore != nil && p.imageStore.Usage() != (termimage.Usage{}) {
+					t.Fatalf("disabled iTerm retained usage=%#v", p.imageStore.Usage())
 				}
+				if len(session.written()) != 0 {
+					t.Fatalf("disabled iTerm replied: wire=%q", session.written())
+				}
+			}
+			if deadline, ok := m.NextImageDeadline(); ok || !deadline.IsZero() {
+				t.Fatalf("idle deadline=%v ok=%v", deadline, ok)
+			}
+			if !imagesEnabled && len(wakes) != 0 {
+				t.Fatalf("all-disabled runtime woke %d times", len(wakes))
 			}
 		})
 	}
 
 	m, _, _ := newITermRuntimeMux(t, true, true, true, nil, nil)
 	p, _ := m.sessions.lookup(1)
-	if m.imageScheduler != nil || p.imageStore != nil || p.kittyAdapter != nil || p.sixelAdapter != nil || p.itermAdapter != nil {
-		t.Fatal("test-only flags activated without validated image limits")
+	if m.imageScheduler != nil || m.imageBudget != nil || p.imageStore != nil || p.kittyAdapter != nil || p.sixelAdapter != nil || p.itermAdapter != nil ||
+		m.kittyPending != nil || m.sixelPending != nil || m.itermPending != nil {
+		t.Fatal("protocol flags activated without validated image limits")
 	}
 }
 

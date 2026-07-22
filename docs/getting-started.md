@@ -171,14 +171,14 @@ Run `cervterm.exe --doctor --config <path>` to confirm configured intent and pla
 
 ## Experimental Kitty graphics opt-in
 
-CervTerm has a deliberately narrow direct-data Kitty graphics subset for controlled testing. It is experimental, disabled by default, restart-scoped, and rendered only by the GLFW/OpenGL frontend. Enable it only in an explicit v2 configuration, then restart CervTerm:
+CervTerm has deliberately narrow Kitty, Sixel, and iTerm inline-image subsets for controlled testing. They are experimental, disabled by default, restart-scoped, independently composable, and rendered only by the GLFW/OpenGL frontend. Enable only the protocols you need in an explicit v2 configuration, then restart CervTerm:
 
 ```lua
 return {
   config_version = 2,
   graphics = {
     kitty = { enabled = true },
-    -- Phase 14 configured intent only; these do not activate a frontend yet.
+    -- Every protocol remains experimental and default-off.
     sixel = { enabled = false },
     iterm = { enabled = false },
     limits = {
@@ -192,11 +192,11 @@ return {
 }
 ```
 
-The values shown are the built-in shared configurable caps. Every value must be positive; configuration may lower but not raise a cap. Changing any graphics enable flag or limit requires a restart. To roll back Kitty operationally, set `graphics.kitty.enabled = false` and restart.
+The values shown are the built-in caps shared by every enabled protocol in the process; GPU limits apply independently to each OpenGL context. Every value must be positive; configuration may lower but not raise a cap. Changing any graphics enable flag or limit requires a restart. To roll back a protocol operationally, set its `enabled` field to `false` and restart.
 
-`graphics.sixel.enabled` and `graphics.iterm.enabled` are independently composable strict-v2, default-off, restart-scoped configured-intent flags. In this slice the GLFW frontend deliberately ignores both flags: setting either to `true` changes config, provenance, diffs, templates, and doctor output only. It does not allocate image limits, stores, schedulers, caches, or mux protocol options, and it does not enable Sixel or iTerm rendering. Production activation is deferred to a later Phase 14 slice.
+`graphics.kitty.enabled`, `graphics.sixel.enabled`, and `graphics.iterm.enabled` are independently composable strict-v2, default-off, restart-scoped activation flags. Enabling any one creates the bounded shared image model and decode scheduler, a pane-local store, only that protocol's adapter, and one distinct texture cache per OpenGL context. With all three disabled, those image resources remain absent and the text-only draw and wake paths stay dormant.
 
-The accepted protocol surface is exact:
+The accepted Kitty protocol surface is exact:
 
 - direct data only (`t=d` or the default direct transport);
 - actions `t` (transmit), `T` (transmit and place), `p` (place), `d` (delete), and `q` (query);
@@ -208,7 +208,7 @@ Hard caps include a 256 KiB APC/DCS frame; 4 KiB Kitty header and 4 KiB Kitty pa
 
 Replies are fixed, bounded, and value-free: `OK`, `EINVAL` (invalid request), `ENOTSUP` (unsupported action/key/format/transport), `ENOSPC` (cap reached), `ETIME` (transfer timeout), `ECANCELED` (cancelled), `ENOENT` (not found), and `EIO` (internal/runtime failure). They do not echo payload bytes, pixels, paths, or raw metadata. Kitty `q=1` suppresses success replies and `q=2` suppresses all replies.
 
-This is not a full Kitty conformance claim. Animation/frame composition, external file/path/temporary-file/shared-memory transports, Unicode placeholders, Sixel and iTerm rendering, and non-OpenGL rendering are explicitly unsupported. The dormant Sixel/iTerm flags do not change that support boundary. `--doctor` can report configured intent and limits, but its one-shot diagnostic process does not prove live frontend activation.
+This is not a full Kitty, Sixel, or iTerm conformance claim. Animation/frame composition, external file/path/temporary-file/shared-memory transports, Unicode placeholders, broad iTerm sizing/file forms, and non-OpenGL rendering remain explicitly unsupported. Sixel and iTerm activation accepts only the bounded inline subsets documented by the generated configuration and enforced by their decoders. `--doctor` can report configured intent and limits, but its one-shot diagnostic process does not prove live frontend activation.
 
 ## Known beta limitations
 

@@ -65,7 +65,7 @@ func (c *windowController) restoreStartupProjectionsBeforeMux(blueprint layoutre
 		return errors.Join(err, c.restoreWindows.AbortRestore(restore), c.abortRestoreProjections(projection, nil))
 	}
 	if err := c.publishRestoreProjections(projection, ids); err != nil {
-		return errors.Join(err, c.restoreWindows.AbortRestore(restore))
+		return errors.Join(err, c.restoreWindows.AbortRestore(restore), c.abortRestoreProjections(projection, nil))
 	}
 	if !c.validRestoreProjectionCandidate(projection, true) {
 		return errors.Join(errRestoreProjectionTransaction, c.restoreWindows.AbortRestore(restore), c.abortRestoreProjections(projection, nil))
@@ -142,18 +142,18 @@ func (c *windowController) publishRestoreProjections(candidate *restoreProjectio
 		return errRestoreProjectionTransaction
 	}
 	if len(ids) != len(candidate.bundles) {
-		return errors.Join(errRestoreProjectionTransaction, c.abortRestoreProjections(candidate, nil))
+		return errRestoreProjectionTransaction
 	}
 	seen := make(map[termmux.WindowID]struct{}, len(ids))
 	for _, id := range ids {
 		if id == 0 {
-			return errors.Join(errRestoreProjectionTransaction, c.abortRestoreProjections(candidate, nil))
+			return errRestoreProjectionTransaction
 		}
 		if _, duplicate := seen[id]; duplicate {
-			return errors.Join(errWindowProjectionExists, c.abortRestoreProjections(candidate, nil))
+			return errWindowProjectionExists
 		}
 		if _, exists := c.windows[id]; exists {
-			return errors.Join(errWindowProjectionExists, c.abortRestoreProjections(candidate, nil))
+			return errWindowProjectionExists
 		}
 		seen[id] = struct{}{}
 	}
@@ -162,11 +162,11 @@ func (c *windowController) publishRestoreProjections(candidate *restoreProjectio
 			continue
 		}
 		if bundle.unbind == nil {
-			return errors.Join(errRestoreProjectionTransaction, c.abortRestoreProjections(candidate, nil))
+			return errRestoreProjectionTransaction
 		}
 		candidate.bound = append(candidate.bound, index)
 		if err := bundle.bind(ids[index]); err != nil {
-			return errors.Join(fmt.Errorf("bind restore projection %d: %w", index, err), c.abortRestoreProjections(candidate, nil))
+			return fmt.Errorf("bind restore projection %d: %w", index, err)
 		}
 	}
 	candidate.ids = append([]termmux.WindowID(nil), ids...)
