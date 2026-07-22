@@ -1,0 +1,37 @@
+# phase13-meta {"version":1,"suite":"store","go_version":"go version go1.25.8 windows/amd64","goos":"windows","goarch":"amd64","cpu":"AMD Ryzen 9 7940HX with Radeon Graphics","gomaxprocs":1,"benchtime":"2s","samples":10,"production_commit":"fe8f7d58fce1bf5ac7189c7bf17fd3192761c587","harness_sha256":"d6482a622cac3ad6331f9cbc0afa6b0ebd2a36533e6b9c3612acb86575aa46f1","measured_source_sha256":"0ee8de66804eb8ebd8d3f0a337f4a55487178c6cea40d80dbddbed287e7310ad","working_tree_dirty":true,"warm_command":["go","test","./internal/termimage","-run","^$","-bench","^Benchmark(ProcessBudget|Store)","-benchmem","-benchtime","5s","-cpu","1","-count","1"],"record_command":["go","test","./internal/termimage","-run","^$","-bench","^Benchmark(ProcessBudget|Store)","-benchmem","-benchtime","2s","-cpu","1","-count","10"]}
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/termimage
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkProcessBudgetReserveRelease 	51216498	        41.20 ns/op	      64 B/op	       1 allocs/op
+BenchmarkProcessBudgetReserveRelease 	64425552	        42.87 ns/op	      64 B/op	       1 allocs/op
+BenchmarkProcessBudgetReserveRelease 	52764646	        42.25 ns/op	      64 B/op	       1 allocs/op
+BenchmarkProcessBudgetReserveRelease 	53197383	        42.74 ns/op	      64 B/op	       1 allocs/op
+BenchmarkProcessBudgetReserveRelease 	63699000	        42.30 ns/op	      64 B/op	       1 allocs/op
+BenchmarkProcessBudgetReserveRelease 	54969358	        42.19 ns/op	      64 B/op	       1 allocs/op
+BenchmarkProcessBudgetReserveRelease 	52087063	        43.01 ns/op	      64 B/op	       1 allocs/op
+BenchmarkProcessBudgetReserveRelease 	54775261	        41.82 ns/op	      64 B/op	       1 allocs/op
+BenchmarkProcessBudgetReserveRelease 	64879418	        45.67 ns/op	      64 B/op	       1 allocs/op
+BenchmarkProcessBudgetReserveRelease 	51803852	        44.67 ns/op	      64 B/op	       1 allocs/op
+BenchmarkStoreBeginTransferCancel    	10430365	       225.2 ns/op	     336 B/op	       4 allocs/op
+BenchmarkStoreBeginTransferCancel    	11321950	       229.8 ns/op	     336 B/op	       4 allocs/op
+BenchmarkStoreBeginTransferCancel    	 9781146	       241.5 ns/op	     336 B/op	       4 allocs/op
+BenchmarkStoreBeginTransferCancel    	10737068	       237.1 ns/op	     336 B/op	       4 allocs/op
+BenchmarkStoreBeginTransferCancel    	10923385	       227.2 ns/op	     336 B/op	       4 allocs/op
+BenchmarkStoreBeginTransferCancel    	 9966744	       239.2 ns/op	     336 B/op	       4 allocs/op
+BenchmarkStoreBeginTransferCancel    	10759556	       253.2 ns/op	     336 B/op	       4 allocs/op
+BenchmarkStoreBeginTransferCancel    	10385325	       237.0 ns/op	     336 B/op	       4 allocs/op
+BenchmarkStoreBeginTransferCancel    	10245931	       239.5 ns/op	     336 B/op	       4 allocs/op
+BenchmarkStoreBeginTransferCancel    	10575445	       238.0 ns/op	     336 B/op	       4 allocs/op
+BenchmarkStoreAcquireMiss            	1000000000	         1.073 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStoreAcquireMiss            	1000000000	         1.046 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStoreAcquireMiss            	1000000000	         0.9695 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStoreAcquireMiss            	1000000000	         0.9574 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStoreAcquireMiss            	1000000000	         1.006 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStoreAcquireMiss            	1000000000	         0.9439 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStoreAcquireMiss            	1000000000	         0.9655 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStoreAcquireMiss            	1000000000	         1.049 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStoreAcquireMiss            	1000000000	         1.069 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStoreAcquireMiss            	1000000000	         1.161 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/termimage	65.460s

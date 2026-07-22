@@ -174,6 +174,8 @@ func (t *fakeTimer) Stop() bool {
 func TestTransferTimerAutonomouslyClosesAndRemovesPending(t *testing.T) {
 	process := NewProcessBudget()
 	store := NewStore(process, DefaultLimits())
+	now := time.Unix(100, 0)
+	store.now = func() time.Time { return now }
 	var expire func()
 	store.after = func(_ time.Duration, callback func()) timerStopper {
 		expire = callback
@@ -186,6 +188,7 @@ func TestTransferTimerAutonomouslyClosesAndRemovesPending(t *testing.T) {
 	if err := transfer.Append([]byte("held")); err != nil {
 		t.Fatal(err)
 	}
+	now = now.Add(HardTransferLifetime)
 	expire()
 	if !transfer.Closed() || process.Usage() != (Usage{}) || store.Usage() != (Usage{}) {
 		t.Fatalf("timer close leaked process=%#v pane=%#v", process.Usage(), store.Usage())
@@ -310,5 +313,58 @@ func TestNewStoreRejectsInvalidInputs(t *testing.T) {
 	store := NewStore(NewProcessBudget(), DefaultLimits())
 	if _, err := store.BeginTransfer(Header{}); err != ErrInvalidID {
 		t.Fatalf("zero IDs error = %v", err)
+	}
+}
+
+func TestTransferSlidingSilenceDeadlineAndSeal(t *testing.T) {
+	process := NewProcessBudget()
+	store := NewStore(process, DefaultLimits())
+	now := time.Unix(1000, 0)
+	store.now = func() time.Time { return now }
+	var callbacks []func()
+	store.after = func(_ time.Duration, callback func()) timerStopper {
+		callbacks = append(callbacks, callback)
+		return &fakeTimer{}
+	}
+	transfer, err := store.BeginTransfer(Header{Transfer: 1, Image: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := callbacks[0]
+	now = now.Add(5 * time.Second)
+	if err = transfer.Append([]byte("held")); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(5 * time.Second)
+	old()
+	if transfer.Closed() {
+		t.Fatal("stale timer closed touched transfer")
+	}
+	now = now.Add(5 * time.Second)
+	callbacks[len(callbacks)-1]()
+	if !transfer.Closed() || process.Usage() != (Usage{}) {
+		t.Fatalf("expiry leaked usage=%#v", process.Usage())
+	}
+
+	transfer, err = store.BeginTransfer(Header{Transfer: 2, Image: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = transfer.Append([]byte("sealed")); err != nil {
+		t.Fatal(err)
+	}
+	if err = transfer.Seal(); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(HardTransferLifetime * 2)
+	if got, copyErr := transfer.EncodedCopy(); copyErr != nil || string(got) != "sealed" {
+		t.Fatalf("sealed copy=%q err=%v", got, copyErr)
+	}
+	if err = transfer.Append([]byte("late")); err != ErrTransferClosed {
+		t.Fatalf("sealed append=%v", err)
+	}
+	transfer.Close()
+	if process.Usage() != (Usage{}) || store.Usage() != (Usage{}) {
+		t.Fatal("sealed transfer leaked")
 	}
 }
