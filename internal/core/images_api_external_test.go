@@ -229,3 +229,33 @@ func TestImageAnchorGenerationTracksCoordinateMutationsNotCursorMovement(t *test
 		t.Fatal("screen transition did not invalidate captured anchors")
 	}
 }
+
+func TestImageGenerationReportsFreshOwnerState(t *testing.T) {
+	terminal := core.NewTerminal(4, 2)
+	var nilTerminal *core.Terminal
+	if nilTerminal.ImageGeneration() != 0 || terminal.ImageGeneration() != 0 {
+		t.Fatal("unattached image generation must be zero")
+	}
+	store := termimage.NewStore(termimage.NewProcessBudget(), termimage.DefaultLimits())
+	if err := terminal.AttachImageStore(store); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.ImageGeneration() != 0 {
+		t.Fatal("fresh sidecar generation must be zero")
+	}
+	if _, err := terminal.CommitImage(core.ImageCommit{Candidate: apiCandidate(t, store, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	committed := terminal.ImageGeneration()
+	if committed == 0 {
+		t.Fatal("commit did not advance the fresh generation")
+	}
+	terminal.ResetImages()
+	if terminal.ImageGeneration() <= committed {
+		t.Fatal("reset did not advance the fresh generation")
+	}
+	terminal.CloseImageStore()
+	if terminal.ImageGeneration() != 0 {
+		t.Fatal("closed image state must report zero")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"cervterm/internal/kitty"
 	"cervterm/internal/pty"
 	"cervterm/internal/render"
+	"cervterm/internal/sixel"
 	"cervterm/internal/termimage"
 	"cervterm/internal/vt"
 )
@@ -33,6 +34,8 @@ type pane struct {
 	kittyAdapter   *kitty.Adapter
 	kittyOutcomes  []kitty.Outcome
 	kittyEvents    []Event
+	sixelAdapter   *sixel.Adapter
+	sixelOutcomes  []sixel.Outcome
 	session        pty.Session
 	launch         FreshLaunch
 	snapshot       render.Snapshot
@@ -141,8 +144,17 @@ func (p *pane) close() error {
 		if p.kittyAdapter != nil {
 			p.kittyAdapter.Close()
 		}
+		if p.sixelAdapter != nil {
+			p.sixelAdapter.Close()
+		}
+		for index := range p.sixelOutcomes {
+			if p.sixelOutcomes[index].Command != nil {
+				p.sixelOutcomes[index].Command.Close()
+			}
+		}
 		p.kittyOutcomes = nil
 		p.kittyEvents = nil
+		p.sixelOutcomes = nil
 		p.terminal.CloseImageStore()
 		p.clearReplies()
 		if p.session != nil {

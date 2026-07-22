@@ -20,6 +20,9 @@ type Options struct {
 	HideCursorWhenScrolled *bool
 	ImageLimits            *termimage.Limits
 	KittyEnabled           bool
+	// SixelEnabled is a programmatic, test-only runtime seam. Public config and
+	// frontend activation remain intentionally disabled until later Phase 14 slices.
+	SixelEnabled bool
 	// Now may be called by decode workers and must be safe for concurrent use.
 	Now func() time.Time
 }
@@ -51,6 +54,8 @@ type Mux struct {
 	imageScheduler *imageDecodeScheduler
 	kittyPending   map[uint64]kittyDecodeOwner
 	kittyNextToken uint64
+	sixelPending   map[uint64]sixelDecodeOwner
+	sixelNextToken uint64
 	bootstrapped   bool
 	bounds         PixelRect
 	paneMetrics    map[PaneID]CellMetrics
@@ -81,9 +86,14 @@ func New(factory SessionFactory, options Options) *Mux {
 		} else {
 			mux.imageLimits = limits
 			mux.imageBudget = termimage.NewProcessBudget()
-			if options.KittyEnabled {
+			if options.KittyEnabled || options.SixelEnabled {
 				mux.imageScheduler = newImageDecodeScheduler(options.Wake, options.Now)
-				mux.kittyPending = make(map[uint64]kittyDecodeOwner)
+				if options.KittyEnabled {
+					mux.kittyPending = make(map[uint64]kittyDecodeOwner)
+				}
+				if options.SixelEnabled {
+					mux.sixelPending = make(map[uint64]sixelDecodeOwner)
+				}
 			}
 		}
 	}
@@ -357,7 +367,7 @@ func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
 
 func (m *Mux) Drain(limit int) []Event {
 	var events []Event
-	events = append(events, m.expireKitty(m.options.Now())...)
+	events = append(events, m.expireImages(m.options.Now())...)
 	for count := 0; limit <= 0 || count < limit; count++ {
 		var imageReady <-chan struct{}
 		if m.imageScheduler != nil {
@@ -384,9 +394,14 @@ func (m *Mux) Drain(limit int) []Event {
 					p.kittyAdapter.Close()
 					p.kittyAdapter = nil
 				}
+				if p.sixelAdapter != nil {
+					p.sixelAdapter.Close()
+					p.sixelAdapter = nil
+				}
 				events = append(events, p.kittyEvents...)
 				p.kittyEvents = nil
 				events = append(events, m.processKittyOutcomes(p)...)
+				m.processSixelOutcomes(p)
 				p.state = PaneStateExited
 				tab := m.model.tabForPane(p.id)
 				exit := Event{Kind: PaneExited, Pane: p.id}
@@ -464,5 +479,7 @@ func (m *Mux) Shutdown() error {
 		m.imageScheduler.close()
 		m.imageScheduler = nil
 	}
+	clear(m.kittyPending)
+	clear(m.sixelPending)
 	return m.sessions.shutdownRegistry()
 }

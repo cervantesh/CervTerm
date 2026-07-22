@@ -95,12 +95,25 @@ func (m *Mux) submitKittyDecode(p *pane, outcome kitty.Outcome) {
 
 func (m *Mux) applyImageCompletion(completion imageDecodeCompletion) []Event {
 	defer m.imageScheduler.finish(completion.Key)
-	kittyCompletion, ok := decodeKittyCompletion(completion)
-	if !ok {
+	switch completion.Owner.protocol {
+	case imageDecodeKitty:
+		kittyCompletion, ok := decodeKittyCompletion(completion)
+		if !ok {
+			completion.Close()
+			return nil
+		}
+		return m.applyKittyCompletion(kittyCompletion)
+	case imageDecodeSixel:
+		sixelCompletion, ok := decodeSixelCompletion(completion)
+		if !ok {
+			completion.Close()
+			return nil
+		}
+		return m.applySixelCompletion(sixelCompletion)
+	default:
 		completion.Close()
 		return nil
 	}
-	return m.applyKittyCompletion(kittyCompletion)
 }
 
 func (m *Mux) applyKittyCompletion(completion kittyDecodeCompletion) []Event {
@@ -174,11 +187,15 @@ func (m *Mux) NextImageDeadline() (time.Time, bool) {
 	var earliest time.Time
 	found := false
 	for _, p := range m.sessions.panes {
-		if p.kittyAdapter == nil {
-			continue
+		if p.kittyAdapter != nil {
+			if deadline, ok := p.kittyAdapter.NextExpiry(); ok && (!found || deadline.Before(earliest)) {
+				earliest, found = deadline, true
+			}
 		}
-		if deadline, ok := p.kittyAdapter.NextExpiry(); ok && (!found || deadline.Before(earliest)) {
-			earliest, found = deadline, true
+		if p.sixelAdapter != nil {
+			if deadline, ok := p.sixelAdapter.NextExpiry(); ok && (!found || deadline.Before(earliest)) {
+				earliest, found = deadline, true
+			}
 		}
 	}
 	for _, owner := range m.kittyPending {
@@ -186,10 +203,15 @@ func (m *Mux) NextImageDeadline() (time.Time, bool) {
 			earliest, found = owner.acceptUntil, true
 		}
 	}
+	for _, owner := range m.sixelPending {
+		if !found || owner.acceptUntil.Before(earliest) {
+			earliest, found = owner.acceptUntil, true
+		}
+	}
 	return earliest, found
 }
 
-func (m *Mux) expireKitty(now time.Time) []Event {
+func (m *Mux) expireImages(now time.Time) []Event {
 	if m == nil || m.imageScheduler == nil {
 		return nil
 	}
@@ -201,20 +223,26 @@ func (m *Mux) expireKitty(now time.Time) []Event {
 	m.sessions.mu.Unlock()
 	var events []Event
 	for _, p := range panes {
-		if p.kittyAdapter == nil {
-			continue
+		if p.kittyAdapter != nil {
+			outcome := p.kittyAdapter.Expire(now)
+			if outcome.Failure != kitty.ReplyNone {
+				p.kittyOutcomes = append(p.kittyOutcomes, outcome)
+				events = append(events, m.processKittyOutcomes(p)...)
+			}
 		}
-		outcome := p.kittyAdapter.Expire(now)
-		if outcome.Failure != kitty.ReplyNone {
-			p.kittyOutcomes = append(p.kittyOutcomes, outcome)
-			events = append(events, m.processKittyOutcomes(p)...)
+		if p.sixelAdapter != nil {
+			outcome := p.sixelAdapter.Expire(now)
+			if outcome.Command != nil || outcome.Failure != 0 {
+				p.sixelOutcomes = append(p.sixelOutcomes, outcome)
+				m.processSixelOutcomes(p)
+			}
 		}
 	}
 	for token, owner := range m.kittyPending {
 		if now.Before(owner.acceptUntil) {
 			continue
 		}
-		if finishedAt, completed := m.imageScheduler.completionTime(owner.paneID); completed && finishedAt.Before(owner.acceptUntil) {
+		if m.imageCompletionBefore(owner.paneID, owner.acceptUntil) {
 			continue
 		}
 		delete(m.kittyPending, token)
@@ -223,5 +251,22 @@ func (m *Mux) expireKitty(now time.Time) []Event {
 			events = append(events, p.flushReplies()...)
 		}
 	}
+	for token, owner := range m.sixelPending {
+		if now.Before(owner.acceptUntil) {
+			continue
+		}
+		if m.imageCompletionBefore(owner.paneID, owner.acceptUntil) {
+			continue
+		}
+		delete(m.sixelPending, token)
+	}
 	return m.ResolveEventAddresses(events)
 }
+
+func (m *Mux) imageCompletionBefore(paneID PaneID, deadline time.Time) bool {
+	finishedAt, completed := m.imageScheduler.completionTime(paneID)
+	return completed && finishedAt.Before(deadline)
+}
+
+// expireKitty is retained for focused Phase 13 tests; expiration is now shared.
+func (m *Mux) expireKitty(now time.Time) []Event { return m.expireImages(now) }

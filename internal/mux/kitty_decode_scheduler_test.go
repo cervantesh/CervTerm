@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cervterm/internal/kitty"
+	"cervterm/internal/sixel"
 	"cervterm/internal/termimage"
 )
 
@@ -371,5 +372,126 @@ func TestSharedImageSchedulerClosesMismatchedErasedResult(t *testing.T) {
 	}
 	if result.closes.Load() != 1 {
 		t.Fatalf("mismatched result closes=%d", result.closes.Load())
+	}
+}
+
+type sixelSchedulerTestJob struct {
+	started chan<- struct{}
+	release <-chan struct{}
+	active  *atomic.Int32
+	maximum *atomic.Int32
+	runs    atomic.Int32
+	closes  atomic.Int32
+}
+
+func (j *sixelSchedulerTestJob) Run(ctx context.Context) *sixel.DecodeResult {
+	j.runs.Add(1)
+	if j.active != nil {
+		active := j.active.Add(1)
+		updateAtomicMaximum(j.maximum, active)
+		defer j.active.Add(-1)
+	}
+	if j.started != nil {
+		j.started <- struct{}{}
+	}
+	if j.release != nil {
+		select {
+		case <-j.release:
+		case <-ctx.Done():
+			return &sixel.DecodeResult{Failure: sixel.FailureCancelled}
+		}
+	}
+	return &sixel.DecodeResult{Failure: sixel.FailureFailed}
+}
+
+func (j *sixelSchedulerTestJob) Close() { j.closes.Add(1) }
+
+func awaitImageSchedulerCompletion(t *testing.T, scheduler *imageDecodeScheduler) imageDecodeCompletion {
+	t.Helper()
+	select {
+	case <-scheduler.ready():
+		completion, ok := scheduler.takeCompletion()
+		if !ok {
+			t.Fatal("scheduler signaled without a completion")
+		}
+		return completion
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for image completion")
+		return imageDecodeCompletion{}
+	}
+}
+
+func TestSharedImageSchedulerUsesOnePaneKeyAcrossProtocols(t *testing.T) {
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	scheduler := newImageDecodeScheduler(nil)
+	defer scheduler.close()
+	kittyJob := &decodeSchedulerTestJob{started: started, release: release}
+	if err := scheduler.submitKitty(kittyDecodeWork{owner: kittyDecodeOwner{paneID: 7}, job: kittyJob}); err != nil {
+		t.Fatal(err)
+	}
+	awaitSchedulerSignals(t, started, 1)
+	sixelDuplicate := &sixelSchedulerTestJob{}
+	if err := scheduler.submitSixel(sixelDecodeWork{owner: sixelDecodeOwner{paneID: 7}, job: sixelDuplicate}); !errors.Is(err, errKittyDecodePaneActive) {
+		t.Fatalf("cross-protocol duplicate error=%v", err)
+	}
+	if sixelDuplicate.runs.Load() != 0 || sixelDuplicate.closes.Load() != 1 {
+		t.Fatalf("duplicate runs=%d closes=%d", sixelDuplicate.runs.Load(), sixelDuplicate.closes.Load())
+	}
+	close(release)
+	completion := awaitImageSchedulerCompletion(t, scheduler)
+	if completion.Owner.protocol != imageDecodeKitty {
+		t.Fatalf("protocol=%d", completion.Owner.protocol)
+	}
+	completion.Close()
+	scheduler.finish(completion.Key)
+
+	sixelJob := &sixelSchedulerTestJob{}
+	if err := scheduler.submitSixel(sixelDecodeWork{owner: sixelDecodeOwner{paneID: 7}, job: sixelJob}); err != nil {
+		t.Fatalf("pane key not released after Finish: %v", err)
+	}
+	completion = awaitImageSchedulerCompletion(t, scheduler)
+	if completion.Owner.protocol != imageDecodeSixel {
+		t.Fatalf("protocol=%d", completion.Owner.protocol)
+	}
+	completion.Close()
+	scheduler.finish(completion.Key)
+}
+
+func TestSharedImageSchedulerBoundsMixedProtocolConcurrency(t *testing.T) {
+	started := make(chan struct{}, 3)
+	release := make(chan struct{})
+	var active, maximum atomic.Int32
+	scheduler := newImageDecodeScheduler(nil)
+	defer scheduler.close()
+	kittyOne := &decodeSchedulerTestJob{started: started, release: release, active: &active, maximum: &maximum}
+	sixelTwo := &sixelSchedulerTestJob{started: started, release: release, active: &active, maximum: &maximum}
+	kittyThree := &decodeSchedulerTestJob{started: started, release: release, active: &active, maximum: &maximum}
+	if err := scheduler.submitKitty(kittyDecodeWork{owner: kittyDecodeOwner{paneID: 1}, job: kittyOne}); err != nil {
+		t.Fatal(err)
+	}
+	if err := scheduler.submitSixel(sixelDecodeWork{owner: sixelDecodeOwner{paneID: 2}, job: sixelTwo}); err != nil {
+		t.Fatal(err)
+	}
+	if err := scheduler.submitKitty(kittyDecodeWork{owner: kittyDecodeOwner{paneID: 3}, job: kittyThree}); err != nil {
+		t.Fatal(err)
+	}
+	awaitSchedulerSignals(t, started, imageDecodeWorkerCount)
+	select {
+	case <-started:
+		t.Fatal("mixed protocols exceeded the shared two-worker bound")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	for range 3 {
+		completion := awaitImageSchedulerCompletion(t, scheduler)
+		completion.Close()
+		scheduler.finish(completion.Key)
+	}
+	if maximum.Load() != int32(imageDecodeWorkerCount) {
+		t.Fatalf("maximum=%d want=%d", maximum.Load(), imageDecodeWorkerCount)
+	}
+	if kittyOne.runs.Load() != 1 || sixelTwo.runs.Load() != 1 || kittyThree.runs.Load() != 1 {
+		t.Fatalf("runs kitty1=%d sixel2=%d kitty3=%d", kittyOne.runs.Load(), sixelTwo.runs.Load(), kittyThree.runs.Load())
 	}
 }

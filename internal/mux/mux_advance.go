@@ -6,6 +6,7 @@ func (m *Mux) advancePane(p *pane, data []byte) []Event {
 	events := p.kittyEvents
 	p.kittyEvents = nil
 	events = append(events, m.processKittyOutcomes(p)...)
+	m.processSixelOutcomes(p)
 	events = append(events, p.flushReplies()...)
 	p.capture()
 	events = append(events,
