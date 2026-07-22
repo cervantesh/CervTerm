@@ -113,9 +113,9 @@ func TestPreeditRevisionDamagesOnlyOnMutation(t *testing.T) {
 	}
 }
 
-func TestImageGenerationIsIndependentGlobalDamageIdentity(t *testing.T) {
+func TestImageGenerationIsExcludedFromGlobalDamageIdentity(t *testing.T) {
 	app := &App{contentScaleX: 1, contentScaleY: 1}
-	app.snap = render.Snapshot{Cols: 4, Rows: 2, Cells: make([]core.Cell, 8), ImageGeneration: 1}
+	app.snap = render.Snapshot{Cols: 4, Rows: 2, Cells: make([]core.Cell, 8), ImageGeneration: 1, PaneObject: 1}
 	background := color.RGBA{A: 0xff}
 	record := func() bool {
 		full, _ := app.prepareDamage(320, 160, 0, false, false, background)
@@ -125,14 +125,14 @@ func TestImageGenerationIsIndependentGlobalDamageIdentity(t *testing.T) {
 	record()
 	record()
 	if record() {
-		t.Fatal("stable image generation pinned global damage")
+		t.Fatal("stable baseline remained globally damaged")
 	}
 	app.snap.ImageGeneration++
-	if !record() || !record() || record() {
-		t.Fatal("image generation must damage both back buffers without pinning redraw")
+	if record() {
+		t.Fatal("image-only change entered global text damage")
 	}
 	app.snap.PaneObject = 2
-	if !record() || !record() || record() {
-		t.Fatal("equal-generation pane switch did not damage both back buffers")
+	if record() {
+		t.Fatal("pane image identity entered global text damage")
 	}
 }
