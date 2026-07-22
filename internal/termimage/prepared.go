@@ -25,12 +25,20 @@ func (s *Store) PrepareCandidate(candidate *DecodedCandidate) (*PreparedStoreSta
 	if s != nil && s.owner.Load() != nil {
 		return nil, ResourceRef{}, ErrPreparedState
 	}
-	return s.prepareCandidate(candidate)
+	return s.prepareCandidateWithRetention(candidate, ResourceDurable)
 }
 
 func (s *Store) prepareCandidate(candidate *DecodedCandidate) (*PreparedStoreState, ResourceRef, error) {
+	return s.prepareCandidateWithRetention(candidate, ResourceDurable)
+}
+
+func (s *Store) prepareCandidateWithRetention(candidate *DecodedCandidate, retention ResourceRetention) (*PreparedStoreState, ResourceRef, error) {
 	if s == nil || s.closed.Load() || s.resetting.Load() || candidate == nil || !candidate.ValidFor(s) {
 		return nil, ResourceRef{}, ErrCandidateInvalid
+	}
+	if !retention.Valid() {
+		candidate.Close()
+		return nil, ResourceRef{}, ErrInvalidRetention
 	}
 	if s.prepared != nil {
 		return nil, ResourceRef{}, ErrPreparedState
@@ -45,7 +53,7 @@ func (s *Store) prepareCandidate(candidate *DecodedCandidate) (*PreparedStoreSta
 	if !ok {
 		return nil, ResourceRef{}, ErrCandidateInvalid
 	}
-	created := &resource{ref: ref, width: candidate.width, height: candidate.height, stride: candidate.stride, rgba: pixels, lease: lease}
+	created := &resource{ref: ref, width: candidate.width, height: candidate.height, stride: candidate.stride, rgba: pixels, lease: lease, retention: retention}
 	old := resources[candidate.image]
 	resources[candidate.image] = created
 	prepared := &PreparedStoreState{
