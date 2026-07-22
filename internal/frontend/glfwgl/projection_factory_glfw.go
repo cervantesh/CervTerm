@@ -104,6 +104,7 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 		}
 		return nil
 	}))
+	appendTerminalImageCacheResource(bundle, child)
 	child.ligaturesActive = atlas.supportsLigatures(child.cfg.Font.Ligatures)
 	child.cellW, child.cellH = float32(atlas.cellW), float32(atlas.cellH)
 	if initialGrid {

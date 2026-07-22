@@ -198,8 +198,13 @@ func (a *App) processTermEvents(_ bool) {
 }
 
 // redrawWanted reports whether visible state currently demands a presentation.
+// Cache retries request a frame only when a visible failed generation reaches
+// its fixed retry deadline; an empty/idle cache contributes no cadence.
 func (a *App) redrawWanted(now time.Time) bool {
 	if a.needsRedraw {
+		return true
+	}
+	if a.terminalImageCache.retryDue(now) {
 		return true
 	}
 	if a.blinkActive() && a.blinkPhaseAt(now) != a.lastBlinkPhase {
@@ -245,6 +250,12 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 		zoomWake := max(minWake, deadline.Sub(now))
 		if wake <= 0 || zoomWake < wake {
 			wake = zoomWake
+		}
+	}
+	if deadline, ok := a.terminalImageCache.nextRetryDeadline(); ok {
+		retryWake := max(minWake, deadline.Sub(now))
+		if wake <= 0 || retryWake < wake {
+			wake = retryWake
 		}
 	}
 	if a.divider.settlePending {
