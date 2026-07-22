@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"cervterm/internal/config"
 	"cervterm/internal/frontend/gpu"
 	termmux "cervterm/internal/mux"
 	"cervterm/internal/termimage"
@@ -25,6 +26,10 @@ func defaultTerminalImageCacheFactory(
 	return newTerminalImageCache(renderer, acquire, limits)
 }
 
+func imagesEnabled(graphics config.GraphicsConfig) bool {
+	return graphics.Kitty.Enabled || graphics.Sixel.Enabled || graphics.ITerm.Enabled
+}
+
 func (a *App) muxOptions() termmux.Options {
 	historyCapacity := a.cfg.Scrolling.History
 	hideCursorWhenScrolled := a.cfg.Scrolling.HideCursorWhenScrolled
@@ -38,7 +43,7 @@ func (a *App) muxOptions() termmux.Options {
 			}
 		},
 	}
-	if !a.cfg.Graphics.Kitty.Enabled {
+	if !imagesEnabled(a.cfg.Graphics) {
 		return options
 	}
 	limits := a.cfg.Graphics.Limits
@@ -48,7 +53,9 @@ func (a *App) muxOptions() termmux.Options {
 		Images:       limits.ImageCountPerPane,
 		Placements:   limits.PlacementCountPerPane,
 	}
-	options.KittyEnabled = true
+	options.KittyEnabled = a.cfg.Graphics.Kitty.Enabled
+	options.SixelEnabled = a.cfg.Graphics.Sixel.Enabled
+	options.ITermEnabled = a.cfg.Graphics.ITerm.Enabled
 	return options
 }
 
@@ -86,7 +93,7 @@ func (a *App) prepareTerminalImageCache() error {
 	if a == nil {
 		return errors.New("prepare terminal image cache: nil app")
 	}
-	if !a.cfg.Graphics.Kitty.Enabled {
+	if !imagesEnabled(a.cfg.Graphics) {
 		return nil
 	}
 	if a.terminalImageCache != nil {

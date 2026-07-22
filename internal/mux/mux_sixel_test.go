@@ -70,7 +70,7 @@ func TestSixelProgrammaticOptionAndAdapterIsolation(t *testing.T) {
 		wantKitty, wantSixel     bool
 	}{
 		{name: "no limits", kitty: true, sixel: true},
-		{name: "limits only", limits: &limits, wantStore: true},
+		{name: "limits only", limits: &limits},
 		{name: "kitty only", limits: &limits, kitty: true, wantScheduler: true, wantStore: true, wantKitty: true},
 		{name: "sixel only", limits: &limits, sixel: true, wantScheduler: true, wantStore: true, wantSixel: true},
 		{name: "both", limits: &limits, kitty: true, sixel: true, wantScheduler: true, wantStore: true, wantKitty: true, wantSixel: true},

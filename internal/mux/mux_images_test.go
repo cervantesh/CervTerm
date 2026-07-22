@@ -10,7 +10,7 @@ import (
 func newImageTestMux(t *testing.T) (*Mux, PaneID) {
 	t.Helper()
 	limits := termimage.DefaultLimits()
-	m := New(&fakeFactory{}, Options{IngressCapacity: 8, ImageLimits: &limits})
+	m := New(&fakeFactory{}, Options{IngressCapacity: 8, ImageLimits: &limits, KittyEnabled: true})
 	_, id, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16})
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func TestMuxShutdownReleasesSharedImageBudget(t *testing.T) {
 
 func TestMuxInvalidImageLimitsFailClosed(t *testing.T) {
 	invalid := termimage.Limits{}
-	m := New(&fakeFactory{}, Options{ImageLimits: &invalid})
+	m := New(&fakeFactory{}, Options{ImageLimits: &invalid, KittyEnabled: true})
 	if m.ImageSetupError() == nil || m.imageBudget != nil {
 		t.Fatal("invalid limits did not fail closed")
 	}
@@ -107,6 +107,62 @@ func TestMuxInvalidImageLimitsFailClosed(t *testing.T) {
 		t.Fatal("invalid limits enabled pane store")
 	}
 	_ = m.Shutdown()
+}
+
+func TestMuxAllDisabledIgnoresLimitsWithoutWakeOrImageAllocation(t *testing.T) {
+	invalid := termimage.Limits{}
+	wakes := make(chan struct{}, 1)
+	m := New(&fakeFactory{}, Options{ImageLimits: &invalid, Wake: func() {
+		select {
+		case wakes <- struct{}{}:
+		default:
+		}
+	}})
+	if m.options.ImageLimits != nil || m.ImageSetupError() != nil || m.imageBudget != nil || m.imageScheduler != nil ||
+		m.kittyPending != nil || m.sixelPending != nil || m.itermPending != nil || m.imageLimits != (termimage.Limits{}) {
+		t.Fatalf("all-disabled mux retained image state: options=%#v limits=%#v budget=%p scheduler=%p", m.options, m.imageLimits, m.imageBudget, m.imageScheduler)
+	}
+	_, id, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pane, _ := m.sessions.lookup(id)
+	if pane.imageStore != nil || pane.kittyAdapter != nil || pane.sixelAdapter != nil || pane.itermAdapter != nil {
+		t.Fatalf("all-disabled pane retained image state: %#v", pane)
+	}
+	if deadline, ok := m.NextImageDeadline(); ok || !deadline.IsZero() {
+		t.Fatalf("all-disabled deadline=%v ok=%v", deadline, ok)
+	}
+	if allocs := testing.AllocsPerRun(1000, func() {
+		if events := m.Drain(1); events != nil {
+			t.Fatalf("all-disabled drain events=%#v", events)
+		}
+	}); allocs != 0 {
+		t.Fatalf("all-disabled image idle allocated %.0f times", allocs)
+	}
+	if len(wakes) != 0 {
+		t.Fatalf("all-disabled image idle woke %d times", len(wakes))
+	}
+	_ = m.Shutdown()
+}
+
+func BenchmarkMuxAllDisabledImageIdle(b *testing.B) {
+	limits := termimage.DefaultLimits()
+	m := New(&fakeFactory{}, Options{ImageLimits: &limits})
+	if _, _, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16}); err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = m.Shutdown() })
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m.Drain(1)
+		m.NextImageDeadline()
+	}
+	b.StopTimer()
+	if m.options.ImageLimits != nil || m.imageBudget != nil || m.imageScheduler != nil {
+		b.Fatal("all-disabled benchmark activated images")
+	}
 }
 
 func TestMuxCrossWindowTransferPreservesImageStoreAndResource(t *testing.T) {
@@ -166,7 +222,7 @@ func TestMuxCrossWindowTabTransferPreservesEveryImageStoreAndResource(t *testing
 
 func TestMuxRestoreAbortClosesEveryDetachedPaneStore(t *testing.T) {
 	limits := termimage.DefaultLimits()
-	m := New(&restoreTestFactory{}, Options{IngressCapacity: 64, ImageLimits: &limits})
+	m := New(&restoreTestFactory{}, Options{IngressCapacity: 64, ImageLimits: &limits, KittyEnabled: true})
 	candidate, err := m.PrepareRestore(blueprintFromSnapshot(t, restoreSnapshot()), restoreGeometries())
 	if err != nil {
 		t.Fatal(err)

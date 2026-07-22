@@ -55,12 +55,13 @@ func TestDefaultLuaDocumentsTypedAndCallbackActions(t *testing.T) {
 	}
 }
 
-func TestDefaultLuaDocumentsDormantSixelAndITermFlags(t *testing.T) {
+func TestDefaultLuaDocumentsExperimentalSixelAndITermFlags(t *testing.T) {
 	template := DefaultLua()
 	for _, fragment := range []string{
 		"sixel = {",
 		"iterm = {",
-		"Dormant Phase 14 intent only; frontend activation is not wired yet.",
+		"Experimental bounded inline Sixel subset; default off and restart required.",
+		"Experimental bounded inline iTerm subset; default off and restart required.",
 	} {
 		if !strings.Contains(template, fragment) {
 			t.Fatalf("default Lua template missing %q", fragment)
@@ -75,6 +76,6 @@ func TestDefaultLuaDocumentsDormantSixelAndITermFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.Graphics.Sixel.Enabled || cfg.Graphics.ITerm.Enabled {
-		t.Fatalf("template enabled dormant graphics: %#v", cfg.Graphics)
+		t.Fatalf("template enabled default-off graphics: %#v", cfg.Graphics)
 	}
 }

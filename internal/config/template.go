@@ -185,11 +185,11 @@ return {
 			enabled = %t,
 		},
 		sixel = {
-			-- Dormant Phase 14 intent only; frontend activation is not wired yet.
+			-- Experimental bounded inline Sixel subset; default off and restart required.
 			enabled = %t,
 		},
 		iterm = {
-			-- Dormant Phase 14 intent only; frontend activation is not wired yet.
+			-- Experimental bounded inline iTerm subset; default off and restart required.
 			enabled = %t,
 		},
 		limits = {

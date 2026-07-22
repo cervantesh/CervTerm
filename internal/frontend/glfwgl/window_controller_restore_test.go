@@ -8,6 +8,7 @@ import (
 	"io"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -118,6 +119,9 @@ func TestWindowControllerRestoreBindFailureRollsBackWholeBatch(t *testing.T) {
 	}
 	if err := controller.publishRestoreProjections(candidate, []termmux.WindowID{2, 3, 4}); err == nil {
 		t.Fatal("bind failure accepted")
+	}
+	if err := controller.abortRestoreProjections(candidate, nil); err != nil {
+		t.Fatal(err)
 	}
 	assertRestoreProjectionPristine(t, controller, factory.hosts)
 	if len(factory.bindings) != 0 {
@@ -313,6 +317,20 @@ func TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam(t *testing
 			}
 			if tc.name != "prepare" && windows.aborts != 1 {
 				t.Fatalf("aborts=%d log=%v", windows.aborts, log)
+			}
+			if tc.name != "prepare" {
+				abortIndex, nativeCleanupIndex := -1, -1
+				for index, entry := range log {
+					if entry == "mux-abort" {
+						abortIndex = index
+					}
+					if nativeCleanupIndex < 0 && (strings.HasPrefix(entry, "unbind:") || strings.HasPrefix(entry, "current:")) {
+						nativeCleanupIndex = index
+					}
+				}
+				if abortIndex < 0 || nativeCleanupIndex < 0 || abortIndex > nativeCleanupIndex {
+					t.Fatalf("rollback was not reverse-acquisition order: %v", log)
+				}
 			}
 		})
 	}
