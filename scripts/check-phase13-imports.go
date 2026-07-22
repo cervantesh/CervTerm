@@ -19,6 +19,10 @@ var termImageForbidden = []string{
 	"cervterm/internal/frontend",
 }
 
+var kittyForbidden = append(append([]string{}, termImageForbidden...),
+	"cervterm/internal/config", "cervterm/internal/vt",
+)
+
 func main() {
 	root, err := repositoryRoot()
 	if err != nil {
@@ -46,6 +50,7 @@ func main() {
 			}
 			rel = filepath.ToSlash(rel)
 			inTermImage := strings.HasPrefix(rel, "internal/termimage/")
+			inKitty := strings.HasPrefix(rel, "internal/kitty/")
 			inFrontend := strings.HasPrefix(rel, "internal/frontend/")
 			for _, spec := range file.Imports {
 				importPath, unquoteErr := strconv.Unquote(spec.Path.Value)
@@ -54,6 +59,9 @@ func main() {
 				}
 				if inTermImage && hasForbiddenPrefix(importPath, termImageForbidden) {
 					violations = append(violations, fmt.Sprintf("%s imports forbidden termimage dependency %q", rel, importPath))
+				}
+				if inKitty && hasForbiddenPrefix(importPath, kittyForbidden) {
+					violations = append(violations, fmt.Sprintf("%s imports forbidden kitty dependency %q", rel, importPath))
 				}
 				if !inFrontend && (importPath == "github.com/go-gl/gl" || strings.HasPrefix(importPath, "github.com/go-gl/gl/") || importPath == "github.com/go-gl/glfw" || strings.HasPrefix(importPath, "github.com/go-gl/glfw/")) {
 					violations = append(violations, fmt.Sprintf("%s imports frontend-only dependency %q", rel, importPath))
