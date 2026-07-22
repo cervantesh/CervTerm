@@ -188,3 +188,168 @@ func TestKittyRuntimeResetRejectsStaleCompletionAndReleasesCandidate(t *testing.
 		t.Fatalf("usage=%#v", m.imageBudget.Usage())
 	}
 }
+
+func seedKittyAnchorHistory(t *testing.T, p *pane) {
+	t.Helper()
+	for range p.terminal.Rows() + 2 {
+		p.terminal.PutRune('x')
+		p.terminal.CarriageReturn()
+		p.terminal.NewLine()
+	}
+	if p.terminal.ScrollbackLines() == 0 {
+		t.Fatal("setup did not create scrollback")
+	}
+}
+
+func TestKittyAsyncPlacementCapturesCanonicalAnchorBeforeLaterPTYMovement(t *testing.T) {
+	m, _, wakes := newKittyRuntimeMux(t, true)
+	p, _ := m.sessions.lookup(1)
+	seedKittyAnchorHistory(t, p)
+	p.terminal.SetCursor(1, 2)
+	want := p.terminal.ImageCursorAnchor()
+	m.advancePane(p, []byte("\x1b_Ga=T,i=1,p=1,c=1,r=1,s=1,v=1;AQIDBA==\x1b\\\x1b[1;1H"))
+	if len(m.kittyPending) != 1 {
+		t.Fatalf("pending=%d", len(m.kittyPending))
+	}
+	for _, owner := range m.kittyPending {
+		if owner.anchorRow != want.Row || owner.anchorCol != want.Col {
+			t.Fatalf("captured=(%d,%d) want=%#v", owner.anchorRow, owner.anchorCol, want)
+		}
+	}
+	if p.terminal.CursorRow() != 0 || p.terminal.CursorCol() != 0 {
+		t.Fatalf("later PTY cursor movement was not applied: (%d,%d)", p.terminal.CursorRow(), p.terminal.CursorCol())
+	}
+	select {
+	case <-wakes:
+	case <-time.After(2 * time.Second):
+		t.Fatal("decode did not wake owner")
+	}
+	_ = m.Drain(16)
+	viewportTop := p.terminal.ScrollbackLines()
+	projection := p.terminal.ImageProjection(viewportTop, p.terminal.Rows())
+	if len(projection.Placements) != 1 || projection.Placements[0].ID != 1 || projection.Placements[0].Anchor.Row != want.Row-int64(viewportTop) || projection.Placements[0].Anchor.Col != want.Col {
+		t.Fatalf("projection=%#v want=%#v viewportTop=%d", projection, want, viewportTop)
+	}
+	if usage := p.imageStore.Usage(); usage.Images != 1 || usage.Placements != 1 {
+		t.Fatalf("usage=%#v", usage)
+	}
+	if p.terminal.CursorRow() != 0 || p.terminal.CursorCol() != 0 {
+		t.Fatal("image completion moved the later cursor")
+	}
+}
+
+func TestKittySynchronousPlaceUsesCanonicalPrimaryAndAlternateAnchors(t *testing.T) {
+	m, _, wakes := newKittyRuntimeMux(t, true)
+	p, _ := m.sessions.lookup(1)
+	m.advancePane(p, []byte("\x1b_Ga=t,i=1,s=1,v=1;AQIDBA==\x1b\\"))
+	select {
+	case <-wakes:
+	case <-time.After(2 * time.Second):
+		t.Fatal("decode did not wake owner")
+	}
+	_ = m.Drain(16)
+	seedKittyAnchorHistory(t, p)
+	p.terminal.SetCursor(1, 2)
+	m.advancePane(p, []byte("\x1b_Ga=p,i=1,p=2,c=1,r=1;\x1b\\"))
+	viewportTop := p.terminal.ScrollbackLines()
+	primary := p.terminal.ImageProjection(viewportTop, p.terminal.Rows())
+	if len(primary.Placements) != 1 || primary.Placements[0].ID != 2 || primary.Placements[0].Anchor.Row != 1 || primary.Placements[0].Anchor.Col != 2 {
+		t.Fatalf("primary projection=%#v viewportTop=%d", primary, viewportTop)
+	}
+
+	p.terminal.SetAlternateScreenMode(true)
+	p.terminal.SetCursor(1, 3)
+	m.advancePane(p, []byte("\x1b_Ga=p,i=1,p=3,c=1,r=1;\x1b\\"))
+	alternate := p.terminal.ImageProjection(99, p.terminal.Rows())
+	if len(alternate.Placements) != 1 || alternate.Placements[0].ID != 3 || alternate.Placements[0].Anchor.Row != 1 || alternate.Placements[0].Anchor.Col != 3 {
+		t.Fatalf("alternate projection=%#v", alternate)
+	}
+	if usage := p.imageStore.Usage(); usage.Images != 1 || usage.Placements != 2 {
+		t.Fatalf("usage=%#v", usage)
+	}
+}
+
+func TestKittyAsyncPlacementRejectsCapturedAnchorAfterReflow(t *testing.T) {
+	m, _, wakes := newKittyRuntimeMux(t, true)
+	p, _ := m.sessions.lookup(1)
+	p.terminal.SetCursor(1, 2)
+	m.advancePane(p, []byte("\x1b_Ga=T,i=1,p=1,c=1,r=1,s=1,v=1;AQIDBA==\x1b\\"))
+	if len(m.kittyPending) != 1 {
+		t.Fatalf("pending=%d", len(m.kittyPending))
+	}
+	if _, err := m.ResizeGrid(PixelRect{Width: 400, Height: 240}, CellMetrics{CellWidth: 8, CellHeight: 16}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-wakes:
+	case <-time.After(2 * time.Second):
+		t.Fatal("decode did not wake owner")
+	}
+	_ = m.Drain(16)
+	if _, ok := p.imageStore.ResourceRef(1); ok || len(p.terminal.ImageProjection(p.terminal.ScrollbackLines(), p.terminal.Rows()).Placements) != 0 {
+		t.Fatal("completion published a stale pre-reflow anchor")
+	}
+	if usage := p.imageStore.Usage(); usage != (termimage.Usage{}) {
+		t.Fatalf("usage=%#v", usage)
+	}
+}
+
+func TestKittyAsyncPlacementRejectsCoordinateMutationAfterTerminator(t *testing.T) {
+	tests := []struct {
+		name   string
+		setup  func(*pane)
+		suffix string
+		verify func(*testing.T, *pane)
+	}{
+		{
+			name: "history ring eviction",
+			setup: func(p *pane) {
+				seedKittyAnchorHistory(t, p)
+				p.terminal.SetScrollbackCapacity(1)
+				p.terminal.SetCursor(p.terminal.Rows()-1, 2)
+			},
+			suffix: "\n",
+		},
+		{
+			name: "alternate screen entry",
+			setup: func(p *pane) {
+				p.terminal.SetCursor(1, 2)
+			},
+			suffix: "\x1b[?1049h",
+			verify: func(t *testing.T, p *pane) {
+				t.Helper()
+				if !p.terminal.AlternateScreenMode() {
+					t.Fatal("alternate screen suffix was not applied")
+				}
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m, _, wakes := newKittyRuntimeMux(t, true)
+			p, _ := m.sessions.lookup(1)
+			test.setup(p)
+			before := p.terminal.ImageAnchorGeneration()
+			input := []byte("\x1b_Ga=T,i=1,p=1,c=1,r=1,s=1,v=1;AQIDBA==\x1b\\" + test.suffix)
+			m.advancePane(p, input)
+			if test.verify != nil {
+				test.verify(t, p)
+			}
+			if got := p.terminal.ImageAnchorGeneration(); got == before {
+				t.Fatal("coordinate mutation did not invalidate captured anchor")
+			}
+			select {
+			case <-wakes:
+			case <-time.After(2 * time.Second):
+				t.Fatal("decode did not wake owner")
+			}
+			_ = m.Drain(16)
+			if _, ok := p.imageStore.ResourceRef(1); ok {
+				t.Fatal("completion published after coordinate mutation")
+			}
+			if usage := p.imageStore.Usage(); usage != (termimage.Usage{}) {
+				t.Fatalf("usage=%#v", usage)
+			}
+		})
+	}
+}
