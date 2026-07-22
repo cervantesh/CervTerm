@@ -23,6 +23,31 @@ type ImageCommitResult struct {
 	Placement *termimage.PlacementID
 }
 
+// ImageCursorAnchor returns the cell-space anchor for an image placed at the
+// current cursor. Primary-screen rows include retained scrollback; alternate
+// rows are top-relative. Owner-thread callers capture the returned value before
+// asynchronous work so later cursor or screen changes cannot rewrite intent.
+func (t *Terminal) ImageCursorAnchor() termimage.CellAnchor {
+	if t == nil {
+		return termimage.CellAnchor{}
+	}
+	row := t.cursorRow
+	if !t.alternateScreen {
+		row += t.scrollbackRows
+	}
+	return termimage.CellAnchor{Row: int64(row), Col: uint32(t.cursorCol)}
+}
+
+// ImageAnchorGeneration changes whenever terminal content or screen lifecycle
+// could rebase, erase, or reroute an anchor captured before asynchronous decode.
+// Cursor-only movement intentionally does not change it.
+func (t *Terminal) ImageAnchorGeneration() uint64 {
+	if t == nil {
+		return 0
+	}
+	return t.imageAnchorGeneration
+}
+
 // AttachImageStore installs the pane-owned store. Terminal mutations are owner-thread only.
 func (t *Terminal) AttachImageStore(store *termimage.Store) error {
 	if t == nil || store == nil || store.Closed() {
