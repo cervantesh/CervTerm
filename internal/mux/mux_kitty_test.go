@@ -3,7 +3,9 @@ package mux
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -65,7 +67,7 @@ func TestKittyRuntimeDisabledInstallsNoSinkOrScheduler(t *testing.T) {
 	m, session, _ := newKittyRuntimeMux(t, false)
 	pane, _ := m.sessions.lookup(1)
 	m.advancePane(pane, []byte("\x1b_Ga=t,i=1,s=1,v=1;AQIDBA==\x1b\\"))
-	if m.kittyScheduler != nil || pane.kittyAdapter != nil || len(session.written()) != 0 {
+	if m.imageScheduler != nil || pane.kittyAdapter != nil || len(session.written()) != 0 {
 		t.Fatal("disabled runtime allocated or replied")
 	}
 }
@@ -179,7 +181,7 @@ func TestKittyRuntimeResetRejectsStaleCompletionAndReleasesCandidate(t *testing.
 	m.kittyPending[77] = owner
 	p.terminal.ResetImages()
 	p.capture()
-	_ = m.applyKittyCompletion(kittyDecodeCompletion{owner: owner, result: result})
+	_ = m.applyKittyCompletion(kittyDecodeCompletion{Owner: owner, Result: result, FinishedAt: owner.acceptUntil.Add(-time.Nanosecond)})
 	want := out.Reply.Encode(kitty.ReplyCancelled)
 	if got := session.written(); !bytes.Equal(got, want) {
 		t.Fatalf("wire=%q want=%q", got, want)
@@ -351,5 +353,184 @@ func TestKittyAsyncPlacementRejectsCoordinateMutationAfterTerminator(t *testing.
 				t.Fatalf("usage=%#v", usage)
 			}
 		})
+	}
+}
+
+func TestKittyRuntimeUsesWorkerCompletionBoundary(t *testing.T) {
+	deadlineNanos := int64(termimage.HardAcceptanceDeadline)
+	for _, test := range []struct {
+		name     string
+		finished int64
+		want     kitty.ReplyCode
+	}{
+		{"before", deadlineNanos - 1, kitty.ReplyFailed},
+		{"equal", deadlineNanos, kitty.ReplyTimeout},
+		{"after", deadlineNanos + 1, kitty.ReplyTimeout},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			limits := termimage.DefaultLimits()
+			factory := &fakeFactory{}
+			var nanos atomic.Int64
+			wakes := make(chan struct{}, 1)
+			m := New(factory, Options{IngressCapacity: 8, ImageLimits: &limits, KittyEnabled: true, Now: func() time.Time { return time.Unix(0, nanos.Load()) }, Wake: func() { wakes <- struct{}{} }})
+			_, _, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer m.Shutdown()
+			p, _ := m.sessions.lookup(1)
+			slot, ok := p.reserveImageReply()
+			if !ok {
+				t.Fatal("reserve")
+			}
+			owner := kittyDecodeOwner{paneID: 1, pane: p, token: 1, replySlot: slot, hasSlot: true, acceptUntil: time.Unix(0, deadlineNanos)}
+			started := make(chan struct{}, 1)
+			release := make(chan struct{})
+			job := &decodeSchedulerTestJob{started: started, release: release}
+			if err = m.imageScheduler.submitKitty(kittyDecodeWork{owner: owner, job: job}); err != nil {
+				t.Fatal(err)
+			}
+			m.kittyPending[1] = owner
+			awaitSchedulerSignals(t, started, 1)
+			nanos.Store(test.finished)
+			close(release)
+			awaitSchedulerSignals(t, wakes, 1)
+			if test.finished < deadlineNanos {
+				nanos.Store(deadlineNanos)
+			}
+			_ = m.Drain(8)
+			want := owner.plan.Encode(test.want)
+			if got := factory.sessions[0].written(); !bytes.Equal(got, want) {
+				t.Fatalf("wire=%q want=%q", got, want)
+			}
+			if len(m.kittyPending) != 0 {
+				t.Fatal("pending owner survived drain")
+			}
+		})
+	}
+}
+
+type transferHoldingDecodeJob struct {
+	transfer *termimage.CandidateTransfer
+	started  chan<- struct{}
+	release  <-chan struct{}
+}
+
+func (j *transferHoldingDecodeJob) Run(ctx context.Context) *kitty.DecodeResult {
+	if j.started != nil {
+		j.started <- struct{}{}
+	}
+	select {
+	case <-j.release:
+	case <-ctx.Done():
+	}
+	j.transfer.Close()
+	return &kitty.DecodeResult{Failure: kitty.ReplyCancelled}
+}
+
+func (j *transferHoldingDecodeJob) Close() {
+	if j != nil && j.transfer != nil {
+		j.transfer.Close()
+	}
+}
+
+func TestKittyExpiryRetainsPaneActivityUntilWorkerReturnAndCleanup(t *testing.T) {
+	limits := termimage.DefaultLimits()
+	var nanos atomic.Int64
+	m := New(&fakeFactory{}, Options{IngressCapacity: 8, ImageLimits: &limits, KittyEnabled: true, Now: func() time.Time { return time.Unix(0, nanos.Load()) }})
+	_, _, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Shutdown()
+	p, _ := m.sessions.lookup(1)
+	owner := kittyDecodeOwner{paneID: 1, pane: p, token: 1, acceptUntil: time.Unix(0, int64(termimage.HardAcceptanceDeadline))}
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	transfer, err := p.imageStore.BeginTransfer(termimage.Header{Transfer: 1, Image: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := &transferHoldingDecodeJob{transfer: transfer, started: started, release: release}
+	if err = m.imageScheduler.submitKitty(kittyDecodeWork{owner: owner, job: job}); err != nil {
+		t.Fatal(err)
+	}
+	m.kittyPending[1] = owner
+	awaitSchedulerSignals(t, started, 1)
+	nanos.Store(int64(termimage.HardAcceptanceDeadline))
+	_ = m.expireKitty(time.Unix(0, nanos.Load()))
+	if usage := p.imageStore.Usage(); usage.PendingTransfers != 1 {
+		t.Fatalf("expiry released running transfer: %#v", usage)
+	}
+	duplicate := &decodeSchedulerTestJob{}
+	if err = m.imageScheduler.submitKitty(kittyDecodeWork{owner: kittyDecodeOwner{paneID: 1}, job: duplicate}); !errors.Is(err, errKittyDecodePaneActive) || duplicate.closes.Load() != 1 {
+		t.Fatalf("duplicate err=%v closes=%d", err, duplicate.closes.Load())
+	}
+	close(release)
+	completion := awaitSchedulerCompletion(t, m.imageScheduler)
+	_ = m.applyKittyCompletion(completion)
+	m.imageScheduler.finish(completion.Owner.paneID)
+	if usage := p.imageStore.Usage(); usage.PendingTransfers != 0 {
+		t.Fatalf("worker cleanup leaked transfer: %#v", usage)
+	}
+	accepted := &decodeSchedulerTestJob{}
+	if err = m.imageScheduler.submitKitty(kittyDecodeWork{owner: kittyDecodeOwner{paneID: 1}, job: accepted}); err != nil {
+		t.Fatalf("pane not released after cleanup: %v", err)
+	}
+}
+
+func TestKittyRuntimeTypedNilCompletionCancelsWithoutPanic(t *testing.T) {
+	m, session, _ := newKittyRuntimeMux(t, true)
+	p, _ := m.sessions.lookup(1)
+	slot, ok := p.reserveImageReply()
+	if !ok {
+		t.Fatal("reserve")
+	}
+	owner := kittyDecodeOwner{paneID: 1, pane: p, token: 99, replySlot: slot, hasSlot: true, acceptUntil: time.Now().Add(time.Second)}
+	m.kittyPending[99] = owner
+	_ = m.applyKittyCompletion(kittyDecodeCompletion{Owner: owner, FinishedAt: owner.acceptUntil.Add(-time.Nanosecond)})
+	if got, want := session.written(), owner.plan.Encode(kitty.ReplyCancelled); !bytes.Equal(got, want) {
+		t.Fatalf("wire=%q want=%q", got, want)
+	}
+}
+
+func TestKittyRuntimeQueuedLateCandidateCannotPublish(t *testing.T) {
+	limits := termimage.DefaultLimits()
+	factory := &fakeFactory{}
+	var nanos atomic.Int64
+	wakes := make(chan struct{}, 8)
+	m := New(factory, Options{IngressCapacity: 8, ImageLimits: &limits, KittyEnabled: true, Now: func() time.Time { return time.Unix(0, nanos.Load()) }, Wake: func() { wakes <- struct{}{} }})
+	_, _, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Shutdown()
+	started := make(chan struct{}, kittyDecodeWorkerCount)
+	release := make(chan struct{})
+	for index := 0; index < kittyDecodeWorkerCount; index++ {
+		owner := kittyDecodeOwner{paneID: PaneID(index + 100)}
+		if err = m.imageScheduler.submitKitty(kittyDecodeWork{owner: owner, job: &decodeSchedulerTestJob{started: started, release: release}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	awaitSchedulerSignals(t, started, kittyDecodeWorkerCount)
+	p, _ := m.sessions.lookup(1)
+	m.advancePane(p, []byte("\x1b_Ga=t,i=1,s=1,v=1;AQIDBA==\x1b\\"))
+	if len(m.kittyPending) != 1 || p.imageStore.Usage().PendingTransfers != 1 {
+		t.Fatalf("queued decode ownership pending=%d usage=%#v", len(m.kittyPending), p.imageStore.Usage())
+	}
+	nanos.Store(int64(termimage.HardAcceptanceDeadline) + 1)
+	close(release)
+	awaitSchedulerSignals(t, wakes, kittyDecodeWorkerCount+1)
+	_ = m.Drain(16)
+	if _, ok := p.imageStore.ResourceRef(1); ok {
+		t.Fatal("late candidate published")
+	}
+	if usage := p.imageStore.Usage(); usage != (termimage.Usage{}) {
+		t.Fatalf("late candidate ownership leaked: %#v", usage)
+	}
+	want := (kitty.ReplyPlan{}).Encode(kitty.ReplyTimeout)
+	if got := factory.sessions[0].written(); !bytes.Equal(got, want) {
+		t.Fatalf("wire=%q want=%q", got, want)
 	}
 }

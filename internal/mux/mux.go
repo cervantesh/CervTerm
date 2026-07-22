@@ -20,7 +20,8 @@ type Options struct {
 	HideCursorWhenScrolled *bool
 	ImageLimits            *termimage.Limits
 	KittyEnabled           bool
-	Now                    func() time.Time
+	// Now may be called by decode workers and must be safe for concurrent use.
+	Now func() time.Time
 }
 
 type PaneView struct {
@@ -47,7 +48,7 @@ type Mux struct {
 	imageBudget    *termimage.ProcessBudget
 	imageLimits    termimage.Limits
 	imageSetupErr  error
-	kittyScheduler *kittyDecodeScheduler
+	imageScheduler *imageDecodeScheduler
 	kittyPending   map[uint64]kittyDecodeOwner
 	kittyNextToken uint64
 	bootstrapped   bool
@@ -81,7 +82,7 @@ func New(factory SessionFactory, options Options) *Mux {
 			mux.imageLimits = limits
 			mux.imageBudget = termimage.NewProcessBudget()
 			if options.KittyEnabled {
-				mux.kittyScheduler = newKittyDecodeScheduler(options.Wake)
+				mux.imageScheduler = newImageDecodeScheduler(options.Wake, options.Now)
 				mux.kittyPending = make(map[uint64]kittyDecodeOwner)
 			}
 		}
@@ -358,13 +359,17 @@ func (m *Mux) Drain(limit int) []Event {
 	var events []Event
 	events = append(events, m.expireKitty(m.options.Now())...)
 	for count := 0; limit <= 0 || count < limit; count++ {
-		var kittyCompletions <-chan kittyDecodeCompletion
-		if m.kittyScheduler != nil {
-			kittyCompletions = m.kittyScheduler.completions()
+		var imageReady <-chan struct{}
+		if m.imageScheduler != nil {
+			imageReady = m.imageScheduler.ready()
 		}
 		select {
-		case completion := <-kittyCompletions:
-			events = append(events, m.applyKittyCompletion(completion)...)
+		case <-imageReady:
+			completion, ok := m.imageScheduler.takeCompletion()
+			if !ok {
+				continue
+			}
+			events = append(events, m.applyImageCompletion(completion)...)
 		case record := <-m.sessions.incoming:
 			p, ok := m.sessions.lookup(record.pane)
 			if !ok || p != record.owner || p.state == PaneStateClosed || p.state == PaneStateClosing {
@@ -455,9 +460,9 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 }
 
 func (m *Mux) Shutdown() error {
-	if m.kittyScheduler != nil {
-		m.kittyScheduler.close()
-		m.kittyScheduler = nil
+	if m.imageScheduler != nil {
+		m.imageScheduler.close()
+		m.imageScheduler = nil
 	}
 	return m.sessions.shutdownRegistry()
 }

@@ -27,21 +27,21 @@ func NewDecodeJob(store *termimage.Store, command Command) (*DecodeJob, ReplyCod
 	}
 	return &DecodeJob{store: store, command: command}, ReplyNone
 }
-func (j *DecodeJob) Run(ctx context.Context) DecodeResult {
+func (j *DecodeJob) Run(ctx context.Context) *DecodeResult {
 	if j == nil || !j.state.CompareAndSwap(0, 1) {
-		return DecodeResult{Failure: ReplyCancelled}
+		return &DecodeResult{Failure: ReplyCancelled}
 	}
 	transfer := j.command.Transfer
 	j.command.Transfer = nil
 	payload, err := transfer.TakeSealedPayload(j.store)
 	if err != nil {
 		transfer.Close()
-		return DecodeResult{Failure: ReplyCancelled}
+		return &DecodeResult{Failure: ReplyCancelled}
 	}
 	defer payload.Close()
 	header, epoch := payload.Header(), payload.Epoch()
 	if err = ctx.Err(); err != nil {
-		return DecodeResult{Failure: ReplyCancelled}
+		return &DecodeResult{Failure: ReplyCancelled}
 	}
 	var candidate *termimage.DecodedCandidate
 	if j.command.Decode.Format == FormatPNG {
@@ -50,13 +50,13 @@ func (j *DecodeJob) Run(ctx context.Context) DecodeResult {
 		candidate, err = decodeRaw(ctx, j.store, header.Image, j.command.Decode, payload)
 	}
 	if err != nil {
-		return DecodeResult{Failure: decodeFailure(err)}
+		return &DecodeResult{Failure: decodeFailure(err)}
 	}
 	if candidate.Epoch() != epoch || !candidate.ValidFor(j.store) || !candidate.WritesSealed() {
 		candidate.Close()
-		return DecodeResult{Failure: ReplyCancelled}
+		return &DecodeResult{Failure: ReplyCancelled}
 	}
-	return DecodeResult{Candidate: candidate}
+	return &DecodeResult{Candidate: candidate}
 }
 func (j *DecodeJob) Close() {
 	if j == nil || !j.state.CompareAndSwap(0, 2) {

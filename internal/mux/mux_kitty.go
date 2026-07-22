@@ -84,7 +84,7 @@ func (m *Mux) submitKittyDecode(p *pane, outcome kitty.Outcome) {
 	anchor := p.terminal.ImageCursorAnchor()
 	owner := kittyDecodeOwner{paneID: p.id, pane: p, generation: p.snapshot.ImageGeneration, reflowGen: p.reflowGen, anchorGen: p.terminal.ImageAnchorGeneration(), token: m.kittyNextToken, replySlot: slot, hasSlot: hasSlot, plan: outcome.Reply, command: ownerCommand, acceptUntil: m.options.Now().Add(termimage.HardAcceptanceDeadline), anchorRow: anchor.Row, anchorCol: anchor.Col}
 	work := kittyDecodeWork{owner: owner, job: job}
-	if err := m.kittyScheduler.submit(work); err != nil {
+	if err := m.imageScheduler.submitKitty(work); err != nil {
 		if hasSlot {
 			p.completeImageReply(slot, outcome.Reply.Encode(kitty.ReplyLimit))
 		}
@@ -93,23 +93,39 @@ func (m *Mux) submitKittyDecode(p *pane, outcome kitty.Outcome) {
 	m.kittyPending[owner.token] = owner
 }
 
+func (m *Mux) applyImageCompletion(completion imageDecodeCompletion) []Event {
+	defer m.imageScheduler.finish(completion.Key)
+	kittyCompletion, ok := decodeKittyCompletion(completion)
+	if !ok {
+		completion.Close()
+		return nil
+	}
+	return m.applyKittyCompletion(kittyCompletion)
+}
+
 func (m *Mux) applyKittyCompletion(completion kittyDecodeCompletion) []Event {
-	owner := completion.owner
-	defer m.kittyScheduler.finish(owner)
-	result := completion.result
+	owner := completion.Owner
+	result := completion.Result
 	pendingOwner, pending := m.kittyPending[owner.token]
 	if !pending || pendingOwner.pane != owner.pane {
-		result.Close()
+		if result != nil {
+			result.Close()
+		}
 		return nil
 	}
 	delete(m.kittyPending, owner.token)
 	p, ok := m.sessions.lookup(owner.paneID)
 	if !ok || p != owner.pane || m.model.tabForPane(owner.paneID) == nil {
-		result.Close()
+		if result != nil {
+			result.Close()
+		}
 		return nil
 	}
-	code := result.Failure
-	if code == kitty.ReplyNone && (m.options.Now().After(owner.acceptUntil) || p.snapshot.ImageGeneration != owner.generation || p.reflowGen != owner.reflowGen || p.terminal.ImageAnchorGeneration() != owner.anchorGen || result.Candidate == nil || !result.Candidate.ValidFor(p.imageStore)) {
+	code := kitty.ReplyCancelled
+	if result != nil {
+		code = result.Failure
+	}
+	if code == kitty.ReplyNone && (!completion.FinishedAt.Before(owner.acceptUntil) || p.snapshot.ImageGeneration != owner.generation || p.reflowGen != owner.reflowGen || p.terminal.ImageAnchorGeneration() != owner.anchorGen || result.Candidate == nil || !result.Candidate.ValidFor(p.imageStore)) {
 		result.Close()
 		code = kitty.ReplyCancelled
 	}
@@ -137,7 +153,7 @@ func (m *Mux) applyKittyCompletion(completion kittyDecodeCompletion) []Event {
 			code = kitty.ReplyUnsupported
 		}
 	}
-	if result.Candidate != nil {
+	if result != nil && result.Candidate != nil {
 		result.Close()
 	}
 	if owner.hasSlot {
@@ -150,7 +166,7 @@ func (m *Mux) applyKittyCompletion(completion kittyDecodeCompletion) []Event {
 }
 
 func (m *Mux) NextImageDeadline() (time.Time, bool) {
-	if m == nil || m.kittyScheduler == nil {
+	if m == nil || m.imageScheduler == nil {
 		return time.Time{}, false
 	}
 	m.sessions.mu.Lock()
@@ -174,7 +190,7 @@ func (m *Mux) NextImageDeadline() (time.Time, bool) {
 }
 
 func (m *Mux) expireKitty(now time.Time) []Event {
-	if m == nil || m.kittyScheduler == nil {
+	if m == nil || m.imageScheduler == nil {
 		return nil
 	}
 	m.sessions.mu.Lock()
@@ -196,6 +212,9 @@ func (m *Mux) expireKitty(now time.Time) []Event {
 	}
 	for token, owner := range m.kittyPending {
 		if now.Before(owner.acceptUntil) {
+			continue
+		}
+		if finishedAt, completed := m.imageScheduler.completionTime(owner.paneID); completed && finishedAt.Before(owner.acceptUntil) {
 			continue
 		}
 		delete(m.kittyPending, token)
