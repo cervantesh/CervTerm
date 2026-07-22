@@ -65,6 +65,7 @@ type App struct {
 	windowID                  termmux.WindowID
 	controller                *windowController
 	r                         gpu.Renderer
+	terminalImageCache        *terminalImageCache
 	backgroundSurface         gpu.BackgroundSurface
 	backgroundSurfaceWidth    int
 	backgroundSurfaceHeight   int
