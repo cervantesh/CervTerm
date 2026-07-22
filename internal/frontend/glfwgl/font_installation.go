@@ -12,7 +12,6 @@ import (
 	"cervterm/internal/fontdesc"
 	"cervterm/internal/fontglyph"
 	"cervterm/internal/frontend/gpu"
-	termmux "cervterm/internal/mux"
 	"cervterm/internal/script"
 )
 
@@ -54,22 +53,6 @@ func RunWithOptions(cfg config.Config, rt *script.Runtime) error {
 
 func RunWithSource(cfg config.Config, rt *script.Runtime, sourcePath string) error {
 	return runWithSource(cfg, rt, nil, nil, nil, []string{sourcePath}, nil, sourcePath, script.CandidateOptions{})
-}
-
-func (a *App) initMux() {
-	historyCapacity := a.cfg.Scrolling.History
-	hideCursorWhenScrolled := a.cfg.Scrolling.HideCursorWhenScrolled
-	a.mux = termmux.New(nil, termmux.Options{
-		ScrollbackCapacity:     &historyCapacity,
-		HideCursorWhenScrolled: &hideCursorWhenScrolled,
-		Wake:                   a.wakeMainLoop,
-		SetClipboard: func(_ termmux.PaneID, text string) {
-			if a.window != nil && a.cfg.Clipboard.OSC52 == "write" {
-				a.window.SetClipboardString(text)
-			}
-		},
-	})
-	a.mux.SetPaletteBase(configuredPaletteBase(a.cfg.Colors))
 }
 
 // fontInstallationPlan is an immutable description of startup font resources.
