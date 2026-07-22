@@ -170,4 +170,5 @@ type Terminal struct {
 	imageStore              *termimage.Store
 	imageOwner              *termimage.StoreOwner
 	imageSidecars           *imageSidecars
+	imageAnchorGeneration   uint64
 }

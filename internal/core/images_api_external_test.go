@@ -159,3 +159,73 @@ func TestPublicImageAPIAlternateProjectionAndExit(t *testing.T) {
 		t.Fatalf("exit usage=%#v", store.Usage())
 	}
 }
+
+func TestImageCursorAnchorTracksPrimaryHistoryAndAlternateCoordinates(t *testing.T) {
+	terminal := core.NewTerminalWithHistory(4, 2, 4)
+	for _, r := range []rune{'a', 'b', 'c'} {
+		terminal.PutRune(r)
+		terminal.CarriageReturn()
+		terminal.NewLine()
+	}
+	if terminal.ScrollbackLines() == 0 {
+		t.Fatal("setup did not create scrollback")
+	}
+	terminal.SetCursor(1, 2)
+	beforeRow, beforeCol := terminal.CursorRow(), terminal.CursorCol()
+	primary := terminal.ImageCursorAnchor()
+	if want := int64(terminal.ScrollbackLines() + beforeRow); primary.Row != want || primary.Col != uint32(beforeCol) {
+		t.Fatalf("primary anchor=%#v want row=%d col=%d", primary, want, beforeCol)
+	}
+	if terminal.CursorRow() != beforeRow || terminal.CursorCol() != beforeCol {
+		t.Fatal("anchor query mutated the cursor")
+	}
+
+	terminal.Resize(3, 3)
+	afterResize := terminal.ImageCursorAnchor()
+	if want := int64(terminal.ScrollbackLines() + terminal.CursorRow()); afterResize.Row != want || afterResize.Col != uint32(terminal.CursorCol()) {
+		t.Fatalf("resized anchor=%#v want row=%d col=%d", afterResize, want, terminal.CursorCol())
+	}
+
+	terminal.SetAlternateScreenMode(true)
+	terminal.SetCursor(2, 1)
+	alternate := terminal.ImageCursorAnchor()
+	if alternate.Row != 2 || alternate.Col != 1 {
+		t.Fatalf("alternate anchor=%#v", alternate)
+	}
+	terminal.SetAlternateScreenMode(false)
+	restored := terminal.ImageCursorAnchor()
+	if want := int64(terminal.ScrollbackLines() + terminal.CursorRow()); restored.Row != want || restored.Col != uint32(terminal.CursorCol()) {
+		t.Fatalf("restored anchor=%#v want row=%d col=%d", restored, want, terminal.CursorCol())
+	}
+	var nilTerminal *core.Terminal
+	if got := nilTerminal.ImageCursorAnchor(); got != (termimage.CellAnchor{}) {
+		t.Fatalf("nil anchor=%#v", got)
+	}
+}
+
+func TestImageAnchorGenerationTracksCoordinateMutationsNotCursorMovement(t *testing.T) {
+	terminal := core.NewTerminalWithHistory(4, 2, 2)
+	store := termimage.NewStore(termimage.NewProcessBudget(), termimage.DefaultLimits())
+	if err := terminal.AttachImageStore(store); err != nil {
+		t.Fatal(err)
+	}
+	start := terminal.ImageAnchorGeneration()
+	terminal.SetCursor(1, 2)
+	if got := terminal.ImageAnchorGeneration(); got != start {
+		t.Fatalf("cursor-only generation=%d want=%d", got, start)
+	}
+	terminal.PutRune('x')
+	afterText := terminal.ImageAnchorGeneration()
+	if afterText == start {
+		t.Fatal("text mutation did not invalidate captured anchors")
+	}
+	terminal.Resize(3, 3)
+	afterResize := terminal.ImageAnchorGeneration()
+	if afterResize == afterText {
+		t.Fatal("resize/reflow did not invalidate captured anchors")
+	}
+	terminal.SetAlternateScreenMode(true)
+	if got := terminal.ImageAnchorGeneration(); got == afterResize {
+		t.Fatal("screen transition did not invalidate captured anchors")
+	}
+}

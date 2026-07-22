@@ -35,7 +35,7 @@ func (m *Mux) processKittyOutcomes(p *pane) []Event {
 			code := kitty.ReplyInvalid
 			if request := command.Placement; request != nil {
 				if ref, ok := p.imageStore.ResourceRef(command.Image); ok {
-					spec := termimage.PlacementSpec{ID: request.ID, Anchor: termimage.CellAnchor{Row: int64(p.terminal.CursorRow()), Col: uint32(p.terminal.CursorCol())}, Cols: request.Cols, Rows: request.Rows, Crop: request.Crop, Z: request.Z, Opacity: 255}
+					spec := termimage.PlacementSpec{ID: request.ID, Anchor: p.terminal.ImageCursorAnchor(), Cols: request.Cols, Rows: request.Rows, Crop: request.Crop, Z: request.Z, Opacity: 255}
 					if _, err := p.terminal.CommitImage(core.ImageCommit{Existing: &ref, Placement: &spec}); err == nil {
 						code = kitty.ReplyOK
 					} else {
@@ -81,7 +81,8 @@ func (m *Mux) submitKittyDecode(p *pane, outcome kitty.Outcome) {
 	ownerCommand := command
 	ownerCommand.Transfer = nil
 	m.kittyNextToken++
-	owner := kittyDecodeOwner{paneID: p.id, pane: p, generation: p.snapshot.ImageGeneration, token: m.kittyNextToken, replySlot: slot, hasSlot: hasSlot, plan: outcome.Reply, command: ownerCommand, acceptUntil: m.options.Now().Add(termimage.HardAcceptanceDeadline), anchorRow: int64(p.terminal.CursorRow()), anchorCol: uint32(p.terminal.CursorCol())}
+	anchor := p.terminal.ImageCursorAnchor()
+	owner := kittyDecodeOwner{paneID: p.id, pane: p, generation: p.snapshot.ImageGeneration, reflowGen: p.reflowGen, anchorGen: p.terminal.ImageAnchorGeneration(), token: m.kittyNextToken, replySlot: slot, hasSlot: hasSlot, plan: outcome.Reply, command: ownerCommand, acceptUntil: m.options.Now().Add(termimage.HardAcceptanceDeadline), anchorRow: anchor.Row, anchorCol: anchor.Col}
 	work := kittyDecodeWork{owner: owner, job: job}
 	if err := m.kittyScheduler.submit(work); err != nil {
 		if hasSlot {
@@ -108,7 +109,7 @@ func (m *Mux) applyKittyCompletion(completion kittyDecodeCompletion) []Event {
 		return nil
 	}
 	code := result.Failure
-	if code == kitty.ReplyNone && (m.options.Now().After(owner.acceptUntil) || p.snapshot.ImageGeneration != owner.generation || result.Candidate == nil || !result.Candidate.ValidFor(p.imageStore)) {
+	if code == kitty.ReplyNone && (m.options.Now().After(owner.acceptUntil) || p.snapshot.ImageGeneration != owner.generation || p.reflowGen != owner.reflowGen || p.terminal.ImageAnchorGeneration() != owner.anchorGen || result.Candidate == nil || !result.Candidate.ValidFor(p.imageStore)) {
 		result.Close()
 		code = kitty.ReplyCancelled
 	}
