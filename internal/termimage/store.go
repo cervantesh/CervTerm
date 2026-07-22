@@ -7,13 +7,10 @@ import (
 	"time"
 )
 
-type timerStopper interface{ Stop() bool }
-
 type Store struct {
 	process *ProcessBudget
 	pane    paneBudget
 	now     func() time.Time
-	after   func(time.Duration, func()) timerStopper
 
 	epoch     atomic.Uint64
 	closed    atomic.Bool
@@ -49,12 +46,9 @@ func NewStore(process *ProcessBudget, limits Limits) *Store {
 		return nil
 	}
 	store := &Store{
-		process: process,
-		pane:    paneBudget{limits: effective},
-		now:     time.Now,
-		after: func(delay time.Duration, callback func()) timerStopper {
-			return time.AfterFunc(delay, callback)
-		},
+		process:    process,
+		pane:       paneBudget{limits: effective},
+		now:        time.Now,
 		pending:    make(map[TransferID]*CandidateTransfer),
 		candidates: make(map[*DecodedCandidate]struct{}),
 		state:      &storeState{resources: make(map[ImageID]*resource)},
@@ -142,10 +136,9 @@ func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 	}
 	transfer := &CandidateTransfer{
 		store: s, header: header, epoch: StoreEpoch(s.epoch.Load()),
-		deadline: s.now().Add(HardTransferLifetime), base: lease,
+		deadline: s.now().Add(HardTransferLifetime), base: lease, open: true,
 	}
 	s.pending[header.Transfer] = transfer
-	transfer.timer = s.after(HardTransferLifetime, transfer.expire)
 	return transfer, nil
 }
 
@@ -298,7 +291,7 @@ type CandidateTransfer struct {
 	epoch    StoreEpoch
 	deadline time.Time
 	base     *reservation
-	timer    timerStopper
+	open     bool
 
 	mu      sync.Mutex
 	closing atomic.Bool
@@ -313,7 +306,7 @@ func (t *CandidateTransfer) Touch() error {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.closing.Load() || t.timer == nil {
+	if t.closing.Load() || !t.open {
 		return ErrTransferClosed
 	}
 	now := t.store.now()
@@ -322,10 +315,6 @@ func (t *CandidateTransfer) Touch() error {
 		return ErrTransferExpired
 	}
 	t.deadline = now.Add(HardTransferLifetime)
-	if t.timer != nil {
-		t.timer.Stop()
-	}
-	t.timer = t.store.after(HardTransferLifetime, t.expire)
 	return nil
 }
 
@@ -335,10 +324,24 @@ func (t *CandidateTransfer) Deadline() (time.Time, bool) {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.closing.Load() || t.timer == nil {
+	if t.closing.Load() || !t.open {
 		return time.Time{}, false
 	}
 	return t.deadline, true
+}
+
+// Expire closes an open transfer when its owner-observed deadline is due.
+func (t *CandidateTransfer) Expire(now time.Time) bool {
+	if t == nil {
+		return false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closing.Load() || !t.open || now.Before(t.deadline) {
+		return false
+	}
+	t.closeLocked()
+	return true
 }
 
 func (t *CandidateTransfer) Seal() error {
@@ -347,33 +350,15 @@ func (t *CandidateTransfer) Seal() error {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.closing.Load() || t.timer == nil {
+	if t.closing.Load() || !t.open {
 		return ErrTransferClosed
 	}
 	if !t.store.now().Before(t.deadline) {
 		t.closeLocked()
 		return ErrTransferExpired
 	}
-	t.timer.Stop()
-	t.timer = nil
+	t.open = false
 	return nil
-}
-
-func (t *CandidateTransfer) expire() {
-	if t == nil {
-		return
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.closing.Load() || t.timer == nil {
-		return
-	}
-	delay := t.deadline.Sub(t.store.now())
-	if delay > 0 {
-		t.timer = t.store.after(delay, t.expire)
-		return
-	}
-	t.closeLocked()
 }
 
 func (t *CandidateTransfer) Append(chunk []byte) error {
@@ -382,7 +367,7 @@ func (t *CandidateTransfer) Append(chunk []byte) error {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.closing.Load() || t.timer == nil {
+	if t.closing.Load() || !t.open {
 		return ErrTransferClosed
 	}
 	if !t.store.now().Before(t.deadline) {
@@ -401,10 +386,6 @@ func (t *CandidateTransfer) Append(chunk []byte) error {
 	t.leases = append(t.leases, lease)
 	t.encoded += uint64(len(copyOfChunk))
 	t.deadline = t.store.now().Add(HardTransferLifetime)
-	if t.timer != nil {
-		t.timer.Stop()
-	}
-	t.timer = t.store.after(HardTransferLifetime, t.expire)
 	return nil
 }
 
@@ -417,7 +398,7 @@ func (t *CandidateTransfer) EncodedCopy() ([]byte, error) {
 	if t.closing.Load() {
 		return nil, ErrTransferClosed
 	}
-	if t.timer != nil && !t.store.now().Before(t.deadline) {
+	if t.open && !t.store.now().Before(t.deadline) {
 		t.closeLocked()
 		return nil, ErrTransferExpired
 	}
@@ -434,7 +415,7 @@ func (t *CandidateTransfer) SealedEncodedCopy(store *Store) ([]byte, Header, Sto
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.closing.Load() || t.timer != nil || t.store != store || store.closed.Load() || store.resetting.Load() || t.epoch != StoreEpoch(store.epoch.Load()) {
+	if t.closing.Load() || t.open || t.store != store || store.closed.Load() || store.resetting.Load() || t.epoch != StoreEpoch(store.epoch.Load()) {
 		return nil, Header{}, 0, ErrTransferClosed
 	}
 	result := make([]byte, 0, int(t.encoded))
@@ -470,9 +451,6 @@ func (t *CandidateTransfer) Close() {
 func (t *CandidateTransfer) closeLocked() {
 	if !t.closing.CompareAndSwap(false, true) {
 		return
-	}
-	if t.timer != nil {
-		t.timer.Stop()
 	}
 	for i := len(t.leases) - 1; i >= 0; i-- {
 		t.leases[i].Close()

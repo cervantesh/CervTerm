@@ -178,8 +178,13 @@ func (a *Adapter) Expire(now time.Time) Outcome {
 		return Outcome{}
 	}
 	reply := a.reply
-	if a.active != nil {
-		a.active.Close()
+	failure := ReplyTimeout
+	if a.active != nil && !a.active.Expire(now) {
+		if !a.active.Closed() {
+			a.captureDeadline(a.active)
+			return Outcome{}
+		}
+		failure = ReplyCancelled
 	}
 	a.active = nil
 	a.activeFrames = 0
@@ -187,7 +192,7 @@ func (a *Adapter) Expire(now time.Time) Outcome {
 	a.reply = ReplyPlan{}
 	a.deadline = time.Time{}
 	a.frame = nil
-	return Outcome{Reply: reply, Failure: ReplyTimeout}
+	return Outcome{Reply: reply, Failure: failure}
 }
 func (a *Adapter) Close() {
 	if a == nil || a.closed {
