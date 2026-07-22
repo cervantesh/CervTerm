@@ -36,3 +36,16 @@ func (b *nativeProjectionBundle) close() error {
 	}
 	return joined
 }
+
+// closeProjectionBundleWithCurrent is the rollback seam for partial native
+// projections. GPU resources, including the terminal image cache, are always
+// closed only after their owning host context has been made current.
+func closeProjectionBundleWithCurrent(bundle *nativeProjectionBundle) error {
+	if bundle == nil {
+		return nil
+	}
+	if bundle.host != nil {
+		bundle.host.MakeContextCurrent()
+	}
+	return bundle.close()
+}
