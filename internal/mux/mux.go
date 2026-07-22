@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"cervterm/internal/core"
 	"cervterm/internal/pty"
@@ -18,6 +19,8 @@ type Options struct {
 	ScrollbackCapacity     *int
 	HideCursorWhenScrolled *bool
 	ImageLimits            *termimage.Limits
+	KittyEnabled           bool
+	Now                    func() time.Time
 }
 
 type PaneView struct {
@@ -38,18 +41,21 @@ type PaneView struct {
 }
 
 type Mux struct {
-	sessions      *localSessionRegistry
-	options       Options
-	model         *Model
-	imageBudget   *termimage.ProcessBudget
-	imageLimits   termimage.Limits
-	imageSetupErr error
-	bootstrapped  bool
-	bounds        PixelRect
-	paneMetrics   map[PaneID]CellMetrics
-	paletteBase   core.PaletteBase
-	windowFault   func(string) error // package-private deterministic failure injection
-	pending       *RestoreCandidate
+	sessions       *localSessionRegistry
+	options        Options
+	model          *Model
+	imageBudget    *termimage.ProcessBudget
+	imageLimits    termimage.Limits
+	imageSetupErr  error
+	kittyScheduler *kittyDecodeScheduler
+	kittyPending   map[uint64]kittyDecodeOwner
+	kittyNextToken uint64
+	bootstrapped   bool
+	bounds         PixelRect
+	paneMetrics    map[PaneID]CellMetrics
+	paletteBase    core.PaletteBase
+	windowFault    func(string) error // package-private deterministic failure injection
+	pending        *RestoreCandidate
 }
 
 func New(factory SessionFactory, options Options) *Mux {
@@ -58,6 +64,9 @@ func New(factory SessionFactory, options Options) *Mux {
 	}
 	if options.IngressCapacity <= 0 {
 		options.IngressCapacity = 256
+	}
+	if options.Now == nil {
+		options.Now = time.Now
 	}
 	sessions := newLocalSessionRegistry(factory, options.IngressCapacity, options.Wake)
 	mux := &Mux{
@@ -71,6 +80,10 @@ func New(factory SessionFactory, options Options) *Mux {
 		} else {
 			mux.imageLimits = limits
 			mux.imageBudget = termimage.NewProcessBudget()
+			if options.KittyEnabled {
+				mux.kittyScheduler = newKittyDecodeScheduler(options.Wake)
+				mux.kittyPending = make(map[uint64]kittyDecodeOwner)
+			}
 		}
 	}
 	return mux
@@ -343,8 +356,15 @@ func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
 
 func (m *Mux) Drain(limit int) []Event {
 	var events []Event
+	events = append(events, m.expireKitty(m.options.Now())...)
 	for count := 0; limit <= 0 || count < limit; count++ {
+		var kittyCompletions <-chan kittyDecodeCompletion
+		if m.kittyScheduler != nil {
+			kittyCompletions = m.kittyScheduler.completions()
+		}
 		select {
+		case completion := <-kittyCompletions:
+			events = append(events, m.applyKittyCompletion(completion)...)
 		case record := <-m.sessions.incoming:
 			p, ok := m.sessions.lookup(record.pane)
 			if !ok || p != record.owner || p.state == PaneStateClosed || p.state == PaneStateClosing {
@@ -354,6 +374,14 @@ func (m *Mux) Drain(limit int) []Event {
 				events = append(events, m.advancePane(p, record.data)...)
 			}
 			if record.err != nil && p.state == PaneStateRunning {
+				p.parser.EndOfInput()
+				if p.kittyAdapter != nil {
+					p.kittyAdapter.Close()
+					p.kittyAdapter = nil
+				}
+				events = append(events, p.kittyEvents...)
+				p.kittyEvents = nil
+				events = append(events, m.processKittyOutcomes(p)...)
 				p.state = PaneStateExited
 				tab := m.model.tabForPane(p.id)
 				exit := Event{Kind: PaneExited, Pane: p.id}
@@ -496,4 +524,10 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 	return m.ResolveEventAddresses(events), errors.Join(closeErr, resizeErr)
 }
 
-func (m *Mux) Shutdown() error { return m.sessions.shutdownRegistry() }
+func (m *Mux) Shutdown() error {
+	if m.kittyScheduler != nil {
+		m.kittyScheduler.close()
+		m.kittyScheduler = nil
+	}
+	return m.sessions.shutdownRegistry()
+}

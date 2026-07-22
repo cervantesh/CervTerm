@@ -62,6 +62,48 @@ func (t *Terminal) commitImage(commit imageCommit) (imageCommitResult, error) {
 	return result, nil
 }
 
+func (t *Terminal) placeExistingImage(ref termimage.ResourceRef, spec termimage.PlacementSpec) (termimage.PlacementID, error) {
+	if t == nil || t.imageStore == nil || t.imageSidecars == nil {
+		return 0, ErrImageStateUnavailable
+	}
+	width, height, ok := t.imageStore.ResourceDimensions(ref)
+	if !ok {
+		return 0, ErrImageStateUnavailable
+	}
+	if t.imageSidecars.generation == math.MaxUint64 {
+		return 0, termimage.ErrGenerationExhausted
+	}
+	validated, err := termimage.ValidatePlacementSpec(spec, width, height)
+	if err != nil {
+		return 0, err
+	}
+	if err = t.validatePlacementCoordinates(validated); err != nil {
+		return 0, err
+	}
+	primary, _ := cloneImagePlacements(t.imageSidecars.primary, termimage.ResourceRef{}, false)
+	alternate, _ := cloneImagePlacements(t.imageSidecars.alternate, termimage.ResourceRef{}, false)
+	if placementIDExists(primary, validated.ID) || placementIDExists(alternate, validated.ID) {
+		return 0, termimage.ErrInvalidPlacement
+	}
+	lease, err := t.imageStore.ReservePlacements(1)
+	if err != nil {
+		return 0, err
+	}
+	placement, err := termimage.NewPlacement(validated, ref, width, height)
+	if err != nil {
+		lease.Close()
+		return 0, err
+	}
+	entry := imagePlacement{placement: placement, lease: lease}
+	if t.alternateScreen {
+		alternate = append(alternate, entry)
+	} else {
+		primary = append(primary, entry)
+	}
+	t.imageSidecars = &imageSidecars{primary: primary, alternate: alternate, generation: t.imageSidecars.generation + 1}
+	return placement.ID, nil
+}
+
 func (t *Terminal) prepareImageCommit(commit imageCommit, fault imagePrepareFault) (_ *preparedImageMutation, _ imageCommitResult, err error) {
 	candidate := commit.candidate
 	if t == nil || t.imageStore == nil || t.imageOwner == nil || t.imageSidecars == nil || candidate == nil || !candidate.ValidFor(t.imageStore) {

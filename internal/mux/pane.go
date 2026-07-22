@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"cervterm/internal/core"
+	"cervterm/internal/kitty"
 	"cervterm/internal/pty"
 	"cervterm/internal/render"
 	"cervterm/internal/termimage"
@@ -29,6 +30,9 @@ type pane struct {
 	terminal       *core.Terminal
 	parser         vt.Parser
 	imageStore     *termimage.Store
+	kittyAdapter   *kitty.Adapter
+	kittyOutcomes  []kitty.Outcome
+	kittyEvents    []Event
 	session        pty.Session
 	launch         FreshLaunch
 	snapshot       render.Snapshot
@@ -134,6 +138,11 @@ func (p *pane) close() error {
 	p.closeOnce.Do(func() {
 		p.state = PaneStateClosing
 		close(p.done)
+		if p.kittyAdapter != nil {
+			p.kittyAdapter.Close()
+		}
+		p.kittyOutcomes = nil
+		p.kittyEvents = nil
 		p.terminal.CloseImageStore()
 		p.clearReplies()
 		if p.session != nil {

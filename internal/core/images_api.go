@@ -14,6 +14,7 @@ var (
 
 type ImageCommit struct {
 	Candidate *termimage.DecodedCandidate
+	Existing  *termimage.ResourceRef
 	Placement *termimage.PlacementSpec
 }
 
@@ -47,6 +48,19 @@ func (t *Terminal) CommitImage(commit ImageCommit) (ImageCommitResult, error) {
 			commit.Candidate.Close()
 		}
 		return ImageCommitResult{}, ErrImageStoreUnavailable
+	}
+	if commit.Existing != nil {
+		if commit.Candidate != nil || commit.Placement == nil {
+			if commit.Candidate != nil {
+				commit.Candidate.Close()
+			}
+			return ImageCommitResult{}, termimage.ErrInvalidPlacement
+		}
+		id, err := t.placeExistingImage(*commit.Existing, *commit.Placement)
+		if err != nil {
+			return ImageCommitResult{}, err
+		}
+		return ImageCommitResult{Resource: *commit.Existing, Placement: &id}, nil
 	}
 	result, err := t.commitImage(imageCommit{candidate: commit.Candidate, placement: commit.Placement})
 	return ImageCommitResult{Resource: result.resource, Placement: result.placement}, err
