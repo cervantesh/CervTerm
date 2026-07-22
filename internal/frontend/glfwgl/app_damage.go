@@ -25,8 +25,6 @@ type damageState struct {
 	cols              int
 	displayOffset     int
 	alternateScreen   bool
-	imageGeneration   uint64
-	paneObject        uint64
 	selectionActive   bool
 	selectionStart    termsel.Point
 	selectionEnd      termsel.Point
@@ -68,8 +66,6 @@ func (a *App) prepareDamage(w, h, displayOffset int, alternateScreen, noticeVisi
 		a.contentScaleX != a.damage.contentScaleX || a.contentScaleY != a.damage.contentScaleY ||
 		a.snap.Cols != a.damage.cols || displayOffset != a.damage.displayOffset ||
 		alternateScreen != a.damage.alternateScreen ||
-		a.snap.ImageGeneration != a.damage.imageGeneration ||
-		a.snap.PaneObject != a.damage.paneObject ||
 		a.selection.active != a.damage.selectionActive ||
 		a.selection.start != a.damage.selectionStart || a.selection.end != a.damage.selectionEnd ||
 		a.showStats != a.damage.showStats || noticeVisible != a.damage.noticeVisible ||
@@ -150,8 +146,6 @@ func (a *App) recordDamageFrame(w, h, displayOffset int, alternateScreen, notice
 	a.damage.contentScaleX, a.damage.contentScaleY = a.contentScaleX, a.contentScaleY
 	a.damage.cols = a.snap.Cols
 	a.damage.displayOffset, a.damage.alternateScreen = displayOffset, alternateScreen
-	a.damage.imageGeneration = a.snap.ImageGeneration
-	a.damage.paneObject = a.snap.PaneObject
 	a.damage.selectionActive = a.selection.active
 	a.damage.selectionStart, a.damage.selectionEnd = a.selection.start, a.selection.end
 	a.damage.showStats, a.damage.noticeVisible = a.showStats, noticeVisible
