@@ -9,10 +9,14 @@ import (
 // GraphicsConfig contains default-off, restart-scoped terminal graphics policy.
 type GraphicsConfig struct {
 	Kitty  KittyGraphicsConfig
+	Sixel  SixelGraphicsConfig
+	ITerm  ITermGraphicsConfig
 	Limits GraphicsLimitsConfig
 }
 
 type KittyGraphicsConfig struct{ Enabled bool }
+type SixelGraphicsConfig struct{ Enabled bool }
+type ITermGraphicsConfig struct{ Enabled bool }
 
 type GraphicsLimitsConfig struct {
 	EncodedBytesPerPane   uint64
@@ -39,6 +43,12 @@ func decodeV2GraphicsConfig(document Document, cfg *Config) {
 	}
 	if kitty := tableField(graphics, "kitty"); kitty != nil {
 		cfg.Graphics.Kitty.Enabled = boolField(kitty, "enabled", cfg.Graphics.Kitty.Enabled)
+	}
+	if sixel := tableField(graphics, "sixel"); sixel != nil {
+		cfg.Graphics.Sixel.Enabled = boolField(sixel, "enabled", cfg.Graphics.Sixel.Enabled)
+	}
+	if iterm := tableField(graphics, "iterm"); iterm != nil {
+		cfg.Graphics.ITerm.Enabled = boolField(iterm, "enabled", cfg.Graphics.ITerm.Enabled)
 	}
 	limits := tableField(graphics, "limits")
 	if limits == nil {

@@ -15,6 +15,9 @@ import (
 func enabledTerminalImageConfig() config.Config {
 	cfg := config.Defaults()
 	cfg.Graphics.Kitty.Enabled = true
+	// Slice 14.14 publishes these flags but the frontend must still ignore them.
+	cfg.Graphics.Sixel.Enabled = true
+	cfg.Graphics.ITerm.Enabled = true
 	cfg.Graphics.Limits.EncodedBytesPerPane = 1024
 	cfg.Graphics.Limits.DecodedBytesPerPane = 2048
 	cfg.Graphics.Limits.ImageCountPerPane = 3
@@ -49,18 +52,39 @@ func (p *terminalImageCacheFactoryProbe) create(renderer gpu.TerminalImageRender
 	return cache, err
 }
 
-func TestTerminalImageActivationDisabledIsLiteralNil(t *testing.T) {
-	for _, name := range []string{"default", "v1-effective", "explicit-disabled"} {
-		t.Run(name, func(t *testing.T) {
+func TestTerminalImageActivationIgnoresDormantProtocolsWhenKittyIsDisabled(t *testing.T) {
+	tests := []struct {
+		name      string
+		sixel     bool
+		iterm     bool
+		lowerCaps bool
+	}{
+		{name: "default"},
+		{name: "v1-effective"},
+		{name: "explicit-disabled", lowerCaps: true},
+		{name: "dormant-sixel", sixel: true, lowerCaps: true},
+		{name: "dormant-iterm", iterm: true, lowerCaps: true},
+		{name: "dormant-both", sixel: true, iterm: true, lowerCaps: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			cfg := config.Defaults()
-			if name == "explicit-disabled" {
+			cfg.Graphics.Sixel.Enabled = test.sixel
+			cfg.Graphics.ITerm.Enabled = test.iterm
+			if test.lowerCaps {
+				cfg.Graphics.Limits.EncodedBytesPerPane = 512
+				cfg.Graphics.Limits.DecodedBytesPerPane = 1024
+				cfg.Graphics.Limits.ImageCountPerPane = 2
+				cfg.Graphics.Limits.PlacementCountPerPane = 2
 				cfg.Graphics.Limits.GPUBytesPerContext = 1024
 			}
 			probe := &terminalImageCacheFactoryProbe{}
 			app := &App{cfg: cfg, r: &glRenderer{}, terminalImageCacheFactory: probe.create}
 			options := app.muxOptions()
-			if options.ImageLimits != nil || options.KittyEnabled {
-				t.Fatalf("disabled image options=%#v", options)
+			// ImageLimits is the mux/store allocation gate. Dormant public flags must
+			// not cross it or reach either test-only mux protocol option.
+			if options.ImageLimits != nil || options.KittyEnabled || options.SixelEnabled || options.ITermEnabled {
+				t.Fatalf("dormant image options=%#v", options)
 			}
 			if err := app.initMux(); err != nil {
 				t.Fatal(err)
@@ -69,16 +93,16 @@ func TestTerminalImageActivationDisabledIsLiteralNil(t *testing.T) {
 				t.Fatal(err)
 			}
 			if app.terminalImageCache != nil || len(probe.calls) != 0 {
-				t.Fatalf("disabled cache=%p factory calls=%d", app.terminalImageCache, len(probe.calls))
+				t.Fatalf("dormant cache=%p factory calls=%d", app.terminalImageCache, len(probe.calls))
 			}
 			if deadline, ok := app.mux.NextImageDeadline(); ok || !deadline.IsZero() {
-				t.Fatalf("disabled mux advertised image work deadline=%v ok=%v", deadline, ok)
+				t.Fatalf("dormant mux advertised image work deadline=%v ok=%v", deadline, ok)
 			}
 			if err := app.rollbackInitializedMux(nil); err != nil {
 				t.Fatal(err)
 			}
 			if app.mux != nil {
-				t.Fatal("disabled mux owner remained published after rollback")
+				t.Fatal("dormant mux owner remained published after rollback")
 			}
 		})
 	}
@@ -88,7 +112,7 @@ func TestTerminalImageActivationMapsEnabledLimitsIntoOneMux(t *testing.T) {
 	cfg := enabledTerminalImageConfig()
 	app := &App{cfg: cfg}
 	options := app.muxOptions()
-	if !options.KittyEnabled || options.ImageLimits == nil {
+	if !options.KittyEnabled || options.SixelEnabled || options.ITermEnabled || options.ImageLimits == nil {
 		t.Fatalf("enabled image options=%#v", options)
 	}
 	want := termimage.Limits{EncodedBytes: 1024, DecodedBytes: 2048, Images: 3, Placements: 4}
@@ -253,8 +277,8 @@ func TestTerminalImageActivationConfigDiffRemainsRestartScoped(t *testing.T) {
 			}
 		}
 	}
-	if graphics != 6 {
-		t.Fatalf("graphics restart changes=%d want=6 (%#v)", graphics, changes)
+	if graphics != 8 {
+		t.Fatalf("graphics restart changes=%d want=8 (%#v)", graphics, changes)
 	}
 }
 

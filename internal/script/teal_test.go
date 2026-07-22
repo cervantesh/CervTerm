@@ -48,8 +48,39 @@ func TestTypedDefaultTealExample(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("typed default should validate: %v", err)
 	}
-	if cfg.ColorScheme != "Shades of Purple" || cfg.Colors.Background != "#2D2B55" || cfg.IME.Enabled || cfg.Accessibility.Enabled || cfg.Accessibility.Scope != "visible" || cfg.Graphics.Kitty.Enabled || cfg.Graphics.Limits.GPUBytesPerContext != 268435456 {
+	if cfg.ColorScheme != "Shades of Purple" || cfg.Colors.Background != "#2D2B55" || cfg.IME.Enabled || cfg.Accessibility.Enabled || cfg.Accessibility.Scope != "visible" || cfg.Graphics.Kitty.Enabled || cfg.Graphics.Sixel.Enabled || cfg.Graphics.ITerm.Enabled || cfg.Graphics.Limits.GPUBytesPerContext != 268435456 {
 		t.Fatalf("typed defaults drifted: scheme=%q background=%q ime=%v accessibility=%#v graphics=%#v", cfg.ColorScheme, cfg.Colors.Background, cfg.IME.Enabled, cfg.Accessibility, cfg.Graphics)
+	}
+}
+
+func TestTypedGraphicsProtocolFlagsTealExample(t *testing.T) {
+	if _, err := exec.LookPath("tl"); err != nil {
+		t.Skip("tl not installed")
+	}
+	dir := t.TempDir()
+	copyFile(t, filepath.Join("..", "..", "docs", "examples", "cervterm.d.tl"), filepath.Join(dir, "cervterm.d.tl"))
+	source := `local cervterm = require("cervterm")
+local config: cervterm.Config = {
+	config_version = 2,
+	graphics = {
+		sixel = { enabled = true },
+		iterm = { enabled = true },
+	},
+}
+return config
+`
+	path := filepath.Join(dir, "cervterm.tl")
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := BuildCandidateBundle(path, config.Defaults(), CandidateOptions{})
+	if err != nil {
+		t.Fatalf("typed graphics candidate load failed: %v", err)
+	}
+	defer bundle.Close()
+	cfg := bundle.Config()
+	if !cfg.Graphics.Sixel.Enabled || !cfg.Graphics.ITerm.Enabled || cfg.Graphics.Kitty.Enabled {
+		t.Fatalf("typed graphics flags=%#v", cfg.Graphics)
 	}
 }
 

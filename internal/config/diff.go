@@ -129,6 +129,8 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Accessibility.Enabled != effective.Accessibility.Enabled, "accessibility.enabled", ApplyRestart)
 	changes = appendChange(changes, desired.Accessibility.Scope != effective.Accessibility.Scope, "accessibility.scope", ApplyRestart)
 	changes = appendChange(changes, desired.Graphics.Kitty.Enabled != effective.Graphics.Kitty.Enabled, "graphics.kitty.enabled", ApplyRestart)
+	changes = appendChange(changes, desired.Graphics.Sixel.Enabled != effective.Graphics.Sixel.Enabled, "graphics.sixel.enabled", ApplyRestart)
+	changes = appendChange(changes, desired.Graphics.ITerm.Enabled != effective.Graphics.ITerm.Enabled, "graphics.iterm.enabled", ApplyRestart)
 	changes = appendChange(changes, desired.Graphics.Limits.EncodedBytesPerPane != effective.Graphics.Limits.EncodedBytesPerPane, "graphics.limits.encoded_bytes_per_pane", ApplyRestart)
 	changes = appendChange(changes, desired.Graphics.Limits.DecodedBytesPerPane != effective.Graphics.Limits.DecodedBytesPerPane, "graphics.limits.decoded_bytes_per_pane", ApplyRestart)
 	changes = appendChange(changes, desired.Graphics.Limits.ImageCountPerPane != effective.Graphics.Limits.ImageCountPerPane, "graphics.limits.image_count_per_pane", ApplyRestart)

@@ -54,3 +54,27 @@ func TestDefaultLuaDocumentsTypedAndCallbackActions(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultLuaDocumentsDormantSixelAndITermFlags(t *testing.T) {
+	template := DefaultLua()
+	for _, fragment := range []string{
+		"sixel = {",
+		"iterm = {",
+		"Dormant Phase 14 intent only; frontend activation is not wired yet.",
+	} {
+		if !strings.Contains(template, fragment) {
+			t.Fatalf("default Lua template missing %q", fragment)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "graphics.lua")
+	if err := os.WriteFile(path, []byte(template), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadLua(path, Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Graphics.Sixel.Enabled || cfg.Graphics.ITerm.Enabled {
+		t.Fatalf("template enabled dormant graphics: %#v", cfg.Graphics)
+	}
+}

@@ -146,6 +146,8 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 	{name: "accessibility", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "enabled", kind: KindBoolean}, {name: "scope", kind: KindString}}},
 	{name: "graphics", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
 		{name: "kitty", kind: KindTable, children: []fieldSchema{{name: "enabled", kind: KindBoolean}}},
+		{name: "sixel", kind: KindTable, children: []fieldSchema{{name: "enabled", kind: KindBoolean}}},
+		{name: "iterm", kind: KindTable, children: []fieldSchema{{name: "enabled", kind: KindBoolean}}},
 		{name: "limits", kind: KindTable, children: []fieldSchema{
 			{name: "encoded_bytes_per_pane", kind: KindInteger}, {name: "decoded_bytes_per_pane", kind: KindInteger},
 			{name: "image_count_per_pane", kind: KindInteger}, {name: "placement_count_per_pane", kind: KindInteger},
@@ -196,7 +198,8 @@ func isV2OnlyPath(path string) bool {
 		"bell", "bell.mode", "bell.focus", "bell.throttle_ms", "bell.visual_duration_ms",
 		"notification", "notification.enabled", "notification.focus", "notification.rate_limit_ms",
 		"ime", "ime.enabled", "accessibility", "accessibility.enabled", "accessibility.scope",
-		"graphics", "graphics.kitty", "graphics.kitty.enabled", "graphics.limits",
+		"graphics", "graphics.kitty", "graphics.kitty.enabled", "graphics.sixel", "graphics.sixel.enabled",
+		"graphics.iterm", "graphics.iterm.enabled", "graphics.limits",
 		"graphics.limits.encoded_bytes_per_pane", "graphics.limits.decoded_bytes_per_pane",
 		"graphics.limits.image_count_per_pane", "graphics.limits.placement_count_per_pane",
 		"graphics.limits.gpu_bytes_per_context",
