@@ -48,6 +48,10 @@ const (
 	stateDCSDiscardEsc
 	stateDCSPreamble
 	stateDCSPreambleEsc
+	stateOSC1337
+	stateOSC1337Esc
+	stateOSC1337Discard
+	stateOSC1337DiscardEsc
 )
 
 const maxCSIParam = 1<<16 - 1
@@ -172,6 +176,7 @@ func (p *Parser) advanceByte(t *core.Terminal, b byte) {
 			return
 		}
 		p.appendOSC(b)
+		p.selectOSC1337()
 	case stateOSCEsc:
 		if b == '\\' {
 			p.dispatchOSC(t)
