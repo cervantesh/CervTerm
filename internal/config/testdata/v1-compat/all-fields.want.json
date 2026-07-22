@@ -121,6 +121,12 @@
     "Kitty": {
       "Enabled": false
     },
+    "Sixel": {
+      "Enabled": false
+    },
+    "ITerm": {
+      "Enabled": false
+    },
     "Limits": {
       "EncodedBytesPerPane": 8388608,
       "DecodedBytesPerPane": 67108864,

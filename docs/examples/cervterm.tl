@@ -103,6 +103,8 @@ local config: cervterm.Config = {
   },
   graphics = {
     kitty = { enabled = false },
+    sixel = { enabled = false },
+    iterm = { enabled = false },
     limits = {
       encoded_bytes_per_pane = 8388608,
       decoded_bytes_per_pane = 67108864,

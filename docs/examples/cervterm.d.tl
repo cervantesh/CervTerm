@@ -432,6 +432,14 @@ local record cervterm
     enabled: boolean | Unset
   end
 
+  record SixelGraphicsDocument
+    enabled: boolean | Unset
+  end
+
+  record ITermGraphicsDocument
+    enabled: boolean | Unset
+  end
+
   record GraphicsLimitsDocument
     encoded_bytes_per_pane: integer | Unset
     decoded_bytes_per_pane: integer | Unset
@@ -442,6 +450,8 @@ local record cervterm
 
   record GraphicsDocument
     kitty: KittyGraphicsDocument | Unset
+    sixel: SixelGraphicsDocument | Unset
+    iterm: ITermGraphicsDocument | Unset
     limits: GraphicsLimitsDocument | Unset
   end
 

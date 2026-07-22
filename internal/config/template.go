@@ -184,6 +184,14 @@ return {
 			-- Experimental direct-data Kitty subset; default off and restart required.
 			enabled = %t,
 		},
+		sixel = {
+			-- Dormant Phase 14 intent only; frontend activation is not wired yet.
+			enabled = %t,
+		},
+		iterm = {
+			-- Dormant Phase 14 intent only; frontend activation is not wired yet.
+			enabled = %t,
+		},
 		limits = {
 			encoded_bytes_per_pane = %d,
 			decoded_bytes_per_pane = %d,
@@ -320,7 +328,8 @@ return {
 		cfg.Clipboard.OSC52,
 		cfg.IME.Enabled,
 		cfg.Accessibility.Enabled, cfg.Accessibility.Scope,
-		cfg.Graphics.Kitty.Enabled, cfg.Graphics.Limits.EncodedBytesPerPane, cfg.Graphics.Limits.DecodedBytesPerPane, cfg.Graphics.Limits.ImageCountPerPane, cfg.Graphics.Limits.PlacementCountPerPane, cfg.Graphics.Limits.GPUBytesPerContext,
+		cfg.Graphics.Kitty.Enabled, cfg.Graphics.Sixel.Enabled, cfg.Graphics.ITerm.Enabled,
+		cfg.Graphics.Limits.EncodedBytesPerPane, cfg.Graphics.Limits.DecodedBytesPerPane, cfg.Graphics.Limits.ImageCountPerPane, cfg.Graphics.Limits.PlacementCountPerPane, cfg.Graphics.Limits.GPUBytesPerContext,
 		cfg.Bell.Mode, cfg.Bell.Focus, cfg.Bell.ThrottleMS, cfg.Bell.VisualDurationMS,
 		cfg.Notification.Enabled, cfg.Notification.Focus, cfg.Notification.RateLimitMS,
 		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.ZoomInHotkey, cfg.Render.ZoomOutHotkey, cfg.Render.ZoomResetHotkey, cfg.Render.VSync, cfg.Render.MaxFPS, cfg.Render.Redraw, cfg.Render.Damage, cfg.Render.Bidi,
