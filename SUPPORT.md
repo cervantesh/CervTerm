@@ -32,6 +32,7 @@ Best-effort support currently targets:
 - OSC 8 hyperlinks and OSC 133/633 shell semantic metadata/actions under the documented trust policy,
 - default-off terminal notification requests; the native notification adapter is currently Windows-only.
 - controlled testing of the restart-scoped, visible-only, default-off Windows UI Automation adapter.
+- controlled testing of the restart-scoped, default-off direct-data Kitty subset on the GLFW/OpenGL frontend (`t`/`T`/`p`/`d`/`q`; RGB24/RGBA32/PNG; zlib only for raw RGB/RGBA) within documented hard caps.
 
 Not yet guaranteed:
 
@@ -41,6 +42,7 @@ Not yet guaranteed:
 - full cross-platform GUI behavior,
 - native bell/notification effects on macOS or Linux GUI builds.
 - Narrator/NVDA support, default-on accessibility, macOS NSAccessibility, Linux AT-SPI, or Windows 386 accessibility.
+- full Kitty graphics conformance, animation, external file/path/temporary-file/shared-memory transports, Unicode placeholders, Sixel, iTerm inline images, or terminal images outside the GLFW/OpenGL frontend.
 
 ## Security or supply-chain concerns
 

@@ -134,6 +134,36 @@ func TestMuxCrossWindowTransferPreservesImageStoreAndResource(t *testing.T) {
 	}
 }
 
+func TestMuxCrossWindowTabTransferPreservesEveryImageStoreAndResource(t *testing.T) {
+	m, firstPane := newImageTestMux(t)
+	destination, _ := addRuntimeTestWindow(t, m, tabMetrics())
+	if err := m.model.ActivateWindow(1); err != nil {
+		t.Fatal(err)
+	}
+	secondPane, _, err := m.SpawnSplit(firstPane, SplitColumns, SpawnSpec{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs := map[PaneID]termimage.ResourceRef{firstPane: commitMuxImage(t, m, firstPane, 21), secondPane: commitMuxImage(t, m, secondPane, 22)}
+	stores := make(map[PaneID]*termimage.Store, 2)
+	for id := range refs {
+		pane, _ := m.sessions.lookup(id)
+		stores[id] = pane.imageStore
+	}
+	if _, err = m.TransferTabBetweenWindows(TabTransferRequest{SourceWindow: 1, DestinationWindow: destination.ID, Tab: 1, Position: 1, SourceBounds: PixelRect{Width: 800, Height: 480}, DestinationBounds: PixelRect{Width: 480, Height: 320}, Resolve: m.resolveMetrics}); err != nil {
+		t.Fatal(err)
+	}
+	for id, ref := range refs {
+		pane, ok := m.sessions.lookup(id)
+		if !ok || pane.imageStore != stores[id] {
+			t.Fatalf("pane %d changed image store", id)
+		}
+		if _, ok = m.AcquireImageResource(id, ref); !ok {
+			t.Fatalf("pane %d lost resource", id)
+		}
+	}
+}
+
 func TestMuxRestoreAbortClosesEveryDetachedPaneStore(t *testing.T) {
 	limits := termimage.DefaultLimits()
 	m := New(&restoreTestFactory{}, Options{IngressCapacity: 64, ImageLimits: &limits})
