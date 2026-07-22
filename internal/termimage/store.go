@@ -205,6 +205,17 @@ func (s *Store) Acquire(ref ResourceRef) (DetachedResource, bool) {
 	}, true
 }
 
+func (s *Store) ResourceDimensions(ref ResourceRef) (uint32, uint32, bool) {
+	if s == nil || ref.Image == 0 || ref.Generation == 0 {
+		return 0, 0, false
+	}
+	stored := s.state.resources[ref.Image]
+	if stored == nil || stored.ref != ref {
+		return 0, 0, false
+	}
+	return stored.width, stored.height, true
+}
+
 func (s *Store) Reset() {
 	if s == nil || s.closed.Load() || s.owner.Load() != nil {
 		return

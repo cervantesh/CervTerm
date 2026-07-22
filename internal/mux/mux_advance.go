@@ -3,7 +3,10 @@ package mux
 func (m *Mux) advancePane(p *pane, data []byte) []Event {
 	oldTitle, oldCWD, oldBell := p.title, p.cwd, p.bellCount
 	p.advanceTerminal(data)
-	events := p.flushReplies()
+	events := p.kittyEvents
+	p.kittyEvents = nil
+	events = append(events, m.processKittyOutcomes(p)...)
+	events = append(events, p.flushReplies()...)
 	p.capture()
 	events = append(events,
 		Event{Kind: PaneOutput, Pane: p.id, Data: append([]byte(nil), data...)},
