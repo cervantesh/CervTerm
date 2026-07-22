@@ -65,6 +65,7 @@ type App struct {
 	windowID                  termmux.WindowID
 	controller                *windowController
 	r                         gpu.Renderer
+	terminalImageCacheFactory terminalImageCacheFactory
 	terminalImageCache        *terminalImageCache
 	terminalImages            terminalImageFrame
 	terminalImageDamage       terminalImageDamageState
@@ -169,28 +170,29 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 	safeFonts := safeFontsMode.Swap(false)
 	activeCfg := effectiveStartupConfig(authoredCfg, safeFonts)
 	app := &App{
-		cfg:                    activeCfg,
-		desiredCfg:             authoredCfg.Clone(),
-		composedCfg:            authoredCfg.Clone(),
-		safeFonts:              safeFonts,
-		configStateInitialized: true,
-		composedProvenance:     initialProvenance,
-		configPath:             sourcePath,
-		candidateOptions:       initialOptions,
-		scriptRT:               rt,
-		scriptGeneration:       1,
-		scriptBundle:           bundle,
-		scriptActivation:       activation,
-		legacyTransition:       legacyTransition,
-		configWatchHashes:      watchHashes,
-		cellW:                  9,
-		cellH:                  16,
-		uiScale:                1,
-		blinkStart:             time.Now(),
-		paneUI:                 make(map[termmux.PaneID]*paneUIState),
-		pendingPaneScroll:      make(map[termmux.PaneID]int),
-		pendingPaneResize:      make(map[termmux.PaneID]termmux.PaneGeometry),
-		bellState:              bellState{bellDelivered: make(map[termmux.PaneID]int)},
+		cfg:                       activeCfg,
+		desiredCfg:                authoredCfg.Clone(),
+		composedCfg:               authoredCfg.Clone(),
+		safeFonts:                 safeFonts,
+		configStateInitialized:    true,
+		composedProvenance:        initialProvenance,
+		configPath:                sourcePath,
+		candidateOptions:          initialOptions,
+		scriptRT:                  rt,
+		scriptGeneration:          1,
+		scriptBundle:              bundle,
+		scriptActivation:          activation,
+		legacyTransition:          legacyTransition,
+		configWatchHashes:         watchHashes,
+		cellW:                     9,
+		cellH:                     16,
+		uiScale:                   1,
+		blinkStart:                time.Now(),
+		paneUI:                    make(map[termmux.PaneID]*paneUIState),
+		pendingPaneScroll:         make(map[termmux.PaneID]int),
+		pendingPaneResize:         make(map[termmux.PaneID]termmux.PaneGeometry),
+		bellState:                 bellState{bellDelivered: make(map[termmux.PaneID]int)},
+		terminalImageCacheFactory: defaultTerminalImageCacheFactory,
 	}
 	app.initCompositionCoordinator()
 	app.linkLauncher = platformURLLauncher{}
@@ -314,8 +316,7 @@ func (a *App) runWindow() error {
 	if err := a.applyInitialGridWindowPlan(w, sx, sy); err != nil {
 		return err
 	}
-	a.initMux()
-	if err := a.commitStartupConfiguration(); err != nil {
+	if err := a.activateInitialTerminalImages(a.commitStartupConfiguration); err != nil {
 		return err
 	}
 	a.syncProcessServices()

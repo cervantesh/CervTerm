@@ -104,6 +104,9 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 		}
 		return nil
 	}))
+	if imageErr := child.prepareTerminalImageCache(); imageErr != nil {
+		return fail(imageErr)
+	}
 	appendTerminalImageCacheResource(bundle, child)
 	child.ligaturesActive = atlas.supportsLigatures(child.cfg.Font.Ligatures)
 	child.cellW, child.cellH = float32(atlas.cellW), float32(atlas.cellH)
@@ -153,7 +156,8 @@ func newProjectionApp(owner *App) *App {
 		safeFonts: owner.safeFonts, composedProvenance: append([]config.ProvenanceRecord(nil), owner.composedProvenance...),
 		configStateInitialized: true, configPath: owner.configPath, candidateOptions: owner.candidateOptions.Clone(),
 		mux: owner.mux, controller: owner.controller, scriptRT: owner.scriptRT, scriptGeneration: owner.scriptGeneration,
-		cellW: 9, cellH: 16, uiScale: 1, blinkStart: time.Now(),
+		terminalImageCacheFactory: owner.terminalImageCacheFactory,
+		cellW:                     9, cellH: 16, uiScale: 1, blinkStart: time.Now(),
 		paneUI: make(map[termmux.PaneID]*paneUIState), pendingPaneScroll: make(map[termmux.PaneID]int),
 		pendingPaneResize: make(map[termmux.PaneID]termmux.PaneGeometry), configWatchHashes: make(map[string][32]byte),
 		bellState: bellState{bellDelivered: owner.bellDelivered},

@@ -65,10 +65,10 @@ func (a *App) adoptInitialProjection(window *glfw.Window) error {
 				}
 				return nil
 			}),
-			projectionResourceFunc(a.closeTerminalImageCache),
-			projectionResourceFunc(a.closeNotificationEffectSink),
 		},
 	}
+	appendTerminalImageCacheResource(bundle, a)
+	bundle.resources = append(bundle.resources, projectionResourceFunc(a.closeNotificationEffectSink))
 	a.activateProjectionIME(window, bundle.beforeUnbind)
 	if accessibilityErr := prepareProjectionAccessibility(a, window, bundle.beforeUnbind); accessibilityErr != nil {
 		return errors.Join(accessibilityErr, bundle.beforeUnbind.close())

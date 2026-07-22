@@ -20,13 +20,14 @@ import (
 )
 
 type fakeRestoreProjectionFactory struct {
-	log        *[]string
-	failAt     int
-	bindAt     int
-	hosts      []*fakeNativeWindow
-	apps       []*App
-	geometries []termmux.RestoreWindowGeometry
-	bindings   map[int]termmux.WindowID
+	log         *[]string
+	failAt      int
+	bindAt      int
+	hosts       []*fakeNativeWindow
+	apps        []*App
+	geometries  []termmux.RestoreWindowGeometry
+	bindings    map[int]termmux.WindowID
+	resourceFor func(int, *App) projectionResource
 }
 
 func (f *fakeRestoreProjectionFactory) PrepareRestore(index int) (*nativeProjectionBundle, termmux.RestoreWindowGeometry, error) {
@@ -56,6 +57,9 @@ func (f *fakeRestoreProjectionFactory) PrepareRestore(index int) (*nativeProject
 		*f.log = append(*f.log, fmt.Sprintf("close:%d", index))
 		return nil
 	}))
+	if f.resourceFor != nil {
+		bundle.resources = append(bundle.resources, f.resourceFor(index, app))
+	}
 	geometry := termmux.RestoreWindowGeometry{Content: termmux.PixelRect{Width: 800 + index, Height: 480}, Metrics: termmux.CellMetrics{CellWidth: 8, CellHeight: 16}}
 	f.geometries = append(f.geometries, geometry)
 	if index == f.failAt {

@@ -493,7 +493,7 @@ func (a *App) closeTerminalImageCache() error {
 }
 
 func appendTerminalImageCacheResource(bundle *nativeProjectionBundle, app *App) {
-	if bundle == nil || app == nil {
+	if bundle == nil || app == nil || app.terminalImageCache == nil {
 		return
 	}
 	bundle.resources = append(bundle.resources, projectionResourceFunc(app.closeTerminalImageCache))
