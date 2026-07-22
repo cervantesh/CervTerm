@@ -43,10 +43,11 @@ func validateTerminalImageCacheLimits(limits terminalImageCacheLimits) (terminal
 type terminalImageAcquire func(gpu.ImageTextureKey) (termimage.DetachedResource, bool)
 
 type terminalImageCacheEntry struct {
-	texture  gpu.ImageTexture
-	bytes    uint64
-	lastUsed uint64
-	pinned   bool
+	texture       gpu.ImageTexture
+	bytes         uint64
+	width, height uint32
+	lastUsed      uint64
+	pinned        bool
 }
 
 type terminalImageRetryIdentity struct {
@@ -65,19 +66,21 @@ type terminalImageRetryState struct {
 }
 
 type terminalImageCacheStats struct {
-	Entries, Bytes, Pins uint64
-	Hits, Misses         uint64
-	Acquisitions         uint64
-	UploadAttempts       uint64
-	UploadFailures       uint64
-	RetryAttempts        uint64
-	RetryExhausted       uint64
-	Evictions            uint64
-	CloseFailures        uint64
-	OmittedEntryCap      uint64
-	OmittedByteCap       uint64
-	OmittedUnavailable   uint64
-	OmittedUploadFailure uint64
+	Frames, Entries, Bytes, Pins uint64
+	Hits, Misses                 uint64
+	Acquisitions                 uint64
+	UploadAttempts               uint64
+	UploadFailures               uint64
+	RetryAttempts                uint64
+	RetryExhausted               uint64
+	DrawAttempts                 uint64
+	DrawFailures                 uint64
+	Evictions                    uint64
+	CloseFailures                uint64
+	OmittedEntryCap              uint64
+	OmittedByteCap               uint64
+	OmittedUnavailable           uint64
+	OmittedUploadFailure         uint64
 }
 
 type terminalImageFrameResult struct {
@@ -88,6 +91,7 @@ type terminalImageFrameResult struct {
 	OmittedByteCap       uint64
 	OmittedUnavailable   uint64
 	OmittedUploadFailure uint64
+	Uploaded             []gpu.ImageTextureKey
 	Err                  error
 }
 
@@ -98,6 +102,7 @@ type terminalImageCache struct {
 	entries  map[gpu.ImageTextureKey]*terminalImageCacheEntry
 	retries  map[terminalImageRetryIdentity]*terminalImageRetryState
 	pins     []gpu.ImageTextureKey
+	uploaded []gpu.ImageTextureKey
 	bytes    uint64
 	clock    uint64
 	stats    terminalImageCacheStats
@@ -119,6 +124,7 @@ func newTerminalImageCache(renderer gpu.TerminalImageRenderer, acquire terminalI
 		entries:  make(map[gpu.ImageTextureKey]*terminalImageCacheEntry),
 		retries:  make(map[terminalImageRetryIdentity]*terminalImageRetryState),
 		pins:     make([]gpu.ImageTextureKey, 0, validated.Entries),
+		uploaded: make([]gpu.ImageTextureKey, 0, validated.Entries),
 	}, nil
 }
 
@@ -127,6 +133,8 @@ func (c *terminalImageCache) beginFrame(now time.Time, visible []gpu.ImageTextur
 	if c == nil || c.closed {
 		return result
 	}
+	c.stats.Frames++
+	c.uploaded = c.uploaded[:0]
 	c.releasePins()
 	for _, retry := range c.retries {
 		retry.active = false
@@ -260,12 +268,16 @@ func (c *terminalImageCache) beginFrame(now time.Time, visible []gpu.ImageTextur
 			retry.deadline = time.Time{}
 			retry.exhausted = false
 		}
-		entry = &terminalImageCacheEntry{texture: texture, bytes: bytes}
+		entry = &terminalImageCacheEntry{
+			texture: texture, bytes: bytes, width: resource.Width, height: resource.Height,
+		}
 		c.entries[key] = entry
 		c.bytes += bytes
+		c.uploaded = append(c.uploaded, key)
 		c.pin(key, entry)
 		result.Ready++
 	}
+	result.Uploaded = c.uploaded
 	return result
 }
 
@@ -383,17 +395,34 @@ func (c *terminalImageCache) releasePins() {
 	c.pins = c.pins[:0]
 }
 
-func (c *terminalImageCache) texture(key gpu.ImageTextureKey) (gpu.ImageTexture, bool) {
+type terminalImageTextureMetadata struct {
+	Width, Height uint32
+}
+
+func (c *terminalImageCache) textureMetadata(key gpu.ImageTextureKey) (gpu.ImageTexture, terminalImageTextureMetadata, bool) {
 	if c == nil || c.closed {
-		return nil, false
+		return nil, terminalImageTextureMetadata{}, false
 	}
 	entry := c.entries[key]
-	return func() (gpu.ImageTexture, bool) {
-		if entry == nil || entry.texture == nil {
-			return nil, false
-		}
-		return entry.texture, true
-	}()
+	if entry == nil || entry.texture == nil || entry.width == 0 || entry.height == 0 {
+		return nil, terminalImageTextureMetadata{}, false
+	}
+	return entry.texture, terminalImageTextureMetadata{Width: entry.width, Height: entry.height}, true
+}
+
+func (c *terminalImageCache) texture(key gpu.ImageTextureKey) (gpu.ImageTexture, bool) {
+	texture, _, ok := c.textureMetadata(key)
+	return texture, ok
+}
+
+func (c *terminalImageCache) draw(texture gpu.ImageTexture, destination, source gpu.ImageRect, opacity float32) {
+	if c == nil || c.closed || texture == nil {
+		return
+	}
+	c.stats.DrawAttempts++
+	if err := c.renderer.DrawTerminalImage(texture, destination, source, opacity); err != nil {
+		c.stats.DrawFailures++
+	}
 }
 
 func (c *terminalImageCache) nextRetryDeadline() (time.Time, bool) {
@@ -448,6 +477,7 @@ func (c *terminalImageCache) Close() error {
 		delete(c.entries, key)
 	}
 	c.bytes = 0
+	c.uploaded = c.uploaded[:0]
 	clear(c.retries)
 	return joined
 }
@@ -458,6 +488,7 @@ func (a *App) closeTerminalImageCache() error {
 	}
 	cache := a.terminalImageCache
 	a.terminalImageCache = nil
+	a.resetTerminalImageDrawState()
 	return cache.Close()
 }
 
