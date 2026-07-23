@@ -9,14 +9,19 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/ActiveState/termtest/conpty"
 )
 
+// localSession owns native resources and must never be copied after first use.
 type localSession struct {
-	pty    *conpty.ConPty
-	handle uintptr
+	pty       *conpty.ConPty
+	handle    uintptr
+	closePTY  func() error
+	closeErr  error
+	closeOnce sync.Once
 }
 
 func NewLocal(rows, cols uint16) (Session, error) {
@@ -68,7 +73,7 @@ func NewLocalWithOptions(rows, cols uint16, opts Options) (Session, error) {
 		return nil, err
 	}
 
-	return &localSession{pty: cp, handle: handle}, nil
+	return &localSession{pty: cp, handle: handle, closePTY: cp.Close}, nil
 }
 
 // hasEnvKey reports whether env already contains a "KEY=..." entry for key,
@@ -109,10 +114,14 @@ func (s *localSession) Resize(size Size) error {
 }
 
 func (s *localSession) Close() error {
-	err := s.pty.Close()
-	if s.handle != 0 {
-		_ = syscall.CloseHandle(syscall.Handle(s.handle))
-		s.handle = 0
-	}
-	return err
+	s.closeOnce.Do(func() {
+		if s.closePTY != nil {
+			s.closeErr = s.closePTY()
+		}
+		if s.handle != 0 {
+			_ = syscall.CloseHandle(syscall.Handle(s.handle))
+			s.handle = 0
+		}
+	})
+	return s.closeErr
 }
