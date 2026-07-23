@@ -26,6 +26,13 @@ func loadConfiguredRestorePlan(cfg config.Config) (layoutstate.Plan, bool, error
 	return store.Load()
 }
 
+func applyRestoreLoadPolicy(plan layoutstate.Plan, found bool, err error) (layoutstate.Plan, bool, string) {
+	if err != nil {
+		return layoutstate.Plan{}, false, "invalid-or-unavailable"
+	}
+	return plan, found, ""
+}
+
 func prepareConfiguredRestore(cfg config.Config, plan layoutstate.Plan, monitors []windowbounds.Monitor) (layoutrestore.Blueprint, error) {
 	targets := make([]layoutrestore.Target, 0, len(cfg.LaunchMenu))
 	for _, target := range cfg.LaunchMenu {
