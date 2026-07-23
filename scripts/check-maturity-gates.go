@@ -43,6 +43,17 @@ type phase15EvidenceRow struct {
 	Exclusion     string   `json:"exclusion,omitempty"`
 }
 
+type phase15SupportMatrix struct {
+	Features []phase15SupportFeature `json:"features"`
+}
+
+type phase15SupportFeature struct {
+	ID             string `json:"id"`
+	Status         string `json:"status"`
+	DefaultEnabled *bool  `json:"default_enabled"`
+	SupportClaim   string `json:"support_claim"`
+}
+
 var requiredDocs = []string{
 	"SUPPORT.md",
 	".github/ISSUE_TEMPLATE/bug_report.yml",
@@ -85,6 +96,7 @@ func main() {
 	findings = append(findings, checkReleaseTrustDoc()...)
 	findings = append(findings, checkCIGates()...)
 	findings = append(findings, checkPhase15Evidence()...)
+	findings = append(findings, checkPhase15SupportMatrix()...)
 	if len(findings) > 0 {
 		fmt.Fprintln(os.Stderr, "maturity gate failures:")
 		for _, f := range findings {
@@ -201,6 +213,47 @@ func checkCIGates() []finding {
 	for _, forbidden := range []string{"power" + "shell", "p" + "wsh"} {
 		if strings.Contains(strings.ToLower(text), forbidden) {
 			findings = append(findings, finding{path: path, reason: "CI must not invoke forbidden shell host"})
+		}
+	}
+	return findings
+}
+
+func checkPhase15SupportMatrix() []finding {
+	const path = "docs/parity-support-matrix.json"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	var document phase15SupportMatrix
+	if err := json.Unmarshal(data, &document); err != nil {
+		return []finding{{path: path, reason: "invalid JSON: " + err.Error()}}
+	}
+	var findings []finding
+	features := make(map[string]phase15SupportFeature, len(document.Features))
+	for _, feature := range document.Features {
+		if feature.ID == "" {
+			findings = append(findings, finding{path: path, reason: "support feature has empty id"})
+			continue
+		}
+		if _, duplicate := features[feature.ID]; duplicate {
+			findings = append(findings, finding{path: path, reason: "duplicate support feature " + feature.ID})
+		}
+		features[feature.ID] = feature
+	}
+	for _, id := range []string{"input.ime_preedit", "accessibility.windows_uia", "shell.windows_native_notifications", "graphics.kitty", "graphics.sixel_iterm"} {
+		feature, exists := features[id]
+		if !exists {
+			findings = append(findings, finding{path: path, reason: "missing experimental support feature " + id})
+			continue
+		}
+		claim := strings.TrimSpace(feature.SupportClaim)
+		if feature.Status != "experimental" || feature.DefaultEnabled == nil || *feature.DefaultEnabled || claim == "" || claim == "supported" {
+			findings = append(findings, finding{path: path, reason: id + " must remain experimental, explicit default-off, and non-supported"})
+		}
+	}
+	for _, id := range []string{"renderer.selection", "domains.local_ssh_wsl", "mux.live_detach_reattach"} {
+		if feature, exists := features[id]; !exists || feature.Status != "excluded" {
+			findings = append(findings, finding{path: path, reason: id + " must remain excluded"})
 		}
 	}
 	return findings
