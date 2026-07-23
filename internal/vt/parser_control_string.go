@@ -54,6 +54,7 @@ func (p *Parser) SetControlStringSink(sink ControlStringSink) {
 // Reset cancels one open selected control-string candidate, drops all partial
 // parser state, and returns to ground. Parser callbacks remain installed.
 func (p *Parser) Reset() {
+	p.preservePublicHoldForReset()
 	if kind, ok := p.activeControlKind(); ok {
 		p.cancelControlString(kind, false)
 	} else {
@@ -63,6 +64,7 @@ func (p *Parser) Reset() {
 	p.utf8Len = 0
 	p.resetCSI()
 	p.resetOSC()
+	p.clearPublicProjection()
 }
 
 // EndOfInput cancels an incomplete control string and drops every other partial
@@ -73,15 +75,20 @@ func (p *Parser) EndOfInput() {
 
 func (p *Parser) startControlString(kind ControlStringKind) {
 	p.clearControlString()
-	if p.control == nil || p.control.sink == nil {
+	hasSink := p.control != nil && p.control.sink != nil
+	if !hasSink && !p.publicWantsControl(kind) {
 		p.state = controlDiscardState(kind)
 		return
+	}
+	if p.control == nil {
+		p.control = new(controlStringState)
 	}
 	p.control.activeSink = p.control.sink
 	switch kind {
 	case ControlStringDCS:
 		p.state = stateDCSPreamble
 	case ControlStringOSC1337:
+		p.control.total = len("1337;")
 		p.state = stateOSC1337
 	default:
 		p.state = stateAPC
@@ -182,17 +189,26 @@ func (p *Parser) advanceOSC1337Escape(b byte) {
 	case '\\':
 		p.finishControlString(ControlStringOSC1337)
 	case 0x07:
-		p.appendOSC1337Byte(0x1b)
-		p.finishControlString(ControlStringOSC1337)
+		if p.appendOSC1337Byte(0x1b) {
+			p.finishControlString(ControlStringOSC1337)
+		} else {
+			// BEL terminates the overflow discard immediately.
+			p.state = stateGround
+		}
 	case 0x18, 0x1a:
 		p.cancelControlString(ControlStringOSC1337, false)
 	case 0x1b:
-		p.appendOSC1337Byte(0x1b)
-		p.state = stateOSC1337Esc
+		if p.appendOSC1337Byte(0x1b) {
+			p.state = stateOSC1337Esc
+		} else {
+			// The prior ESC overflowed, while this ESC may begin an
+			// overlapping ST for the rejected frame.
+			p.state = stateOSC1337DiscardEsc
+		}
 	default:
-		p.appendOSC1337Byte(0x1b)
-		p.appendOSC1337Byte(b)
-		p.state = stateOSC1337
+		if p.appendOSC1337Byte(0x1b) && p.appendOSC1337Byte(b) {
+			p.state = stateOSC1337
+		}
 	}
 }
 
@@ -254,12 +270,10 @@ func (p *Parser) advanceUnselectedDCSEscape(b byte) {
 }
 
 func (p *Parser) abandonUnselectedDCS(next byte) {
-	sink := p.control.activeSink
+	// No selected DCS payload was delivered, so there is no selected transfer
+	// to cancel and no adapter diagnostic to emit.
 	p.clearControlString()
 	p.state = next
-	if sink != nil {
-		sink(ControlStringEvent{Kind: ControlStringDCS, Final: true, Cancelled: true})
-	}
 }
 
 func (p *Parser) appendControlByte(kind ControlStringKind, b byte) bool {
@@ -267,6 +281,10 @@ func (p *Parser) appendControlByte(kind ControlStringKind, b byte) bool {
 	if control.total >= maxControlStringLen {
 		p.overflowControlString(kind)
 		return false
+	}
+	if control.activeSink == nil {
+		control.total++
+		return true
 	}
 	if control.chunkLen == len(control.chunk) {
 		p.emitControlChunk(kind)
@@ -277,20 +295,32 @@ func (p *Parser) appendControlByte(kind ControlStringKind, b byte) bool {
 	return true
 }
 
-func (p *Parser) appendOSC1337Byte(b byte) {
+func (p *Parser) appendOSC1337Byte(b byte) bool {
 	control := p.control
+	if control.total >= maxControlStringLen {
+		p.overflowControlString(ControlStringOSC1337)
+		return false
+	}
+	if control.activeSink == nil {
+		control.total++
+		return true
+	}
 	if control.chunkLen == len(control.chunk) {
 		p.emitControlChunk(ControlStringOSC1337)
 	}
 	control.chunk[control.chunkLen] = b
 	control.chunkLen++
+	control.total++
+	return true
 }
 
 func (p *Parser) emitControlChunk(kind ControlStringKind) {
 	control := p.control
 	chunk := control.chunk[:control.chunkLen]
 	control.chunkLen = 0
-	control.activeSink(ControlStringEvent{Kind: kind, Chunk: chunk})
+	if control.activeSink != nil {
+		control.activeSink(ControlStringEvent{Kind: kind, Chunk: chunk})
+	}
 }
 
 func (p *Parser) finishControlString(kind ControlStringKind) {
@@ -389,7 +419,7 @@ func (p *Parser) activeControlKind() (ControlStringKind, bool) {
 	switch p.state {
 	case stateAPC, stateAPCEsc:
 		return ControlStringAPC, true
-	case stateDCS, stateDCSEsc, stateDCSPreamble, stateDCSPreambleEsc:
+	case stateDCS, stateDCSEsc:
 		return ControlStringDCS, true
 	case stateOSC1337, stateOSC1337Esc:
 		return ControlStringOSC1337, true

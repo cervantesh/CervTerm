@@ -212,3 +212,32 @@ Before enabling, run the normal build gates above plus the focused Phase 13 auto
 | macOS, real GLFW/OpenGL GUI | UNRUN | No GUI qualification or Kitty support claim recorded. |
 
 Record any future run in a dedicated validation artifact before changing these rows, `docs/parity-support-matrix.json`, release notes, or the default. Partial completion stays experimental/default-off; a failed security, ownership, rollback or context-isolation row blocks a support/default-on proposal.
+
+## Phase 14 experimental Sixel and iTerm images — real-GUI qualification
+
+Phase 14 is delivered as a restart-scoped, default-off experiment with `support_claim=none`, not as a platform or full-protocol support claim. Use a strict-v2 temporary config, enable only the protocol combination named by the row, restart for every comparison, and keep every configured limit at or below the generated defaults. Record Windows build, architecture, GPU/driver, OpenGL vendor/renderer/version, CervTerm commit, emitting application/fixture plus hashes, exact config, observed diagnostics/replies, and screenshots/video. A row not personally exercised is **UNRUN**, never PASS.
+
+Automated parser, grammar, decode, scheduler, lifecycle, rollback, diagnostics, public-output redaction, import/no-I/O, performance, and fuzz evidence is recorded in [`validation/phase-14-qualification.md`](validation/phase-14-qualification.md) and [`validation/phase-14-closeout.md`](validation/phase-14-closeout.md). It does not change any row below.
+
+| Windows 11 / real GLFW/OpenGL manual check | Result | Required evidence |
+|---|---|---|
+| All graphics flags false: ordinary UTF-8, disabled Sixel/iTerm frames, text rendering, Lua output callbacks, idle cadence, and shutdown remain compatible with the text-only path | UNRUN | exact config, emitted bytes/tool, callback trace, idle observation, screenshot |
+| Sixel only: each accepted preamble, raster declaration, RGB palette select/define, repeats, `$`, `-`, transparent pixels, non-divisible cell spans, pane clipping, and fixed `z=0` ordering render as documented | UNRUN | fixture hashes/commands, cell metrics, screenshots for tokens/spans/layers |
+| iTerm only: BEL and ST forms, strict padded base64 PNG, exact `size`, intrinsic/width-only/height-only aspect sizing, alpha, pane clipping, and fixed `z=0` ordering render as documented | UNRUN | fixture hashes/commands, cell metrics, screenshots for all sizing modes |
+| Kitty/Sixel/iTerm combinations: all eight enable masks create only requested adapters, share one bounded FIFO/two-worker scheduler and pane/process budgets, preserve Kitty/DSR/OSC reply order, and never produce a Sixel/iTerm reply | UNRUN | eight configs/restarts, captured replies, scheduler/budget observations |
+| Cursor neutrality: successful, malformed, cancelled, timed-out, and over-limit Sixel/iTerm frames leave cursor row/column and subsequent text placement unchanged | UNRUN | before/after CPR or deterministic text grid plus screenshot/trace |
+| Lifecycle: edit/erase/scroll/history eviction/ED3/reflow/alternate exit/delete/reset/close retires an ephemeral resource only with its final placement; pane/tab/window/workspace movement preserves valid CPU identity | UNRUN | scripted sequence, before/after screenshots/video, final resource observations |
+| Cross-window GL ownership: moved images upload in the destination context; source-window close, cache pressure, upload failure/retry, context teardown, and shutdown never reuse a foreign texture or stall input | UNRUN | two-window trace, GL diagnostics/counters if available, responsiveness notes |
+| Failure/rollback: malformed grammar/base64/PNG, external-I/O/name/path/URL attempts, bombs, stale metrics/generation, close-during-decode, and child/restore activation failure commit no partial state and leave prior text/image state usable | UNRUN | adversarial fixtures, diagnostics, before/after state, failure-injection trace |
+| Public output privacy: enabled selected Kitty/Sixel/iTerm envelopes never reach `PaneOutput`/Lua output callbacks across fragmentation, cancel, overflow, reset, or EOF; disabled/unselected controls remain byte-identical; diagnostics contain only allowed fields | UNRUN | callback capture with payload markers, diagnostics record, raw emitting command kept private/redacted |
+
+### Phase 14 platform disposition
+
+| Real-GUI platform row | Result | Claim boundary |
+|---|---|---|
+| Windows 11 `windows/amd64`, real GLFW/OpenGL GUI | UNRUN | Automated Windows tests/fuzz/benchmarks are not a real-GUI run; Sixel/iTerm remain experimental/default-off with support none. |
+| Windows 11 `windows/arm64`, real GLFW/OpenGL GUI | UNRUN | No Phase 14 GUI run or support claim recorded. |
+| Linux, real GLFW/OpenGL GUI | UNRUN | Headless/tagged compilation or tests do not qualify GUI behavior. |
+| macOS, real GLFW/OpenGL GUI | UNRUN | No Phase 14 GUI run or support claim recorded. |
+
+Record any future run in a dedicated validation artifact before changing these rows, `docs/parity-support-matrix.json`, release notes, defaults, or support claims. Partial completion stays experimental/default-off. Any payload leakage, external I/O, cursor/reply side effect, ownership/rollback failure, cross-context GL reuse, cap widening/multiplication, or unstable input blocks a status proposal.

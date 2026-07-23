@@ -397,7 +397,10 @@ func (m *Mux) Drain(limit int) []Event {
 				events = append(events, m.advancePane(p, record.data)...)
 			}
 			if record.err != nil && p.state == PaneStateRunning {
-				p.parser.EndOfInput()
+				public := p.parser.EndOfInputPublic()
+				if len(public) > 0 {
+					events = append(events, Event{Kind: PaneOutput, Pane: p.id, Data: public})
+				}
 				if p.kittyAdapter != nil {
 					p.kittyAdapter.Close()
 					p.kittyAdapter = nil

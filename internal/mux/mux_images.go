@@ -31,6 +31,7 @@ func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
 	if m.options.ITermEnabled {
 		pane.itermAdapter = itermimage.NewAdapter(store)
 	}
+	pane.parser.SetPublicOutputRedaction(pane.kittyAdapter != nil, pane.sixelAdapter != nil, pane.itermAdapter != nil)
 	if pane.kittyAdapter != nil || pane.sixelAdapter != nil || pane.itermAdapter != nil {
 		pane.parser.SetControlStringSink(func(event vt.ControlStringEvent) {
 			switch event.Kind {

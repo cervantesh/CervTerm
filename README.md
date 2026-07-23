@@ -10,7 +10,7 @@ CervTerm is not a finished daily-driver terminal yet, but it already includes:
 
 - Windows ConPTY backend and Unix PTY backend behind build tags.
 - GLFW/OpenGL frontend.
-- Experimental, default-off, restart-scoped direct-data Kitty graphics subset on the GLFW/OpenGL frontend (`t`/`T`/`p`/`d`/`q`; RGB24, RGBA32, and PNG; zlib only for raw RGB/RGBA), with bounded chunking and resource caps.
+- Experimental, default-off, restart-scoped bounded Kitty, Sixel, and iTerm inline-image subsets on the GLFW/OpenGL frontend, with independent protocol flags, shared resource budgets, and no stable support claim.
 - Scrollback, alternate screen, resize reflow, selection/copy/paste, and bracketed paste.
 - Native in-process pane mux with independent PTY/parser/core state per pane, clipped binary row/column splits, draggable dividers, focused input, deterministic close/collapse, and independent per-pane zoom.
 - Scrollback search: `ctrl+shift+f` opens a search bar (Enter jumps to the next match upward, Esc closes); also scriptable via `term:search`.
@@ -183,20 +183,29 @@ Fixed-grid controls `font.line_height`/`font.cell_width` (0.5–3.0) and `baseli
 
 ## Experimental Kitty graphics opt-in
 
-CervTerm implements a deliberately narrow, experimental Kitty graphics subset. It is disabled by default, restart-scoped, and rendered only by the existing GLFW/OpenGL frontend. The accepted direct-data actions are `t` (transmit), `T` (transmit and place), `p` (place), `d` (delete), and `q` (query). Accepted formats are RGB24 (`f=24`), RGBA32 (`f=32`), and PNG (`f=100`); `o=z` zlib compression applies only to raw RGB24/RGBA32 data.
+CervTerm implements deliberately narrow Kitty, Sixel, and iTerm inline-image subsets. All three are experimental, disabled by default, restart-scoped, independently enabled, rendered only by the existing GLFW/OpenGL frontend, and carry no stable support claim.
 
-Enable it in an explicit v2 config, then restart CervTerm:
+Enable only the protocols you need in an explicit v2 config, then restart CervTerm:
 
 ```lua
 return {
   config_version = 2,
-  graphics = { kitty = { enabled = true } },
+  graphics = {
+    -- Set only the protocol(s) being tested to true.
+    kitty = { enabled = false },
+    sixel = { enabled = false },
+    iterm = { enabled = false },
+  },
 }
 ```
 
-Transfers, decoded images, placements, replies, decode concurrency, and per-context GPU textures are bounded. Configurable limits may only lower the built-in caps. Protocol replies are fixed and value-free: `OK`, `EINVAL`, `ENOTSUP`, `ENOSPC`, `ETIME`, `ECANCELED`, `ENOENT`, and `EIO`. To roll back, set `graphics.kitty.enabled = false` and restart.
+The Kitty subset accepts direct-data `t`/`T`/`p`/`d`/`q` actions, RGB24, RGBA32, and PNG; `o=z` applies only to raw RGB/RGBA. Replies are fixed and value-free: `OK`, `EINVAL`, `ENOTSUP`, `ENOSPC`, `ETIME`, `ECANCELED`, `ENOENT`, and `EIO`.
 
-This is not a full Kitty conformance claim. Animation, external file/path/temporary-file/shared-memory transports, Unicode placeholders, Sixel, iTerm inline images, and non-OpenGL rendering are not supported. See [`docs/getting-started.md`](docs/getting-started.md) for exact caps and [`docs/troubleshooting.md`](docs/troubleshooting.md) for diagnostics.
+The Phase 14 Sixel subset accepts only 7-bit `ESC P q`, `ESC P 0q`, `ESC P 0;0q`, or `ESC P 0;0;0q`, terminated by ST. It requires exactly one `"1;1;W;H` raster declaration before pixel output and accepts only `?`–`~`, `!N<char>` (`N=1..4096`), `#N`, `#N;2;R;G;B`, `$`, and `-`. The iTerm subset accepts only 7-bit `OSC 1337;File=...:<strict padded base64>` terminated by BEL or ST, with exact `inline=1`, positive decoded `size`, one PNG with exact EOF, and optionally one cell dimension (`width=N` xor `height=N`, `N=1..256`) with absent or exact `preserveAspectRatio=1`.
+
+Kitty, Sixel, and iTerm share the same lower-only pane/process limits, FIFO scheduler, two process workers, one outstanding job per pane, queue capacity 32, and 250 ms acceptance deadline. Sixel/iTerm use internal high-half IDs (`0x80000000..0xffffffff`), commit cursor-neutral ephemeral resources, retire a resource with its final placement, emit no protocol reply, and reserve no reply slot. Enabled selected image frames are removed by the parser-coupled `PaneOutput` projection before Lua output callbacks; disabled or unselected control strings remain public.
+
+Operational rollback is independent: set the affected `graphics.<protocol>.enabled = false` and restart. This is not a full Kitty, Sixel, or iTerm conformance claim. C1 forms, animation, external file/path/URL/temporary-file/shared-memory/download/write transports, broad iTerm sizing, Sixel scrolling/DECSDM, cursor effects, and non-OpenGL rendering remain excluded. See [`docs/getting-started.md`](docs/getting-started.md) for exact caps, [`docs/manual-verification.md`](docs/manual-verification.md) for the entirely UNRUN Phase 14 real-GUI matrix, and [`docs/troubleshooting.md`](docs/troubleshooting.md) for diagnostics.
 
 ## Known limitations
 

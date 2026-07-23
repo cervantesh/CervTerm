@@ -21,6 +21,8 @@ type Parser struct {
 
 	control *controlStringState
 
+	public publicOutputProjection
+
 	utf8Buf [utf8.UTFMax]byte
 	utf8Len int
 
@@ -56,7 +58,20 @@ const (
 
 const maxCSIParam = 1<<16 - 1
 
+// Advance parses data without returning the public byte projection. When public
+// redaction is configured it still runs the projection path so callers may mix
+// Advance and AdvancePublic without desynchronizing framing decisions.
 func (p *Parser) Advance(t *core.Terminal, data []byte) {
+	if p.public.configured() || p.public.mode != publicOutputIdle || p.public.holdLen != 0 {
+		p.advanceProjected(t, data, false)
+		return
+	}
+	p.advanceCore(t, data)
+}
+
+// advanceCore is the parser implementation shared by Advance and AdvancePublic.
+// It deliberately knows nothing about public-output projection.
+func (p *Parser) advanceCore(t *core.Terminal, data []byte) {
 	for len(data) > 0 {
 		if p.utf8Len > 0 {
 			// A control/ASCII byte cannot continue UTF-8. Drop the malformed pending
