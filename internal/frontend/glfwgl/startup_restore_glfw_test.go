@@ -3,8 +3,10 @@
 package glfwgl
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"cervterm/internal/config"
@@ -50,6 +52,17 @@ func TestLoadConfiguredRestorePlanIsOptInAndUsesConfiguredStore(t *testing.T) {
 	}
 	if _, found, err := loadConfiguredRestorePlan(cfg); err == nil || !found {
 		t.Fatalf("corrupt found=%v err=%v", found, err)
+	}
+}
+
+func TestRestoreLoadPolicyTurnsInvalidStateIntoFreshValueFreeFallback(t *testing.T) {
+	plan := startupRestorePlan(t, layoutstate.Launch{})
+	got, found, disposition := applyRestoreLoadPolicy(plan, true, errors.New("SECRET layout path and payload"))
+	if found || got.Snapshot().Version != 0 || disposition != "invalid-or-unavailable" {
+		t.Fatalf("fallback plan=%#v found=%v disposition=%q", got.Snapshot(), found, disposition)
+	}
+	if strings.Contains(disposition, "SECRET") {
+		t.Fatalf("fallback disposition leaked source error: %q", disposition)
 	}
 }
 

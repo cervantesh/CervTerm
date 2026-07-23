@@ -29,6 +29,8 @@ jobs:
         run: go test ./internal/vt -run '^$' -fuzz=FuzzParserAdvanceDoesNotPanic -fuzztime=2s
       - name: GLFW tests
         run: go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -count=1
+      - name: Phase 15 recovery and redaction gates
+        run: go run ./scripts/check-phase15-recovery.go -race
       - name: Generate Windows resources
         run: |
           go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest

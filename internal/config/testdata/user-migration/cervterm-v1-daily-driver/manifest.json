@@ -1,0 +1,7 @@
+{
+  "id": "cervterm-v1-daily-driver",
+  "source_kind": "cervterm-v1",
+  "provenance": "sanitized owner-provided daily-driver configuration",
+  "effective_equivalence": true,
+  "unsupported": []
+}

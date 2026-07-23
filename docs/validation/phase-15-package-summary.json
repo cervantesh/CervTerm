@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-07-23T18:15:00-04:00",
+  "candidate_commit": "d468089",
+  "version": "v0.10.0-beta.1",
+  "platform": "windows-amd64",
+  "package": {
+    "status": "PASS",
+    "command": "go run ./scripts/package-beta.go -version v0.10.0-beta.1 -outdir C:/tmp/cervterm-phase15-package-final",
+    "artifact": "cervterm-v0.10.0-beta.1-windows.zip",
+    "bytes": 17208623,
+    "sha256": "4db6cdfbb895aaa7425c574ccc9d29fe56368a1517852313aac23a295d5105cf",
+    "note": "Local qualification artifact; the release workflow rebuilds from the merged tag."
+  },
+  "installed_smoke": {
+    "status": "PASS",
+    "command": "go run ./scripts/smoke-installed-package.go -zip C:/tmp/cervterm-phase15-package-final/cervterm-v0.10.0-beta.1-windows.zip -expected-version v0.10.0-beta.1 -workdir C:/tmp/cervterm-phase15-package-final/smoke",
+    "checks": [
+      "cervterm --version",
+      "cervterm --build-info",
+      "cervterm --doctor",
+      "real ConPTY cmd echo",
+      "clean child shutdown"
+    ]
+  },
+  "defaults": {
+    "kitty": false,
+    "sixel": false,
+    "iterm": false,
+    "ime": false,
+    "accessibility": false,
+    "native_notifications": false
+  }
+}

@@ -125,6 +125,7 @@ func printConfigDoctor(configPath string, candidateOptions script.CandidateOptio
 	fmt.Printf("  background-budget: cpu=%d gpu=%d encoded-per-image=%d encoded-aggregate=%d\n", backgroundcore.MaxAggregateCPUBytes, backgroundcore.MaxAggregateGPUBytes, backgroundcore.MaxEncodedBytesPerImage, backgroundcore.MaxAggregateEncodedBytes)
 	fmt.Printf("  background-layers: %d\n", len(report.Config.Background.Layers))
 	fmt.Println("  background-surface-capability: runtime-probed (OpenGL frontend supported; headless unavailable)")
+	printSupportDoctor(report.Config)
 	if safeFonts && report.Config.Font.Family != "Go Mono" {
 		fmt.Printf("  font-configured-family: %s\n", report.Config.Font.Family)
 	}
