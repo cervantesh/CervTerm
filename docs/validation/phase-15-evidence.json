@@ -42,7 +42,15 @@
       "configuration": "sanitized CervTerm v1 and WezTerm daily-driver corpus",
       "evidence": ["docs/validation/phase-15-config-migrations.md"]
     },
-    {"id": "recovery.redaction", "status": "UNRUN", "attempted": false},
+    {
+      "id": "recovery.redaction",
+      "status": "PASS",
+      "attempted": true,
+      "commit": "1a7335a",
+      "environment": "Windows 11 windows/amd64; Go 1.25.8; focused normal and race gates",
+      "configuration": "config reload, layout restore, transient image activation/cache, diagnostic setup and panic fixtures",
+      "evidence": ["docs/validation/phase-15-recovery-redaction.md"]
+    },
     {"id": "performance.phase15", "status": "UNRUN", "attempted": false},
     {"id": "security.automated", "status": "UNRUN", "attempted": false},
     {"id": "accessibility.automated", "status": "UNRUN", "attempted": false},
