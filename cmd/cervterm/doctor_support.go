@@ -54,7 +54,7 @@ func doctorCapabilities(cfg config.Config) []doctorCapability {
 		},
 		{
 			ID: "accessibility.windows_uia", Status: "experimental", Platform: "windows",
-			ManualQualification: "unrun", SupportClaim: "none", DefaultEnabled: boolPointer(false),
+			ManualQualification: "phase15-gui-lifecycle-only-no-at", SupportClaim: "none", DefaultEnabled: boolPointer(false),
 			ConfiguredIntent: boolIntent(cfg.Accessibility.Enabled), BuildAvailability: doctorWindowsAvailability("windows-uia"),
 		},
 		{
@@ -63,13 +63,13 @@ func doctorCapabilities(cfg config.Config) []doctorCapability {
 			ConfiguredIntent: boolIntent(cfg.Notification.Enabled), BuildAvailability: doctorWindowsAvailability("windows-native"),
 		},
 		{
-			ID: "graphics.kitty", Status: "experimental", Platform: "windows-glfw-opengl",
-			ManualQualification: "unrun", SupportClaim: "subset_only", DefaultEnabled: boolPointer(false),
+			ID: "graphics.kitty", Status: "experimental", Platform: "linux-wslg-scoped; windows-conpty-filtered",
+			ManualQualification: "phase15-linux-wslg-accepted-reply-windows-filtered", SupportClaim: "subset_only", DefaultEnabled: boolPointer(false),
 			ConfiguredIntent: boolIntent(cfg.Graphics.Kitty.Enabled), BuildAvailability: doctorGLFWAvailability("glfw-opengl"),
 		},
 		{
-			ID: "graphics.sixel_iterm", Status: "experimental", Platform: "windows-glfw-opengl",
-			ManualQualification: "unrun", SupportClaim: "none", DefaultEnabled: boolPointer(false),
+			ID: "graphics.sixel_iterm", Status: "experimental", Platform: "windows-iterm-glfw-opengl; linux-wslg-sixel-scoped",
+			ManualQualification: "phase15-windows-iterm-pass-linux-wslg-sixel-pass-conpty-filter-boundary", SupportClaim: "none", DefaultEnabled: boolPointer(false),
 			ConfiguredIntent:  fmt.Sprintf("sixel=%t,iterm=%t", cfg.Graphics.Sixel.Enabled, cfg.Graphics.ITerm.Enabled),
 			BuildAvailability: doctorGLFWAvailability("glfw-opengl"),
 		},
