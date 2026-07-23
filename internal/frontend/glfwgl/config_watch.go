@@ -5,8 +5,11 @@ package glfwgl
 import (
 	"crypto/sha256"
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"cervterm/internal/config"
@@ -75,14 +78,34 @@ func normalizeWatchPaths(paths []string) []string {
 		if path == "" {
 			continue
 		}
-		if _, ok := seen[path]; ok {
+		identity := watchPathIdentity(path)
+		if _, ok := seen[identity]; ok {
 			continue
 		}
-		seen[path] = struct{}{}
+		seen[identity] = struct{}{}
 		result = append(result, path)
 	}
 	sort.Strings(result)
 	return result
+}
+
+// watchPathIdentity coalesces Windows case and 8.3 parent-directory aliases
+// without resolving the final path component. Keeping that component intact is
+// required so two declarative symlink aliases remain independently watched for
+// retargeting.
+func watchPathIdentity(path string) string {
+	clean := filepath.Clean(path)
+	if runtime.GOOS != "windows" {
+		return clean
+	}
+	if absolute, err := filepath.Abs(clean); err == nil {
+		clean = absolute
+	}
+	directory := filepath.Dir(clean)
+	if canonicalDirectory, err := filepath.EvalSymlinks(directory); err == nil {
+		clean = filepath.Join(canonicalDirectory, filepath.Base(clean))
+	}
+	return strings.ToLower(filepath.Clean(clean))
 }
 
 func watchExpectations(paths []string) []config.SourceWatchExpectation {
