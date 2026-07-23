@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "phase": 15,
+  "phase_status": "in_progress",
+  "baseline_commit": "1a42be817273affa873f37bb99e8dd1d7c615bf7",
+  "baseline_release": "v0.9.0-beta.1",
+  "states": ["PASS", "FAIL", "SKIP", "UNRUN", "NOT-APPLICABLE"],
+  "rows": [
+    {
+      "id": "authority.preflight",
+      "status": "PASS",
+      "attempted": true,
+      "commit": "1a42be817273affa873f37bb99e8dd1d7c615bf7",
+      "environment": "repository validation",
+      "configuration": "documentation-only",
+      "evidence": ["docs/validation/phase-15-preflight.md"]
+    },
+    {
+      "id": "release.incoming_checkpoint",
+      "status": "PASS",
+      "attempted": true,
+      "commit": "1a42be817273affa873f37bb99e8dd1d7c615bf7",
+      "environment": "GitHub Actions release workflow 29976791082",
+      "configuration": "tag v0.9.0-beta.1",
+      "evidence": ["https://github.com/cervantesh/CervTerm/releases/tag/v0.9.0-beta.1"]
+    },
+    {"id": "compatibility.doctor", "status": "UNRUN", "attempted": false},
+    {"id": "config.real_user_migrations", "status": "UNRUN", "attempted": false},
+    {"id": "recovery.redaction", "status": "UNRUN", "attempted": false},
+    {"id": "performance.phase15", "status": "UNRUN", "attempted": false},
+    {"id": "security.automated", "status": "UNRUN", "attempted": false},
+    {"id": "accessibility.automated", "status": "UNRUN", "attempted": false},
+    {"id": "platform.windows_daily_driver", "status": "UNRUN", "attempted": false},
+    {"id": "platform.windows_real_gui", "status": "UNRUN", "attempted": false},
+    {"id": "platform.linux_headless", "status": "UNRUN", "attempted": false},
+    {"id": "platform.linux_real_gui", "status": "UNRUN", "attempted": false},
+    {"id": "platform.macos_build", "status": "UNRUN", "attempted": false},
+    {"id": "platform.macos_real_gui", "status": "UNRUN", "attempted": false},
+    {"id": "release.candidate_readiness", "status": "UNRUN", "attempted": false},
+    {"id": "release.phase15_checkpoint", "status": "UNRUN", "attempted": false}
+  ]
+}
