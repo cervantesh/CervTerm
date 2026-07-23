@@ -32,7 +32,7 @@ func (f *glfwProjectionFactory) Prepare() (bundle *nativeProjectionBundle, spec 
 }
 
 func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, y int, position, initialGrid bool) (bundle *nativeProjectionBundle, spec termmux.SpawnSpec, content termmux.PixelRect, metrics termmux.CellMetrics, title string, err error) {
-	bundle = &nativeProjectionBundle{app: child}
+	bundle = &nativeProjectionBundle{app: child, beforeUnbind: newCompositionBeforeUnbind(child)}
 	fail := func(cause error) (*nativeProjectionBundle, termmux.SpawnSpec, termmux.PixelRect, termmux.CellMetrics, string, error) {
 		return bundle, spec, content, metrics, "", cause
 	}
@@ -59,6 +59,7 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 		}
 		return child.blurProvider.Close()
 	}))
+	bundle.resources = append(bundle.resources, projectionResourceFunc(child.closeNotificationEffectSink))
 	child.configureNativeWindow(window)
 	child.applyWindowAppearance()
 	glfw.SwapInterval(boolSwapInterval(child.cfg.Render.VSync))
@@ -103,6 +104,10 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 		}
 		return nil
 	}))
+	if imageErr := child.prepareTerminalImageCache(); imageErr != nil {
+		return fail(imageErr)
+	}
+	appendTerminalImageCacheResource(bundle, child)
 	child.ligaturesActive = atlas.supportsLigatures(child.cfg.Font.Ligatures)
 	child.cellW, child.cellH = float32(atlas.cellW), float32(atlas.cellH)
 	if initialGrid {
@@ -127,6 +132,11 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 			return fmt.Errorf("bind projection: %w", errWindowProjectionMissing)
 		}
 		child.windowID = id
+		if accessibilityErr := prepareProjectionAccessibility(child, window, bundle.beforeUnbind); accessibilityErr != nil {
+			child.windowID = 0
+			return accessibilityErr
+		}
+		child.catchUpBellEvents()
 		child.installCallbacks()
 		child.needsRedraw = true
 		return nil
@@ -135,6 +145,7 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 		child.windowID = 0
 		return nil
 	}
+	child.activateProjectionIME(window, bundle.beforeUnbind)
 	return bundle, spec, content, metrics, title, nil
 }
 
@@ -145,10 +156,13 @@ func newProjectionApp(owner *App) *App {
 		safeFonts: owner.safeFonts, composedProvenance: append([]config.ProvenanceRecord(nil), owner.composedProvenance...),
 		configStateInitialized: true, configPath: owner.configPath, candidateOptions: owner.candidateOptions.Clone(),
 		mux: owner.mux, controller: owner.controller, scriptRT: owner.scriptRT, scriptGeneration: owner.scriptGeneration,
-		cellW: 9, cellH: 16, uiScale: 1, blinkStart: time.Now(),
+		terminalImageCacheFactory: owner.terminalImageCacheFactory,
+		cellW:                     9, cellH: 16, uiScale: 1, blinkStart: time.Now(),
 		paneUI: make(map[termmux.PaneID]*paneUIState), pendingPaneScroll: make(map[termmux.PaneID]int),
 		pendingPaneResize: make(map[termmux.PaneID]termmux.PaneGeometry), configWatchHashes: make(map[string][32]byte),
+		bellState: bellState{bellDelivered: owner.bellDelivered},
 	}
+	child.initCompositionCoordinator()
 	child.initZoomHotkeys()
 	child.initActionBindings()
 	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {

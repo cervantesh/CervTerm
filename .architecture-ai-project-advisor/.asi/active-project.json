@@ -1,6 +1,8 @@
 {
   "slug": "cervterm",
   "name": "CervTerm",
-  "stage": "MVP / pre-beta renderer hardening",
-  "updatedAt": "2026-07-11"
+  "stage": "plan",
+  "phase": "14",
+  "objective": "Add bounded default-off Sixel and iTerm inline image adapters over the Phase 13 image model.",
+  "updatedAt": "2026-07-23"
 }

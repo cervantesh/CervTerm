@@ -22,6 +22,10 @@ Repeatable `--config-override PATH=VALUE` inputs apply left-to-right after the s
 
 `--explain-config` and repeatable `--explain-config-field PATH` evaluate this same v2 composition in diagnostic-only mode, then print deterministic selection, graph, resolved values, application scopes, and provenance without activating callbacks or publishing Teal. Sensitive maps are redacted and callback bodies are never rendered.
 
+`bell` is a strict v2 live policy. `mode` is `disabled` (default), `audible`, `visual`, or `taskbar`; `focus` is `unfocused` (default) or `always`; `throttle_ms` is bounded to `0..60000`; and `visual_duration_ms` is bounded to `50..2000`. These settings throttle only frontend effects. Every BEL still increments the pane-local monotonic count and invokes `events.bell` once, even when effects are disabled, focus-suppressed, or throttled. Audible effects use the Windows system bell; unsupported platforms report capability failure without affecting the callback stream.
+
+`notification` is a strict v2 live consent policy for bounded OSC 9/777 metadata. `enabled` defaults to `false`, `focus` is `unfocused` (default) or `always`, and `rate_limit_ms` is bounded to `100..60000`. Requests queued before their native window exists lose freshness and can never produce a delayed external effect. Adapter failures and overflow diagnostics are coalesced and never include request title/body. On Windows, accepted requests use a native notification-area balloon with real-time delivery and quiet-time respect; the icon resource is owned by its native projection and removed during rollback/shutdown. Other platforms fail closed until separately qualified adapters exist.
+
 ## Keybindings
 
 Add a `keys` array to the returned config table. Each entry has:
@@ -71,6 +75,7 @@ return { keys = {
     end },
   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
   { key = "o", mods = "ctrl+shift", action = cervterm.action.CopySemanticZone("output") },
+  { key = "i", mods = "ctrl+shift", action = cervterm.action.SelectSemanticZone("input") },
   { key = "p", mods = "ctrl+shift", action = cervterm.action.ActivateCommandPalette },
   { key = "q", mods = "ctrl+shift", action = cervterm.action.ActivateQuickSelect },
   { key = "l", mods = "ctrl+shift", action = cervterm.action.ActivateLaunchMenu },
@@ -87,7 +92,9 @@ return { keys = {
 } }
 ```
 
-Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ActivateLaunchMenu`, `ReloadConfig`, `ClosePane`, `ResetFontSize`, `NewTab`, `ActivateTabSwitcher`, and `NewWindow`. Constructors include `CopySemanticZone("input"|"output")`, `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `ScrollToPrompt(-1|1)`, `Zoom(delta)`, pane actions, tab actions, `CloseWindow(window_id)`, `FocusWindow(window_id)`, `MoveTabToWindow(window_id, tab_id, position)`, `MovePaneToWindow(window_id, pane_id, "columns"|"rows")`, and `Multiple({...})`. Window, tab, and pane IDs are stable process-local positive integers; missing or stale explicit targets fail without falling back to the focused window. `WithTarget(action, "origin")` is also available.
+Constants: `CopySelection`, `PasteClipboard`, `ToggleSearch`, `ToggleStats`, `ActivateCommandPalette`, `ActivateQuickSelect`, `ActivateLaunchMenu`, `ReloadConfig`, `ClosePane`, `ResetFontSize`, `NewTab`, `ActivateTabSwitcher`, and `NewWindow`. Constructors include `CopySemanticZone("input"|"output")`, `SelectSemanticZone("input"|"output")`, `ScrollLines(n)`, `ScrollPage(n)`, `ScrollBuffer(1|-1)`, `ScrollToPrompt(-1|1)`, `Zoom(delta)`, pane actions, tab actions, `CloseWindow(window_id)`, `FocusWindow(window_id)`, `MoveTabToWindow(window_id, tab_id, position)`, `MovePaneToWindow(window_id, pane_id, "columns"|"rows")`, and `Multiple({...})`. Window, tab, and pane IDs are stable process-local positive integers; missing or stale explicit targets fail without falling back to the focused window. `WithTarget(action, "origin")` is also available.
+
+`SelectSemanticZone` targets the input or output belonging to the current prompt cycle, scrolls it into the addressed pane, and creates a pane-local viewport selection. The complete range must fit in one viewport; otherwise the action fails before changing either scrolling or the existing selection. Bottom-clamped ranges are accepted when fully visible. Copying that selection preserves hard line breaks and suppresses soft-wrap-only breaks, matching `CopySemanticZone`.
 
 Arguments are validated during config loading. Typed actions use registry press/repeat policy. Function callbacks preserve legacy behavior: they execute on press, consume repeat without executing, and run through the existing watchdog.
 
@@ -170,8 +177,9 @@ Routing is exclusive: terminal mouse reporting has priority; holding Shift keeps
 Add an `events` table to react to terminal activity. Every handler is optional
 and receives the `term` handle first:
 
-- `output(term, data)`: fires for each chunk of program output, with the raw
-  bytes as a string. This runs on every output chunk, so keep it fast — a slow
+- `output(term, data)`: fires for each non-empty public-output chunk. Ordinary
+  bytes and disabled or nonselected controls remain byte-identical; enabled
+  selected Kitty/Sixel/iTerm image envelopes are omitted. Keep it fast — a slow
   handler throttles rendering.
 - `title(term, title)`: fires when the program changes the window title (OSC 0/2).
 - `cwd(term, dir)`: fires when the program reports a new working directory with

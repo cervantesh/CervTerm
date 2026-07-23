@@ -161,3 +161,14 @@ func BenchmarkCaptureReuse(b *testing.B) {
 		Capture(&snap, term)
 	}
 }
+
+func BenchmarkPhase13TextOnlySnapshot(b *testing.B) {
+	term := core.NewTerminal(120, 40)
+	var snap Snapshot
+	Capture(&snap, term)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		Capture(&snap, term)
+	}
+}

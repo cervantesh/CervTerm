@@ -92,11 +92,12 @@ func cloneDetachedCells(src []core.Cell) []core.Cell {
 	return out
 }
 
-func (p *pane) advanceTerminal(data []byte) {
+func (p *pane) advanceTerminal(data []byte) []byte {
 	oldOffset := p.terminal.DisplayOffset()
-	p.parser.Advance(p.terminal, data)
+	public := p.parser.AdvancePublic(p.terminal, data)
 	p.contentGen++
 	if p.terminal.DisplayOffset() != oldOffset {
 		p.viewportGen++
 	}
+	return public
 }

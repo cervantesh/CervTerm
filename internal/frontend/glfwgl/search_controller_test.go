@@ -133,3 +133,33 @@ func TestSearchControllerQueryEditing(t *testing.T) {
 		t.Fatalf("close() must deactivate and drop any match")
 	}
 }
+
+func TestSearchActivationAndWholeTextAreStableAndAtomic(t *testing.T) {
+	sc, _ := newTestSearch(t, "x\r\n")
+	if !sc.open() || sc.activation == 0 {
+		t.Fatal("open did not create activation")
+	}
+	activation := sc.activation
+	if !sc.appendText(activation, "日本語") || string(sc.query) != "日本語" {
+		t.Fatalf("query=%q", string(sc.query))
+	}
+	before := string(sc.query)
+	if sc.appendText(activation+1, "stale") || sc.appendText(activation, "bad\ntext") || sc.appendText(activation, string(make([]rune, maxSearchQueryRunes))) {
+		t.Fatal("invalid text append succeeded")
+	}
+	if string(sc.query) != before {
+		t.Fatalf("invalid append mutated query=%q", string(sc.query))
+	}
+	sc.close()
+	if !sc.open() || sc.activation == activation || sc.appendText(activation, "old") {
+		t.Fatalf("new activation=%d old=%d", sc.activation, activation)
+	}
+}
+
+func TestSearchActivationExhaustionFailsClosed(t *testing.T) {
+	sc, _ := newTestSearch(t, "x\r\n")
+	sc.nextActivation = maxSearchActivation
+	if sc.open() || sc.active {
+		t.Fatalf("exhausted activation opened: %#v", sc)
+	}
+}

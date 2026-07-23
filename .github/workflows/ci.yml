@@ -27,8 +27,8 @@ jobs:
         run: go vet -unsafeptr=false ./...
       - name: VT parser fuzz smoke
         run: go test ./internal/vt -run '^$' -fuzz=FuzzParserAdvanceDoesNotPanic -fuzztime=2s
-      - name: GLFW compile check
-        run: go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -run '^$' -count=0
+      - name: GLFW tests
+        run: go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -count=1
       - name: Generate Windows resources
         run: |
           go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest

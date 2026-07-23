@@ -144,13 +144,13 @@ func TestParserOSCTitleStringTerminator(t *testing.T) {
 	}
 }
 
-func TestParserIgnoresUnsupportedOSC(t *testing.T) {
+func TestParserOSC9DoesNotChangeTitle(t *testing.T) {
 	term := core.NewTerminal(20, 4)
 	term.SetTitle("old")
 	var p Parser
 	p.Advance(term, []byte("\x1b]9;new\x07"))
 	if term.Title() != "old" {
-		t.Fatalf("unsupported OSC changed title: %q", term.Title())
+		t.Fatalf("OSC 9 notification changed title: %q", term.Title())
 	}
 }
 

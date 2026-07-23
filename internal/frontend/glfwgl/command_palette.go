@@ -30,7 +30,7 @@ func (a *App) openCommandPalette() error {
 		return termaction.ErrTargetUnavailable
 	}
 	entries, actions := a.commandPaletteSnapshot(true)
-	if len(entries) == 0 || !a.modal.Open(modal.ModeCommandPalette, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
+	if len(entries) == 0 || !a.openModal(modal.ModeCommandPalette, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
 		return fmt.Errorf("command palette has no available commands")
 	}
 	if a.search.active {

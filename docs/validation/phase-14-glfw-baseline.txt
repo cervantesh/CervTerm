@@ -1,0 +1,17 @@
+# phase13-meta {"version":1,"suite":"glfw","go_version":"go version go1.25.8 windows/amd64","goos":"windows","goarch":"amd64","cpu":"AMD Ryzen 9 7940HX with Radeon Graphics","gomaxprocs":1,"benchtime":"2s","samples":10,"production_commit":"b1eec1335aaad55cffbec9b15c610e3aebbc24dd","harness_sha256":"7f48560d8279ea93f6dd51b71d40836119a1da9da1aa85a636e4861816f82363","working_tree_dirty":false,"warm_command":["go","test","-tags","glfw","./internal/frontend/glfwgl","-run","^$","-bench","^BenchmarkPhase13DisabledDraw$","-benchmem","-benchtime","5s","-cpu","1","-count","1"],"record_command":["go","test","-tags","glfw","./internal/frontend/glfwgl","-run","^$","-bench","^BenchmarkPhase13DisabledDraw$","-benchmem","-benchtime","2s","-cpu","1","-count","10"]}
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   55492	     42359 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw 	   56895	     43334 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw 	   55237	     43480 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw 	   54768	     43388 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw 	   55119	     43280 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw 	   54840	     43130 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw 	   55609	     43127 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw 	   55357	     42951 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw 	   55126	     43335 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw 	   55250	     43266 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/frontend/glfwgl	29.050s

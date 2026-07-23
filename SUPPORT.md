@@ -28,14 +28,22 @@ Best-effort support currently targets:
 - Windows portable zip releases from GitHub Releases,
 - the GLFW/OpenGL frontend on Windows,
 - headless Linux verification artifacts,
-- default config and documented Lua config overrides.
+- default config and documented Lua config overrides,
+- OSC 8 hyperlinks and OSC 133/633 shell semantic metadata/actions under the documented trust policy,
+- default-off terminal notification requests; the native notification adapter is currently Windows-only.
+- controlled testing of the restart-scoped, visible-only, default-off Windows UI Automation adapter.
+- controlled testing of the restart-scoped, default-off direct-data Kitty subset on the GLFW/OpenGL frontend (`t`/`T`/`p`/`d`/`q`; RGB24/RGBA32/PNG; zlib only for raw RGB/RGBA) within documented hard caps.
+- controlled testing of the independent restart-scoped, default-off bounded Sixel DCS and iTerm OSC 1337 direct-inline PNG subsets on the Windows GLFW/OpenGL frontend; manual qualification is unrun and `support_claim` remains `none`.
 
 Not yet guaranteed:
 
 - stable daily-driver compatibility for all TUIs,
 - signed Windows installer UX,
 - MSI or stable winget install path,
-- full cross-platform GUI behavior.
+- full cross-platform GUI behavior,
+- native bell/notification effects on macOS or Linux GUI builds.
+- Narrator/NVDA support, default-on accessibility, macOS NSAccessibility, Linux AT-SPI, or Windows 386 accessibility.
+- full Kitty, Sixel, or iTerm graphics conformance; animation; C1 image forms; external file/path/URL/temporary-file/shared-memory/download/write transports; broad iTerm sizing; Sixel scrolling/DECSDM; cursor effects; or terminal images outside the GLFW/OpenGL frontend.
 
 ## Security or supply-chain concerns
 

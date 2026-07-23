@@ -107,7 +107,10 @@ func (a *App) tryRunRestoredWindow(blueprint layoutrestore.Blueprint) (bool, err
 		a.controller = nil
 		return false, err
 	}
-	a.initMux()
+	if err := a.initMux(); err != nil {
+		a.resetFailedRestoreFrontend(freshConfig)
+		return true, err
+	}
 	a.syncProcessServices()
 	factory := &glfwRestoreProjectionFactory{owner: a, windows: restoreBlueprintWindows(blueprint)}
 	if err := a.controller.restoreStartupProjectionsBeforeMux(blueprint, factory, a.commitRestoredStartupConfiguration); err != nil {

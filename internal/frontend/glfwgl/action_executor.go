@@ -66,6 +66,10 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		if err := a.executeCopySemanticZone(pane, command); err != nil {
 			return actionExecutionError(command, termaction.ErrorMux, err)
 		}
+	case termaction.SelectSemanticZone:
+		if err := a.executeSelectSemanticZone(pane, command); err != nil {
+			return actionExecutionError(command, termaction.ErrorMux, err)
+		}
 	case termaction.PasteClipboard:
 		view, _ := a.mux.PaneView(pane)
 		a.writePaneInputBytes(pane, input.EncodePaste(a.Clipboard(), view.BracketedPaste))
@@ -76,7 +80,9 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		if a.search.active {
 			a.search.close()
 		} else {
-			a.search.open()
+			if !a.search.open() {
+				return actionExecutionError(command, termaction.ErrorAction, errTextTargetExhausted)
+			}
 		}
 	case termaction.ActivateCommandPalette:
 		if err := a.openCommandPalette(); err != nil {
@@ -300,7 +306,7 @@ func (a *App) executeScrollAction(pane termmux.PaneID, command termaction.Scroll
 		if pane == a.focusedPane && a.window != nil && a.cfg.Scrollbar.Enabled {
 			a.scrollbar.lastActivity = time.Now()
 		}
-		a.requestRedraw()
+		a.requestAccessibilityRedraw()
 	}
 	return nil
 }
@@ -340,7 +346,7 @@ func (a *App) executeScrollToPrompt(pane termmux.PaneID, command termaction.Scro
 	}
 	if moved {
 		a.recordPaneScroll(pane)
-		a.requestRedraw()
+		a.requestAccessibilityRedraw()
 	}
 	return nil
 }

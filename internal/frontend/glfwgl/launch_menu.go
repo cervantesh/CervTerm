@@ -22,7 +22,7 @@ func (a *App) openLaunchMenu(pane termmux.PaneID) error {
 	for i, target := range targets {
 		entries[i] = modal.Entry{ID: target.ID, Label: target.Label, Detail: target.Program, Category: "launch"}
 	}
-	if !a.modal.Open(modal.ModeLaunchMenu, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
+	if !a.openModal(modal.ModeLaunchMenu, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
 		return fmt.Errorf("launch menu could not open")
 	}
 	a.requestRedraw()

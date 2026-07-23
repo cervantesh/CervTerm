@@ -10,6 +10,7 @@ CervTerm is not a finished daily-driver terminal yet, but it already includes:
 
 - Windows ConPTY backend and Unix PTY backend behind build tags.
 - GLFW/OpenGL frontend.
+- Experimental, default-off, restart-scoped bounded Kitty, Sixel, and iTerm inline-image subsets on the GLFW/OpenGL frontend, with independent protocol flags, shared resource budgets, and no stable support claim.
 - Scrollback, alternate screen, resize reflow, selection/copy/paste, and bracketed paste.
 - Native in-process pane mux with independent PTY/parser/core state per pane, clipped binary row/column splits, draggable dividers, focused input, deterministic close/collapse, and independent per-pane zoom.
 - Scrollback search: `ctrl+shift+f` opens a search bar (Enter jumps to the next match upward, Esc closes); also scriptable via `term:search`.
@@ -179,6 +180,32 @@ Text uses unhinted, typeface-faithful rasterization by default (`render.text_ras
 `font.fallback` and bounded `font.rules` select one face for a whole cluster in authored-rule → primary → ordered-fallback → embedded order. Symbol classes cover emoji, CJK, Nerd Font PUA, Powerline, box drawing, braille, and symbols. Fallback is lazy: ordinary ASCII does not load fallback faces. `font.features` projects validated OpenType tags while the legacy `ligatures` boolean remains shorthand; all font resource fields require restart.
 
 Fixed-grid controls `font.line_height`/`font.cell_width` (0.5–3.0) and `baseline_offset`/`glyph_offset_x`/`glyph_offset_y` (-64..64 px) change the shared cell canvas without changing logical per-glyph advances. Font environments retain at most 64 contexts, parsed font data remains bounded to 128 faces/256 MiB, and each context retains at most 8,192 negative results. `--safe-fonts` restores Go Mono and natural metrics. `--doctor` reports effective metrics, feature capability, concrete path-free primary style metadata, representative Powerline/Nerd/CJK/emoji/rule-tier selections, and capacity limits. Arbitrary active-terminal content selections and live cache counts remain unavailable in diagnostic-only mode.
+
+## Experimental Kitty graphics opt-in
+
+CervTerm implements deliberately narrow Kitty, Sixel, and iTerm inline-image subsets. All three are experimental, disabled by default, restart-scoped, independently enabled, rendered only by the existing GLFW/OpenGL frontend, and carry no stable support claim.
+
+Enable only the protocols you need in an explicit v2 config, then restart CervTerm:
+
+```lua
+return {
+  config_version = 2,
+  graphics = {
+    -- Set only the protocol(s) being tested to true.
+    kitty = { enabled = false },
+    sixel = { enabled = false },
+    iterm = { enabled = false },
+  },
+}
+```
+
+The Kitty subset accepts direct-data `t`/`T`/`p`/`d`/`q` actions, RGB24, RGBA32, and PNG; `o=z` applies only to raw RGB/RGBA. Replies are fixed and value-free: `OK`, `EINVAL`, `ENOTSUP`, `ENOSPC`, `ETIME`, `ECANCELED`, `ENOENT`, and `EIO`.
+
+The Phase 14 Sixel subset accepts only 7-bit `ESC P q`, `ESC P 0q`, `ESC P 0;0q`, or `ESC P 0;0;0q`, terminated by ST. It requires exactly one `"1;1;W;H` raster declaration before pixel output and accepts only `?`–`~`, `!N<char>` (`N=1..4096`), `#N`, `#N;2;R;G;B`, `$`, and `-`. The iTerm subset accepts only 7-bit `OSC 1337;File=...:<strict padded base64>` terminated by BEL or ST, with exact `inline=1`, positive decoded `size`, one PNG with exact EOF, and optionally one cell dimension (`width=N` xor `height=N`, `N=1..256`) with absent or exact `preserveAspectRatio=1`.
+
+Kitty, Sixel, and iTerm share the same lower-only pane/process limits, FIFO scheduler, two process workers, one outstanding job per pane, queue capacity 32, and 250 ms acceptance deadline. Sixel/iTerm use internal high-half IDs (`0x80000000..0xffffffff`), commit cursor-neutral ephemeral resources, retire a resource with its final placement, emit no protocol reply, and reserve no reply slot. Enabled selected image frames are removed by the parser-coupled `PaneOutput` projection before Lua output callbacks; disabled or unselected control strings remain public.
+
+Operational rollback is independent: set the affected `graphics.<protocol>.enabled = false` and restart. This is not a full Kitty, Sixel, or iTerm conformance claim. C1 forms, animation, external file/path/URL/temporary-file/shared-memory/download/write transports, broad iTerm sizing, Sixel scrolling/DECSDM, cursor effects, and non-OpenGL rendering remain excluded. See [`docs/getting-started.md`](docs/getting-started.md) for exact caps, [`docs/manual-verification.md`](docs/manual-verification.md) for the entirely UNRUN Phase 14 real-GUI matrix, and [`docs/troubleshooting.md`](docs/troubleshooting.md) for diagnostics.
 
 ## Known limitations
 

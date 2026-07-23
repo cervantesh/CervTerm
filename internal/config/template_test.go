@@ -54,3 +54,28 @@ func TestDefaultLuaDocumentsTypedAndCallbackActions(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultLuaDocumentsExperimentalSixelAndITermFlags(t *testing.T) {
+	template := DefaultLua()
+	for _, fragment := range []string{
+		"sixel = {",
+		"iterm = {",
+		"Experimental bounded inline Sixel subset; default off and restart required.",
+		"Experimental bounded inline iTerm subset; default off and restart required.",
+	} {
+		if !strings.Contains(template, fragment) {
+			t.Fatalf("default Lua template missing %q", fragment)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "graphics.lua")
+	if err := os.WriteFile(path, []byte(template), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadLua(path, Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Graphics.Sixel.Enabled || cfg.Graphics.ITerm.Enabled {
+		t.Fatalf("template enabled default-off graphics: %#v", cfg.Graphics)
+	}
+}

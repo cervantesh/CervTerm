@@ -34,6 +34,7 @@ func (a *App) wakeMainLoop() {
 // ingress is drained once, and process timers/reload are ticked once per cycle.
 // Projection-local state and presentation remain independent.
 func (a *App) runLoop(_ *glfw.Window) error {
+	startRuntimeMetricsProbe(a)
 	return a.runProcessLoop(a.cfg.Render.Redraw == "continuous")
 }
 
@@ -135,17 +136,32 @@ func (a *App) runProcessLoop(continuous bool) error {
 }
 
 func (a *App) tickProjection() {
+	recordRuntimeMetricsWake(a)
 	a.processTermEvents(false)
+	a.catchUpBellEvents()
 	a.applyPendingZoom()
 	a.applyPendingDividerResize()
 	a.resizeToWindow()
 	a.fireLifecycleEvents()
 	a.syncStatusSegments()
 	a.syncOverlays()
+	if a.accessibilityRuntime != nil {
+		if err := a.accessibilityRuntime.Refresh(); err != nil {
+			a.failAccessibilityRuntime(err)
+		}
+	}
 }
 
 func (a *App) processNextWakeTimeout(now time.Time) time.Duration {
 	wake := maxWake
+	if a.mux != nil {
+		if deadline, ok := a.mux.NextImageDeadline(); ok {
+			candidate := max(minWake, deadline.Sub(now))
+			if candidate < wake {
+				wake = candidate
+			}
+		}
+	}
 	for _, id := range a.controller.projectionIDs() {
 		projection := a.controller.projectionApp(id)
 		if projection == nil || !a.controller.projectionVisible(id) {
@@ -182,8 +198,16 @@ func (a *App) processTermEvents(_ bool) {
 }
 
 // redrawWanted reports whether visible state currently demands a presentation.
+// Cache retries request a frame only when a visible failed generation reaches
+// its fixed retry deadline; an empty/idle cache contributes no cadence.
 func (a *App) redrawWanted(now time.Time) bool {
 	if a.needsRedraw {
+		return true
+	}
+	if a.terminalImageDamage.pending() {
+		return true
+	}
+	if a.terminalImageCache.retryDue(now) {
 		return true
 	}
 	if a.blinkActive() && a.blinkPhaseAt(now) != a.lastBlinkPhase {
@@ -191,6 +215,9 @@ func (a *App) redrawWanted(now time.Time) bool {
 	}
 	if a.notice != "" && now.After(a.noticeUntil) {
 		return true // one repaint to clear the expired notice
+	}
+	if !a.bellVisualUntil.IsZero() && !now.Before(a.bellVisualUntil) {
+		return true // one repaint to clear the visual bell
 	}
 	if a.showStats && now.Sub(a.lastStatsDraw) >= 500*time.Millisecond {
 		return true
@@ -228,6 +255,12 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 			wake = zoomWake
 		}
 	}
+	if deadline, ok := a.terminalImageCache.nextRetryDeadline(); ok {
+		retryWake := max(minWake, deadline.Sub(now))
+		if wake <= 0 || retryWake < wake {
+			wake = retryWake
+		}
+	}
 	if a.divider.settlePending {
 		dividerWake := max(minWake, a.divider.settleAt.Sub(now))
 		if wake <= 0 || dividerWake < wake {
@@ -238,6 +271,12 @@ func (a *App) nextWakeTimeout(now time.Time) time.Duration {
 		scrollbarWake = max(minWake, scrollbarWake)
 		if wake <= 0 || scrollbarWake < wake {
 			wake = scrollbarWake
+		}
+	}
+	if !a.bellVisualUntil.IsZero() {
+		bellWake := max(minWake, a.bellVisualUntil.Sub(now))
+		if wake <= 0 || bellWake < wake {
+			wake = bellWake
 		}
 	}
 	return wake
@@ -281,7 +320,7 @@ func (a *App) spawnInitialPTY(w *glfw.Window) {
 		ShellProgram: a.cfg.Shell.Program, ShellArgs: a.cfg.Shell.Args,
 		WorkingDirectory: a.cfg.Shell.WorkingDirectory, Env: a.cfg.Shell.Env,
 	}}, eventsRect, a.muxMetrics())
-	a.focusedPane = pane
+	a.setFocusedPane(pane)
 	a.dispatchMuxEvents(events)
 	a.syncFocusedProjection()
 	a.markResizeEvent(a.cols, a.rows)

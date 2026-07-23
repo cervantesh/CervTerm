@@ -75,94 +75,6 @@ func (d Document) Has(path string) bool {
 	return ok
 }
 
-func FromDocument(base Config, document Document) Config {
-	cfg := FromTable(base, document.Root)
-	if window := tableField(document.Root, "window"); window != nil {
-		if document.Has("window.padding_x") {
-			cfg.Window.PaddingLeft = cfg.Window.PaddingX
-			cfg.Window.PaddingRight = cfg.Window.PaddingX
-		}
-		if document.Has("window.padding_y") {
-			cfg.Window.PaddingTop = cfg.Window.PaddingY
-			cfg.Window.PaddingBottom = cfg.Window.PaddingY
-		}
-		if document.AuthoredVersion >= 2 {
-			cfg.Window.PaddingLeft = intField(window, "padding_left", cfg.Window.PaddingLeft)
-			cfg.Window.PaddingRight = intField(window, "padding_right", cfg.Window.PaddingRight)
-			cfg.Window.PaddingTop = intField(window, "padding_top", cfg.Window.PaddingTop)
-			cfg.Window.PaddingBottom = intField(window, "padding_bottom", cfg.Window.PaddingBottom)
-			cfg.Window.TextOpacity = numberField(window, "text_opacity", cfg.Window.TextOpacity)
-			cfg.Window.BackgroundOpacity = numberField(window, "background_opacity", cfg.Window.BackgroundOpacity)
-			cfg.Window.InitialRows = intField(window, "initial_rows", cfg.Window.InitialRows)
-			cfg.Window.InitialCols = intField(window, "initial_cols", cfg.Window.InitialCols)
-			cfg.Window.Decorations = stringField(window, "decorations", cfg.Window.Decorations)
-			cfg.Window.Titlebar = stringField(window, "titlebar", cfg.Window.Titlebar)
-		}
-	}
-	if scrollbar := tableField(document.Root, "scrollbar"); scrollbar != nil {
-		if document.AuthoredVersion >= 2 {
-			if document.Has("scrollbar.mode") {
-				cfg.Scrollbar.Mode = stringField(scrollbar, "mode", cfg.Scrollbar.Mode)
-				cfg.Scrollbar.Enabled = cfg.Scrollbar.Mode != "never"
-			} else if document.Has("scrollbar.enabled") {
-				if cfg.Scrollbar.Enabled {
-					cfg.Scrollbar.Mode = "scrolling"
-				} else {
-					cfg.Scrollbar.Mode = "never"
-				}
-			}
-			cfg.Scrollbar.StableGutter = boolField(scrollbar, "stable_gutter", cfg.Scrollbar.StableGutter)
-			cfg.Scrollbar.AnimationFPS = intField(scrollbar, "animation_fps", cfg.Scrollbar.AnimationFPS)
-		} else {
-			if cfg.Scrollbar.Enabled {
-				cfg.Scrollbar.Mode = "scrolling"
-			} else {
-				cfg.Scrollbar.Mode = "never"
-			}
-			cfg.Scrollbar.StableGutter = true
-			cfg.Scrollbar.AnimationFPS = base.Scrollbar.AnimationFPS
-		}
-	}
-	if document.AuthoredVersion < 2 {
-		cfg.TabBar = base.TabBar
-	}
-	if document.AuthoredVersion < 2 {
-		cfg.Window.TextOpacity = base.Window.TextOpacity
-		cfg.Window.BackgroundOpacity = base.Window.BackgroundOpacity
-		cfg.Render.MaxFPS = base.Render.MaxFPS
-		cfg.Window.InitialRows = base.Window.InitialRows
-		cfg.Window.InitialCols = base.Window.InitialCols
-		cfg.Window.Decorations = base.Window.Decorations
-		cfg.Window.Titlebar = base.Window.Titlebar
-	}
-	if document.AuthoredVersion >= 2 {
-		cfg.ColorScheme = stringField(document.Root, "color_scheme", cfg.ColorScheme)
-		if background := tableField(document.Root, "background"); background != nil {
-			cfg.Background.Layers = backgroundLayerListField(background, "layers", cfg.Background.Layers)
-		}
-		if font := tableField(document.Root, "font"); font != nil {
-			cfg.Font.Descriptors = descriptorListField(font, "descriptors", cfg.Font.Descriptors)
-			cfg.Font.Fallback = descriptorListField(font, "fallback", cfg.Font.Fallback)
-			cfg.Font.Rules = fontRuleListField(font, "rules", cfg.Font.Rules)
-			cfg.Font.Features = integerMapField(font, "features", cfg.Font.Features)
-			cfg.Font.LineHeight = numberField(font, "line_height", cfg.Font.LineHeight)
-			cfg.Font.CellWidth = numberField(font, "cell_width", cfg.Font.CellWidth)
-			cfg.Font.BaselineOffset = numberField(font, "baseline_offset", cfg.Font.BaselineOffset)
-			cfg.Font.GlyphOffsetX = numberField(font, "glyph_offset_x", cfg.Font.GlyphOffsetX)
-			cfg.Font.GlyphOffsetY = numberField(font, "glyph_offset_y", cfg.Font.GlyphOffsetY)
-		}
-		if render := tableField(document.Root, "render"); render != nil {
-			cfg.Render.MaxFPS = intField(render, "max_fps", cfg.Render.MaxFPS)
-		}
-	}
-	if quick := tableField(document.Root, "quick_select"); quick != nil {
-		cfg.QuickSelect.Rules = quickSelectRuleListField(quick, "rules", cfg.QuickSelect.Rules)
-		cfg.QuickSelect.Compiled, _ = PrepareQuickSelect(cfg.QuickSelect.Rules)
-	}
-	cfg.LaunchMenu = launchTargetListField(document.Root, "launch_menu", cfg.LaunchMenu)
-	return cfg
-}
-
 type fieldSchema struct {
 	name            string
 	kind            ValueKind
@@ -230,6 +142,25 @@ var rootSchema = fieldSchema{kind: KindTable, children: []fieldSchema{
 		{name: "blink_interval_ms", kind: KindInteger}, {name: "thickness", kind: KindNumber},
 	}},
 	{name: "clipboard", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "osc52", kind: KindString}}},
+	{name: "ime", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "enabled", kind: KindBoolean}}},
+	{name: "accessibility", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{{name: "enabled", kind: KindBoolean}, {name: "scope", kind: KindString}}},
+	{name: "graphics", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
+		{name: "kitty", kind: KindTable, children: []fieldSchema{{name: "enabled", kind: KindBoolean}}},
+		{name: "sixel", kind: KindTable, children: []fieldSchema{{name: "enabled", kind: KindBoolean}}},
+		{name: "iterm", kind: KindTable, children: []fieldSchema{{name: "enabled", kind: KindBoolean}}},
+		{name: "limits", kind: KindTable, children: []fieldSchema{
+			{name: "encoded_bytes_per_pane", kind: KindInteger}, {name: "decoded_bytes_per_pane", kind: KindInteger},
+			{name: "image_count_per_pane", kind: KindInteger}, {name: "placement_count_per_pane", kind: KindInteger},
+			{name: "gpu_bytes_per_context", kind: KindInteger},
+		}},
+	}},
+	{name: "bell", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
+		{name: "mode", kind: KindString}, {name: "focus", kind: KindString},
+		{name: "throttle_ms", kind: KindInteger}, {name: "visual_duration_ms", kind: KindInteger},
+	}},
+	{name: "notification", kind: KindTable, apply: ApplyLive, children: []fieldSchema{
+		{name: "enabled", kind: KindBoolean}, {name: "focus", kind: KindString}, {name: "rate_limit_ms", kind: KindInteger},
+	}},
 	{name: "render", kind: KindTable, apply: ApplyRestart, children: []fieldSchema{
 		{name: "bidi", kind: KindBoolean}, {name: "text_gamma", kind: KindNumber}, {name: "text_darken", kind: KindNumber},
 		{name: "text_raster", kind: KindString}, {name: "stats_hotkey", kind: KindString},
@@ -264,6 +195,14 @@ func isV2OnlyPath(path string) bool {
 		"background.layers", "quick_select.rules", "launch_menu",
 		"scrollbar.mode", "scrollbar.stable_gutter", "scrollbar.animation_fps", "render.max_fps",
 		"tab_bar.mode", "tab_bar.position", "tab_bar.height_px", "tab_bar.min_width_px", "tab_bar.max_width_px", "tab_bar.padding_x", "tab_bar.show_new_button", "tab_bar.show_close_button",
+		"bell", "bell.mode", "bell.focus", "bell.throttle_ms", "bell.visual_duration_ms",
+		"notification", "notification.enabled", "notification.focus", "notification.rate_limit_ms",
+		"ime", "ime.enabled", "accessibility", "accessibility.enabled", "accessibility.scope",
+		"graphics", "graphics.kitty", "graphics.kitty.enabled", "graphics.sixel", "graphics.sixel.enabled",
+		"graphics.iterm", "graphics.iterm.enabled", "graphics.limits",
+		"graphics.limits.encoded_bytes_per_pane", "graphics.limits.decoded_bytes_per_pane",
+		"graphics.limits.image_count_per_pane", "graphics.limits.placement_count_per_pane",
+		"graphics.limits.gpu_bytes_per_context",
 		"font.descriptors", "font.fallback", "font.rules", "font.features", "font.line_height", "font.cell_width", "font.baseline_offset", "font.glyph_offset_x", "font.glyph_offset_y":
 		return true
 	default:
@@ -333,6 +272,21 @@ func decodeDocumentOptions(source string, root *lua.LTable, available map[string
 	}
 	if version == 1 && root.RawGetString("layout_persistence") != lua.LNil {
 		return Document{}, documentError(source, "layout_persistence", "requires config_version = 2")
+	}
+	if version == 1 && root.RawGetString("bell") != lua.LNil {
+		return Document{}, documentError(source, "bell", "requires config_version = 2")
+	}
+	if version == 1 && root.RawGetString("notification") != lua.LNil {
+		return Document{}, documentError(source, "notification", "requires config_version = 2")
+	}
+	if version == 1 && root.RawGetString("ime") != lua.LNil {
+		return Document{}, documentError(source, "ime", "requires config_version = 2")
+	}
+	if version == 1 && root.RawGetString("accessibility") != lua.LNil {
+		return Document{}, documentError(source, "accessibility", "requires config_version = 2")
+	}
+	if version == 1 && root.RawGetString("graphics") != lua.LNil {
+		return Document{}, documentError(source, "graphics", "requires config_version = 2")
 	}
 	if unsetPath := findUnsetPath(root, rootSchema, ""); unsetPath != "" {
 		if version == 1 {

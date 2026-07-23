@@ -29,6 +29,10 @@ func Contains(r Range, p Point) bool {
 }
 
 func Text(cells []core.Cell, cols, rows int, r Range) string {
+	return TextWithWrapped(cells, nil, cols, rows, r)
+}
+
+func TextWithWrapped(cells []core.Cell, wrapped []bool, cols, rows int, r Range) string {
 	if cols <= 0 || rows <= 0 || len(cells) == 0 {
 		return ""
 	}
@@ -50,7 +54,7 @@ func Text(cells []core.Cell, cols, rows int, r Range) string {
 
 		line := lineText(cells, cols, row, startCol, endCol)
 		b.WriteString(line)
-		if row != r.End.Row {
+		if row != r.End.Row && (row >= len(wrapped) || !wrapped[row]) {
 			b.WriteByte('\n')
 		}
 	}

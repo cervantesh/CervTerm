@@ -99,6 +99,42 @@
   "Clipboard": {
     "OSC52": "write"
   },
+  "IME": {
+    "Enabled": false
+  },
+  "Accessibility": {
+    "Enabled": false,
+    "Scope": "visible"
+  },
+  "Bell": {
+    "Mode": "disabled",
+    "Focus": "unfocused",
+    "ThrottleMS": 250,
+    "VisualDurationMS": 120
+  },
+  "Notification": {
+    "Enabled": false,
+    "Focus": "unfocused",
+    "RateLimitMS": 5000
+  },
+  "Graphics": {
+    "Kitty": {
+      "Enabled": false
+    },
+    "Sixel": {
+      "Enabled": false
+    },
+    "ITerm": {
+      "Enabled": false
+    },
+    "Limits": {
+      "EncodedBytesPerPane": 8388608,
+      "DecodedBytesPerPane": 67108864,
+      "ImageCountPerPane": 256,
+      "PlacementCountPerPane": 1024,
+      "GPUBytesPerContext": 268435456
+    }
+  },
   "Render": {
     "Bidi": true,
     "TextGamma": 1.2,

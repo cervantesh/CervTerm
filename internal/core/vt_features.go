@@ -97,8 +97,13 @@ func (t *Terminal) CursorForwardTabs(n int) {
 	if n <= 0 {
 		n = 1
 	}
-	for ; n > 0; n-- {
+	for n > 0 {
+		before := t.cursorCol
 		t.Tab()
+		n--
+		if t.cursorCol == before {
+			break
+		}
 	}
 }
 
@@ -106,7 +111,7 @@ func (t *Terminal) CursorBackwardTabs(n int) {
 	if n <= 0 {
 		n = 1
 	}
-	for ; n > 0; n-- {
+	for n > 0 && t.cursorCol > 0 {
 		prev := 0
 		for col := t.cursorCol - 1; col >= 0; col-- {
 			if col < len(t.tabStops) && t.tabStops[col] {
@@ -115,6 +120,7 @@ func (t *Terminal) CursorBackwardTabs(n int) {
 			}
 		}
 		t.cursorCol = prev
+		n--
 	}
 	t.wrapNext = false
 }

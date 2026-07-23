@@ -37,7 +37,7 @@ func (m *Mux) SpawnTab(spec SpawnSpec, metrics CellMetrics, title string) (TabID
 		return 0, 0, nil, err
 	}
 	defer m.sessions.release(paneID)
-	pane := newPane(paneID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	pane := m.createPane(paneID, cols, rows)
 	pane.setFreshLaunch(spec)
 	pane.terminal.SetPaletteBase(m.paletteBase)
 	if m.options.SetClipboard != nil {
@@ -49,6 +49,7 @@ func (m *Mux) SpawnTab(spec SpawnSpec, metrics CellMetrics, title string) (TabID
 		if session != nil {
 			_ = session.Close()
 		}
+		_ = pane.close()
 		return 0, 0, nil, fmt.Errorf("spawn tab: %w", spawnErr)
 	}
 	pane.session = session

@@ -112,6 +112,17 @@ func TestActionExecutorGlobalAndDeferredActions(t *testing.T) {
 	}
 }
 
+func TestActionExecutorReportsSearchActivationExhaustion(t *testing.T) {
+	a := newMuxTestApp(t, 20, 10)
+	a.search.redraw = func() {}
+	a.search.nextActivation = maxSearchActivation
+	err := executeFocusedAction(a, termaction.ToggleSearch{})
+	var execution *termaction.ExecutionError
+	if !errors.As(err, &execution) || execution.Class != termaction.ErrorAction || a.search.active {
+		t.Fatalf("search exhaustion: active=%v err=%v", a.search.active, err)
+	}
+}
+
 func TestActionExecutorScrollsTargetPane(t *testing.T) {
 	a := newMuxTestApp(t, 20, 10)
 	pane := a.focusedPane

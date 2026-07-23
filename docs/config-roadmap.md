@@ -9,11 +9,11 @@ CervTerm will support two configuration authoring modes:
 
 Lua is the runtime target. Teal is the safer authoring layer for users and AI agents that benefit from a typed schema.
 
-## Current status (2026-07-16)
+## Current status (2026-07-23)
 
-The original v1 sequence below is retained as design history. Go/Lua/Teal configuration, discovery, validation, generated templates, scripting callbacks, safe atomic single-file reload, opacity/blur, scrollbar, pane bindings, font selection, cursor controls, and the native pane mux are implemented. The canonical forward plan is [`wezterm-parity-roadmap.md`](wezterm-parity-roadmap.md), and support state is tracked in [`parity-support-matrix.json`](parity-support-matrix.json).
+The original v1 sequence below is retained as design history. Go/Lua/Teal configuration, strict versioned documents, deterministic composition/provenance, includes and dependency watching, named environments/profiles, typed CLI overrides, desired/effective application scopes, runtime patches, diagnostic explanation, generated templates, and atomic activation/recovery are implemented. The canonical forward plan is [`wezterm-parity-roadmap.md`](wezterm-parity-roadmap.md), and support state is tracked in [`parity-support-matrix.json`](parity-support-matrix.json).
 
-The next configuration work is a typed action registry followed by versioned composition, includes, provenance, CLI/profile overrides, dependency watching, and migration. Local/SSH/WSL domains and renderer selection are excluded.
+Phase 14 adds independent strict-v2, restart-scoped, default-false `graphics.sixel.enabled` and `graphics.iterm.enabled` flags beside Kitty. They are experimental activation intent, not support claims; renderer selection and local/SSH/WSL domains remain excluded.
 
 ## Why both Lua and Teal?
 
@@ -97,6 +97,29 @@ Ideas to defer:
 - Font feature-level HarfBuzz tuning until font rendering is upgraded.
 - Remote control and large plugin ecosystems.
 
+
+## Current strict-v2 terminal graphics schema
+
+The generated Lua template and Teal declarations expose the same bounded structure:
+
+```lua
+graphics = {
+  kitty = { enabled = false },
+  sixel = { enabled = false },
+  iterm = { enabled = false },
+  limits = {
+    encoded_bytes_per_pane = 8388608,
+    decoded_bytes_per_pane = 67108864,
+    image_count_per_pane = 256,
+    placement_count_per_pane = 1024,
+    gpu_bytes_per_context = 268435456,
+  },
+}
+```
+
+Every enable flag is independent, experimental, default-off, strict-v2, and restart-scoped; v1 does not expose these fields. Every limit must be positive, is restart-scoped, applies to the one shared Kitty/Sixel/iTerm owner, and may only lower the immutable hard cap. Live reload records desired/effective restart differences but cannot activate, disable, or resize graphics resources before restart. Child and restored windows inherit the effective graphics state, not a pending desired value.
+
+Set only the affected protocol flag to `false` and restart for operational rollback. The Sixel/iTerm flags enable only the narrow grammars documented in [`spec.md`](spec.md#phase-14-experimental-sixel-and-iterm-inline-images); they do not imply broad conformance, external file/path/URL I/O, animation, cursor effects, renderer selection, or a stable support claim.
 ## Proposed CervTerm schema v1
 
 The first config version should be intentionally small and map only to features CervTerm already has or is about to implement.

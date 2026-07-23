@@ -10,7 +10,6 @@ import (
 
 	"cervterm/internal/config"
 	"cervterm/internal/frontend/gpu"
-	"cervterm/internal/input"
 	"cervterm/internal/metrics"
 	"cervterm/internal/modal"
 	termmux "cervterm/internal/mux"
@@ -66,6 +65,10 @@ type App struct {
 	windowID                  termmux.WindowID
 	controller                *windowController
 	r                         gpu.Renderer
+	terminalImageCacheFactory terminalImageCacheFactory
+	terminalImageCache        *terminalImageCache
+	terminalImages            terminalImageFrame
+	terminalImageDamage       terminalImageDamageState
 	backgroundSurface         gpu.BackgroundSurface
 	backgroundSurfaceWidth    int
 	backgroundSurfaceHeight   int
@@ -77,51 +80,60 @@ type App struct {
 
 	lastFBW, lastFBH int
 
-	cols, rows        int
-	cellW             float32
-	cellH             float32
-	insets            FramebufferInsets
-	drawOriginX       float32
-	drawOriginY       float32
-	uiScale           float32
-	tabBar            tabBarLayout
-	tabBarPressed     tabHit
-	tabBarFirst       int
-	tabBarHeight      int
-	tabClose          tabCloseConfirmation
-	tabActivity       map[termmux.TabID]bool
-	contentScaleX     float32
-	contentScaleY     float32
-	status            statusState
-	overlays          overlayRender
-	scriptRT          *script.Runtime
-	scriptBundle      *script.CandidateBundle
-	scriptActivation  *script.CandidateActivation
-	legacyTransition  *config.LegacyTealTransition
-	scriptGeneration  uint64
-	commandPalette    map[string]commandPaletteActivation
-	workspaceSwitcher map[string]workspaceSwitcherActivation
-	quickSelect       quickSelectActivation
-	notice            string
-	noticeUntil       time.Time
-	suppressNextChar  bool
-	lastStats         time.Time
-	blinkStart        time.Time
-	showStats         bool
-	statsSpec         script.Spec
-	statsSpecOK       bool
-	zoom              zoomBindings
-	actionBindings    []keyActionBinding
-	keyTable          keyTableState
-	link              linkState
-	linkLauncher      urlLauncher
-	clipboardSetter   func(string)
-	hud               hudCache
-	fps               float64
-	fpsFrames         uint64
-	fpsTime           time.Time
-	skippedGlyph      []bool // reused per-row scratch buffer to avoid per-frame allocs
-	ligaturesActive   bool   // font.ligatures enabled AND the active shaper can substitute
+	cols, rows                       int
+	cellW                            float32
+	cellH                            float32
+	insets                           FramebufferInsets
+	drawOriginX                      float32
+	drawOriginY                      float32
+	uiScale                          float32
+	tabBar                           tabBarLayout
+	tabBarPressed                    tabHit
+	tabBarFirst                      int
+	tabBarHeight                     int
+	tabClose                         tabCloseConfirmation
+	tabActivity                      map[termmux.TabID]bool
+	contentScaleX                    float32
+	contentScaleY                    float32
+	status                           statusState
+	overlays                         overlayRender
+	scriptRT                         *script.Runtime
+	scriptBundle                     *script.CandidateBundle
+	scriptActivation                 *script.CandidateActivation
+	legacyTransition                 *config.LegacyTealTransition
+	scriptGeneration                 uint64
+	commandPalette                   map[string]commandPaletteActivation
+	workspaceSwitcher                map[string]workspaceSwitcherActivation
+	quickSelect                      quickSelectActivation
+	notice                           string
+	noticeUntil                      time.Time
+	charSuppression                  charSuppression
+	textTarget                       committedTextTargetState
+	composition                      compositionCoordinator
+	candidateGeometry                candidateGeometryPublisher
+	imeActivation                    projectionIMEActivation
+	accessibilityActivation          projectionAccessibilityActivation
+	accessibilityRuntime             projectionAccessibilityRuntime
+	accessibilityCompositionRevision uint64
+	lastStats                        time.Time
+	blinkStart                       time.Time
+	showStats                        bool
+	statsSpec                        script.Spec
+	statsSpecOK                      bool
+	zoom                             zoomBindings
+	actionBindings                   []keyActionBinding
+	keyTable                         keyTableState
+	link                             linkState
+	linkLauncher                     urlLauncher
+	clipboardSetter                  func(string)
+	bellState
+	notificationState
+	hud             hudCache
+	fps             float64
+	fpsFrames       uint64
+	fpsTime         time.Time
+	skippedGlyph    []bool // reused per-row scratch buffer to avoid per-frame allocs
+	ligaturesActive bool   // font.ligatures enabled AND the active shaper can substitute
 
 	rowHashes, prevHashes, prevPrevHashes []uint64
 	lastCursorRow, prevCursorRow          int
@@ -158,28 +170,31 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 	safeFonts := safeFontsMode.Swap(false)
 	activeCfg := effectiveStartupConfig(authoredCfg, safeFonts)
 	app := &App{
-		cfg:                    activeCfg,
-		desiredCfg:             authoredCfg.Clone(),
-		composedCfg:            authoredCfg.Clone(),
-		safeFonts:              safeFonts,
-		configStateInitialized: true,
-		composedProvenance:     initialProvenance,
-		configPath:             sourcePath,
-		candidateOptions:       initialOptions,
-		scriptRT:               rt,
-		scriptGeneration:       1,
-		scriptBundle:           bundle,
-		scriptActivation:       activation,
-		legacyTransition:       legacyTransition,
-		configWatchHashes:      watchHashes,
-		cellW:                  9,
-		cellH:                  16,
-		uiScale:                1,
-		blinkStart:             time.Now(),
-		paneUI:                 make(map[termmux.PaneID]*paneUIState),
-		pendingPaneScroll:      make(map[termmux.PaneID]int),
-		pendingPaneResize:      make(map[termmux.PaneID]termmux.PaneGeometry),
+		cfg:                       activeCfg,
+		desiredCfg:                authoredCfg.Clone(),
+		composedCfg:               authoredCfg.Clone(),
+		safeFonts:                 safeFonts,
+		configStateInitialized:    true,
+		composedProvenance:        initialProvenance,
+		configPath:                sourcePath,
+		candidateOptions:          initialOptions,
+		scriptRT:                  rt,
+		scriptGeneration:          1,
+		scriptBundle:              bundle,
+		scriptActivation:          activation,
+		legacyTransition:          legacyTransition,
+		configWatchHashes:         watchHashes,
+		cellW:                     9,
+		cellH:                     16,
+		uiScale:                   1,
+		blinkStart:                time.Now(),
+		paneUI:                    make(map[termmux.PaneID]*paneUIState),
+		pendingPaneScroll:         make(map[termmux.PaneID]int),
+		pendingPaneResize:         make(map[termmux.PaneID]termmux.PaneGeometry),
+		bellState:                 bellState{bellDelivered: make(map[termmux.PaneID]int)},
+		terminalImageCacheFactory: defaultTerminalImageCacheFactory,
 	}
+	app.initCompositionCoordinator()
 	app.linkLauncher = platformURLLauncher{}
 	app.configScope = app.runtimeScopes.NewScope()
 	app.configWatch = newConfigWatchState(watchPaths...)
@@ -301,8 +316,7 @@ func (a *App) runWindow() error {
 	if err := a.applyInitialGridWindowPlan(w, sx, sy); err != nil {
 		return err
 	}
-	a.initMux()
-	if err := a.commitStartupConfiguration(); err != nil {
+	if err := a.activateInitialTerminalImages(a.commitStartupConfiguration); err != nil {
 		return err
 	}
 	a.syncProcessServices()
@@ -316,180 +330,4 @@ func (a *App) runWindow() error {
 	a.needsRedraw = true
 
 	return a.runLoop(w)
-}
-
-func (a *App) installCallbacks() {
-	a.window.SetContentScaleCallback(func(_ *glfw.Window, scaleX, scaleY float32) {
-		a.rebuildForContentScale(scaleX, scaleY)
-		a.requestRedraw()
-	})
-	a.window.SetFramebufferSizeCallback(func(_ *glfw.Window, _, _ int) {
-		a.requestRedraw()
-	})
-	a.window.SetCharCallback(func(_ *glfw.Window, char rune) {
-		if a.handleModalChar(char) {
-			return
-		}
-		if a.suppressNextChar {
-			a.suppressNextChar = false
-			return
-		}
-		// While the search bar is open, printable input edits the query and never
-		// reaches the PTY (trap 1). closeSearch restores this callback's normal
-		// flow exactly by clearing a.search.active.
-		if a.search.active {
-			a.search.appendRune(char)
-			return
-		}
-		if encoded, ok := input.Encode(input.Event{Rune: char}); ok {
-			a.writeInputBytes(encoded)
-		}
-	})
-	a.window.SetKeyCallback(func(_ *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		a.handleKeyEvent(key, action, mods)
-	})
-
-	a.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
-		if a.handleModalMouseButton(button, action, mods) {
-			return
-		}
-		x, y := a.window.GetCursorPos()
-		if a.handleTabBarButton(button, action, x, y) {
-			return
-		}
-		if a.handleConfiguredMouseButton(button, action, mods, x, y) {
-			return
-		}
-		if a.divider.active {
-			if button == glfw.MouseButtonLeft && action == glfw.Release {
-				a.finishDividerDrag()
-				a.updateDividerCursor(x, y)
-			}
-			return
-		}
-		if button == glfw.MouseButtonLeft && action == glfw.Press && a.mouseCapturePane == 0 && a.beginDividerDrag(x, y) {
-			return
-		}
-		fx, fy := a.windowToFramebuffer(x, y)
-		if a.handleScrollbarButton(button, action, fx, fy) {
-			a.clearDividerCursor()
-			return
-		}
-		if button != glfw.MouseButtonLeft {
-			return
-		}
-		point := a.pointFromPixels(float32(x), float32(y))
-		if action == glfw.Press {
-			a.captureLinkPress(point)
-			a.selection.dragging = true
-			a.selection.active = false
-			a.selection.start = point
-			a.selection.end = point
-			a.clearHover()
-			a.requestRedraw()
-			return
-		}
-		if action == glfw.Release {
-			a.selection.end = point
-			a.selection.dragging = false
-			if !a.selection.active && a.handleLinkClick(point) {
-				a.requestRedraw()
-				return
-			}
-			a.requestRedraw()
-		}
-	})
-	a.window.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
-		if a.handleModalCursorPos(x, y) {
-			return
-		}
-		if a.pointerOverTabBar(x, y) {
-			a.clearDividerCursor()
-			return
-		}
-		if a.mouseCapturePane != 0 {
-			a.clearDividerCursor()
-			a.sendMouseMove(x, y)
-			return
-		}
-		if a.handleConfiguredMouseDrag(x, y) {
-			return
-		}
-		if a.dragDivider(x, y) {
-			return
-		}
-		fx, fy := a.windowToFramebuffer(x, y)
-		if a.handleScrollbarMove(fx, fy) {
-			a.clearDividerCursor()
-			return
-		}
-		reported := a.sendMouseMove(x, y)
-		if a.updateDividerCursor(x, y) {
-			return
-		}
-		if reported {
-			return
-		}
-		if !a.selection.dragging {
-			if pane, _, ok := a.paneAtWindowPosition(x, y); ok {
-				a.updateHoverForPane(pane, x, y)
-			} else {
-				a.clearHover()
-			}
-			return
-		}
-		a.selection.end = a.pointFromPixels(float32(x), float32(y))
-		a.selection.active = true
-		a.requestRedraw()
-	})
-	a.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {
-		if a.handleModalScroll(xoff, yoff) {
-			return
-		}
-		x, y := a.window.GetCursorPos()
-		if a.pointerOverTabBar(x, y) {
-			return
-		}
-		if a.handleConfiguredMouseWheel(yoff, x, y) {
-			return
-		}
-		if a.handleZoomWheel(yoff) {
-			return
-		}
-		fx, fy := a.windowToFramebuffer(x, y)
-		if a.handleScrollbarWheel(yoff, fx, fy) {
-			return
-		}
-		rows := scrollRowsFromWheelDelta(yoff, a.cfg.Scrolling.WheelMultiplier)
-		if rows == 0 {
-			return
-		}
-		moved, _ := a.mux.ScrollViewport(a.focusedPane, rows)
-		if moved {
-			a.scrollbar.lastActivity = time.Now()
-			a.requestRedraw()
-			a.markScrollEvent()
-		}
-	})
-	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
-		a.recordNativeFocus(focused)
-		if !focused {
-			a.keyTable.cancel()
-			a.finishDividerDrag()
-			a.clearDividerCursor()
-			a.cancelMouseCapture()
-			a.mouseBindingCapture = mouseBindingCapture{}
-		}
-		a.fireScriptEvent(func() error { return a.scriptRT.FireFocus(a.hostForFocused(), focused) })
-		_, view, ok := a.focusedView()
-		enabled := ok && view.FocusEvents
-		if !enabled {
-			return
-		}
-		if focused {
-			a.writeInput("\x1b[I")
-		} else {
-			a.writeInput("\x1b[O")
-		}
-	})
 }

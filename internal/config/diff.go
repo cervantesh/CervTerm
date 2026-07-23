@@ -125,6 +125,24 @@ func DiffConfig(desired, effective Config) []ConfigChange {
 	changes = appendChange(changes, desired.Cursor.Thickness != effective.Cursor.Thickness, "cursor.thickness", ApplyLive)
 
 	changes = appendChange(changes, desired.Clipboard.OSC52 != effective.Clipboard.OSC52, "clipboard.osc52", ApplyRestart)
+	changes = appendChange(changes, desired.IME.Enabled != effective.IME.Enabled, "ime.enabled", ApplyRestart)
+	changes = appendChange(changes, desired.Accessibility.Enabled != effective.Accessibility.Enabled, "accessibility.enabled", ApplyRestart)
+	changes = appendChange(changes, desired.Accessibility.Scope != effective.Accessibility.Scope, "accessibility.scope", ApplyRestart)
+	changes = appendChange(changes, desired.Graphics.Kitty.Enabled != effective.Graphics.Kitty.Enabled, "graphics.kitty.enabled", ApplyRestart)
+	changes = appendChange(changes, desired.Graphics.Sixel.Enabled != effective.Graphics.Sixel.Enabled, "graphics.sixel.enabled", ApplyRestart)
+	changes = appendChange(changes, desired.Graphics.ITerm.Enabled != effective.Graphics.ITerm.Enabled, "graphics.iterm.enabled", ApplyRestart)
+	changes = appendChange(changes, desired.Graphics.Limits.EncodedBytesPerPane != effective.Graphics.Limits.EncodedBytesPerPane, "graphics.limits.encoded_bytes_per_pane", ApplyRestart)
+	changes = appendChange(changes, desired.Graphics.Limits.DecodedBytesPerPane != effective.Graphics.Limits.DecodedBytesPerPane, "graphics.limits.decoded_bytes_per_pane", ApplyRestart)
+	changes = appendChange(changes, desired.Graphics.Limits.ImageCountPerPane != effective.Graphics.Limits.ImageCountPerPane, "graphics.limits.image_count_per_pane", ApplyRestart)
+	changes = appendChange(changes, desired.Graphics.Limits.PlacementCountPerPane != effective.Graphics.Limits.PlacementCountPerPane, "graphics.limits.placement_count_per_pane", ApplyRestart)
+	changes = appendChange(changes, desired.Graphics.Limits.GPUBytesPerContext != effective.Graphics.Limits.GPUBytesPerContext, "graphics.limits.gpu_bytes_per_context", ApplyRestart)
+	changes = appendChange(changes, desired.Bell.Mode != effective.Bell.Mode, "bell.mode", ApplyLive)
+	changes = appendChange(changes, desired.Bell.Focus != effective.Bell.Focus, "bell.focus", ApplyLive)
+	changes = appendChange(changes, desired.Bell.ThrottleMS != effective.Bell.ThrottleMS, "bell.throttle_ms", ApplyLive)
+	changes = appendChange(changes, desired.Bell.VisualDurationMS != effective.Bell.VisualDurationMS, "bell.visual_duration_ms", ApplyLive)
+	changes = appendChange(changes, desired.Notification.Enabled != effective.Notification.Enabled, "notification.enabled", ApplyLive)
+	changes = appendChange(changes, desired.Notification.Focus != effective.Notification.Focus, "notification.focus", ApplyLive)
+	changes = appendChange(changes, desired.Notification.RateLimitMS != effective.Notification.RateLimitMS, "notification.rate_limit_ms", ApplyLive)
 
 	changes = appendChange(changes, desired.Render.Bidi != effective.Render.Bidi, "render.bidi", ApplyRestart)
 	changes = appendChange(changes, desired.Render.TextGamma != effective.Render.TextGamma, "render.text_gamma", ApplyRestart)
@@ -175,6 +193,8 @@ func MergeLiveConfig(base, source Config) Config {
 	base.Scrollbar = source.Scrollbar
 	base.TabBar = source.TabBar
 	base.Cursor = source.Cursor
+	base.Bell = source.Bell
+	base.Notification = source.Notification
 	base.Render.MaxFPS = source.Render.MaxFPS
 	base.LaunchMenu = cloneLaunchTargets(source.LaunchMenu)
 	base.QuickSelect = source.QuickSelect

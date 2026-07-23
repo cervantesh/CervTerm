@@ -41,17 +41,17 @@ func (c *windowController) createRuntimeProjection() (termmux.WindowID, error) {
 	}
 	bundle, spec, content, metrics, title, err := c.candidateFactory.Prepare()
 	if err != nil {
-		return 0, errors.Join(err, bundle.close())
+		return 0, errors.Join(err, closeProjectionBundleWithCurrent(bundle))
 	}
 	if bundle == nil || bundle.host == nil || bundle.handle == nil {
-		return 0, errors.Join(errWindowProjectionMissing, bundle.close())
+		return 0, errors.Join(errWindowProjectionMissing, closeProjectionBundleWithCurrent(bundle))
 	}
 	view, events, err := c.runtimeWindows.CreateWindow(spec, content, metrics, title)
 	if err != nil {
-		return 0, errors.Join(err, bundle.close())
+		return 0, errors.Join(err, closeProjectionBundleWithCurrent(bundle))
 	}
 	rollback := func(cause error) error {
-		return errors.Join(cause, c.runtimeWindows.RollbackWindow(view.ID), bundle.close())
+		return errors.Join(cause, c.runtimeWindows.RollbackWindow(view.ID), closeProjectionBundleWithCurrent(bundle))
 	}
 	if bundle.bind != nil {
 		if err := bundle.bind(view.ID); err != nil {

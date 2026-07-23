@@ -1,0 +1,160 @@
+//go:build glfw
+
+package glfwgl
+
+import (
+	"errors"
+
+	"cervterm/internal/ime"
+	"cervterm/internal/modal"
+	termmux "cervterm/internal/mux"
+)
+
+var errCompositionCleanupPanic = errors.New("composition cleanup callback panic")
+
+func (a *App) openModal(mode modal.Mode, pane modal.PaneIdentity, focus modal.FocusIdentity, entries []modal.Entry) bool {
+	if !a.modal.Open(mode, pane, focus, entries) {
+		return false
+	}
+	_ = a.cancelComposition(ime.CancelModalChanged)
+	if a.accessibilityRuntime != nil {
+		a.accessibilityRuntime.Invalidate(accessibilityAllSemanticIntents)
+	}
+	return true
+}
+
+func (a *App) replaceModal(mode modal.Mode, entries []modal.Entry) bool {
+	if !a.modal.Replace(mode, entries) {
+		return false
+	}
+	_ = a.cancelComposition(ime.CancelModalChanged)
+	if a.accessibilityRuntime != nil {
+		a.accessibilityRuntime.Invalidate(accessibilityAllSemanticIntents)
+	}
+	return true
+}
+
+func (a *App) closeModal() []modal.Intent {
+	if !a.modal.Active() {
+		return nil
+	}
+	intents := a.modal.Close()
+	_ = a.cancelComposition(ime.CancelModalChanged)
+	if a.accessibilityRuntime != nil {
+		a.accessibilityRuntime.Invalidate(accessibilityAllSemanticIntents)
+	}
+	return intents
+}
+
+func (a *App) compositionNativeFocusChanged(focused bool) {
+	if !focused {
+		_ = a.cancelComposition(ime.CancelFocusLost)
+		a.charSuppression.clearEcho()
+	}
+}
+
+func (a *App) cancelCompositionForMuxEvent(event termmux.Event) {
+	snapshot := a.composition.snapshot()
+	if !snapshot.Active {
+		return
+	}
+	switch event.Kind {
+	case termmux.PaneFocused:
+		if snapshot.Target.ID != uint64(event.Pane) {
+			_ = a.cancelComposition(ime.CancelTargetChanged)
+		}
+	case termmux.PaneClosed, termmux.PaneTransferred:
+		if snapshot.Target.ID == uint64(event.Pane) {
+			_ = a.cancelComposition(ime.CancelTargetChanged)
+		}
+	case termmux.WindowTabsEmpty:
+		_ = a.cancelComposition(ime.CancelTargetChanged)
+	}
+}
+
+func (a *App) compositionTargetsPane(pane termmux.PaneID) bool {
+	snapshot := a.composition.snapshot()
+	return snapshot.Active && snapshot.Target.ID == uint64(pane)
+}
+
+func (a *App) compositionTargetsTab(tab termmux.TabID) bool {
+	snapshot := a.composition.snapshot()
+	if !snapshot.Active || a.mux == nil {
+		return false
+	}
+	targetTab, ok := a.mux.TabForPane(termmux.PaneID(snapshot.Target.ID))
+	return ok && targetTab == tab
+}
+
+type compositionBeforeUnbind struct {
+	cancel       func() error
+	beforeNative func() error
+	deactivate   func() error
+	restore      func() error
+	release      func() error
+	wndProcHost  *windowsWndProcHost
+	done         bool
+}
+
+func (coordinator *compositionBeforeUnbind) close() error {
+	if coordinator == nil || coordinator.done {
+		return nil
+	}
+	coordinator.done = true
+	// Teardown is deliberately at-most-once. Even when a native cleanup step
+	// reports an error, retrying restored callbacks or released contexts is unsafe;
+	// callers continue through unbind, resource closure, and HWND destruction.
+	var joined error
+	for _, step := range []func() error{coordinator.cancel, coordinator.beforeNative, coordinator.deactivate, coordinator.restore, coordinator.release} {
+		joined = errors.Join(joined, callCompositionCleanupStep(step))
+	}
+	return joined
+}
+
+func callCompositionCleanupStep(step func() error) (err error) {
+	if step == nil {
+		return nil
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = errCompositionCleanupPanic
+		}
+	}()
+	return step()
+}
+
+func (coordinator *compositionBeforeUnbind) attachWndProcHost(host *windowsWndProcHost) error {
+	if coordinator == nil || coordinator.done || host == nil || coordinator.restore != nil || coordinator.release != nil {
+		return errWndProcHostInvalid
+	}
+	deactivate := coordinator.deactivate
+	coordinator.deactivate = func() error {
+		return errors.Join(callCompositionCleanupStep(deactivate), host.deactivate())
+	}
+	coordinator.restore = host.restore
+	coordinator.release = host.release
+	coordinator.wndProcHost = host
+	return nil
+}
+
+func (coordinator *compositionBeforeUnbind) attachBeforeNative(step func() error) error {
+	if coordinator == nil || coordinator.done || step == nil || coordinator.beforeNative != nil {
+		return errWndProcHostInvalid
+	}
+	coordinator.beforeNative = step
+	return nil
+}
+
+func newCompositionBeforeUnbind(app *App) *compositionBeforeUnbind {
+	if app == nil {
+		return nil
+	}
+	return &compositionBeforeUnbind{
+		cancel: func() error { return app.cancelComposition(ime.CancelTeardown) },
+		deactivate: func() error {
+			app.composition.deactivateDelivery()
+			app.charSuppression.clear()
+			return nil
+		},
+	}
+}

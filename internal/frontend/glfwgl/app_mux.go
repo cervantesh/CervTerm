@@ -5,6 +5,8 @@ package glfwgl
 import (
 	"fmt"
 
+	"cervterm/internal/accessibility"
+	"cervterm/internal/ime"
 	termmux "cervterm/internal/mux"
 	termsel "cervterm/internal/selection"
 
@@ -71,7 +73,8 @@ func (a *App) loadPaneUI(id termmux.PaneID) {
 	a.mouseReport = state.mouseReport
 	a.activatePaneFont(id)
 	a.lterm = muxSearchTerminal{mux: a.mux, pane: id}
-	a.search.init(a.lterm, a.requestRedraw)
+	a.search.init(a.lterm, a.requestAccessibilityRedraw)
+	a.search.bindActivationChange(func() { _ = a.cancelComposition(ime.CancelTargetChanged) })
 }
 
 func (a *App) syncFocusedProjection() bool {
@@ -85,7 +88,7 @@ func (a *App) syncFocusedProjection() bool {
 	}
 	if a.focusedPane != id {
 		a.saveActivePaneUI()
-		a.focusedPane = id
+		a.setFocusedPane(id)
 		a.loadPaneUI(id)
 	}
 	a.snap = view.Snapshot
@@ -116,20 +119,28 @@ func (a *App) focusPane(id termmux.PaneID) bool {
 
 func (a *App) applyMuxEvents(events []termmux.Event) bool {
 	consumed := false
+	var accessibilityIntents accessibility.SemanticIntent
+	var accessibilityAnnouncements []accessibility.AnnouncementKind
 	for _, event := range events {
+		a.cancelCompositionForMuxEvent(event)
+		intent, announcement := accessibilityIntentForMuxEvent(event)
+		accessibilityIntents |= intent
+		if announcement != accessibility.AnnouncementNone {
+			accessibilityAnnouncements = append(accessibilityAnnouncements, announcement)
+		}
 		host := paneHost{app: a, pane: event.Pane}
 		switch event.Kind {
 		case termmux.PaneStarted:
 			a.ensurePaneUI(event.Pane)
 		case termmux.PaneOutput:
-			a.meter.AddBytes(len(event.Data))
+			a.meter.AddBytes(event.BytesRead)
 			if tab, ok := a.mux.TabForPane(event.Pane); ok && tab != a.mux.ActiveTab() {
 				if a.tabActivity == nil {
 					a.tabActivity = make(map[termmux.TabID]bool)
 				}
 				a.tabActivity[tab] = true
 			}
-			if a.scriptRT != nil && a.scriptRT.WantsOutput() {
+			if len(event.Data) > 0 && a.scriptRT != nil && a.scriptRT.WantsOutput() {
 				if err := a.scriptRT.FireOutput(host, string(event.Data)); err != nil {
 					a.Notify("script error: " + err.Error())
 				}
@@ -145,14 +156,18 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 		case termmux.PaneCWDChanged:
 			a.fireScriptEvent(func() error { return a.scriptRT.FireCwd(host, event.Text) })
 		case termmux.PaneBell:
-			a.fireScriptEvent(func() error { return a.scriptRT.FireBell(host) })
+			a.deliverBellEvent(event.Pane)
+		case termmux.PaneNotificationRequested:
+			a.applyNotificationEffect(event.Notification, event.Fresh)
+		case termmux.PaneNotificationOverflow:
+			a.reportNotificationOverflow()
 		case termmux.PaneFocused:
 			oldPane := a.focusedPane
 			if oldPane != 0 && oldPane != event.Pane {
 				a.sendPaneFocus(oldPane, false)
 			}
 			a.saveActivePaneUI()
-			a.focusedPane = event.Pane
+			a.setFocusedPane(event.Pane)
 			a.loadPaneUI(event.Pane)
 			if oldPane != event.Pane {
 				a.sendPaneFocus(event.Pane, true)
@@ -164,6 +179,7 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 			}
 			consumed = true
 		case termmux.PaneGeometryChanged:
+			a.invalidateCandidateGeometry()
 			if event.Pane == a.focusedPane {
 				a.cols, a.rows = event.Geometry.Cols, event.Geometry.Rows
 			}
@@ -190,6 +206,7 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 			delete(a.paneUI, event.Pane)
 			delete(a.pendingPaneScroll, event.Pane)
 			delete(a.pendingPaneResize, event.Pane)
+			delete(a.bellDelivered, event.Pane)
 			if a.mouseCapturePane == event.Pane {
 				a.mouseCapturePane = 0
 			}
@@ -214,7 +231,17 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 	}
 	if consumed {
 		a.syncFocusedProjection()
+		_ = a.reconcileComposition(ime.CancelTargetChanged)
 		a.requestRedraw()
+	}
+	if a.accessibilityRuntime != nil {
+		a.accessibilityRuntime.Invalidate(accessibilityIntents)
+		for _, announcement := range accessibilityAnnouncements {
+			if err := a.accessibilityRuntime.Announce(announcement); err != nil {
+				a.failAccessibilityRuntime(err)
+				break
+			}
+		}
 	}
 	return consumed
 }
