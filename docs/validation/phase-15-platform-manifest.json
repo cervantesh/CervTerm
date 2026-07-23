@@ -14,11 +14,11 @@
     ],
     "package_sha256": "c75f6cf134551e0f5e762e69d1c86aaa6ab124a80ce7ac726b9ca1e1fe87e576",
     "executable_sha256": "e498378ec68ff48b7b8d3ff884efb783c8a1eb17cabf101c393bea2cf8798ef9",
-    "gui_helper_sha256": "489ba02f9a0feae23db935e6d034e7141dfee2ac776a99f96578dcded274a3fa",
+    "gui_helper_sha256": "f9ae09a301719e4d1957230a39a3c03890c9a4f39b6f215569eeabf81f4d0640",
     "disabled_config_sha256": "7c131487b49e4615c7acb8626433c866b7ca69cbfb85c0f63a9f5b407496cc80",
     "enabled_config_sha256": "e660914d63e140bbc1951cbc38a0d6fec8ee5729564ecf8b9e7866e4643d204e",
-    "disabled_screenshot_sha256": "ef3e0331d5640b5e5bf50b57be62c771a6e7b0f4818a627dcee5d833fcd5765b",
-    "enabled_screenshot_sha256": "21f676dcbeb52c17f947571c830b52cb41ce9396ea2d5ef177a5867a02653086",
+    "disabled_screenshot_sha256": "ae23a3f883fec68fd44d7b762f740ddc8cbfc41a23c02c9600614fb7c37eb25b",
+    "enabled_screenshot_sha256": "9c6f5ab090b6872c6481a1957c9594fbe26bd85bfac664ec9a9c8abeaddee9f2",
     "daily_driver_artifacts_sha256": {
       "alternate-screen.log": "b891341bee3216904ce798a9c62c36342e067329aca3a11f9eaae26386f15059",
       "alternate-screen.vt": "0bd9e7f54ff1ab8c604e59814e557c0403283eb64a686eb8d308804c4608ea95",
@@ -34,6 +34,19 @@
       "resize-reflow-100col.vt": "2ed5f3096ec826cf2608134bb4109509388c4dcf4e450fc2c418a72caafbc98f",
       "resize-reflow-40col.log": "5b04cd75ab27fb5fc6853537f6bb371185d1c40a432c5a2c76adba9fee60abd0",
       "resize-reflow-40col.vt": "2ed5f3096ec826cf2608134bb4109509388c4dcf4e450fc2c418a72caafbc98f"
+    },
+    "gui_results": [
+      "disabled flags: no image rendered; ordinary text retained",
+      "enabled flags: accepted iTerm PNG visibly rendered orange 4x2-cell placement",
+      "Windows ConPTY raw capture filtered APC Kitty and DCS Sixel before parser",
+      "both runs WM_CLOSE exit 0"
+    ],
+    "final_enabled_metrics": {
+      "startup_window_ms": 261.39,
+      "working_set_bytes": 116228096,
+      "peak_working_set_bytes": 116228096,
+      "idle_cpu_one_core_percent": 0.625,
+      "exit_code": 0
     }
   },
   "linux": {
@@ -48,14 +61,15 @@
       "CGO GLFW tests PASS",
       "CGO GLFW build PASS",
       "WSLg/X11 Mesa software-OpenGL window visible",
-      "Sixel fixture retained following text",
+      "Kitty APC accepted with fixed OK reply echoed by PTY",
+      "Sixel frame visibly rendered green",
       "xdotool X11 close; exit 0"
     ],
     "headless_executable_sha256": "e7f1ad404cc3bd93d282712d1412a11eb12345196624272657bcf492b741e8cb",
     "gui_executable_sha256": "3bf2bf8c9c70c0641ec5ddfbbe72f1e54fc1abf6e16b8e470b5b44189d5ab56d",
     "gui_config_sha256": "6cfd7bd7a25367f703159349d073012a3ed422fae229f31c5d11e6c9aea1deb6",
-    "gui_helper_sha256": "8979f9ad59ae5a0cebf843fe6ea6d07855f94ecba0f7363c5d85b92a64c5776e",
-    "sanitized_screenshot_sha256": "a15396462b0ca8fc005e1f92d936fdb1724ed6198d98b3f32f8a6e04b8980920"
+    "gui_helper_sha256": "dc8fa408b1776acb005b43982435d0841bbd037c1e1c60bb8615c3211b8166dd",
+    "sanitized_screenshot_sha256": "1f10b029ac4539a0ad80e915eb167d44d3de611dc6eb6673a6d2fb2f76103d4c"
   },
   "macos": {
     "darwin_amd64_cgo0_build": "PASS",

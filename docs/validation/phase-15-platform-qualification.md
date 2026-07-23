@@ -23,9 +23,9 @@ The initial RC1 qualification exposed repeatable Windows heap termination `0xc00
 Two real GUI runs used a bounded helper emitting ordinary text, OSC 8, OSC 133 semantic zones, and Kitty/Sixel/iTerm envelopes:
 
 - all graphics and accessibility disabled: [screenshot](../assets/phase15-windows-disabled.png);
-- all three graphics protocols plus visible-only experimental accessibility enabled: [screenshot](../assets/phase15-windows-enabled.png).
+- all three graphics flags plus visible-only experimental accessibility enabled: [screenshot](../assets/phase15-windows-enabled.png).
 
-Both windows became visible, remained responsive during a five-second idle sample, retained text after all envelopes, captured a screenshot, processed `WM_CLOSE`, and exited zero without panic/fatal diagnostics. The enabled run exercised real OpenGL context/cache/placement activation; this is a bounded qualification fixture, not broad protocol conformance.
+Both windows became visible, remained responsive during a five-second idle sample, retained ordinary text, captured a screenshot, processed `WM_CLOSE`, and exited zero without panic/fatal diagnostics. The enabled run committed and visibly drew the accepted iTerm PNG as the orange 4x2-cell image, exercising the real OpenGL cache/placement path. Windows ConPTY filtered APC Kitty and DCS Sixel bytes before CervTerm's parser (confirmed by raw ConPTY capture), so those two protocols are not claimed as Windows visual PASS rows. This is a bounded qualification fixture, not broad protocol conformance.
 
 ### Process comparison
 
@@ -41,7 +41,7 @@ Three alternating Phase 0/candidate runs used the same 900x620 helper window. Me
 | Peak working set | 109,817,856 B | 111,230,976 B | +1.29% |
 | Idle CPU, one-core scale | 0.5207% | 0.5208% | effectively unchanged |
 
-All remain below the Phase 15 15% investigation threshold. A separate enabled graphics/accessibility run measured 313.54 ms startup, 115,851,264 B working set, 0.3125% idle CPU, and clean exit.
+All remain below the Phase 15 15% investigation threshold. A separate final enabled graphics/accessibility run measured 261.39 ms startup, 116,228,096 B working set, 0.625% idle CPU, visible iTerm output, and clean exit.
 
 ## Linux amd64
 
@@ -58,7 +58,7 @@ The host lacks a system emoji package; qualification supplied the same pinned pa
 
 ### Real GUI
 
-**Result: PASS with WSLg scope.** GLFW/OpenGL tests and build passed against user-extracted Ubuntu development packages. A WSLg/X11 real window then ran with Mesa software OpenGL, all image protocols enabled, emitted text/OSC/Sixel fixture traffic, produced a [cropped screenshot](../assets/phase15-linux-wslg.png), accepted an X11 window-close event, and exited zero.
+**Result: PASS with WSLg scope.** GLFW/OpenGL tests and build passed against user-extracted Ubuntu development packages. A WSLg/X11 real window then ran with Mesa software OpenGL and all image flags enabled. The Unix PTY preserved Kitty APC (the fixed `OK` reply was echoed by the fixture) and visibly rendered the accepted Sixel frame as the green rectangle. The run produced a [cropped screenshot](../assets/phase15-linux-wslg.png), accepted an X11 window-close event, and exited zero.
 
 Expected platform diagnostics reported unsupported KWin blur/titlebar integration and no Segoe UI Emoji. This qualifies WSLg/X11 software-GL integration only; it does not claim broad native Linux desktop/driver support.
 
