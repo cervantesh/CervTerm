@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "captured_utc": "2026-07-23T21:10:00Z",
+  "candidate_commit": "f2be778",
+  "qualification_version": "0.10.0-phase15-rc2",
+  "windows": {
+    "host": "Windows 11 Home 10.0.26200 build 26200; amd64; AMD Ryzen 9 7940HX; Go 1.25.8",
+    "commands": [
+      "package-beta 0.10.0-phase15-rc2",
+      "release-preflight (39 pass, 0 required fail, 1 expected vttest warning)",
+      "smoke-installed-package (exit 0)",
+      "daily-driver-smoke (all seven cases exit 0)",
+      "real GUI disabled/enabled probe (window visible, screenshot, 5s idle, WM_CLOSE, exit 0)"
+    ],
+    "package_sha256": "c75f6cf134551e0f5e762e69d1c86aaa6ab124a80ce7ac726b9ca1e1fe87e576",
+    "executable_sha256": "e498378ec68ff48b7b8d3ff884efb783c8a1eb17cabf101c393bea2cf8798ef9",
+    "gui_helper_sha256": "489ba02f9a0feae23db935e6d034e7141dfee2ac776a99f96578dcded274a3fa",
+    "disabled_config_sha256": "7c131487b49e4615c7acb8626433c866b7ca69cbfb85c0f63a9f5b407496cc80",
+    "enabled_config_sha256": "e660914d63e140bbc1951cbc38a0d6fec8ee5729564ecf8b9e7866e4643d204e",
+    "disabled_screenshot_sha256": "ef3e0331d5640b5e5bf50b57be62c771a6e7b0f4818a627dcee5d833fcd5765b",
+    "enabled_screenshot_sha256": "21f676dcbeb52c17f947571c830b52cb41ce9396ea2d5ef177a5867a02653086",
+    "daily_driver_artifacts_sha256": {
+      "alternate-screen.log": "b891341bee3216904ce798a9c62c36342e067329aca3a11f9eaae26386f15059",
+      "alternate-screen.vt": "0bd9e7f54ff1ab8c604e59814e557c0403283eb64a686eb8d308804c4608ea95",
+      "cmd-basic.log": "480c54cbe8cc1fb225c6fc8ba3fb7d505909631a100f5d7d1afa0c4f03ca26ce",
+      "cmd-basic.vt": "3699c7aaf70e932e7b46debb34f8e2f8d4369b99d244239bd9ae3093d2a2e442",
+      "git-log.log": "650099701123fbfb93aded087cbde0cf26ef29018be8fba9e0cdd39166d80170",
+      "git-log.vt": "ba3613153ec97d6d5a40a0de5c59cd5c6c7707763c944c607a9bc7a4ac847196",
+      "long-session.log": "88c7bbd8735440490e4cab347f6ec69744d0fdcbf7d1214f52e72f37784bda39",
+      "long-session.vt": "99fce305e431c5c7040c4b5a3774a63df093bcc3a701ff0315e45afee48e8806",
+      "pager-more.log": "fec4c6bd89518e387930b0bd22aa1c3f22773b714a0e3f5c7592ccf65658870e",
+      "pager-more.vt": "26ea4340d3a02ef9a04ec051ba08af24f6b68a609d31e60fc60e02e793134e05",
+      "resize-reflow-100col.log": "35c700faeb5e9b59b626bf1ceeb3186ba012ee675f239c0e303a3b400574be87",
+      "resize-reflow-100col.vt": "2ed5f3096ec826cf2608134bb4109509388c4dcf4e450fc2c418a72caafbc98f",
+      "resize-reflow-40col.log": "5b04cd75ab27fb5fc6853537f6bb371185d1c40a432c5a2c76adba9fee60abd0",
+      "resize-reflow-40col.vt": "2ed5f3096ec826cf2608134bb4109509388c4dcf4e450fc2c418a72caafbc98f"
+    }
+  },
+  "linux": {
+    "host": "Ubuntu 24.04 WSL2/WSLg; linux/amd64; Linux 6.6.87.2; Go 1.25.8",
+    "headless": [
+      "maturity PASS",
+      "CGO_ENABLED=0 go test ./... PASS",
+      "CGO_ENABLED=0 go vet PASS",
+      "headless build/version/default-config PASS"
+    ],
+    "gui": [
+      "CGO GLFW tests PASS",
+      "CGO GLFW build PASS",
+      "WSLg/X11 Mesa software-OpenGL window visible",
+      "Sixel fixture retained following text",
+      "xdotool X11 close; exit 0"
+    ],
+    "headless_executable_sha256": "e7f1ad404cc3bd93d282712d1412a11eb12345196624272657bcf492b741e8cb",
+    "gui_executable_sha256": "3bf2bf8c9c70c0641ec5ddfbbe72f1e54fc1abf6e16b8e470b5b44189d5ab56d",
+    "gui_config_sha256": "6cfd7bd7a25367f703159349d073012a3ed422fae229f31c5d11e6c9aea1deb6",
+    "gui_helper_sha256": "8979f9ad59ae5a0cebf843fe6ea6d07855f94ecba0f7363c5d85b92a64c5776e",
+    "sanitized_screenshot_sha256": "a15396462b0ca8fc005e1f92d936fdb1724ed6198d98b3f32f8a6e04b8980920"
+  },
+  "macos": {
+    "darwin_amd64_cgo0_build": "PASS",
+    "darwin_arm64_cgo0_build": "PASS",
+    "real_gui": "SKIP: no macOS/Cocoa host"
+  },
+  "windows_arm64": {
+    "cgo0_build": "PASS",
+    "real_gui": "UNRUN"
+  }
+}
