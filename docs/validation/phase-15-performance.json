@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "captured_utc": "2026-07-23T20:13:35Z",
+  "commit": "fd98c7eebe19b31c270996889ba95f81584ef16d",
+  "go_version": "go version go1.25.8 windows/amd64",
+  "go_environment": {
+    "CGO_ENABLED": "1",
+    "GOAMD64": "v1",
+    "GOEXPERIMENT": "",
+    "GOFLAGS": "-p=4"
+  },
+  "goos": "windows",
+  "goarch": "amd64",
+  "cpu": "AMD Ryzen 9 7940HX with Radeon Graphics",
+  "samples": 10,
+  "baseline_refs": {
+    "approved-harness": "0673a5aa2d127080087a38446c3a6a16664562a9",
+    "phase0": "7d64cc9",
+    "phase14-evidence": "353cdcfe5260c11d9eee87c6a96663e5291e8125",
+    "phase14-production": "b1eec1335aaad55cffbec9b15c610e3aebbc24dd"
+  },
+  "baseline_sha256": {
+    "docs/validation/phase-14-control-baseline.txt": "e571c27d82ed57457bccffbcd2f423b009006282b723c392b433409873e47726",
+    "docs/validation/phase-14-glfw-baseline.txt": "e52be71942c487b8972300e64d83bbfbf7f100cdbb4593a51c7a3461f69363ab",
+    "docs/validation/phase-14-glfwframe-baseline.txt": "23ea8fe01ca7197352644c1bdb48af2624dec89b6bd0bf96a40d8696dd017db5",
+    "docs/validation/phase-14-store-baseline.txt": "016a2909208406352105283880f9c563eefa9f352f00203d06af93c4b007bedd",
+    "docs/validation/phase-14-text-baseline.txt": "10204fa03f30385379ac28638daf8786954c900eaca8cbc40f058fb117d1292b",
+    "git:7d64cc9^{tree}": "c22096973156d6c38054781d4448ad6bf995ba76",
+    "inherited-harness:internal/core/attr_test.go": "634ddf5ce6a037a3988c1f868eeda0c87f5d89b760bac54cd4521626460dfa88",
+    "inherited-harness:internal/frontend/glfwgl/phase13_benchmark_test.go": "c378c7689a80fd71f680a7fd083c4f314ec1cd1844f7de0615cb95f35d05addd",
+    "inherited-harness:internal/frontend/glfwgl/phase13_frame_benchmark_test.go": "d9fa696e322370d96caab2bcab1a9cbd61bb453243f40a998a795e790494e050",
+    "inherited-harness:internal/render/snapshot_test.go": "fcd957628d2651797b5ea3c080cff087618fb150493d696f4f7691341229fd99",
+    "inherited-harness:internal/termimage/store_benchmark_test.go": "87f7f52c135789755d947e8a3db10b41c3799eb202b060ad5b26e0dd3559e0e9",
+    "inherited-harness:internal/vt/parser_benchmark_test.go": "bbd86345783ec6834154024d2d4edba6d816113633f096f3d391a8dd84b0d858",
+    "inherited-harness:internal/vt/parser_control_string_benchmark_test.go": "d830b72a97e62038685992ee9a22c8ea472959efc1dd70d91982540161082487",
+    "phase0-harness:internal/render/snapshot_test.go": "fcd957628d2651797b5ea3c080cff087618fb150493d696f4f7691341229fd99",
+    "phase0-harness:internal/vt/parser_benchmark_test.go": "bbd86345783ec6834154024d2d4edba6d816113633f096f3d391a8dd84b0d858"
+  },
+  "inherited": [
+    {
+      "suite": "phase0",
+      "benchmark": "BenchmarkCaptureReuse",
+      "baseline_median_ns_per_op": 2133,
+      "candidate_median_ns_per_op": 8739,
+      "delta_percent": 309.704641350211,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 1,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 400,
+      "waiver": "P15-W01: detached snapshot metadata growth; zero steady-state allocations retained"
+    },
+    {
+      "suite": "phase0",
+      "benchmark": "BenchmarkCoreReuseVsNew/new-terminal",
+      "baseline_median_ns_per_op": 49525,
+      "candidate_median_ns_per_op": 16769,
+      "delta_percent": -66.14033316506814,
+      "baseline_median_bytes_per_op": 156208,
+      "candidate_median_bytes_per_op": 158128,
+      "baseline_median_allocations_per_op": 4,
+      "candidate_median_allocations_per_op": 4,
+      "threshold_percent": 15,
+      "waiver": "P15-W01: bounded setup/metadata bytes; allocation count unchanged"
+    },
+    {
+      "suite": "phase0",
+      "benchmark": "BenchmarkCoreReuseVsNew/reuse",
+      "baseline_median_ns_per_op": 36610,
+      "candidate_median_ns_per_op": 3159,
+      "delta_percent": -91.37121005189839,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 0,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 15
+    },
+    {
+      "suite": "phase0",
+      "benchmark": "BenchmarkParserThroughput",
+      "baseline_median_ns_per_op": 37460,
+      "candidate_median_ns_per_op": 2918,
+      "delta_percent": -92.21035771489589,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 0,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 15
+    },
+    {
+      "suite": "text",
+      "benchmark": "BenchmarkPhase13TextOnlyCoreReuse",
+      "baseline_median_ns_per_op": 2944,
+      "candidate_median_ns_per_op": 2933.5,
+      "delta_percent": -0.35665760869565216,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 0,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 3
+    },
+    {
+      "suite": "text",
+      "benchmark": "BenchmarkPhase13TextOnlyParser",
+      "baseline_median_ns_per_op": 2899.5,
+      "candidate_median_ns_per_op": 2924.5,
+      "delta_percent": 0.862217623728229,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 0,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 3
+    },
+    {
+      "suite": "text",
+      "benchmark": "BenchmarkPhase13TextOnlySnapshot",
+      "baseline_median_ns_per_op": 8429.5,
+      "candidate_median_ns_per_op": 8380.5,
+      "delta_percent": -0.5812918915712676,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 0,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 3
+    },
+    {
+      "suite": "control",
+      "benchmark": "BenchmarkPhase13ControlStringDiscard",
+      "baseline_median_ns_per_op": 146799,
+      "candidate_median_ns_per_op": 142159.5,
+      "delta_percent": -3.1604438722334622,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 0,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 3
+    },
+    {
+      "suite": "control",
+      "benchmark": "BenchmarkPhase13ControlStringOverflow",
+      "baseline_median_ns_per_op": 1815382.5,
+      "candidate_median_ns_per_op": 1961839,
+      "delta_percent": 8.067528468518342,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 0,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 15,
+      "waiver": "P15-W01: selected-DCS preamble and bounded adapter routing; allocation-free streaming retained"
+    },
+    {
+      "suite": "store",
+      "benchmark": "BenchmarkProcessBudgetReserveRelease",
+      "baseline_median_ns_per_op": 37.32,
+      "candidate_median_ns_per_op": 38.215,
+      "delta_percent": 2.398177920685968,
+      "baseline_median_bytes_per_op": 64,
+      "candidate_median_bytes_per_op": 64,
+      "baseline_median_allocations_per_op": 1,
+      "candidate_median_allocations_per_op": 1,
+      "threshold_percent": 3
+    },
+    {
+      "suite": "store",
+      "benchmark": "BenchmarkStoreAcquireMiss",
+      "baseline_median_ns_per_op": 0.95655,
+      "candidate_median_ns_per_op": 0.9668,
+      "delta_percent": 1.0715592493858117,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 0,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 3
+    },
+    {
+      "suite": "store",
+      "benchmark": "BenchmarkStoreBeginTransferCancel",
+      "baseline_median_ns_per_op": 113.15,
+      "candidate_median_ns_per_op": 111.30000000000001,
+      "delta_percent": -1.6349977905435211,
+      "baseline_median_bytes_per_op": 192,
+      "candidate_median_bytes_per_op": 192,
+      "baseline_median_allocations_per_op": 2,
+      "candidate_median_allocations_per_op": 2,
+      "threshold_percent": 3
+    },
+    {
+      "suite": "glfw",
+      "benchmark": "BenchmarkPhase13DisabledDraw",
+      "baseline_median_ns_per_op": 43028,
+      "candidate_median_ns_per_op": 42799.5,
+      "delta_percent": -0.5310495491307986,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 0,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 3
+    },
+    {
+      "suite": "glfwframe",
+      "benchmark": "BenchmarkPhase13DisabledFrame",
+      "baseline_median_ns_per_op": 6.9815000000000005,
+      "candidate_median_ns_per_op": 6.968,
+      "delta_percent": -0.1933681873522955,
+      "baseline_median_bytes_per_op": 0,
+      "candidate_median_bytes_per_op": 0,
+      "baseline_median_allocations_per_op": 0,
+      "candidate_median_allocations_per_op": 0,
+      "threshold_percent": 3
+    }
+  ],
+  "candidate_only": [
+    {
+      "name": "BenchmarkAccessibilityEventCoalescing",
+      "samples": 10,
+      "median_ns_per_op": 118727.5,
+      "median_bytes_per_op": 2368,
+      "median_allocations_per_op": 97
+    },
+    {
+      "name": "BenchmarkAccessibilitySemanticCapture",
+      "samples": 10,
+      "median_ns_per_op": 144707,
+      "median_bytes_per_op": 509248,
+      "median_allocations_per_op": 587
+    },
+    {
+      "name": "BenchmarkITermAdapterSeal256KiB",
+      "samples": 10,
+      "median_ns_per_op": 1155206.5,
+      "median_bytes_per_op": 266272,
+      "median_allocations_per_op": 57
+    },
+    {
+      "name": "BenchmarkITermDecodeWorker256x64",
+      "samples": 10,
+      "median_ns_per_op": 321762,
+      "median_bytes_per_op": 255236,
+      "median_allocations_per_op": 16450
+    },
+    {
+      "name": "BenchmarkITermScanner256KiB",
+      "samples": 10,
+      "median_ns_per_op": 1039223.5,
+      "median_bytes_per_op": 0,
+      "median_allocations_per_op": 0
+    },
+    {
+      "name": "BenchmarkMuxAllDisabledImageIdle",
+      "samples": 10,
+      "median_ns_per_op": 27.915,
+      "median_bytes_per_op": 0,
+      "median_allocations_per_op": 0
+    },
+    {
+      "name": "BenchmarkPhase15FontEnvironmentRebuild",
+      "samples": 10,
+      "median_ns_per_op": 5483.5,
+      "median_bytes_per_op": 10464,
+      "median_allocations_per_op": 111
+    },
+    {
+      "name": "BenchmarkPhase15InputEncode",
+      "samples": 10,
+      "median_ns_per_op": 52.995000000000005,
+      "median_bytes_per_op": 17,
+      "median_allocations_per_op": 2
+    },
+    {
+      "name": "BenchmarkPhase15ManyTabsWindowsSnapshot",
+      "samples": 10,
+      "median_ns_per_op": 4918,
+      "median_bytes_per_op": 7723,
+      "median_allocations_per_op": 152
+    },
+    {
+      "name": "BenchmarkPhase15ResizeReflow",
+      "samples": 10,
+      "median_ns_per_op": 5479829.5,
+      "median_bytes_per_op": 26459276.5,
+      "median_allocations_per_op": 65071
+    },
+    {
+      "name": "BenchmarkPhase15SemanticProjection",
+      "samples": 10,
+      "median_ns_per_op": 5105.5,
+      "median_bytes_per_op": 0,
+      "median_allocations_per_op": 0
+    },
+    {
+      "name": "BenchmarkPhase15TerminalStartupMemory",
+      "samples": 10,
+      "median_ns_per_op": 11433.5,
+      "median_bytes_per_op": 125344,
+      "median_allocations_per_op": 4
+    },
+    {
+      "name": "BenchmarkProcessBudgetReserveRelease",
+      "samples": 10,
+      "median_ns_per_op": 42.480000000000004,
+      "median_bytes_per_op": 64,
+      "median_allocations_per_op": 1
+    },
+    {
+      "name": "BenchmarkSchedulerSubmitComplete",
+      "samples": 10,
+      "median_ns_per_op": 307.15,
+      "median_bytes_per_op": 0,
+      "median_allocations_per_op": 0
+    },
+    {
+      "name": "BenchmarkSixelAdapterSeal256KiB",
+      "samples": 10,
+      "median_ns_per_op": 635387.5,
+      "median_bytes_per_op": 264984,
+      "median_allocations_per_op": 53
+    },
+    {
+      "name": "BenchmarkSixelDecodeWorker256x64",
+      "samples": 10,
+      "median_ns_per_op": 139614,
+      "median_bytes_per_op": 71088,
+      "median_allocations_per_op": 29
+    },
+    {
+      "name": "BenchmarkSixelTokenizer256KiB",
+      "samples": 10,
+      "median_ns_per_op": 547846,
+      "median_bytes_per_op": 0,
+      "median_allocations_per_op": 0
+    },
+    {
+      "name": "BenchmarkStoreAcquireMiss",
+      "samples": 10,
+      "median_ns_per_op": 0.9529,
+      "median_bytes_per_op": 0,
+      "median_allocations_per_op": 0
+    },
+    {
+      "name": "BenchmarkStoreBeginTransferCancel",
+      "samples": 10,
+      "median_ns_per_op": 110.80000000000001,
+      "median_bytes_per_op": 192,
+      "median_allocations_per_op": 2
+    }
+  ]
+}

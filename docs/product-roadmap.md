@@ -2,7 +2,7 @@
 
 This roadmap captures the path from the current CervTerm prototype toward a minimum daily-driver terminal comparable in ambition to Alacritty, while borrowing configuration and UX lessons from WezTerm and Kitty where appropriate.
 
-**Current plan:** the original four-phase MVP roadmap below is retained as delivery history. New parity work follows [`docs/wezterm-parity-roadmap.md`](wezterm-parity-roadmap.md), with machine-readable status in [`docs/parity-support-matrix.json`](parity-support-matrix.json) and measurements in [`docs/parity-baseline.md`](parity-baseline.md). Renderer selection and local/SSH/WSL domains are excluded.
+**Current plan:** the original four-phase MVP roadmap below is retained as delivery history. The 15-phase WezTerm-parity program in [`docs/wezterm-parity-roadmap.md`](wezterm-parity-roadmap.md) is implementation-complete through release hardening, with machine-readable status in [`docs/parity-support-matrix.json`](parity-support-matrix.json) and qualification measurements under [`docs/validation/`](validation/). Experimental/default-off boundaries and remaining macOS, assistive-technology, and IME qualification work remain explicit. Renderer selection and local/SSH/WSL domains are excluded.
 
 ## Current baseline
 

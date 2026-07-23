@@ -14,7 +14,7 @@ CervTerm is pre-1.0, but configuration changes still require an explicit compati
 
 ## Schema Versions and Migrations
 
-Schema v2 is available through explicit `config_version = 2`; generated templates opt in. Omitted version remains v1. The candidate pipeline now has canonical graph traversal, schema merge/tombstones/provenance, deterministic named environment/profile selection, and a pure typed CLI-override layer. Public loaders intentionally keep `includes`, selection metadata, and `cervterm.config.unset` unavailable, and no override flag is wired, until transactional Teal publication and atomic bundle installation land. Using unavailable surfaces through the current loader fails rather than applying an inert partial feature.
+Schema v2 is available through explicit `config_version = 2`; generated templates opt in. Omitted version remains v1. The versioned candidate pipeline supports canonical includes and captured local modules, schema merge/tombstones/provenance, deterministic environment/profile selection, typed CLI overrides, transactional Teal publication, and atomic bundle installation. Unsupported or invalid surfaces fail candidate preparation rather than applying an inert partial feature.
 
 ADR-0002 defines explicit v2 strictness. Unversioned/v1 files retain the historical behavior in which unknown or mistyped ordinary fields are ignored, because retroactive rejection would break configurations that currently load. The reserved `config_version` discriminator is the sole strict v1 exception. This compatibility exception ends only through the deprecation lifecycle below; migration/doctor diagnostics must identify what v2 will reject.
 
@@ -25,6 +25,8 @@ Every migration must:
 - emit a concise explanation for renamed, split, or removed fields;
 - never rewrite the source file without an explicit user command;
 - retain the previous runtime when migration or validation fails.
+
+The published [Configuration Migration Guide](config-migration.md) and sanitized corpus under `internal/config/testdata/user-migration/` provide before/after examples, exact-equivalence or explicit-divergence manifests, and source-immutability tests.
 
 ## Deprecation Lifecycle
 

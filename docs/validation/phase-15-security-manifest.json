@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "captured_utc": "2026-07-23T20:45:00Z",
+  "candidate_commit": "d468089",
+  "host": "Windows 11 amd64; Go 1.25.8",
+  "gates": [
+    {
+      "command": "go test ./...",
+      "status": "PASS"
+    },
+    {
+      "command": "go vet -unsafeptr=false ./...",
+      "status": "PASS"
+    },
+    {
+      "command": "go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -count=1",
+      "status": "PASS"
+    },
+    {
+      "command": "go run ./scripts/check-phase15-recovery.go -race",
+      "status": "PASS"
+    },
+    {
+      "command": "focused accessibility/core/mux/image/scheduler/parser race suites",
+      "status": "PASS"
+    },
+    {
+      "command": "govulncheck ./...",
+      "status": "PASS",
+      "reachable_vulnerabilities": 0,
+      "unreachable_imported_package_findings": 4,
+      "required_module_findings": 16
+    }
+  ],
+  "fuzz_seconds_each": 2,
+  "fuzz_targets": [
+    "FuzzControlStringFraming",
+    "FuzzOSC1337SelectedTransport",
+    "FuzzPublicOutputProjectionDualOracle",
+    "FuzzPublicOutputProjectionSelectedEnvelope",
+    "FuzzSixelDCSTransportSelection",
+    "FuzzParserAdvanceDoesNotPanic",
+    "FuzzCheckedRGBABytes",
+    "FuzzPlacementCropValidation",
+    "FuzzDeleteSelectorTruthTable",
+    "FuzzStoreLifecycle",
+    "FuzzKittyAdapter",
+    "FuzzKittyDecode",
+    "FuzzSixelTokenizerFragmentation",
+    "FuzzSixelAdapterLifecycle",
+    "FuzzSixelDecodeWorker",
+    "FuzzITermScannerFragmentation",
+    "FuzzITermStrictBase64",
+    "FuzzITermAdapterLifecycle",
+    "FuzzITermDecodeWorker",
+    "FuzzUnmarshalLayout"
+  ],
+  "fuzz_status": "PASS",
+  "github_codeql": {
+    "status": "PASS",
+    "run_id": 30048191712,
+    "url": "https://github.com/cervantesh/CervTerm/actions/runs/30048191712",
+    "commit": "d468089b4010ad30b14ad040fc2eb2b8c688e4cd",
+    "categories": {
+      "actions": 0,
+      "c-cpp": 0,
+      "go": 0,
+      "python": 0
+    },
+    "open_alerts": 0
+  }
+}

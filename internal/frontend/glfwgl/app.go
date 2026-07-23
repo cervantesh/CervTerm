@@ -229,9 +229,9 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 
 func (a *App) runWindow() error {
 	restorePlan, restoreFound, restoreLoadErr := loadConfiguredRestorePlan(a.cfg)
-	if restoreLoadErr != nil {
-		log.Printf("layout restore ignored: %v", restoreLoadErr)
-		restoreFound = false
+	restorePlan, restoreFound, restoreDisposition := applyRestoreLoadPolicy(restorePlan, restoreFound, restoreLoadErr)
+	if restoreDisposition != "" {
+		log.Printf("layout restore ignored: %s", restoreDisposition)
 	}
 	if err := glfw.Init(); err != nil {
 		return err
