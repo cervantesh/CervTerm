@@ -1,12 +1,12 @@
 # Phase 15 security and accessibility qualification
 
 Date: 2026-07-23
-Code candidate: `f2be778`
+Code candidate: `d468089`
 Machine-readable local gate/fuzzer manifest: [`phase-15-security-manifest.json`](phase-15-security-manifest.json).
 
 ## Security automation
 
-**Local result: PASS. Remote CodeQL: pending branch/PR gate.**
+**Result: PASS.**
 
 Executed on Windows 11 amd64 with Go 1.25.8:
 
@@ -26,6 +26,7 @@ Results:
 - focused accessibility/core/mux/image/scheduler/parser race suites passed;
 - `govulncheck` found zero reachable vulnerabilities (four findings in imported packages and sixteen in required modules were unreachable from CervTerm code);
 - package/preflight/smoke qualification rejected no required security or trust check.
+- GitHub CodeQL run [`30048191712`](https://github.com/cervantesh/CervTerm/actions/runs/30048191712) passed for Actions, C/C++, Go, and Python at `d468089`; all four analyses reported zero results and the PR ref had zero open code-scanning alerts.
 
 Every repository fuzzer ran for a two-second mutation interval after seed coverage:
 
@@ -38,7 +39,7 @@ Every repository fuzzer ran for a two-second mutation interval after seed covera
 
 No crash or new failing corpus entry was produced. Protocol adapters remain bounded, selected output remains redacted from public observers, and the accepted iTerm surface performs no external file/path/URL I/O.
 
-GitHub CodeQL and required CI results are recorded at the PR/merge gate before this row becomes the final P15-03 PASS.
+The local and CodeQL results close P15-03. The separate required-CI/package merge gate remains part of release readiness.
 
 ## Accessibility automation
 

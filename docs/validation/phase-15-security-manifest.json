@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "captured_utc": "2026-07-23T20:45:00Z",
-  "candidate_commit": "f2be778",
+  "candidate_commit": "d468089",
   "host": "Windows 11 amd64; Go 1.25.8",
   "gates": [
     {
@@ -56,5 +56,17 @@
     "FuzzUnmarshalLayout"
   ],
   "fuzz_status": "PASS",
-  "github_codeql": "UNRUN: branch not yet pushed at capture time"
+  "github_codeql": {
+    "status": "PASS",
+    "run_id": 30048191712,
+    "url": "https://github.com/cervantesh/CervTerm/actions/runs/30048191712",
+    "commit": "d468089b4010ad30b14ad040fc2eb2b8c688e4cd",
+    "categories": {
+      "actions": 0,
+      "c-cpp": 0,
+      "go": 0,
+      "python": 0
+    },
+    "open_alerts": 0
+  }
 }

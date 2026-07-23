@@ -319,7 +319,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 
 **Normative exclusions:** C1 DCS/OSC, broad Sixel/iTerm conformance, Sixel HLS/scrolling/DECSDM, iTerm name/auto/pixel/percent/two-axis/stretch/multipart forms, external file/path/URL/temporary/shared-memory/download/write I/O, JPEG/GIF, animation, cursor effects, invented replies, renderer selection, and non-OpenGL image rendering.
 
-**Qualification boundary:** the automated close-out and all 13 relevant 60-second fuzz targets pass, but automation does not replace [`docs/manual-verification.md`](manual-verification.md). Every real-GUI/platform row remains UNRUN; `docs/parity-support-matrix.json` therefore records `experimental`, `default_enabled=false`, `manual_qualification=unrun`, and `support_claim=none`.
+**Qualification boundary:** the automated close-out and all relevant fuzz targets pass. Phase 15 adds scoped real-GUI evidence: iTerm passes on Windows OpenGL, Kitty/Sixel pass on Linux WSLg OpenGL, Windows ConPTY filtering is explicitly bounded, and UIA passes lifecycle/privacy qualification without assistive-technology validation. Experimental protocols remain default-off; macOS and broader conformance/support claims remain unqualified. See [`docs/manual-verification.md`](manual-verification.md) and [`docs/validation/phase-15-platform-qualification.md`](validation/phase-15-platform-qualification.md).
 
 **Rollback:** disable `graphics.sixel.enabled` and/or `graphics.iterm.enabled` independently and restart. Activation/restore publishes old-or-new and closes provisional resources in reverse order; failed/late decode closes candidates without partial publication; Phase 13 Kitty remains independently available.
 
@@ -335,6 +335,15 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 - Ship checkpoint releases with opt-in gates for the riskiest features; remove temporary adapters only after one stable release.
 
 **Success:** full tests/race/vet/maturity/package gates pass; no blocker security/accessibility findings; measured regressions are within accepted budgets; docs clearly state exclusions.
+
+**Delivered**
+- Sanitized v1-to-v2 migration corpora and paired templates prove equivalent effective semantics without rewriting user sources.
+- Capability-oriented `--doctor`, strict support-matrix schema checks, evidence parity, and documentation describe platform, default, qualification, and support boundaries.
+- Recovery probes preserve last-valid config/layout/image state, bound retries, clean provisional resources, and keep logs/panic diagnostics value-free and path-redacted.
+- Reproducible startup, RSS, idle CPU/process, input, resize, font, tab/window, metadata, image-transfer and packaged-GUI measurements satisfy the accepted Phase 15 budgets.
+- Windows and Linux WSLg real-GUI matrices record scoped passes, skips, and the repaired ConPTY close race; unsupported macOS/AT/IME combinations remain explicit rather than inferred.
+- Full tests, GLFW tests, vet, maturity, package, race, fuzz, `govulncheck`, CodeQL, and independent review close the hardening gate with no blocker finding.
+- Experimental graphics, IME, accessibility, and native notification features remain default-off with checkpoint rollback and compatibility adapters retained through at least one stable release.
 
 **Verification commands:**
 - `go test ./... -count=1`
@@ -370,4 +379,4 @@ Stop and return to architecture review if:
 - renderer selection becomes a prerequisite.
 
 ## Immediate Next Action
-Proceed to Phase 15 integration/release hardening while retaining Phase 14's experimental/default-off/no-support disposition. The next status-changing action is to run and attach the real Windows/GLFW/OpenGL manual matrix; until then every real-GUI row stays UNRUN and no broader conformance or default-on proposal is justified.
+Publish the Phase 15 beta checkpoint after required CI/package merge gates pass, then monitor migration, recovery, and opt-in feature telemetry/issue reports. Do not broaden support claims or defaults until the remaining macOS, assistive-technology, and IME qualification rows are executed.
