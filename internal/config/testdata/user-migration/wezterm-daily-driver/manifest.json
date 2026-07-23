@@ -1,0 +1,13 @@
+{
+  "id": "wezterm-daily-driver",
+  "source_kind": "wezterm",
+  "provenance": "sanitized owner-provided daily-driver configuration",
+  "effective_equivalence": false,
+  "unsupported": [
+    "software renderer selection is excluded",
+    "clipboard-image child-process callback is not migrated",
+    "automatic update checks are not applicable",
+    "custom status callback is not migrated",
+    "mouse copy-on-release behavior requires an explicit CervTerm binding review"
+  ]
+}

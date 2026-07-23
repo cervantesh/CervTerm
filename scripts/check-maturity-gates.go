@@ -74,6 +74,7 @@ var requiredDocs = []string{
 	"docs/parity-baseline.md",
 	"docs/parity-support-matrix.json",
 	"docs/config-compatibility-policy.md",
+	"docs/config-migration.md",
 	"docs/validation/phase-15-preflight.md",
 	"docs/validation/phase-15-evidence.json",
 	"scripts/capture-parity-baseline.go",
