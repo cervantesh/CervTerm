@@ -24,7 +24,15 @@
       "configuration": "tag v0.9.0-beta.1",
       "evidence": ["https://github.com/cervantesh/CervTerm/releases/tag/v0.9.0-beta.1"]
     },
-    {"id": "compatibility.doctor", "status": "UNRUN", "attempted": false},
+    {
+      "id": "compatibility.doctor",
+      "status": "PASS",
+      "attempted": true,
+      "commit": "c82f634",
+      "environment": "Windows 11 windows/amd64; Go 1.25.8; headless and glfw build modes",
+      "configuration": "defaults plus strict-v2 opt-in intent fixtures",
+      "evidence": ["docs/validation/phase-15-compatibility-doctor.md"]
+    },
     {"id": "config.real_user_migrations", "status": "UNRUN", "attempted": false},
     {"id": "recovery.redaction", "status": "UNRUN", "attempted": false},
     {"id": "performance.phase15", "status": "UNRUN", "attempted": false},
