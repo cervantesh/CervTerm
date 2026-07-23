@@ -55,19 +55,76 @@
 	  "id": "performance.phase15",
 	  "status": "PASS",
 	  "attempted": true,
-	  "commit": "fd98c7e",
-	  "environment": "Windows 11 windows/amd64; AMD Ryzen 9 7940HX; Go 1.25.8; ten interleaved inherited samples",
-	  "configuration": "Phase 0 and Phase 14 detached baselines; candidate integration budgets; explicit P15-W01",
-	  "evidence": ["docs/validation/phase-15-performance.md", "docs/validation/phase-15-performance.json"]
+	  "commit": "f2be778",
+	  "environment": "Windows 11 windows/amd64; AMD Ryzen 9 7940HX; Go 1.25.8; deterministic and real-process samples",
+	  "configuration": "Phase 0/14 detached baselines, candidate integration budgets, explicit P15-W01, three interleaved GUI startup/RSS/idle samples",
+	  "evidence": ["docs/validation/phase-15-performance.md", "docs/validation/phase-15-performance.json", "docs/validation/phase-15-process-comparison.json", "docs/validation/phase-15-platform-qualification.md"]
 	},
     {"id": "security.automated", "status": "UNRUN", "attempted": false},
-    {"id": "accessibility.automated", "status": "UNRUN", "attempted": false},
-    {"id": "platform.windows_daily_driver", "status": "UNRUN", "attempted": false},
-    {"id": "platform.windows_real_gui", "status": "UNRUN", "attempted": false},
-    {"id": "platform.linux_headless", "status": "UNRUN", "attempted": false},
-    {"id": "platform.linux_real_gui", "status": "UNRUN", "attempted": false},
-    {"id": "platform.macos_build", "status": "UNRUN", "attempted": false},
-    {"id": "platform.macos_real_gui", "status": "UNRUN", "attempted": false},
+    {
+	  "id": "accessibility.automated",
+	  "status": "PASS",
+	  "attempted": true,
+	  "commit": "f2be778",
+	  "environment": "Windows 11 windows/amd64; automated privacy/race plus real GUI lifecycle",
+	  "configuration": "visible-only experimental/default-off; no Narrator/NVDA support claim",
+	  "evidence": ["docs/validation/phase-15-security-accessibility.md", "docs/assets/phase15-windows-enabled.png"]
+	},
+    {
+	  "id": "platform.windows_daily_driver",
+	  "status": "PASS",
+	  "attempted": true,
+	  "commit": "f2be778",
+	  "environment": "Windows 11 amd64; packaged 0.10.0-phase15-rc2",
+	  "configuration": "installed-package and complete daily-driver matrix; zero-exit ConPTY shutdown",
+	  "evidence": ["docs/validation/phase-15-platform-qualification.md", "docs/validation/phase-15-platform-manifest.json"]
+	},
+    {
+	  "id": "platform.windows_real_gui",
+	  "status": "PASS",
+	  "attempted": true,
+	  "commit": "f2be778",
+	  "environment": "Windows 11 amd64; real GLFW/OpenGL window",
+	  "configuration": "disabled and enabled bounded protocol/accessibility fixtures",
+	  "evidence": ["docs/validation/phase-15-platform-qualification.md", "docs/validation/phase-15-platform-manifest.json", "docs/validation/phase-15-process-comparison.json", "docs/assets/phase15-windows-disabled.png", "docs/assets/phase15-windows-enabled.png"]
+	},
+    {
+	  "id": "platform.linux_headless",
+	  "status": "PASS",
+	  "attempted": true,
+	  "commit": "f2be778",
+	  "environment": "Ubuntu 24.04 WSL2 linux/amd64; Go 1.25.8",
+	  "configuration": "CGO disabled full tests, vet, build, default config",
+	  "evidence": ["docs/validation/phase-15-platform-qualification.md", "docs/validation/phase-15-platform-manifest.json"]
+	},
+    {
+	  "id": "platform.linux_real_gui",
+	  "status": "PASS",
+	  "attempted": true,
+	  "commit": "f2be778",
+	  "environment": "Ubuntu 24.04 WSLg/X11; Mesa software OpenGL",
+	  "configuration": "GLFW tests/build; enabled Sixel fixture; X11 close and zero exit",
+	  "evidence": ["docs/validation/phase-15-platform-qualification.md", "docs/validation/phase-15-platform-manifest.json", "docs/assets/phase15-linux-wslg.png"]
+	},
+    {
+	  "id": "platform.macos_build",
+	  "status": "PASS",
+	  "attempted": true,
+	  "commit": "f2be778",
+	  "environment": "darwin/amd64 and darwin/arm64 cross-compile",
+	  "configuration": "CGO disabled go build ./...",
+	  "evidence": ["docs/validation/phase-15-platform-qualification.md", "docs/validation/phase-15-platform-manifest.json"]
+	},
+    {
+	  "id": "platform.macos_real_gui",
+	  "status": "SKIP",
+	  "attempted": true,
+	  "commit": "f2be778",
+	  "environment": "no macOS/Cocoa host available",
+	  "configuration": "explicit prerequisite skip; no macOS real-GUI claim",
+	  "prerequisite": "physical or hosted macOS Cocoa/OpenGL environment",
+	  "evidence": ["docs/validation/phase-15-platform-qualification.md", "docs/validation/phase-15-platform-manifest.json"]
+	},
     {"id": "release.candidate_readiness", "status": "UNRUN", "attempted": false},
     {"id": "release.phase15_checkpoint", "status": "UNRUN", "attempted": false}
   ]

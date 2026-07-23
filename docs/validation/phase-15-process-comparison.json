@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "7d64cc9",
+  "candidate_commit": "f2be778",
+  "protocol": "three interleaved samples; forced termination after measurement; median reported",
+  "samples": [
+    {
+      "label": "phase0",
+      "sample": 1,
+      "startup_window_ms": 265.96,
+      "working_set_bytes": 124657664,
+      "peak_working_set_bytes": 124657664,
+      "idle_cpu_one_core_percent": 0.5208
+    },
+    {
+      "label": "candidate",
+      "sample": 1,
+      "startup_window_ms": 292.2,
+      "working_set_bytes": 111456256,
+      "peak_working_set_bytes": 111456256,
+      "idle_cpu_one_core_percent": 1.0414
+    },
+    {
+      "label": "candidate",
+      "sample": 2,
+      "startup_window_ms": 239.51,
+      "working_set_bytes": 111230976,
+      "peak_working_set_bytes": 111230976,
+      "idle_cpu_one_core_percent": 0.5208
+    },
+    {
+      "label": "phase0",
+      "sample": 2,
+      "startup_window_ms": 319.13,
+      "working_set_bytes": 109817856,
+      "peak_working_set_bytes": 109817856,
+      "idle_cpu_one_core_percent": 0.5207
+    },
+    {
+      "label": "phase0",
+      "sample": 3,
+      "startup_window_ms": 265.56,
+      "working_set_bytes": 109703168,
+      "peak_working_set_bytes": 109703168,
+      "idle_cpu_one_core_percent": 0.0
+    },
+    {
+      "label": "candidate",
+      "sample": 3,
+      "startup_window_ms": 290.99,
+      "working_set_bytes": 111153152,
+      "peak_working_set_bytes": 111153152,
+      "idle_cpu_one_core_percent": 0.0
+    }
+  ],
+  "captured_utc": "2026-07-23T21:02:00Z",
+  "host": {
+    "os": "Windows 11 Home 10.0.26200 build 26200",
+    "arch": "amd64",
+    "cpu": "AMD Ryzen 9 7940HX with Radeon Graphics",
+    "go": "go1.25.8 windows/amd64"
+  },
+  "commands": [
+    "baseline: git worktree at 7d64cc9; go build -tags glfw -ldflags -X cervterm/internal/buildinfo.Version=phase0-process-baseline",
+    "candidate: packaged 0.10.0-phase15-rc2 executable at f2be778",
+    "three alternating launches per executable; wait for visible top-level window; 2s settle; 3s CPU sample; read Win32 process memory/times; force terminate after measurement"
+  ],
+  "artifacts_sha256": {
+    "baseline_executable": "5c0998a6633637714ba868085388e7e72b727222473972d0efcfcae8d9022e7f",
+    "candidate_executable": "e498378ec68ff48b7b8d3ff884efb783c8a1eb17cabf101c393bea2cf8798ef9",
+    "baseline_config": "7a2721462a0bb41f961aac687c999e8f67afe17273e4cb19ef6e4d8de8d7ffcb",
+    "candidate_config": "473e5e830bab343abda7b1da70263247591d95ebc260d424f756ddfb09172fdd",
+    "helper_executable": "489ba02f9a0feae23db935e6d034e7141dfee2ac776a99f96578dcded274a3fa"
+  },
+  "medians": {
+    "phase0": {
+      "startup_window_ms": 265.96,
+      "working_set_bytes": 109817856,
+      "peak_working_set_bytes": 109817856,
+      "idle_cpu_one_core_percent": 0.5207
+    },
+    "candidate": {
+      "startup_window_ms": 290.99,
+      "working_set_bytes": 111230976,
+      "peak_working_set_bytes": 111230976,
+      "idle_cpu_one_core_percent": 0.5208
+    },
+    "delta_percent": {
+      "startup_window_ms": 9.41,
+      "working_set_bytes": 1.29,
+      "peak_working_set_bytes": 1.29,
+      "idle_cpu_one_core_percent": 0.02
+    }
+  }
+}
