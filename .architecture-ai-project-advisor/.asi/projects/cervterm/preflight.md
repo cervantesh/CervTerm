@@ -1,40 +1,24 @@
-# Architecture Preflight — Phase 14 Bounded Sixel and iTerm Inline Images
+# Architecture Preflight — Phase 15 Integration and Release Hardening
 
 Date: 2026-07-23
-Decision: **PROCEED ONLY THROUGH ADR 0016, DESIGN, PLAN AND SEQUENTIAL GATES**
-Risk: **High** (untrusted raster/base64/PNG input, parser recovery, CPU/memory bounds, asynchronous ownership)
+Decision: **PROCEED WITH CONSTRAINTS; NO NEW ADR WHILE BOUNDARIES HOLD**
 
-## Smallest safe scope
+Phase 15 is diagnostics, qualification, migration evidence, recovery proof, benchmark, documentation, and release-gate work under ADR-0002, ADR-0007, ADR-0008, ADR-0014, and ADR-0016.
 
-- Static Sixel DCS `q`: exact raster declaration, RGB palette, repeats, carriage/new-band commands; 256 KiB wire frame.
-- iTerm `OSC 1337;File=`: inline=1 direct strict-base64 PNG, exact size, at most one cell dimension; no external I/O.
-- Cursor-neutral placement and no Phase 14 replies.
-- Phase 13 owner/store/budgets/lifecycle/snapshots/GL cache only; no `core.Cell` or renderer change.
-- Independent restart-scoped default-off flags.
+## Locked interpretations
 
-## Required architecture changes
+- Config migration is in-memory and read-only.
+- Layout state is non-authoritative and falls back to a fresh usable window.
+- Image-cache recovery is transient context-local close/recreate or activation rollback; no disk cache.
+- Doctor uses static detached capability descriptors and never establishes runtime activation.
+- PASS, FAIL, SKIP, UNRUN, and NOT-APPLICABLE have distinct entry criteria.
+- Experimental/default-off features retain their current support boundaries without real evidence.
+- Release publication remains separately approved.
 
-1. Canonical owner anchor and collision-proof internal ID namespace.
-2. Atomic ephemeral final-placement resource retirement.
-3. Exact selected DCS and streaming selected OSC parser seams with recovery tests.
-4. Protocol-neutral scheduler with complete Kitty migration before new jobs.
-5. Pure Sixel and iTerm leaf packages plus one shared bounded PNG codec.
-6. Test-only mux routing before public config, and dormant config before atomic production activation.
+## ADR triggers
 
-## Risks and controls
-
-- Raster/PNG bombs: checked dimensions, pixels, bytes, repeats and operation count before growth/allocation.
-- CPU denial: two shared workers, one outstanding job/pane, bounded queue and late-commit rejection; no preemption claim.
-- Parser leakage: discard through BEL/ST/CAN/SUB/EOF/reset with fuzz at every split.
-- Resource leak: ephemeral resource retires atomically with its final placement.
-- ID collision: Kitty low-half and internal high-half partition with exhaustion tests.
-- External effects: import/static gate forbids filesystem, process, network and unsafe leaves.
-- GL/model safety: workers return candidates only; owner commits; GL remains context-local.
-
-## Stop conditions
-
-External file/path/URL/write access; unchecked arithmetic; off-owner model/GL mutation; delayed cursor effects; payload logging/leakage; internal-ID replacement; resource/reservation leak; multiplied/widened hard caps; `core.Cell` widening; renderer selection; default-on or implicit advertisement.
+Persistent image storage, config rewriting, live native doctor probing, default-on promotion, renderer/backend selection, remote domains, or a new release channel.
 
 ## Required gates
 
-ADR-0016, feature design, implementation plan, independent design/plan verification, portable baseline, parser/adapter/decoder fuzz, lifecycle and mixed-scheduler race tests, all-disabled nil benchmarks, activation rollback review, final security/drift review and honest manual qualification.
+Machine-checkable evidence, support-matrix consistency, source immutability, recovery fault injection, privacy/redaction tests, exact inherited ten-sample/3% performance checks, security/accessibility gates, platform matrices, package smoke, final drift review, and explicit approval before publication.
