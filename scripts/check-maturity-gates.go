@@ -78,6 +78,7 @@ var requiredDocs = []string{
 	"docs/validation/phase-15-preflight.md",
 	"docs/validation/phase-15-evidence.json",
 	"scripts/capture-parity-baseline.go",
+	"scripts/capture-phase15-benchmarks.go",
 	"scripts/check-phase15-recovery.go",
 	"scripts/daily-driver-smoke.go",
 	"scripts/package-beta.go",
