@@ -85,7 +85,7 @@
 	  "attempted": true,
 	  "commit": "f2be778",
 	  "environment": "Windows 11 amd64; real GLFW/OpenGL window",
-	  "configuration": "disabled and enabled bounded protocol/accessibility fixtures",
+	  "configuration": "disabled fixture plus enabled accessibility/iTerm visible placement; ConPTY Kitty/Sixel filter boundary recorded",
 	  "evidence": ["docs/validation/phase-15-platform-qualification.md", "docs/validation/phase-15-platform-manifest.json", "docs/validation/phase-15-process-comparison.json", "docs/assets/phase15-windows-disabled.png", "docs/assets/phase15-windows-enabled.png"]
 	},
     {
@@ -103,7 +103,7 @@
 	  "attempted": true,
 	  "commit": "f2be778",
 	  "environment": "Ubuntu 24.04 WSLg/X11; Mesa software OpenGL",
-	  "configuration": "GLFW tests/build; enabled Sixel fixture; X11 close and zero exit",
+	  "configuration": "GLFW tests/build; Kitty fixed-OK reply and visible Sixel placement; X11 close and zero exit",
 	  "evidence": ["docs/validation/phase-15-platform-qualification.md", "docs/validation/phase-15-platform-manifest.json", "docs/assets/phase15-linux-wslg.png"]
 	},
     {
