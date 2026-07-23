@@ -77,6 +77,8 @@ var requiredDocs = []string{
 	"docs/config-migration.md",
 	"docs/validation/phase-15-preflight.md",
 	"docs/validation/phase-15-evidence.json",
+	"docs/validation/phase-15-performance.md",
+	"docs/validation/phase-15-performance.json",
 	"scripts/capture-parity-baseline.go",
 	"scripts/capture-phase15-benchmarks.go",
 	"scripts/check-phase15-recovery.go",
