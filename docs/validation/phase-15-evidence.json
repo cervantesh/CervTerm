@@ -51,7 +51,15 @@
       "configuration": "config reload, layout restore, transient image activation/cache, diagnostic setup and panic fixtures",
       "evidence": ["docs/validation/phase-15-recovery-redaction.md"]
     },
-    {"id": "performance.phase15", "status": "UNRUN", "attempted": false},
+    {
+	  "id": "performance.phase15",
+	  "status": "PASS",
+	  "attempted": true,
+	  "commit": "fd98c7e",
+	  "environment": "Windows 11 windows/amd64; AMD Ryzen 9 7940HX; Go 1.25.8; ten interleaved inherited samples",
+	  "configuration": "Phase 0 and Phase 14 detached baselines; candidate integration budgets; explicit P15-W01",
+	  "evidence": ["docs/validation/phase-15-performance.md", "docs/validation/phase-15-performance.json"]
+	},
     {"id": "security.automated", "status": "UNRUN", "attempted": false},
     {"id": "accessibility.automated", "status": "UNRUN", "attempted": false},
     {"id": "platform.windows_daily_driver", "status": "UNRUN", "attempted": false},
