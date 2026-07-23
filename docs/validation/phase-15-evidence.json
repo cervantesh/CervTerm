@@ -33,7 +33,15 @@
       "configuration": "defaults plus strict-v2 opt-in intent fixtures",
       "evidence": ["docs/validation/phase-15-compatibility-doctor.md"]
     },
-    {"id": "config.real_user_migrations", "status": "UNRUN", "attempted": false},
+    {
+      "id": "config.real_user_migrations",
+      "status": "PASS",
+      "attempted": true,
+      "commit": "5978c5a",
+      "environment": "Windows 11 windows/amd64; Go 1.25.8",
+      "configuration": "sanitized CervTerm v1 and WezTerm daily-driver corpus",
+      "evidence": ["docs/validation/phase-15-config-migrations.md"]
+    },
     {"id": "recovery.redaction", "status": "UNRUN", "attempted": false},
     {"id": "performance.phase15", "status": "UNRUN", "attempted": false},
     {"id": "security.automated", "status": "UNRUN", "attempted": false},
