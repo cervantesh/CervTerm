@@ -2,7 +2,7 @@ package mux
 
 func (m *Mux) advancePane(p *pane, data []byte) []Event {
 	oldTitle, oldCWD, oldBell := p.title, p.cwd, p.bellCount
-	p.advanceTerminal(data)
+	public := p.advanceTerminal(data)
 	events := p.kittyEvents
 	p.kittyEvents = nil
 	events = append(events, m.processKittyOutcomes(p)...)
@@ -11,7 +11,7 @@ func (m *Mux) advancePane(p *pane, data []byte) []Event {
 	events = append(events, p.flushReplies()...)
 	p.capture()
 	events = append(events,
-		Event{Kind: PaneOutput, Pane: p.id, Data: append([]byte(nil), data...)},
+		Event{Kind: PaneOutput, Pane: p.id, Data: append([]byte(nil), public...), BytesRead: len(data)},
 		Event{Kind: PaneDirty, Pane: p.id},
 	)
 	if p.title != oldTitle {

@@ -123,28 +123,24 @@ Attach:
 
 ## Experimental Kitty graphics diagnostics
 
-Kitty graphics are experimental, disabled by default, restart-scoped, and limited to the GLFW/OpenGL frontend. If a direct-data image does not appear:
+Kitty, Sixel, and iTerm inline images are experimental, disabled by default, restart-scoped, rendered only by the GLFW/OpenGL frontend, and not platform-qualified. If an image does not appear:
 
-1. Confirm the active v2 config contains `graphics = { kitty = { enabled = true } }`, then fully restart CervTerm; live reload does not activate this feature.
-2. Confirm the application uses only actions `t`, `T`, `p`, `d`, or `q` and direct data (`t=d` or the default direct transport).
-3. Confirm the format is RGB24 (`f=24`), RGBA32 (`f=32`), or PNG (`f=100`). `o=z` zlib is accepted only with raw RGB24/RGBA32, not PNG.
-4. Check for a fixed reply code and for cap/timeout diagnostics. Oversized, malformed, unsupported, cancelled, expired, or incomplete transfers commit no partial image or placement.
-5. Reproduce with the smallest image and attach `--doctor` output, the diagnostics log, GPU/driver details, and the emitting application's exact Kitty control sequence with any sensitive payload removed.
+1. Confirm an explicit v2 config enables the intended `graphics.kitty`, `graphics.sixel`, or `graphics.iterm` flag, then fully restart; live reload records a restart-required difference but cannot activate graphics.
+2. Start with only one protocol enabled and built-in limits. `--doctor` reports configured intent/limits from a separate process, not live OpenGL activation.
+3. For Kitty, use only direct-data `t`/`T`/`p`/`d`/`q`, RGB24/RGBA32/PNG, and raw-only zlib.
+4. For Sixel, use only 7-bit `ESC P q|0q|0;0q|0;0;0q ... ST`, one `"1;1;W;H` declaration before pixels, and the documented raster/RGB/repeat/`$`/`-` tokens. BEL does not terminate Sixel.
+5. For iTerm, use only 7-bit `OSC 1337;File=...:<strict padded base64>` ending in BEL or ST, with exact lexical `inline=1`, positive decoded `size`, one exact-EOF PNG, optional cell-only `width` xor `height` in `1..256`, and absent or exact `preserveAspectRatio=1`.
+6. Reproduce with the smallest fixture and attach redacted emitting commands, config, `--doctor`, log, Windows build, GPU/driver, and OpenGL vendor/renderer/version. Do not attach private image payloads.
 
-Replies have the form `ESC_Ga=<action>;<code>ESC\` and never echo payload data or paths. Codes are:
+Kitty replies have the form `ESC_Ga=<action>;<code>ESC\` and never echo payload or paths. Codes are `OK`, `EINVAL`, `ENOTSUP`, `ENOSPC`, `ETIME`, `ECANCELED`, `ENOENT`, and `EIO`; `q=1` suppresses success and `q=2` suppresses all replies. Sixel and iTerm deliberately emit **no reply** and reserve no reply slot, so silence is not proof of success.
 
-- `OK`: accepted and committed;
-- `EINVAL`: malformed or invalid request;
-- `ENOTSUP`: unsupported action, key, format, compression, or transport;
-- `ENOSPC`: a chunk, transfer, image, placement, reply, decode, or GPU cap was reached;
-- `ETIME`: transfer lifetime or acceptance deadline expired;
-- `ECANCELED`: transfer was cancelled;
-- `ENOENT`: referenced image or placement was not found;
-- `EIO`: bounded internal/runtime failure.
+Phase 14 programmatic diagnostics are limited to protocol (`sixel` or `iterm`), fixed reason (`invalid`, `unsupported`, `limit`, `timeout`, `cancelled`, `failed`, `stale`, or `busy`), count, and duration. They must never contain payload, pixels, metadata names, base64, pane/image/transfer/placement IDs, paths, or URLs. Treat any such leakage as a security bug.
 
-Kitty `q=1` suppresses successful replies; `q=2` suppresses all replies. Lack of a reply under those modes is not evidence that a request succeeded. `--doctor` reports configured intent and limits from a separate one-shot process; it does not prove that the live OpenGL frontend activated the feature.
+The mux `PaneOutput`/Lua output stream is intentionally not raw PTY ingress when an image adapter is enabled. Parser-coupled projection removes an enabled selected Kitty/Sixel/iTerm control-string envelope across fragmentation and EOF while preserving disabled or unselected control strings. If a selected payload marker appears in a Lua output callback, stop testing and report it with the payload itself removed. Selected-only ingress may legitimately produce an empty `PaneOutput` event and no Lua output callback while still dirtying the pane.
 
-For immediate rollback, set `graphics.kitty.enabled = false` and restart CervTerm. CervTerm does not claim full Kitty conformance and does not support animation, external file/path/temporary-file/shared-memory transports, Unicode placeholders, Sixel, iTerm inline images, or non-OpenGL image rendering.
+Unknown/duplicate fields, malformed base64/PNG, HLS, C1 forms, broad iTerm sizing, animation, Sixel scrolling/DECSDM, cursor effects, and file/path/URL/temporary-file/shared-memory/download/write forms reject atomically. The bounded Sixel/iTerm subsets perform no external filesystem, network, process, or unsafe I/O; do not work around rejection by granting extra file/network access.
+
+For immediate independent rollback, set only the affected `graphics.<protocol>.enabled = false` and restart. If startup, child-window, or restore activation fails, CervTerm should retain old-or-new state and close provisional resources in reverse order; failed or late decode must not replace prior state. Full/broad Kitty, Sixel, and iTerm conformance and non-OpenGL image rendering remain outside the claim. Every Phase 14 real-GUI row is currently UNRUN; see [`manual-verification.md`](manual-verification.md#phase-14-experimental-sixel-and-iterm-images--real-gui-qualification).
 
 ## Package smoke checklist
 

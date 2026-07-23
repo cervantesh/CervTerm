@@ -18,6 +18,7 @@ CervTerm already has:
 - Phase 5 appearance/window controls: per-side padding, independent text/background opacity, bounded layered backgrounds, scrollbar modes/stable gutter/fade FPS, `render.max_fps`, and initial rows/columns plus native decoration/titlebar requests.
 - Visible tabs, multiple native windows, named local workspaces, and layout-only fresh-session persistence.
 - Bounded OSC 8 links and OSC 133/633 semantic zones/actions, strict bell policies, and default-off Windows native notifications behind centralized trust gates.
+- Experimental default-off, restart-scoped bounded Kitty, Sixel, and iTerm inline-image subsets on the GLFW/OpenGL frontend, sharing one owner model, scheduler, pane/process budgets, detached snapshots, and per-context caches; Phase 14 real-GUI qualification remains entirely UNRUN and its support claim remains `none`.
 - Parser/render benchmarks, fuzz/golden fixtures, daily-driver smoke, package smoke, CI, and release provenance.
 
 ## Historical four-phase MVP roadmap
@@ -277,4 +278,4 @@ Deliverable:
 
 ## Near-term recommendation
 
-Execute the parity roadmap sequentially. Phase 0 establishes contracts, baselines, the support matrix, guardrails, and Proposed ADR gates. The first product implementation is Phase 1's typed action engine after ADR-0003 is reviewed and accepted. Every later phase requires focused tests, full gates, validation evidence, and architecture drift review before merge.
+Phase 14's bounded Sixel/iTerm adapters are delivered as experimental, default-off, restart-scoped opt-ins with automated qualification but no manual GUI/support claim. Proceed to Phase 15 release hardening while keeping every Phase 14 real-GUI row UNRUN until personally exercised and recorded; do not broaden protocol conformance, enable defaults, or advertise support from automated evidence alone.

@@ -123,6 +123,28 @@ Disabled behavior is deliberately nil, not a partially initialized mode. With th
 
 Ownership unwinds in acquisition order. Startup first validates/creates the mux image owner, then creates one cache only after its projection renderer/atlas and current GL context exist, and commits startup configuration last. Any activation, child-window, restore or bind failure closes candidate context caches before rolling back projections and mux ownership. Projection close deletes that context's textures while current; pane close/reset cancels pending transfers and invalidates CPU generations; mux shutdown closes workers before pane/session stores. Upload failure never rolls model state back or blocks input: the image is omitted and retries are bounded. Operational limits may only lower ADR-0014 hard caps; rollback is restart with Kitty disabled, retaining inert parser/model code and the unchanged text-only `core.Cell`.
 
+## Phase 14 bounded Sixel/iTerm adapters and public-output projection
+
+Phase 14 preserves the Phase 13 one-way image path rather than creating protocol-specific stores, pools, budgets, snapshots, or GL ownership:
+
+```text
+PTY bytes -> VT selected DCS/OSC framing -> pure sixel/itermimage adapter
+          -> shared bounded decode scheduler/termimage candidate
+          -> mux owner revalidation -> core atomic ephemeral commit
+          -> detached snapshot/acquisition -> projection-local GL cache/draw
+          -> parser-coupled redacted PaneOutput projection for public observers
+```
+
+`internal/sixel` and `internal/itermimage` are pure leaves over `internal/termimage`. The Phase 14 import allowlist prevents dependencies on core, render, mux, frontend, config, VT, filesystem, network, process, unsafe, or third-party packages. Sixel accepts only the approved raster/RGB/repeat/band grammar; iTerm accepts only direct inline strict-base64 PNG with exact decoded size and at most one cell dimension. No adapter can open a file, resolve a URL, start a process, download content, write terminal-provided data externally, or mutate the terminal/model/GL from a worker.
+
+One process FIFO scheduler serves Kitty, Sixel, and iTerm with two workers, one outstanding job per pane, and queue capacity 32. Queue time counts toward the 250 ms acceptance deadline, while pane activity and payload ownership remain held until worker return and owner cleanup. Pane/process transfer, encoded, decoded, image, placement, chunk, operation, and texture limits are shared rather than multiplied. The owner captures pane/store epoch, model and anchor generations, exact cell metrics, palette, canonical cursor-neutral anchor, and internal high-half IDs at frame termination; completion revalidates every value before publication.
+
+Sixel/iTerm image and placement IDs use the monotonic non-reused high half (`0x80000000..0xffffffff`); Kitty wire IDs stay in the low half. Each Phase 14 success is one create-only ephemeral resource/placement transaction. Existing screen lifecycle preparation retires the resource atomically when its final placement disappears, while Kitty durability remains unchanged. Sixel/iTerm produce no replies and do not reserve reply-order slots.
+
+The parser security repair makes `PaneOutput.Data` a projection of parser decisions instead of a copy of raw ingress, while `PaneOutput.BytesRead` preserves raw PTY byte accounting for runtime metrics. `AdvancePublic` and `EndOfInputPublic` use the same selected APC/DCS/OSC state transitions as terminal parsing, omit only enabled selected image envelopes across arbitrary fragmentation, and preserve disabled/unselected bytes. The GLFW Lua output callback sees only non-empty projected payload. An empty projection still preserves the mux `PaneOutput`/pane-dirty activity semantics but does not invoke the Lua output callback. A fixed 16-byte selector hold bounds undecided public data.
+
+Independent strict-v2 `graphics.sixel.enabled` and `graphics.iterm.enabled` flags are default-off and restart-scoped. `imagesEnabled = kitty || sixel || iterm` is the only shared-owner activation condition; all-disabled remains literal nil. Initial, child, and restored projection preparation publishes old-or-new state, uses one distinct cache per current GL context, and unwinds provisional caches/projections/mux ownership in reverse acquisition order. Operational rollback disables only the affected flag and restarts; code rollback proceeds activation, config, mux routes, workers/adapters/shared codec, scheduler, parser transports/projection, ephemeral lifecycle, IDs, then anchor.
+
 
 ## Verifiable measurements
 

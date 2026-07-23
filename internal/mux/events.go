@@ -53,6 +53,7 @@ type Event struct {
 	Tab             TabID
 	SourceTab       TabID
 	Data            []byte
+	BytesRead       int
 	Text            string
 	Notification    core.NotificationRequest
 	Fresh           bool

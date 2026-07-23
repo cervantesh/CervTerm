@@ -133,14 +133,14 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 		case termmux.PaneStarted:
 			a.ensurePaneUI(event.Pane)
 		case termmux.PaneOutput:
-			a.meter.AddBytes(len(event.Data))
+			a.meter.AddBytes(event.BytesRead)
 			if tab, ok := a.mux.TabForPane(event.Pane); ok && tab != a.mux.ActiveTab() {
 				if a.tabActivity == nil {
 					a.tabActivity = make(map[termmux.TabID]bool)
 				}
 				a.tabActivity[tab] = true
 			}
-			if a.scriptRT != nil && a.scriptRT.WantsOutput() {
+			if len(event.Data) > 0 && a.scriptRT != nil && a.scriptRT.WantsOutput() {
 				if err := a.scriptRT.FireOutput(host, string(event.Data)); err != nil {
 					a.Notify("script error: " + err.Error())
 				}

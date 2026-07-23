@@ -53,9 +53,11 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - Bounded quick select for visible HTTP(S) links and compiled custom regex rules, with prefix-free labels, copy/open actions, and stale-generation rejection.
 - A bounded retained launch menu with argv-only local process descriptors, sensitive environment provenance, deterministic environment merging, and spawn-before-topology commit.
 - Experimental default-off Windows UI Automation integration with immutable visible-only terminal/modal/IME documents, stable provider identity, coalesced generation updates, shared WndProc ownership, strict v2/Teal configuration, privacy-safe diagnostics, fail-closed per-window fallback, allocation ceilings, and explicit no-support qualification evidence.
-- Experimental default-off, restart-scoped direct-data Kitty graphics subset for the GLFW/OpenGL frontend: bounded `t`/`T`/`p`/`d`/`q` actions, RGB24/RGBA32/PNG decoding, raw RGB/RGBA zlib compression, chunk/resource/reply/GPU caps, and fixed value-free diagnostics; no full conformance, animation, external transports, Unicode placeholders, Sixel, or iTerm support claim.
+- Experimental default-off, restart-scoped direct-data Kitty graphics subset for the GLFW/OpenGL frontend: bounded `t`/`T`/`p`/`d`/`q` actions, RGB24/RGBA32/PNG decoding, raw RGB/RGBA zlib compression, chunk/resource/reply/GPU caps, and fixed value-free diagnostics; no full conformance, animation, external transports, or Unicode placeholders.
+- Experimental default-off, restart-scoped bounded Sixel DCS and iTerm OSC 1337 inline-image subsets for the GLFW/OpenGL frontend, with exact narrow grammars, strict base64/PNG handling, cursor-neutral no-reply placement, internal high-half IDs, ephemeral final-placement retirement, and shared Kitty scheduler/budgets/cache ownership; support remains unclaimed pending real-GUI qualification.
 
 ### Fixed
+- Prevent enabled selected Kitty/Sixel/iTerm control-string payloads from leaking through mux `PaneOutput` and Lua output callbacks by coupling public-output redaction to the parser's framing decisions; disabled and unselected control strings remain observable.
 
 - Keep selection, search, links, scrollback, mouse reporting, resize events, and Lua callbacks isolated to their originating pane.
 - Allow pane-bound Lua callbacks to read, update, and reload runtime configuration through their originating frontend host.

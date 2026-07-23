@@ -177,8 +177,9 @@ Routing is exclusive: terminal mouse reporting has priority; holding Shift keeps
 Add an `events` table to react to terminal activity. Every handler is optional
 and receives the `term` handle first:
 
-- `output(term, data)`: fires for each chunk of program output, with the raw
-  bytes as a string. This runs on every output chunk, so keep it fast — a slow
+- `output(term, data)`: fires for each non-empty public-output chunk. Ordinary
+  bytes and disabled or nonselected controls remain byte-identical; enabled
+  selected Kitty/Sixel/iTerm image envelopes are omitted. Keep it fast — a slow
   handler throttles rendering.
 - `title(term, title)`: fires when the program changes the window title (OSC 0/2).
 - `cwd(term, dir)`: fires when the program reports a new working directory with

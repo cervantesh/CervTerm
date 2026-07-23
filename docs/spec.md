@@ -83,11 +83,37 @@ Supported wire behavior is limited to Kitty `APC G` with:
 
 Unknown, duplicate, conflicting, malformed, cancelled, truncated, oversized, stale, late, or over-budget input must commit nothing. Replies are bounded fixed codes and never echo payload, pixels, paths, or raw metadata. Resource/placement replacement and deletion are owner-thread transactions: failure preserves the prior resource generation and placement set, and a success reply follows commit rather than precedes it.
 
-The subset excludes file, path, temporary-file and shared-memory transports; remote reads/writes; Kitty animation/frame composition; Unicode placeholders and other unlisted Kitty keys/actions/delete selectors; protocol advertisement while disabled; Sixel DCS; iTerm OSC 1337; renderer selection; and any image bytes or handles in `core.Cell`. Sixel and iTerm adapters remain Phase 14 planned work and may not widen Phase 13 ownership or hard caps silently.
+The Phase 13 Kitty adapter excludes Sixel DCS and iTerm OSC 1337 from its own wire contract. Phase 14 supplies separate bounded opt-in adapters without widening Phase 13 ownership or hard caps. Phase 13 also excludes file/path/temporary-file/shared-memory transports, remote reads/writes, Kitty animation/frame composition, Unicode placeholders, unlisted Kitty keys/actions/delete selectors, protocol advertisement while disabled, renderer selection, and image bytes or handles in `core.Cell`.
 
 Pane/process limits are bounded by ADR-0014 (8/32 pending transfers, 8/32 MiB encoded, 64/256 MiB decoded residency, 256/1,024 images, 1,024/4,096 placements, one/two decode workers). Each GL context additionally owns at most 512 textures and 256 MiB; configured values may only lower the applicable hard cap. Decode results are accepted only after pane/store/generation/deadline revalidation. Snapshots expose detached placement metadata, and a GL-context cache acquires detached exact-generation RGBA only on a miss.
 
 With Kitty disabled, nil is normative: no image budget/store/adapter/scheduler/cache/deadline/draw/damage state is created; bounded APC/DCS input is consumed without image replies or text leakage; the frame seam performs no image mutation, allocation, redraw, or idle scheduling. Rollback is restart with `graphics.kitty.enabled=false`. This delivered subset is not a stable support claim: the Windows/OpenGL manual matrix in `docs/manual-verification.md` remains required, and unrun macOS/Linux GUI rows remain unqualified.
+
+### Phase 14 experimental Sixel and iTerm inline images
+
+Phase 14 is available only through independent strict-v2, restart-scoped `graphics.sixel.enabled=true` and `graphics.iterm.enabled=true` flags. Both remain experimental and default to `false`; their manual real-GUI qualification is UNRUN and their support claim is `none`. Either protocol may be enabled without Kitty or the other protocol. Any enabled image protocol creates one shared model, pane/process budgets, pane stores, FIFO decode scheduler, and one texture cache per OpenGL context; only enabled adapters are instantiated. With all three protocols disabled, the literal-nil/no-allocation/no-wake contract remains normative.
+
+The exact 7-bit Sixel transport grammar is:
+
+- introducer/preamble `ESC P q`, `ESC P 0q`, `ESC P 0;0q`, or `ESC P 0;0;0q`; C1 DCS is excluded;
+- ST is the only successful terminator; CAN/SUB, overflow, reset, and EOF cancel atomically and discard without exposing payload as text;
+- exactly one `"1;1;W;H` raster declaration is required before pixel output;
+- accepted body tokens are `?`–`~`, `!N<char>` with `N=1..4096`, `#N`, `#N;2;R;G;B` with register `0..255` and RGB percentages `0..100`, `$`, and `-`; and
+- HLS, second raster declarations, unknown forms, drawing outside the declared canvas, and results outside checked limits reject the whole image.
+
+Sixel decoding is two-pass. Every syntax command and expanded output column consumes one of at most 4,194,304 operations. Width and height are each at most 4,096, the image is at most 16,777,216 pixels/64 MiB RGBA, and the cell span is `ceil(W/cellPixelWidth)` by `ceil(H/cellPixelHeight)` with each result in `1..256`. The detached 256-entry palette is captured from the pane; image definitions are local and unset pixels remain transparent.
+
+The exact 7-bit iTerm transport grammar is `OSC 1337;File=<fields>:<strict padded base64>` terminated by BEL or ST; C1 OSC is excluded. Fields may appear in any order but must contain exactly one lexical `inline=1` and one positive decimal `size`. The body must be non-empty standard padded base64 that decodes to exactly `size` bytes and exactly one PNG with EOF. An optional `width=N` xor `height=N`, `N=1..256`, is cell-only; `preserveAspectRatio` may be absent or exactly `1`. Duplicate/unknown fields, `name`, whitespace, `inline=0`, omitted inline intent, auto/pixel/percent/two-axis/stretch sizing, non-PNG/trailing data, multipart forms, and file/path/URL/download/write or other external-I/O modes reject atomically.
+
+Intrinsic iTerm sizing uses `Cols=ceil(Wi/cw)` and `Rows=ceil(Hi/ch)`. Width-only `C` uses `Rows=ceil(Hi*C*cw/(Wi*ch))`; height-only `R` uses `Cols=ceil(Wi*R*ch/(Hi*cw))`. Arithmetic is checked and every axis must remain in `1..256`; values are rejected rather than clipped.
+
+The shared hard bounds remain: selected control-string chunks at most 16 KiB and a selected logical frame at most 256 KiB; 8 pending transfers/8 MiB encoded per pane and 32/32 MiB process-wide; at most 4,096 chunks and 10 seconds per transfer; 64 MiB decoded per image and pane, 256 MiB process-wide; 256/1,024 images and 1,024/4,096 placements per pane/process; one outstanding decode per pane, two process workers, FIFO queue capacity 32, and a queue-inclusive 250 ms acceptance deadline; and 512 textures/256 MiB per OpenGL context. Configurable graphics limits may only lower the exposed caps and apply to all enabled protocols.
+
+Sixel/iTerm capture a canonical frame-termination anchor without moving the cursor, allocate monotonic non-reused internal image/placement IDs in `0x80000000..0xffffffff`, and atomically commit one create-only ephemeral resource plus placement. When the final placement retires through edit, erase, scroll, history eviction, ED3, reflow, alternate-screen exit, explicit deletion, reset, or close, the resource retires in the same owner transaction. Kitty wire IDs remain `1..0x7fffffff` and Kitty resources remain durable.
+
+Sixel/iTerm emit no protocol replies and reserve no reply slots. Mux `PaneOutput` is a parser-coupled public projection: a selected frame for an enabled Kitty/Sixel/iTerm adapter is omitted across arbitrary PTY fragmentation, cancellation, overflow, reset, and EOF before Lua output callbacks receive it; disabled or unselected control strings remain public. Diagnostics expose only `Protocol`, fixed `Reason` (`invalid`, `unsupported`, `limit`, `timeout`, `cancelled`, `failed`, `stale`, or `busy`), `Count`, and `Duration`, never payload, pixels, metadata names, base64, or internal IDs.
+
+Operational rollback is independent: set the affected `graphics.sixel.enabled` or `graphics.iterm.enabled` to `false` and restart. Activation/restore failures publish old-or-new state and close provisional resources in reverse acquisition order. Full or broad Sixel/iTerm conformance, animation, external I/O, cursor effects, Sixel scrolling/DECSDM, renderer selection, and non-OpenGL rendering remain outside this bounded subset.
 
 
 ### Scrollback and selection

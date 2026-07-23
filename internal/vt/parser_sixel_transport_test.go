@@ -37,7 +37,7 @@ func TestSixelDCSRejectsEveryNonSelectedPreambleAtomically(t *testing.T) {
 		t.Run(strings.ReplaceAll(preamble, ";", "_"), func(t *testing.T) {
 			input := []byte("\x1bP" + preamble + "hidden\x1b\\OK")
 			events, text := parseControlInput(t, input, nil)
-			if len(events) != 1 || events[0].Kind != ControlStringDCS || !events[0].Final || !events[0].Cancelled || events[0].Overflow || len(events[0].Chunk) != 0 {
+			if len(events) != 0 {
 				t.Fatalf("unselected preamble events: %#v", events)
 			}
 			if !strings.HasPrefix(text, "OK") || strings.Contains(text, "hidden") {
@@ -81,12 +81,34 @@ func TestSixelDCSWholeFrameAndChunkBounds(t *testing.T) {
 	}
 }
 
-func TestSixelDCSPreambleCancellationTerminatesExactlyOnce(t *testing.T) {
+func TestSixelDCSUnselectedPreambleCancellationEmitsNoSelectedEvent(t *testing.T) {
 	for name, suffix := range map[string][]byte{"CAN": {0x18}, "SUB": {0x1a}, "ST": {0x1b, '\\'}} {
 		t.Run(name, func(t *testing.T) {
 			events, text := parseControlInput(t, append([]byte("\x1bP0"), append(suffix, 'Z')...), nil)
-			if len(events) != 1 || events[0].Kind != ControlStringDCS || !events[0].Final || !events[0].Cancelled || events[0].Overflow || !strings.HasPrefix(text, "Z") {
+			if len(events) != 0 || !strings.HasPrefix(text, "Z") {
 				t.Fatalf("events=%#v text=%q", events, text)
+			}
+		})
+	}
+}
+
+func TestSixelDCSUnselectedPreambleResetAndEOFEmitNoSelectedEvent(t *testing.T) {
+	for _, finish := range []struct {
+		name string
+		call func(*Parser)
+	}{
+		{"reset", (*Parser).Reset}, {"EOF", (*Parser).EndOfInput},
+	} {
+		t.Run(finish.name, func(t *testing.T) {
+			term := core.NewTerminal(20, 1)
+			var parser Parser
+			var events []capturedControlEvent
+			parser.SetControlStringSink(captureControlEvents(&events))
+			parser.Advance(term, []byte("\x1bP0"))
+			finish.call(&parser)
+			finish.call(&parser)
+			if len(events) != 0 {
+				t.Fatalf("unselected preamble events=%#v", events)
 			}
 		})
 	}
@@ -96,7 +118,7 @@ func TestSixelDCSCancellationResetEOFAndNilSink(t *testing.T) {
 	for name, suffix := range map[string][]byte{"CAN": {0x18}, "SUB": {0x1a}, "escape CAN": {0x1b, 0x18}} {
 		t.Run(name, func(t *testing.T) {
 			events, text := parseControlInput(t, append([]byte("\x1bPqpartial"), append(suffix, 'Z')...), nil)
-			if len(events) != 1 || !events[0].Final || !events[0].Cancelled || events[0].Overflow || !strings.HasPrefix(text, "Z") {
+			if len(events) != 1 || events[0].Kind != ControlStringDCS || !events[0].Final || !events[0].Cancelled || events[0].Overflow || !strings.HasPrefix(text, "Z") {
 				t.Fatalf("events=%#v text=%q", events, text)
 			}
 		})
@@ -149,8 +171,13 @@ func FuzzSixelDCSTransportSelection(f *testing.F) {
 			t.Fatalf("split=%d differs", point)
 		}
 		assertControlEventBounds(t, gotEvents)
-		if terminalControlEventsForKind(gotEvents, ControlStringDCS) != 1 {
-			t.Fatalf("multiple DCS terminal events: %#v", gotEvents)
+		selected, _ := classifyDCSPreamble([]byte(preamble))
+		wantTerminal := 0
+		if selected {
+			wantTerminal = 1
+		}
+		if terminalControlEventsForKind(gotEvents, ControlStringDCS) != wantTerminal {
+			t.Fatalf("DCS terminal events: %#v", gotEvents)
 		}
 	})
 }

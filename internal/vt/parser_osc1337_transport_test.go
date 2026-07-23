@@ -33,23 +33,49 @@ func TestOSC1337SelectedTransportBELAndSTAcrossEverySplit(t *testing.T) {
 	}
 }
 
-func TestOSC1337ChunkBoundsAndNoParserAggregateCap(t *testing.T) {
-	for _, size := range []int{0, maxControlStringChunk - 1, maxControlStringChunk, maxControlStringChunk + 1, maxOSCLen + 1, 256*1024 + 1} {
-		t.Run(stringSize(size), func(t *testing.T) {
-			payload := bytes.Repeat([]byte{'x'}, size)
-			input := append([]byte("\x1b]1337;"), payload...)
-			input = append(input, 0x07)
-			events, _ := parseControlInput(t, input, nil)
+func TestOSC1337WholeFrameCapOverflowRedactionAndRecovery(t *testing.T) {
+	const selector = "1337;"
+	exactPayloadLen := maxControlStringLen - len(selector)
+	for name, terminator := range map[string][]byte{"BEL": {0x07}, "ST": {0x1b, '\\'}} {
+		t.Run(name, func(t *testing.T) {
+			exactPayload := bytes.Repeat([]byte{'x'}, exactPayloadLen)
+			exact := append([]byte("\x1b]"+selector), exactPayload...)
+			exact = append(exact, terminator...)
+			events, _ := parseControlInput(t, exact, nil)
 			assertControlEventBounds(t, events)
-			if got := joinControlChunks(events); !bytes.Equal(got, payload) || terminalControlEventsForKind(events, ControlStringOSC1337) != 1 {
-				t.Fatalf("size=%d got=%d events=%#v", size, len(got), events)
+			if got := joinControlChunks(events); !bytes.Equal(got, exactPayload) || terminalControlEventsForKind(events, ControlStringOSC1337) != 1 || events[len(events)-1].Cancelled || events[len(events)-1].Overflow {
+				t.Fatalf("exact cap bytes=%d events=%#v", len(got), events)
 			}
-			if size == 256*1024+1 {
-				splits := []int{1, 2, 3, 4, 5, 6, 7, 8, 8 + maxControlStringChunk - 1, 8 + maxControlStringChunk, 8 + 2*maxControlStringChunk, len(input) - 1}
-				fragmented, _ := parseControlInput(t, input, splits)
-				if !reflect.DeepEqual(fragmented, events) {
-					t.Fatalf("large fragmented events differ: got=%d want=%d", len(fragmented), len(events))
+
+			overflowPayload := bytes.Repeat([]byte{'y'}, exactPayloadLen+1)
+			overflow := append([]byte("A\x1b]"+selector), overflowPayload...)
+			overflow = append(overflow, []byte("HIDDEN")...)
+			overflow = append(overflow, terminator...)
+			overflow = append(overflow, 'Z')
+			events, text := parseControlInput(t, overflow, nil)
+			assertControlEventBounds(t, events)
+			terminal, overflowEvents := 0, 0
+			for _, event := range events {
+				if event.Final {
+					terminal++
+					if event.Cancelled && event.Overflow {
+						overflowEvents++
+					}
 				}
+			}
+			if terminal != 1 || overflowEvents != 1 || !strings.HasPrefix(text, "AZ") || strings.Contains(text, "HIDDEN") {
+				t.Fatalf("overflow terminal=%d overflow=%d text=%q events=%#v", terminal, overflowEvents, text, events)
+			}
+
+			term := core.NewTerminal(20, 1)
+			var parser Parser
+			var publicEvents []capturedControlEvent
+			parser.SetControlStringSink(captureControlEvents(&publicEvents))
+			parser.SetPublicOutputRedaction(false, false, true)
+			public := append([]byte(nil), parser.AdvancePublic(term, overflow)...)
+			public = append(public, parser.EndOfInputPublic()...)
+			if !bytes.Equal(public, []byte("AZ")) || !reflect.DeepEqual(publicEvents, events) {
+				t.Fatalf("public=%q events=%#v want events=%#v", public, publicEvents, events)
 			}
 		})
 	}
@@ -184,8 +210,9 @@ func FuzzOSC1337SelectedTransport(f *testing.F) {
 		}
 		assertControlEventBounds(t, fragmentedEvents)
 
-		if len(source) > 512*1024 {
-			source = source[:512*1024]
+		maxPayload := maxControlStringLen - len("1337;")
+		if len(source) > maxPayload+1 {
+			source = source[:maxPayload+1]
 		}
 		payload := make([]byte, len(source))
 		for index, value := range source {
@@ -205,8 +232,16 @@ func FuzzOSC1337SelectedTransport(f *testing.F) {
 			t.Fatalf("split=%d differs", point)
 		}
 		assertControlEventBounds(t, gotEvents)
-		if terminalControlEventsForKind(gotEvents, ControlStringOSC1337) != 1 || !bytes.Equal(joinControlChunks(gotEvents), payload) {
+		if terminalControlEventsForKind(gotEvents, ControlStringOSC1337) != 1 {
 			t.Fatalf("events=%#v", gotEvents)
+		}
+		terminal := gotEvents[len(gotEvents)-1]
+		if len(payload) <= maxPayload {
+			if terminal.Cancelled || terminal.Overflow || !bytes.Equal(joinControlChunks(gotEvents), payload) {
+				t.Fatalf("bounded events=%#v", gotEvents)
+			}
+		} else if !terminal.Cancelled || !terminal.Overflow {
+			t.Fatalf("overflow events=%#v", gotEvents)
 		}
 	})
 }
