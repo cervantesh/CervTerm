@@ -895,7 +895,11 @@ func TestWatchHashesKeepEveryDeclarativeSymlinkAlias(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer loaded.Candidate.Close()
-	if _, ok := loaded.WatchHashes[secondAlias]; !ok {
+	foundSecondAlias := false
+	for watched := range loaded.WatchHashes {
+		foundSecondAlias = foundSecondAlias || watchPathIdentity(watched) == watchPathIdentity(secondAlias)
+	}
+	if !foundSecondAlias {
 		t.Fatalf("duplicate alias omitted from watch hashes: %#v", loaded.WatchPaths)
 	}
 	if err := os.Remove(secondAlias); err != nil {
@@ -1145,8 +1149,9 @@ func TestMissingIncludeCreationRecoversWithoutPrimaryEdit(t *testing.T) {
 }
 
 func containsString(values []string, want string) bool {
+	wantIdentity := watchPathIdentity(want)
 	for _, value := range values {
-		if value == want {
+		if watchPathIdentity(value) == wantIdentity {
 			return true
 		}
 	}

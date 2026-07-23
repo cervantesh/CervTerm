@@ -129,7 +129,7 @@ func TestInitialBackgroundDependenciesJoinStartupFreshnessAndWatchSet(t *testing
 	app.registerInitialBackgroundDependencies(prepared)
 	found := false
 	for _, watched := range app.configWatch.activePaths {
-		found = found || strings.EqualFold(watched, imagePath)
+		found = found || watchPathIdentity(watched) == watchPathIdentity(imagePath)
 	}
 	if !found {
 		t.Fatalf("startup active paths = %v", app.configWatch.activePaths)
