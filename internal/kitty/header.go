@@ -93,15 +93,17 @@ func parseCompleteFrame(frame []byte, continuation bool) (parsedFrame, *parseFai
 		}
 	}
 	quiet, ok := parseUnsigned(fields, 'q', 0, 2, 0)
-	if !ok {
+	quietValue, quietFits := checkedUint8(quiet)
+	if !ok || !quietFits {
 		return parsedFrame{}, &parseFailure{ReplyInvalid, reply}
 	}
-	reply.quiet = Quiet(quiet)
+	reply.quiet = Quiet(quietValue)
 	image, ok := parseUnsigned(fields, 'i', 1, uint64(termimage.MaxWireImageID), 0)
-	if !ok || (action != ActionDelete && image == 0) || (action == ActionDelete && (fields['d'] == "i" || fields['d'] == "I") && image == 0) {
+	imageValue, imageFits := checkedUint32(image)
+	if !ok || !imageFits || (action != ActionDelete && image == 0) || (action == ActionDelete && (fields['d'] == "i" || fields['d'] == "I") && image == 0) {
 		return parsedFrame{}, &parseFailure{ReplyInvalid, reply}
 	}
-	command := Command{Action: action, Image: termimage.ImageID(image)}
+	command := Command{Action: action, Image: termimage.ImageID(imageValue)}
 	more, ok := parseUnsigned(fields, 'm', 0, 1, 0)
 	if !ok {
 		return parsedFrame{}, &parseFailure{ReplyInvalid, reply}
@@ -111,10 +113,11 @@ func parseCompleteFrame(frame []byte, continuation bool) (parsedFrame, *parseFai
 			return parsedFrame{}, &parseFailure{ReplyUnsupported, reply}
 		}
 		format, ok := parseUnsigned(fields, 'f', 0, 100, 32)
-		if !ok || (format != 24 && format != 32 && format != 100) {
+		formatValue, formatFits := checkedUint8(format)
+		if !ok || !formatFits || (format != 24 && format != 32 && format != 100) {
 			return parsedFrame{}, &parseFailure{ReplyUnsupported, reply}
 		}
-		command.Decode.Format = PixelFormat(format)
+		command.Decode.Format = PixelFormat(formatValue)
 		if compression, exists := fields['o']; exists {
 			if compression != "z" || format == 100 {
 				return parsedFrame{}, &parseFailure{ReplyUnsupported, reply}
@@ -123,10 +126,12 @@ func parseCompleteFrame(frame []byte, continuation bool) (parsedFrame, *parseFai
 		}
 		width, wok := parseUnsigned(fields, 's', 0, uint64(termimage.HardImageDimension), 0)
 		height, hok := parseUnsigned(fields, 'v', 0, uint64(termimage.HardImageDimension), 0)
-		if !wok || !hok || (format != 100 && (width == 0 || height == 0 || width*height > termimage.HardImagePixels)) || (format == 100 && (has(fields, 's') || has(fields, 'v'))) {
+		widthValue, widthFits := checkedUint32(width)
+		heightValue, heightFits := checkedUint32(height)
+		if !wok || !hok || !widthFits || !heightFits || (format != 100 && (width == 0 || height == 0 || width*height > termimage.HardImagePixels)) || (format == 100 && (has(fields, 's') || has(fields, 'v'))) {
 			return parsedFrame{}, &parseFailure{ReplyInvalid, reply}
 		}
-		command.Decode.Width, command.Decode.Height = uint32(width), uint32(height)
+		command.Decode.Width, command.Decode.Height = widthValue, heightValue
 		if more == 1 && (len(payload) == 0 || len(payload)%4 != 0) {
 			return parsedFrame{}, &parseFailure{ReplyInvalid, reply}
 		}
@@ -161,10 +166,11 @@ func parseContinuation(fields map[byte]string, payload []byte, reply ReplyPlan) 
 		return parsedFrame{}, &parseFailure{ReplyInvalid, reply}
 	}
 	quiet, ok := parseUnsigned(fields, 'q', 0, 2, uint64(reply.quiet))
-	if !ok {
+	quietValue, quietFits := checkedUint8(quiet)
+	if !ok || !quietFits {
 		return parsedFrame{}, &parseFailure{ReplyInvalid, reply}
 	}
-	reply.quiet = Quiet(quiet)
+	reply.quiet = Quiet(quietValue)
 	if more == 1 && (len(payload) == 0 || len(payload)%4 != 0) {
 		return parsedFrame{}, &parseFailure{ReplyInvalid, reply}
 	}
@@ -191,19 +197,26 @@ func allowedFields(action Action) map[byte]bool {
 
 func parsePlacement(fields map[byte]string) (*PlacementRequest, ReplyCode) {
 	id, ok := parseUnsigned(fields, 'p', 1, uint64(termimage.MaxWirePlacementID), 0)
-	if !ok || id == 0 {
+	idValue, idFits := checkedUint32(id)
+	if !ok || !idFits || id == 0 {
 		return nil, ReplyInvalid
 	}
 	cols, cok := parseUnsigned(fields, 'c', 1, uint64(termimage.HardPlacementSpan), 1)
 	rows, rok := parseUnsigned(fields, 'r', 1, uint64(termimage.HardPlacementSpan), 1)
-	if !cok || !rok || has(fields, 'c') != has(fields, 'r') {
+	colsValue, colsFit := checkedUint16(cols)
+	rowsValue, rowsFit := checkedUint16(rows)
+	if !cok || !rok || !colsFit || !rowsFit || has(fields, 'c') != has(fields, 'r') {
 		return nil, ReplyInvalid
 	}
 	x, xok := parseUnsigned(fields, 'x', 0, uint64(^uint32(0)), 0)
 	y, yok := parseUnsigned(fields, 'y', 0, uint64(^uint32(0)), 0)
 	w, wok := parseUnsigned(fields, 'w', 1, uint64(^uint32(0)), 0)
 	h, hok := parseUnsigned(fields, 'h', 1, uint64(^uint32(0)), 0)
-	if !xok || !yok || !wok || !hok || has(fields, 'w') != has(fields, 'h') || ((has(fields, 'x') || has(fields, 'y')) && !has(fields, 'w')) {
+	xValue, xFits := checkedUint32(x)
+	yValue, yFits := checkedUint32(y)
+	wValue, wFits := checkedUint32(w)
+	hValue, hFits := checkedUint32(h)
+	if !xok || !yok || !wok || !hok || !xFits || !yFits || !wFits || !hFits || has(fields, 'w') != has(fields, 'h') || ((has(fields, 'x') || has(fields, 'y')) && !has(fields, 'w')) {
 		return nil, ReplyInvalid
 	}
 	z := int64(0)
@@ -214,13 +227,14 @@ func parsePlacement(fields map[byte]string) (*PlacementRequest, ReplyCode) {
 		}
 		z = parsed
 	}
+	zValue, zFits := checkedInt16(z)
 	cursor, ok := parseUnsigned(fields, 'C', 0, 1, 0)
-	if !ok {
+	if !ok || !zFits {
 		return nil, ReplyInvalid
 	}
-	request := &PlacementRequest{ID: termimage.PlacementID(id), Cols: uint16(cols), Rows: uint16(rows), Z: int16(z), MoveCursor: cursor != 1}
+	request := &PlacementRequest{ID: termimage.PlacementID(idValue), Cols: colsValue, Rows: rowsValue, Z: zValue, MoveCursor: cursor != 1}
 	if has(fields, 'w') {
-		request.Crop = &termimage.PixelRect{X: uint32(x), Y: uint32(y), Width: uint32(w), Height: uint32(h)}
+		request.Crop = &termimage.PixelRect{X: xValue, Y: yValue, Width: wValue, Height: hValue}
 	}
 	return request, ReplyNone
 }
@@ -263,5 +277,33 @@ func parseUnsigned(fields map[byte]string, key byte, min, max, def uint64) (uint
 	}
 	parsed, err := strconv.ParseUint(value, 10, 64)
 	return parsed, err == nil && parsed >= min && parsed <= max
+}
+
+func checkedUint8(value uint64) (uint8, bool) {
+	if value > uint64(^uint8(0)) {
+		return 0, false
+	}
+	return uint8(value), true
+}
+
+func checkedUint16(value uint64) (uint16, bool) {
+	if value > uint64(^uint16(0)) {
+		return 0, false
+	}
+	return uint16(value), true
+}
+
+func checkedUint32(value uint64) (uint32, bool) {
+	if value > uint64(^uint32(0)) {
+		return 0, false
+	}
+	return uint32(value), true
+}
+
+func checkedInt16(value int64) (int16, bool) {
+	if value < -1<<15 || value > 1<<15-1 {
+		return 0, false
+	}
+	return int16(value), true
 }
 func has(fields map[byte]string, key byte) bool { _, ok := fields[key]; return ok }
