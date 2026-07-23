@@ -78,6 +78,7 @@ var requiredDocs = []string{
 	"docs/validation/phase-15-preflight.md",
 	"docs/validation/phase-15-evidence.json",
 	"scripts/capture-parity-baseline.go",
+	"scripts/check-phase15-recovery.go",
 	"scripts/daily-driver-smoke.go",
 	"scripts/package-beta.go",
 	"scripts/release-preflight.go",
@@ -206,7 +207,7 @@ func checkCIGates() []finding {
 	}
 	text := string(data)
 	var findings []finding
-	for _, required := range []string{"go vet", "govulncheck ./...", "scripts/package-beta.go", "scripts/release-preflight.go", "scripts/smoke-installed-package.go", "scripts/daily-driver-smoke.go"} {
+	for _, required := range []string{"go vet", "govulncheck ./...", "scripts/check-phase15-recovery.go", "scripts/package-beta.go", "scripts/release-preflight.go", "scripts/smoke-installed-package.go", "scripts/daily-driver-smoke.go"} {
 		if !strings.Contains(text, required) {
 			findings = append(findings, finding{path: path, reason: "CI must run " + required})
 		}
