@@ -29,7 +29,7 @@ func (a *App) openTabSwitcher() error {
 		activations[id] = commandPaletteActivation{envelope: termaction.Envelope{Action: termaction.ActivateTab{TabID: uint64(tab.ID)}, Target: termaction.TargetFocused}, generation: a.scriptGeneration}
 		_ = i
 	}
-	if !a.modal.Open(modal.ModeTabSwitcher, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
+	if !a.openModal(modal.ModeTabSwitcher, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
 		return fmt.Errorf("tab switcher could not open")
 	}
 	a.commandPalette = activations

@@ -173,6 +173,28 @@ local record cervterm
     osc52: string
   end
 
+  record IMEConfig
+    enabled: boolean
+  end
+
+  record AccessibilityConfig
+    enabled: boolean
+    scope: string
+  end
+
+  record BellConfig
+    mode: string
+    focus: string
+    throttle_ms: integer
+    visual_duration_ms: integer
+  end
+
+  record NotificationConfig
+    enabled: boolean
+    focus: string
+    rate_limit_ms: integer
+  end
+
   record RenderConfig
     bidi: boolean
     text_gamma: number
@@ -250,6 +272,7 @@ local record cervterm
     NewWindow: Action
     ActivateWorkspaceSwitcher: Action
     CopySemanticZone: function(string): Action
+    SelectSemanticZone: function(string): Action
     ScrollLines: function(integer): Action
     ScrollPage: function(integer): Action
     ScrollBuffer: function(integer): Action
@@ -396,6 +419,55 @@ local record cervterm
     osc52: string | Unset
   end
 
+  record IMEDocument
+    enabled: boolean | Unset
+  end
+
+  record AccessibilityDocument
+    enabled: boolean | Unset
+    scope: string | Unset
+  end
+
+  record KittyGraphicsDocument
+    enabled: boolean | Unset
+  end
+
+  record SixelGraphicsDocument
+    enabled: boolean | Unset
+  end
+
+  record ITermGraphicsDocument
+    enabled: boolean | Unset
+  end
+
+  record GraphicsLimitsDocument
+    encoded_bytes_per_pane: integer | Unset
+    decoded_bytes_per_pane: integer | Unset
+    image_count_per_pane: integer | Unset
+    placement_count_per_pane: integer | Unset
+    gpu_bytes_per_context: integer | Unset
+  end
+
+  record GraphicsDocument
+    kitty: KittyGraphicsDocument | Unset
+    sixel: SixelGraphicsDocument | Unset
+    iterm: ITermGraphicsDocument | Unset
+    limits: GraphicsLimitsDocument | Unset
+  end
+
+  record BellDocument
+    mode: string | Unset
+    focus: string | Unset
+    throttle_ms: integer | Unset
+    visual_duration_ms: integer | Unset
+  end
+
+  record NotificationDocument
+    enabled: boolean | Unset
+    focus: string | Unset
+    rate_limit_ms: integer | Unset
+  end
+
   record RenderDocument
     bidi: boolean | Unset
     text_gamma: number | Unset
@@ -490,6 +562,11 @@ local record cervterm
     tab_bar: TabBarDocument | Unset
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
+    ime: IMEDocument | Unset
+    accessibility: AccessibilityDocument | Unset
+    graphics: GraphicsDocument | Unset
+    bell: BellDocument | Unset
+    notification: NotificationDocument | Unset
     render: RenderDocument | Unset
     shell: ShellDocument | Unset
     launch_menu: {LaunchTarget} | Unset | nil
@@ -520,6 +597,11 @@ local record cervterm
     tab_bar: TabBarDocument | Unset
     cursor: CursorDocument | Unset
     clipboard: ClipboardDocument | Unset
+    ime: IMEDocument | Unset
+    accessibility: AccessibilityDocument | Unset
+    graphics: GraphicsDocument | Unset
+    bell: BellDocument | Unset
+    notification: NotificationDocument | Unset
     render: RenderDocument | Unset
     shell: ShellDocument | Unset
     launch_menu: {LaunchTarget} | Unset | nil

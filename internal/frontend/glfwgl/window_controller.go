@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cervterm/internal/config"
+	"cervterm/internal/ime"
 	termmux "cervterm/internal/mux"
 	"cervterm/internal/script"
 
@@ -68,13 +69,14 @@ func (close projectionResourceFunc) Close() error { return close() }
 // controller still rolls it back, preventing callbacks or native resources
 // from escaping failed candidate creation.
 type nativeProjectionBundle struct {
-	host      nativeWindowHost
-	app       *App
-	handle    func([]termmux.Event) bool
-	bind      func(termmux.WindowID) error
-	unbind    func() error
-	resources []projectionResource
-	closed    bool
+	host         nativeWindowHost
+	app          *App
+	handle       func([]termmux.Event) bool
+	bind         func(termmux.WindowID) error
+	unbind       func() error
+	beforeUnbind *compositionBeforeUnbind
+	resources    []projectionResource
+	closed       bool
 }
 
 type nativeProjectionFactory interface {
@@ -157,17 +159,17 @@ func (c *windowController) createProjection(id termmux.WindowID) error {
 	}
 	bundle, err := c.factory.Create(id)
 	if err != nil {
-		if rollbackErr := bundle.close(); rollbackErr != nil {
+		if rollbackErr := closeProjectionBundleWithCurrent(bundle); rollbackErr != nil {
 			return errors.Join(err, rollbackErr)
 		}
 		return err
 	}
 	if bundle == nil || bundle.host == nil || bundle.handle == nil {
-		rollbackErr := bundle.close()
+		rollbackErr := closeProjectionBundleWithCurrent(bundle)
 		return errors.Join(errWindowProjectionMissing, rollbackErr)
 	}
 	if err := c.attachApp(id, bundle.host, bundle.app, bundle.handle); err != nil {
-		return errors.Join(err, bundle.close())
+		return errors.Join(err, closeProjectionBundleWithCurrent(bundle))
 	}
 	c.windows[id].bundle = bundle
 	return nil
@@ -235,19 +237,6 @@ func (c *windowController) activate(id termmux.WindowID) error {
 	}
 	projection.host.MakeContextCurrent()
 	c.current = id
-	return nil
-}
-
-func (c *windowController) focus(id termmux.WindowID) error {
-	if err := c.requireLoop(); err != nil {
-		return err
-	}
-	projection, ok := c.windows[id]
-	if !ok || projection.closed {
-		return errWindowProjectionMissing
-	}
-	projection.host.Focus()
-	c.active = id
 	return nil
 }
 
@@ -354,16 +343,6 @@ func (c *windowController) dispatch(events []termmux.Event) bool {
 	return consumed
 }
 
-const maxPendingWindowEvents = 256
-
-func (c *windowController) queuePending(id termmux.WindowID, event termmux.Event) {
-	pending := c.pending[id]
-	if len(pending) == maxPendingWindowEvents {
-		pending = pending[1:]
-	}
-	c.pending[id] = append(pending, event)
-}
-
 func (c *windowController) closeProjection(id termmux.WindowID) error {
 	if err := c.requireLoop(); err != nil {
 		return err
@@ -374,8 +353,15 @@ func (c *windowController) closeProjection(id termmux.WindowID) error {
 	}
 	projection.host.MakeContextCurrent()
 	var teardownErr error
+	if projection.bundle != nil {
+		teardownErr = projection.bundle.unbindProjection()
+	} else if projection.app != nil {
+		teardownErr = projection.app.cancelComposition(ime.CancelTeardown)
+		projection.app.composition.deactivateDelivery()
+		projection.app.charSuppression.clear()
+	}
 	if projection.teardown != nil {
-		teardownErr = projection.teardown()
+		teardownErr = errors.Join(teardownErr, projection.teardown())
 	}
 	if projection.bundle != nil {
 		teardownErr = errors.Join(teardownErr, projection.bundle.close())

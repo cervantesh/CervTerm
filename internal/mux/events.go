@@ -1,5 +1,7 @@
 package mux
 
+import "cervterm/internal/core"
+
 // EventKind classifies a pane-addressed state transition observed by the
 // main-thread owner.
 type EventKind uint8
@@ -11,6 +13,8 @@ const (
 	PaneTitleChanged
 	PaneCWDChanged
 	PaneBell
+	PaneNotificationRequested
+	PaneNotificationOverflow
 	PaneExited
 	PaneFocused
 	PaneGeometryChanged
@@ -49,7 +53,10 @@ type Event struct {
 	Tab             TabID
 	SourceTab       TabID
 	Data            []byte
+	BytesRead       int
 	Text            string
+	Notification    core.NotificationRequest
+	Fresh           bool
 	Geometry        PaneGeometry
 	Err             error
 	Revision        uint64

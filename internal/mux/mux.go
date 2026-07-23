@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"cervterm/internal/core"
 	"cervterm/internal/pty"
 	"cervterm/internal/render"
+	"cervterm/internal/termimage"
 )
 
 type Options struct {
@@ -16,6 +18,15 @@ type Options struct {
 	SetClipboard           func(PaneID, string)
 	ScrollbackCapacity     *int
 	HideCursorWhenScrolled *bool
+	ImageLimits            *termimage.Limits
+	KittyEnabled           bool
+	SixelEnabled           bool
+	ITermEnabled           bool
+	// ImageDiagnostic receives fixed privacy-safe Sixel and iTerm failure data.
+	// Callback panics are contained and never change runtime failure handling.
+	ImageDiagnostic func(ImageDiagnostic)
+	// Now may be called by decode workers and must be safe for concurrent use.
+	Now func() time.Time
 }
 
 type PaneView struct {
@@ -36,15 +47,25 @@ type PaneView struct {
 }
 
 type Mux struct {
-	sessions     *localSessionRegistry
-	options      Options
-	model        *Model
-	bootstrapped bool
-	bounds       PixelRect
-	paneMetrics  map[PaneID]CellMetrics
-	paletteBase  core.PaletteBase
-	windowFault  func(string) error // package-private deterministic failure injection
-	pending      *RestoreCandidate
+	sessions       *localSessionRegistry
+	options        Options
+	model          *Model
+	imageBudget    *termimage.ProcessBudget
+	imageLimits    termimage.Limits
+	imageSetupErr  error
+	imageScheduler *imageDecodeScheduler
+	kittyPending   map[uint64]kittyDecodeOwner
+	kittyNextToken uint64
+	sixelPending   map[uint64]sixelDecodeOwner
+	sixelNextToken uint64
+	itermPending   map[uint64]itermDecodeOwner
+	itermNextToken uint64
+	bootstrapped   bool
+	bounds         PixelRect
+	paneMetrics    map[PaneID]CellMetrics
+	paletteBase    core.PaletteBase
+	windowFault    func(string) error // package-private deterministic failure injection
+	pending        *RestoreCandidate
 }
 
 func New(factory SessionFactory, options Options) *Mux {
@@ -54,11 +75,37 @@ func New(factory SessionFactory, options Options) *Mux {
 	if options.IngressCapacity <= 0 {
 		options.IngressCapacity = 256
 	}
+	if options.Now == nil {
+		options.Now = time.Now
+	}
+	if !options.KittyEnabled && !options.SixelEnabled && !options.ITermEnabled {
+		options.ImageLimits = nil
+	}
 	sessions := newLocalSessionRegistry(factory, options.IngressCapacity, options.Wake)
-	return &Mux{
+	mux := &Mux{
 		sessions: sessions, options: options, model: NewModel(),
 		paneMetrics: make(map[PaneID]CellMetrics), paletteBase: core.DefaultPaletteBase(),
 	}
+	if options.ImageLimits != nil {
+		limits, err := termimage.ValidateLimits(*options.ImageLimits)
+		if err != nil {
+			mux.imageSetupErr = err
+		} else {
+			mux.imageLimits = limits
+			mux.imageBudget = termimage.NewProcessBudget()
+			mux.imageScheduler = newImageDecodeScheduler(options.Wake, options.Now)
+			if options.KittyEnabled {
+				mux.kittyPending = make(map[uint64]kittyDecodeOwner)
+			}
+			if options.SixelEnabled {
+				mux.sixelPending = make(map[uint64]sixelDecodeOwner)
+			}
+			if options.ITermEnabled {
+				mux.itermPending = make(map[uint64]itermDecodeOwner)
+			}
+		}
+	}
+	return mux
 }
 
 func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) (TabID, PaneID, []Event, error) {
@@ -77,7 +124,7 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 		return 0, 0, nil, err
 	}
 	defer m.sessions.release(geometry.Pane)
-	p := newPane(geometry.Pane, geometry.Cols, geometry.Rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	p := m.createPane(geometry.Pane, geometry.Cols, geometry.Rows)
 	p.setFreshLaunch(spec)
 	p.terminal.SetPaletteBase(m.paletteBase)
 	p.geometry = geometry
@@ -85,6 +132,7 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 		p.parser.SetClipboard = func(text string) { m.options.SetClipboard(p.id, text) }
 	}
 	if err := m.sessions.register(p); err != nil {
+		_ = p.close()
 		return 0, 0, nil, err
 	}
 	m.bounds = content
@@ -114,6 +162,10 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 	p.appliedSize = p.desiredSize
 	p.capture()
 	if err := m.sessions.start(p.id); err != nil {
+		detached := m.sessions.detach(p.id)
+		if detached.owned {
+			_ = detached.pane.close()
+		}
 		return 0, 0, nil, err
 	}
 	return m.model.TabID(), p.id, []Event{
@@ -145,13 +197,12 @@ func (m *Mux) PaneView(id PaneID) (PaneView, bool) {
 	view := PaneView{
 		ID: id, State: p.state, Geometry: p.geometry,
 		DesiredSize: p.desiredSize, AppliedSize: p.appliedSize, ResizeErr: p.resizeErr,
-		Snapshot:      p.snapshot,
+		Snapshot:      detachedPaneSnapshot(p.snapshot),
 		DisplayOffset: p.terminal.DisplayOffset(), ScrollbackLines: p.terminal.ScrollbackLines(),
 		AlternateScreen: p.terminal.AlternateScreenMode(), BracketedPaste: p.terminal.BracketedPasteMode(),
 		FocusEvents: p.terminal.FocusEventsMode(), ApplicationCursor: p.terminal.ApplicationCursorMode(),
 		MouseMode: p.terminal.MouseMode(),
 	}
-	view.Snapshot.Cells = append(view.Snapshot.Cells[:0:0], p.snapshot.Cells...)
 	return view, true
 }
 func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
@@ -192,7 +243,7 @@ func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID,
 		return 0, nil, err
 	}
 	defer m.sessions.release(predictedID)
-	newPane := newPane(predictedID, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	newPane := m.createPane(predictedID, cols, rows)
 	newPane.setFreshLaunch(spec)
 	newPane.terminal.SetPaletteBase(m.paletteBase)
 	if m.options.SetClipboard != nil {
@@ -204,6 +255,7 @@ func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID,
 		if session != nil {
 			_ = session.Close()
 		}
+		_ = newPane.close()
 		return 0, nil, fmt.Errorf("spawn split pane: %w", spawnErr)
 	}
 	newPane.session = session
@@ -323,8 +375,19 @@ func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
 
 func (m *Mux) Drain(limit int) []Event {
 	var events []Event
+	events = append(events, m.expireImages(m.options.Now())...)
 	for count := 0; limit <= 0 || count < limit; count++ {
+		var imageReady <-chan struct{}
+		if m.imageScheduler != nil {
+			imageReady = m.imageScheduler.ready()
+		}
 		select {
+		case <-imageReady:
+			completion, ok := m.imageScheduler.takeCompletion()
+			if !ok {
+				continue
+			}
+			events = append(events, m.applyImageCompletion(completion)...)
 		case record := <-m.sessions.incoming:
 			p, ok := m.sessions.lookup(record.pane)
 			if !ok || p != record.owner || p.state == PaneStateClosed || p.state == PaneStateClosing {
@@ -334,6 +397,27 @@ func (m *Mux) Drain(limit int) []Event {
 				events = append(events, m.advancePane(p, record.data)...)
 			}
 			if record.err != nil && p.state == PaneStateRunning {
+				public := p.parser.EndOfInputPublic()
+				if len(public) > 0 {
+					events = append(events, Event{Kind: PaneOutput, Pane: p.id, Data: public})
+				}
+				if p.kittyAdapter != nil {
+					p.kittyAdapter.Close()
+					p.kittyAdapter = nil
+				}
+				if p.sixelAdapter != nil {
+					p.sixelAdapter.Close()
+					p.sixelAdapter = nil
+				}
+				if p.itermAdapter != nil {
+					p.itermAdapter.Close()
+					p.itermAdapter = nil
+				}
+				events = append(events, p.kittyEvents...)
+				p.kittyEvents = nil
+				events = append(events, m.processKittyOutcomes(p)...)
+				m.processSixelOutcomes(p)
+				m.processITermOutcomes(p)
 				p.state = PaneStateExited
 				tab := m.model.tabForPane(p.id)
 				exit := Event{Kind: PaneExited, Pane: p.id}
@@ -354,97 +438,6 @@ func (m *Mux) Drain(limit int) []Event {
 		}
 	}
 	return m.ResolveEventAddresses(events)
-}
-
-func (m *Mux) advancePane(p *pane, data []byte) []Event {
-	oldTitle, oldCWD, oldBell := p.title, p.cwd, p.bellCount
-	p.advanceTerminal(data)
-	events := p.flushReplies()
-	p.capture()
-	events = append(events,
-		Event{Kind: PaneOutput, Pane: p.id, Data: append([]byte(nil), data...)},
-		Event{Kind: PaneDirty, Pane: p.id},
-	)
-	if p.title != oldTitle {
-		events = append(events, Event{Kind: PaneTitleChanged, Pane: p.id, Text: p.title})
-	}
-	if p.cwd != oldCWD {
-		events = append(events, Event{Kind: PaneCWDChanged, Pane: p.id, Text: p.cwd})
-	}
-	for bell := oldBell; bell < p.bellCount; bell++ {
-		events = append(events, Event{Kind: PaneBell, Pane: p.id})
-	}
-	return m.ResolveEventAddresses(events)
-}
-
-func (m *Mux) SearchUpward(id PaneID, query string, hasPrev bool, prevRow int) (row, col int, ok bool, err error) {
-	p, exists := m.sessions.lookup(id)
-	if !exists || !m.model.paneExists(id) {
-		return 0, 0, false, ErrPaneNotFound
-	}
-	from := p.terminal.ScrollbackLines() + p.terminal.Rows()
-	if hasPrev {
-		from = prevRow
-	}
-	row, col, ok = p.terminal.SearchBackward(query, from)
-	if ok {
-		oldOffset := p.terminal.DisplayOffset()
-		scrollGlobalRowIntoView(p.terminal, row)
-		if p.terminal.DisplayOffset() != oldOffset {
-			p.viewportGen++
-		}
-		p.capture()
-	}
-	return row, col, ok, nil
-}
-
-func scrollGlobalRowIntoView(t *core.Terminal, row int) {
-	if _, ok := t.GlobalRowToViewport(row); ok {
-		return
-	}
-	targetTop := max(0, row-t.Rows()/2)
-	t.ScrollViewport((t.ScrollbackLines() - targetTop) - t.DisplayOffset())
-}
-
-func (m *Mux) GlobalRowToViewport(id PaneID, row int) (int, bool) {
-	p, ok := m.sessions.lookup(id)
-	if !ok || !m.model.paneExists(id) {
-		return 0, false
-	}
-	return p.terminal.GlobalRowToViewport(row)
-}
-
-func (m *Mux) SetTitle(id PaneID, title string) (bool, error) {
-	p, ok := m.sessions.lookup(id)
-	if !ok || !m.model.paneExists(id) {
-		return false, ErrPaneNotFound
-	}
-	if p.terminal.Title() == title {
-		return false, nil
-	}
-	p.terminal.SetTitle(title)
-	p.capture()
-	return true, nil
-}
-
-func (m *Mux) Line(id PaneID, row int) (string, bool) {
-	p, ok := m.sessions.lookup(id)
-	if !ok || !m.model.paneExists(id) || row < 0 || row >= p.terminal.Rows() {
-		return "", false
-	}
-	cols, rows := p.terminal.Cols(), p.terminal.Rows()
-	cells := make([]core.Cell, cols*rows)
-	p.terminal.CopyView(cells)
-	start := row * cols
-	return core.RowText(cells[start : start+cols]), true
-}
-
-func (m *Mux) LineWrapped(id PaneID, row int) (bool, bool) {
-	p, ok := m.sessions.lookup(id)
-	if !ok || !m.model.paneExists(id) {
-		return false, false
-	}
-	return p.terminal.LineWrapped(row)
 }
 
 func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
@@ -496,5 +489,3 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 	}
 	return m.ResolveEventAddresses(events), errors.Join(closeErr, resizeErr)
 }
-
-func (m *Mux) Shutdown() error { return m.sessions.shutdownRegistry() }

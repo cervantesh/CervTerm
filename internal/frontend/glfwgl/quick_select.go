@@ -37,7 +37,7 @@ func (a *App) openQuickSelect(pane termmux.PaneID) error {
 		entries[i] = modal.Entry{ID: candidate.Label, Label: candidate.Label, Detail: candidate.Text}
 		byLabel[candidate.Label] = candidate
 	}
-	if !a.modal.Open(modal.ModeQuickSelect, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
+	if !a.openModal(modal.ModeQuickSelect, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
 		return fmt.Errorf("quick select could not open")
 	}
 	a.quickSelect = quickSelectActivation{snapshot: snapshot, candidates: byLabel, setClipboard: a.quickSelect.setClipboard}

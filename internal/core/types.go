@@ -1,5 +1,7 @@
 package core
 
+import "cervterm/internal/termimage"
+
 type Attr struct {
 	FG, BG                                LogicalColor
 	Bold, Dim, Italic, Underline, Inverse bool
@@ -144,6 +146,7 @@ type Terminal struct {
 	cwd                     string
 	cwdSeq                  int
 	bellCount               int
+	notifications           notificationStore
 	hyperlinks              hyperlinkState
 	semanticKind            SemanticKind
 	semanticBoundaryPending bool
@@ -164,4 +167,8 @@ type Terminal struct {
 	activeCharset           int
 	cursorStyle             CursorStyle
 	focusEvents             bool
+	imageStore              *termimage.Store
+	imageOwner              *termimage.StoreOwner
+	imageSidecars           *imageSidecars
+	imageAnchorGeneration   uint64
 }

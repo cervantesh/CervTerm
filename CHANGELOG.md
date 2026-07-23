@@ -8,6 +8,10 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 
 ### Added
 
+- Bounded pane-local OSC 9/777 notification request metadata and addressed mux events, without native side effects.
+- Default-off live notification consent, focus, freshness, and rate policy with a redacted fakeable native-adapter boundary.
+- Windows native notification balloons with real-time/quiet-time flags and transactionally cleaned notification-area icon resources.
+- Live strict bell policies with disabled-by-default audible, visual, and taskbar sinks, focus filtering, bounded throttling, and lossless Lua bell callbacks.
 - Native in-process panes with horizontal and vertical splits, focused input, directional navigation, independent terminal sessions, and deterministic close/collapse behavior.
 - Resize adjacent panes live by dragging their divider with the mouse while preserving minimum terminal dimensions.
 - Zoom the focused pane independently while sharing one bounded multi-size glyph atlas across all panes.
@@ -45,11 +49,15 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 - A retained command palette for discoverable typed actions and labeled bindings, with runtime-safe callback invalidation, complete modal input capture, and damage-driven idle rendering.
 - Process-owned native windows and named local workspaces with stable-ID transfer/actions, retained switching, and opt-in atomic layout-only persistence that restores fresh sessions with safe monitor/config fallback.
 - Bounded pane-local OSC 8 hyperlink metadata with 32-byte cell identity, safe referenced-entry retention, primary/alternate isolation, reflow/scrollback preservation, detached render/mux projection, and fresh explicit-click activation through a centralized absolute HTTP(S) policy; no automatic URL opening.
-- Bounded pane-local OSC 133/633 prompt, command-input, and command-output metadata that preserves the 32-byte cell budget through wide cells, blank semantic rows, scrollback, reflow, resize, reset, and alternate screens without retaining shell command/property payloads; generation-checked bounded semantic-history snapshots; typed `ScrollToPrompt(-1|1)` navigation; and bounded `CopySemanticZone("input"|"output")` extraction.
+- Bounded pane-local OSC 133/633 prompt, command-input, and command-output metadata that preserves the 32-byte cell budget through wide cells, blank semantic rows, scrollback, reflow, resize, reset, and alternate screens without retaining shell command/property payloads; generation-checked bounded semantic-history snapshots; typed `ScrollToPrompt(-1|1)` navigation; bounded `CopySemanticZone("input"|"output")`; and viewport-safe `SelectSemanticZone("input"|"output")`.
 - Bounded quick select for visible HTTP(S) links and compiled custom regex rules, with prefix-free labels, copy/open actions, and stale-generation rejection.
 - A bounded retained launch menu with argv-only local process descriptors, sensitive environment provenance, deterministic environment merging, and spawn-before-topology commit.
+- Experimental default-off Windows UI Automation integration with immutable visible-only terminal/modal/IME documents, stable provider identity, coalesced generation updates, shared WndProc ownership, strict v2/Teal configuration, privacy-safe diagnostics, fail-closed per-window fallback, allocation ceilings, and explicit no-support qualification evidence.
+- Experimental default-off, restart-scoped direct-data Kitty graphics subset for the GLFW/OpenGL frontend: bounded `t`/`T`/`p`/`d`/`q` actions, RGB24/RGBA32/PNG decoding, raw RGB/RGBA zlib compression, chunk/resource/reply/GPU caps, and fixed value-free diagnostics; no full conformance, animation, external transports, or Unicode placeholders.
+- Experimental default-off, restart-scoped bounded Sixel DCS and iTerm OSC 1337 inline-image subsets for the GLFW/OpenGL frontend, with exact narrow grammars, strict base64/PNG handling, cursor-neutral no-reply placement, internal high-half IDs, ephemeral final-placement retirement, and shared Kitty scheduler/budgets/cache ownership; support remains unclaimed pending real-GUI qualification.
 
 ### Fixed
+- Prevent enabled selected Kitty/Sixel/iTerm control-string payloads from leaking through mux `PaneOutput` and Lua output callbacks by coupling public-output redaction to the parser's framing decisions; disabled and unselected control strings remain observable.
 
 - Keep selection, search, links, scrollback, mouse reporting, resize events, and Lua callbacks isolated to their originating pane.
 - Allow pane-bound Lua callbacks to read, update, and reload runtime configuration through their originating frontend host.

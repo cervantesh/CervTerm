@@ -178,6 +178,7 @@ func (a *App) applyPaneFontVisual(id termmux.PaneID, size float64, scaleX, scale
 	state.font.cellW = float32(cellW)
 	state.font.cellH = float32(cellH)
 	state.font.baseline = baseline
+	a.invalidateCandidateGeometry()
 	a.requestRedraw()
 	return before.DesiredSize != after.DesiredSize, true
 }

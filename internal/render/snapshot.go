@@ -1,12 +1,20 @@
 package render
 
-import "cervterm/internal/core"
+import (
+	"cervterm/internal/core"
+	"cervterm/internal/termimage"
+)
 
 // Snapshot is the renderer-neutral view of a terminal frame.
 //
 // It intentionally contains only plain values and core cells. Frontends may copy
 // this into GPU buffers, text layouts, or remote protocols without depending on
 // PTY, parser, GLFW, or OpenGL internals.
+type ImagePlacement struct {
+	PaneObject uint64
+	Placement  termimage.Placement
+}
+
 type Snapshot struct {
 	Cols, Rows             int
 	HistoryRows            int
@@ -19,13 +27,20 @@ type Snapshot struct {
 	BellCount              int
 	PaletteOverrides       core.PaletteOverrides
 	Cells                  []core.Cell
+	Wrapped                []bool
 	Hyperlinks             []core.Hyperlink
 	SemanticZones          []core.SemanticZone
 	SemanticZonesTruncated bool
+	Images                 []ImagePlacement
+	ImageGeneration        uint64
+	PaneObject             uint64
+	imagePlacements        []termimage.Placement
+	imageCrops             []termimage.PixelRect
 }
 
 type CaptureOptions struct {
 	HideCursorWhenScrolled bool
+	PaneObject             uint64
 }
 
 // Capture copies terminal state into dst while reusing dst.Cells when possible.
@@ -44,6 +59,11 @@ func CaptureWithOptions(dst *Snapshot, term *core.Terminal, opts CaptureOptions)
 	} else {
 		dst.Cells = dst.Cells[:cellCount]
 	}
+	if cap(dst.Wrapped) < term.Rows() {
+		dst.Wrapped = make([]bool, term.Rows())
+	} else {
+		dst.Wrapped = dst.Wrapped[:term.Rows()]
+	}
 
 	dst.Cols = term.Cols()
 	dst.Rows = term.Rows()
@@ -57,7 +77,20 @@ func CaptureWithOptions(dst *Snapshot, term *core.Terminal, opts CaptureOptions)
 	dst.Cwd = term.Cwd()
 	dst.BellCount = term.BellCount()
 	dst.PaletteOverrides = term.PaletteOverrides()
+	dst.PaneObject = opts.PaneObject
 	term.CopyView(dst.Cells)
+	for row := range dst.Wrapped {
+		dst.Wrapped[row], _ = term.LineWrapped(row)
+	}
 	dst.Hyperlinks = term.ProjectHyperlinks(dst.Cells, dst.Hyperlinks)
 	dst.SemanticZones, dst.SemanticZonesTruncated = core.ProjectSemanticZones(dst.Cells, dst.SemanticZones)
+	dst.imagePlacements, dst.imageCrops, dst.ImageGeneration = term.CopyImageProjection(dst.imagePlacements, dst.imageCrops, term.ViewportTopGlobalRow(), term.Rows())
+	if cap(dst.Images) < len(dst.imagePlacements) {
+		dst.Images = make([]ImagePlacement, len(dst.imagePlacements))
+	} else {
+		dst.Images = dst.Images[:len(dst.imagePlacements)]
+	}
+	for index, placement := range dst.imagePlacements {
+		dst.Images[index] = ImagePlacement{PaneObject: opts.PaneObject, Placement: placement}
+	}
 }

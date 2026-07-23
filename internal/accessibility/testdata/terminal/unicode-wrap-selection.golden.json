@@ -1,0 +1,121 @@
+{
+  "ProviderID": 7,
+  "Generation": 1,
+  "Focus": {
+    "Kind": 3,
+    "Projection": 1,
+    "Object": 2,
+    "Activation": 1
+  },
+  "Truncated": false,
+  "Rows": 3,
+  "Graphemes": 6,
+  "UTF8Bytes": 26,
+  "Nodes": [
+    {
+      "ID": {
+        "Kind": 1,
+        "Projection": 1,
+        "Object": 1,
+        "Activation": 0
+      },
+      "Parent": {
+        "Kind": 0,
+        "Projection": 0,
+        "Object": 0,
+        "Activation": 0
+      },
+      "Role": 1,
+      "Name": "CervTerm",
+      "Text": "",
+      "Rows": [],
+      "Caret": 0,
+      "HasCaret": false,
+      "Selection": {
+        "Start": 0,
+        "End": 0
+      },
+      "HasSelect": false
+    },
+    {
+      "ID": {
+        "Kind": 3,
+        "Projection": 1,
+        "Object": 2,
+        "Activation": 1
+      },
+      "Parent": {
+        "Kind": 1,
+        "Projection": 1,
+        "Object": 1,
+        "Activation": 0
+      },
+      "Role": 3,
+      "Name": "terminal",
+      "Text": "A好éB\nZ",
+      "Rows": [
+        {
+          "Text": "A好",
+          "Bounds": [
+            {
+              "X": 10,
+              "Y": 20,
+              "Width": 5,
+              "Height": 10
+            },
+            {
+              "X": 15,
+              "Y": 20,
+              "Width": 10,
+              "Height": 10
+            }
+          ],
+          "StartGrapheme": 0,
+          "EndGrapheme": 2,
+          "SoftWrapped": true
+        },
+        {
+          "Text": "éB",
+          "Bounds": [
+            {
+              "X": 10,
+              "Y": 30,
+              "Width": 5,
+              "Height": 10
+            },
+            {
+              "X": 15,
+              "Y": 30,
+              "Width": 5,
+              "Height": 10
+            }
+          ],
+          "StartGrapheme": 2,
+          "EndGrapheme": 4,
+          "SoftWrapped": false
+        },
+        {
+          "Text": "Z",
+          "Bounds": [
+            {
+              "X": 10,
+              "Y": 40,
+              "Width": 5,
+              "Height": 10
+            }
+          ],
+          "StartGrapheme": 5,
+          "EndGrapheme": 6,
+          "SoftWrapped": false
+        }
+      ],
+      "Caret": 1,
+      "HasCaret": true,
+      "Selection": {
+        "Start": 1,
+        "End": 6
+      },
+      "HasSelect": true
+    }
+  ]
+}

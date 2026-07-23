@@ -27,6 +27,15 @@ func (p *Parser) appendOSC(b byte) {
 	p.osc = append(p.osc, b)
 }
 
+func (p *Parser) selectOSC1337() bool {
+	if len(p.osc) != 5 || p.osc[0] != '1' || p.osc[1] != '3' || p.osc[2] != '3' || p.osc[3] != '7' || p.osc[4] != ';' {
+		return false
+	}
+	p.resetOSC()
+	p.startControlString(ControlStringOSC1337)
+	return true
+}
+
 func (p *Parser) dispatchOSC(t *core.Terminal) {
 	if p.oscTruncated {
 		// A truncated string must be dropped whole, never half-decoded.
@@ -53,6 +62,8 @@ func (p *Parser) dispatchOSC(t *core.Terminal) {
 		}
 	case "8":
 		p.dispatchOSC8(t, rest)
+	case "9":
+		p.dispatchOSCNotification(t, "", rest)
 	case "133", "633":
 		p.dispatchOSCSemantic(t, code, rest)
 	case "10":
@@ -71,6 +82,16 @@ func (p *Parser) dispatchOSC(t *core.Terminal) {
 		if rest == "" {
 			t.ResetPaletteBG()
 		}
+	case "777":
+		command, remainder, found := strings.Cut(rest, ";")
+		if !found || command != "notify" {
+			return
+		}
+		title, body, found := strings.Cut(remainder, ";")
+		if !found {
+			return
+		}
+		p.dispatchOSCNotification(t, title, body)
 	}
 }
 
@@ -120,6 +141,16 @@ func validOSC8Text(value string) bool {
 		}
 	}
 	return true
+}
+
+func (p *Parser) dispatchOSCNotification(t *core.Terminal, title, body string) {
+	if len(title) > core.MaxNotificationTitleBytes || len(body) > core.MaxNotificationBodyBytes || body == "" {
+		return
+	}
+	if !validOSC8Text(title) || !validOSC8Text(body) {
+		return
+	}
+	t.RequestNotification(title, body)
 }
 
 const maxSemanticOSCBytes = 1024

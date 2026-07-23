@@ -1,44 +1,43 @@
-# Architecture Guardrails
+# CervTerm Phase 14 Guardrails — Sixel and iTerm Inline Images
 
-Project: CervTerm  
-Updated: 2026-07-16
+Date: 2026-07-23
+Authority: ADR-0014 and ADR-0016
 
-## Unicode / Emoji Rendering Guardrails
+## Required
 
-- [ ] Do not add one-off emoji codepoint patches unless they are documented as temporary compatibility shims with a failing regression test.
-- [ ] Unicode emoji behavior must be derived from generated Unicode property tables or a vetted Unicode library.
-- [ ] Grapheme/emoji cluster segmentation must happen before font fallback and glyph rasterization.
-- [ ] Display width decisions for emoji presentation sequences must be made at cluster level, not solely at single-rune level.
-- [ ] Font fallback must select an emoji font for the whole emoji cluster; do not mix monospace and emoji fonts inside one cluster.
-- [ ] Font-specific compatibility hacks, such as Segoe UI Emoji COLRv0 preference, must stay inside `internal/fontglyph` and not leak into terminal core semantics.
-- [ ] Generated Unicode data must include source URLs, Unicode version, and deterministic regeneration instructions.
-- [ ] Unicode version upgrades must update tests and be mentioned in release notes or changelog.
+- [ ] `core.Cell` remains text-only and exactly 32 bytes.
+- [ ] Phase 14 uses the existing pane/process image budgets, owner transaction, screen lifecycle, detached snapshots and context-local GL cache.
+- [ ] Sixel/iTerm leaves import no core/render/mux/frontend/config/VT package and no filesystem/network/process/unsafe facility.
+- [ ] Encoded/decoded/pixel/image/placement/chunk/operation/worker resources retain immutable hard caps and exact ownership rollback.
+- [ ] Parser overflow/cancel/reset/EOF discards atomically through the correct terminator and leaks no payload as text.
+- [ ] Workers mutate no parser/core/mux/session/reply/GL state; owner revalidates and commits.
+- [ ] Cursor remains unchanged; primary anchors include scrollback, alternate anchors are top-relative.
+- [ ] Internal high-half IDs cannot collide with or be addressed by Kitty low-half wire IDs.
+- [ ] Ephemeral resources retire atomically when their final placement retires; Kitty resources remain durable.
+- [ ] All protocols share one bounded scheduler; pending limits are not multiplied.
+- [ ] Sixel/iTerm emit no replies and cannot disturb Kitty/terminal reply order.
+- [ ] `imagesEnabled` creates one shared model/cache only when Kitty, Sixel or iTerm is enabled; all-disabled remains literal nil/no idle work.
+- [ ] Every slice is independently tested, reviewed, committed and locally merged.
 
-## Rendering Verification Guardrails
+## Forbidden
 
-- [ ] `go test ./...` must pass before claiming emoji-rendering completion.
-- [ ] GLFW-tagged rendering/font tests must pass before claiming visual rendering completion.
-- [ ] The emoji visual screenshot must cover categories, not just reported examples: faces, hands/modifiers, BMP+VS16, food, transport, symbols, ZWJ, keycaps, flags, and combining text.
-- [ ] Known host-font limitations, such as national flags on Windows Segoe UI Emoji, must be documented rather than hidden as renderer failures.
+- [ ] Renderer/backend selection or GPU handles crossing contexts.
+- [ ] Image identity/pointers in `core.Cell` or mutable pixels in snapshots.
+- [ ] File/path/URL/temp/shared-memory/download/write transports.
+- [ ] Protocol-specific worker pools, budgets, stores or GL caches.
+- [ ] Sixel cursor scrolling/DECSDM, iTerm cursor effects, animation or invented replies.
+- [ ] Forced decoder-preemption claims, autonomous model timers or early pane-slot release.
+- [ ] Partial publication, success-before-commit, prior-generation replacement on failure, payload/metadata logging.
+- [ ] Stable support claims before automated and real Windows/OpenGL qualification.
 
-## General Project Guardrails
+## Merge gates
 
-- [ ] Keep terminal semantics in `internal/core` independent from platform font names.
-- [ ] Keep platform/font compatibility in `internal/fontglyph`.
-- [ ] Avoid architecture-heavy dependencies unless they replace enough handwritten Unicode logic to reduce long-term maintenance.
-- [ ] Decisions with durable architecture impact require an ADR.
+- [ ] Focused tests and >=60 s touched fuzz once target exists.
+- [ ] Full untagged/tagged tests and vet; full race plus tagged focused race.
+- [ ] Maturity/import checks and `git diff --check`.
+- [ ] Relevant portable ten-run baseline: no new disabled allocations/wakes and <=3% unexplained median regression.
+- [ ] Independent boundary review has no blocker.
 
-## WezTerm-Inspired Parity Guardrails
+## Stop conditions
 
-- [ ] Do not add renderer-backend selection or make backend migration a prerequisite.
-- [ ] Do not introduce local, SSH, WSL, serial, or remote domain abstractions.
-- [ ] Do not add a daemon, live detach/reattach, or persistence of running processes.
-- [ ] Keep mux ownership of pane/tab identity, topology, focus, geometry, and lifecycle out of GLFW.
-- [ ] Keep GLFW and OpenGL calls on the OS thread.
-- [ ] Every public config field updates Go schema, Lua mapping, Teal types, template, validation, reload semantics, tests, and docs together.
-- [ ] Invalid reload candidates must preserve the last valid config, bindings, and runtime.
-- [ ] Terminal-originated data cannot cause external side effects without validation and explicit policy.
-- [ ] IME preedit remains frontend state; only committed text reaches the PTY.
-- [ ] Terminal image transfers require bounded encoded bytes, decoded bytes, pixels, objects, processing time, and cache memory.
-- [ ] Workspaces may persist layout and launch descriptors only, never live processes, PTY handles, credentials, or claimed session continuity.
-- [ ] Each roadmap phase requires focused tests, full gates, validation evidence, and architecture drift review before merge.
+Stop for architecture review on unchecked arithmetic, payload leakage, external I/O need, off-owner mutation, undefined lifecycle, ownership leak, cap widening/multiplication, hidden activation/support, renderer changes or any required gate failure.

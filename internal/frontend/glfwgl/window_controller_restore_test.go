@@ -8,6 +8,7 @@ import (
 	"io"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -20,13 +21,14 @@ import (
 )
 
 type fakeRestoreProjectionFactory struct {
-	log        *[]string
-	failAt     int
-	bindAt     int
-	hosts      []*fakeNativeWindow
-	apps       []*App
-	geometries []termmux.RestoreWindowGeometry
-	bindings   map[int]termmux.WindowID
+	log         *[]string
+	failAt      int
+	bindAt      int
+	hosts       []*fakeNativeWindow
+	apps        []*App
+	geometries  []termmux.RestoreWindowGeometry
+	bindings    map[int]termmux.WindowID
+	resourceFor func(int, *App) projectionResource
 }
 
 func (f *fakeRestoreProjectionFactory) PrepareRestore(index int) (*nativeProjectionBundle, termmux.RestoreWindowGeometry, error) {
@@ -56,6 +58,9 @@ func (f *fakeRestoreProjectionFactory) PrepareRestore(index int) (*nativeProject
 		*f.log = append(*f.log, fmt.Sprintf("close:%d", index))
 		return nil
 	}))
+	if f.resourceFor != nil {
+		bundle.resources = append(bundle.resources, f.resourceFor(index, app))
+	}
 	geometry := termmux.RestoreWindowGeometry{Content: termmux.PixelRect{Width: 800 + index, Height: 480}, Metrics: termmux.CellMetrics{CellWidth: 8, CellHeight: 16}}
 	f.geometries = append(f.geometries, geometry)
 	if index == f.failAt {
@@ -114,6 +119,9 @@ func TestWindowControllerRestoreBindFailureRollsBackWholeBatch(t *testing.T) {
 	}
 	if err := controller.publishRestoreProjections(candidate, []termmux.WindowID{2, 3, 4}); err == nil {
 		t.Fatal("bind failure accepted")
+	}
+	if err := controller.abortRestoreProjections(candidate, nil); err != nil {
+		t.Fatal(err)
 	}
 	assertRestoreProjectionPristine(t, controller, factory.hosts)
 	if len(factory.bindings) != 0 {
@@ -309,6 +317,20 @@ func TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam(t *testing
 			}
 			if tc.name != "prepare" && windows.aborts != 1 {
 				t.Fatalf("aborts=%d log=%v", windows.aborts, log)
+			}
+			if tc.name != "prepare" {
+				abortIndex, nativeCleanupIndex := -1, -1
+				for index, entry := range log {
+					if entry == "mux-abort" {
+						abortIndex = index
+					}
+					if nativeCleanupIndex < 0 && (strings.HasPrefix(entry, "unbind:") || strings.HasPrefix(entry, "current:")) {
+						nativeCleanupIndex = index
+					}
+				}
+				if abortIndex < 0 || nativeCleanupIndex < 0 || abortIndex > nativeCleanupIndex {
+					t.Fatalf("rollback was not reverse-acquisition order: %v", log)
+				}
 			}
 		})
 	}

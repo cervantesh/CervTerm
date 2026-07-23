@@ -38,7 +38,7 @@ func (a *App) requestTabClose(id termmux.TabID) ([]termmux.Event, error) {
 	}
 	pane, _ := a.mux.FocusedPane()
 	entry := modal.Entry{ID: "close-tab", Label: fmt.Sprintf("Close %s", tabDisplayTitle(target)), Detail: fmt.Sprintf("%d running pane(s)", len(target.Panes)), Category: "tab"}
-	if !a.modal.Open(modal.ModeTabCloseConfirmation, modal.PaneIdentity(pane), modal.FocusIdentity(pane), []modal.Entry{entry}) {
+	if !a.openModal(modal.ModeTabCloseConfirmation, modal.PaneIdentity(pane), modal.FocusIdentity(pane), []modal.Entry{entry}) {
 		return nil, fmt.Errorf("close confirmation could not open")
 	}
 	a.tabClose = tabCloseConfirmation{Tab: id, Revision: target.Revision}

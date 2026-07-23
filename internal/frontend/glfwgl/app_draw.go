@@ -27,11 +27,47 @@ type hudCache struct {
 	statsAt   time.Time
 }
 
+type terminalImagePaneDrawStage uint8
+
+const (
+	terminalImagePanePushClip terminalImagePaneDrawStage = iota
+	terminalImagePaneBackground
+	terminalImagePaneNegativeImages
+	terminalImagePaneText
+	terminalImagePaneNonNegativeImages
+	terminalImagePaneOverlays
+	terminalImagePanePopClip
+)
+
+// dispatchTerminalImagePaneDraw keeps the context-free pane layer contract in
+// one place while the caller supplies the renderer-specific operations.
+func dispatchTerminalImagePaneDraw(visit func(terminalImagePaneDrawStage)) {
+	visit(terminalImagePanePushClip)
+	visit(terminalImagePaneBackground)
+	visit(terminalImagePaneNegativeImages)
+	visit(terminalImagePaneText)
+	visit(terminalImagePaneNonNegativeImages)
+	visit(terminalImagePaneOverlays)
+	visit(terminalImagePanePopClip)
+}
+
+func terminalImagePaneClip(geometry termmux.PaneGeometry) gpu.ClipRect {
+	return gpu.ClipRect{
+		X: geometry.Pixels.X, Y: geometry.Pixels.Y,
+		Width: geometry.Pixels.Width, Height: geometry.Pixels.Height,
+	}
+}
+
 func (a *App) draw() {
+	a.beginCandidateGeometryFrame()
+	defer a.finishCandidateGeometryFrame()
 	frameNow := time.Now()
 	frameBlink := a.blinkPhaseAt(frameNow)
 	if a.notice != "" && frameNow.After(a.noticeUntil) {
 		a.notice = ""
+	}
+	if !a.bellVisualUntil.IsZero() && !frameNow.Before(a.bellVisualUntil) {
+		a.bellVisualUntil = time.Time{}
 	}
 	w, h := a.window.GetFramebufferSize()
 	if w != a.lastFBW || h != a.lastFBH {
@@ -56,25 +92,27 @@ func (a *App) draw() {
 		a.Notify("layout: " + err.Error())
 		return
 	}
+	a.beginTerminalImageFrame(frameNow, layout)
+	defer a.finishTerminalImageFrame()
 	focused, _ := a.mux.FocusedPane()
 	baseOriginX, baseOriginY := a.drawOriginX, a.drawOriginY
 	a.saveActivePaneUI()
 	rowsDrawn := 0
 	for _, geometry := range layout.Panes {
-		view, ok := a.mux.PaneView(geometry.Pane)
+		snapshot, ok := a.terminalImageSnapshot(geometry.Pane)
 		if !ok {
 			continue
 		}
 		state := a.ensurePaneUI(geometry.Pane)
 		a.activatePaneFont(geometry.Pane)
-		a.snap = view.Snapshot
+		a.snap = snapshot
 		panePalette := a.snap.PaletteOverrides.Apply(paletteBase)
 		colorResolver := panePalette.ColorResolver()
 		defaultFG := rgb(panePalette.FG)
 		paneBackgroundBase := panePaletteBackground(backgroundBase, panePalette, a.snap.PaletteOverrides)
 		paneBackground := effectivePaneBackground(backgroundBase, paneBackgroundBase, a.snap.PaletteOverrides.BGSet, a.cfg.Window.BackgroundOpacity)
 		a.selection, a.search, a.link, a.mouseReport = state.selection, state.search, state.link, state.mouseReport
-		a.search.init(muxSearchTerminal{mux: a.mux, pane: geometry.Pane}, a.requestRedraw)
+		a.search.init(muxSearchTerminal{mux: a.mux, pane: geometry.Pane}, a.requestAccessibilityRedraw)
 		a.search.viewRow = -1
 		if a.search.hasMatch {
 			if row, ok := a.mux.GlobalRowToViewport(geometry.Pane, a.search.matchRow); ok {
@@ -84,35 +122,57 @@ func (a *App) draw() {
 		a.drawOriginX = float32(geometry.Pixels.X)
 		a.drawOriginY = float32(geometry.Pixels.Y)
 		a.refreshLinks()
-		a.r.PushClip(gpu.ClipRect{X: geometry.Pixels.X, Y: geometry.Pixels.Y, Width: geometry.Pixels.Width, Height: geometry.Pixels.Height})
-		if paneNeedsFlatBackground(len(a.cfg.Background.Layers), a.snap.PaletteOverrides.BGSet) {
-			a.replaceRect(float32(geometry.Pixels.X), float32(geometry.Pixels.Y), float32(geometry.Pixels.Width), float32(geometry.Pixels.Height), paneBackground)
-		}
 		var cursorRowOrder []int
-		for row := 0; row < a.snap.Rows; row++ {
-			rowsDrawn++
-			order := a.drawRow(row, paneBackgroundBase, selectionColor, defaultFG, &colorResolver)
-			if row == a.snap.CursorRow {
-				cursorRowOrder = order
-			}
-		}
-		if geometry.Pane == focused && a.snap.CursorVisible {
-			cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
-			if cursorRowOrder != nil {
-				inverse := render.InversePermutation(cursorRowOrder)
-				if cursorCol >= 0 && cursorCol < len(inverse) {
-					cursorCol = inverse[cursorCol]
+		var preeditX, preeditY float32
+		preeditAvailable := 0
+		dispatchTerminalImagePaneDraw(func(stage terminalImagePaneDrawStage) {
+			switch stage {
+			case terminalImagePanePushClip:
+				a.r.PushClip(terminalImagePaneClip(geometry))
+			case terminalImagePaneBackground:
+				if paneNeedsFlatBackground(len(a.cfg.Background.Layers), a.snap.PaletteOverrides.BGSet) {
+					a.replaceRect(float32(geometry.Pixels.X), float32(geometry.Pixels.Y), float32(geometry.Pixels.Width), float32(geometry.Pixels.Height), paneBackground)
 				}
+			case terminalImagePaneNegativeImages:
+				a.drawTerminalImages(geometry.Pane, true)
+			case terminalImagePaneText:
+				for row := 0; row < a.snap.Rows; row++ {
+					rowsDrawn++
+					order := a.drawRow(row, paneBackgroundBase, selectionColor, defaultFG, &colorResolver)
+					if row == a.snap.CursorRow {
+						cursorRowOrder = order
+					}
+				}
+			case terminalImagePaneNonNegativeImages:
+				a.drawTerminalImages(geometry.Pane, false)
+			case terminalImagePaneOverlays:
+				if geometry.Pane == focused {
+					cursorRow, cursorCol := a.snap.CursorRow, a.snap.CursorCol
+					if cursorRowOrder != nil {
+						inverse := render.InversePermutation(cursorRowOrder)
+						if cursorCol >= 0 && cursorCol < len(inverse) {
+							cursorCol = inverse[cursorCol]
+						}
+					}
+					x := a.drawOriginX + float32(cursorCol)*a.cellW
+					y := a.drawOriginY + float32(cursorRow)*a.cellH
+					if a.snap.CursorVisible {
+						a.drawCursor(x, y, cursorColor, frameBlink)
+					}
+					preeditX, preeditY = x, y
+					preeditAvailable = max(0, int((float32(geometry.Pixels.Right())-x)/a.cellW))
+				}
+				if geometry.Pane == focused {
+					a.drawTerminalPreedit(uint64(geometry.Pane), preeditX, preeditY, preeditAvailable)
+				}
+				a.drawLinkUnderline(cursorColor)
+				if geometry.Pane == focused {
+					a.drawOverlays()
+				}
+			case terminalImagePanePopClip:
+				a.r.PopClip()
 			}
-			x := a.drawOriginX + float32(cursorCol)*a.cellW
-			y := a.drawOriginY + float32(cursorRow)*a.cellH
-			a.drawCursor(x, y, cursorColor, frameBlink)
-		}
-		a.drawLinkUnderline(cursorColor)
-		if geometry.Pane == focused {
-			a.drawOverlays()
-		}
-		a.r.PopClip()
+		})
 		state.selection, state.search, state.link, state.mouseReport = a.selection, a.search, a.link, a.mouseReport
 	}
 	a.drawOriginX, a.drawOriginY = baseOriginX, baseOriginY
@@ -134,7 +194,7 @@ func (a *App) draw() {
 		}
 	}
 	if focused != 0 {
-		a.focusedPane = focused
+		a.setFocusedPane(focused)
 		a.loadPaneUI(focused)
 		if view, ok := a.mux.PaneView(focused); ok {
 			a.snap = view.Snapshot
@@ -146,6 +206,11 @@ func (a *App) draw() {
 	a.prepareStatusBand(w)
 	a.drawScrollbar(frameNow, background, w, h)
 	a.drawTabBar(w, h)
+	if !a.bellVisualUntil.IsZero() && frameNow.Before(a.bellVisualUntil) {
+		flash := a.chrome.accent
+		flash.A = 0x38
+		a.fillRect(0, 0, float32(w), float32(h), flash)
+	}
 	a.drawHUD(w, h, a.chrome, frameNow)
 	a.drawStatusBand(w, a.chrome)
 	a.drawSearchBar(w, h, a.chrome)
@@ -244,6 +309,7 @@ func (a *App) paint(cmds []drawCmd) {
 // state is in the damage global-fallback list).
 func (a *App) drawSearchBar(w, h int, chrome chromeColors) {
 	a.paint(searchBarLayout(a.search.active, string(a.search.query), a.search.hasMatch, w, h, a.cellH, a.uiScale, chrome.background, chrome.accent, chrome.muted))
+	a.drawSearchPreedit(w, h, chrome)
 }
 
 func (a *App) drawTextDecorations(x, y, w, h float32, c color.RGBA, attr core.Attr) {

@@ -64,3 +64,38 @@ func TestCoordinatorBoundsAndRetainedError(t *testing.T) {
 		t.Fatal("unchanged error changed revision")
 	}
 }
+
+func TestCoordinatorActivationAndWholeTextAreStableAndAtomic(t *testing.T) {
+	var c Coordinator
+	if !c.Open(ModeCommandPalette, 7, 9, entries("日本語", "other")) {
+		t.Fatal("open failed")
+	}
+	activation := c.Activation()
+	revision := c.Revision()
+	if activation == 0 || !c.AppendText(activation, "日本") {
+		t.Fatalf("activation=%d append failed", activation)
+	}
+	if c.Activation() != activation || c.Revision() != revision+1 || string(c.Snapshot().Query) != "日本" {
+		t.Fatalf("state=%#v", c.Snapshot())
+	}
+	before := c.Snapshot()
+	if c.AppendText(activation+1, "stale") || c.AppendText(activation, "bad\ntext") || c.AppendText(activation, string(make([]rune, MaxQueryRunes))) {
+		t.Fatal("invalid whole-text append succeeded")
+	}
+	if after := c.Snapshot(); after.Revision != before.Revision || string(after.Query) != string(before.Query) {
+		t.Fatalf("invalid append mutated state: before=%#v after=%#v", before, after)
+	}
+	if !c.Replace(ModeLaunchMenu, entries("new")) || c.Activation() == activation {
+		t.Fatalf("replace did not create a new activation: %#v", c.Snapshot())
+	}
+	if c.AppendText(activation, "old") {
+		t.Fatal("replaced activation accepted text")
+	}
+}
+
+func TestCoordinatorActivationExhaustionFailsClosed(t *testing.T) {
+	c := Coordinator{nextActivation: maxActivationID}
+	if c.Open(ModeCommandPalette, 1, 1, entries("x")) || c.Active() {
+		t.Fatalf("exhausted activation opened: %#v", c.Snapshot())
+	}
+}

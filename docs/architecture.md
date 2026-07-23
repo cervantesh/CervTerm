@@ -26,10 +26,10 @@ The core never imports the mux, renderer, PTY, GLFW, or OpenGL. Each mux pane ow
 ## Native in-process mux
 
 ```text
-Frontend -> Mux Window -> implicit Tab -> SplitTree -> Pane -> local PTY Session -> Terminal Core
+Frontend -> Workspace -> Mux Window -> Tab -> SplitTree -> Pane -> local PTY Session -> Terminal Core
 ```
 
-The mux is process-local and supports native column/row splits, stable split identities and ratios, draggable dividers, focused-pane input, independent scrollback/selection/search/mouse/zoom state, deterministic close/collapse and clipped rendering. GLFW projects pointer and font intent, while `internal/mux` validates ratios and owns pixel/grid geometry using renderer-neutral metrics per pane. Terminal grids update live and PTY resize settles once after divider or pane-zoom interaction. Mixed font sizes share one bounded two-page glyph atlas whose entries are namespaced by raster specification; selecting a pane never clears atlas pages. Visible tabs, multiple local windows, and layout-only workspaces are planned above these ownership boundaries. Domains, a daemon, live detach/reattach, remote sessions, and tmux integration are excluded.
+The mux is process-local and supports native column/row splits, stable split identities and ratios, draggable dividers, focused-pane input, independent scrollback/selection/search/mouse/zoom state, deterministic close/collapse and clipped rendering. It owns visible tabs, multiple local windows, named local workspaces, and layout-only fresh-session persistence above those panes. GLFW projects pointer and font intent, while `internal/mux` validates ratios and owns pixel/grid geometry using renderer-neutral metrics per pane. Terminal grids update live and PTY resize settles once after divider or pane-zoom interaction. Mixed font sizes share one bounded two-page glyph atlas whose entries are namespaced by raster specification; selecting a pane never clears atlas pages. Domains, a daemon, live detach/reattach, remote sessions, and tmux integration are excluded.
 
 ## Bounded font model and fixed-grid projection
 
@@ -86,6 +86,65 @@ Public legacy `script.Load` remains available. The executable is the only proces
 The process-local mux owns a bounded ordered collection of stable `TabID` states. Each tab owns one split tree, remembered focused pane, title and monotonic revision; pane/session/parser/terminal identity remains globally unique and survives transactional cross-tab transfer. Candidate source/destination trees are projected with per-pane metrics before a single commit, and inactive tabs remain excluded from terminal input, active layout and PTY resize.
 
 The GLFW frontend projects only the active tab and treats `Mux.Tabs()` as detached metadata. The retained top/bottom tab bar reserves the same authoritative geometry used by startup planning, runtime grid sizing and scrollbar tracks. Modal input precedes tab chrome, which precedes terminal mouse routing. Close confirmation retains the clicked stable ID and revision and rejects rename, reorder, pane-membership or lifecycle drift; background activity produces one retained badge update without creating a frame cadence.
+
+## Trusted terminal metadata and external effects
+
+OSC 8 hyperlinks, OSC 133/633 shell zones, BEL state, and OSC 9/777 notification requests enter through the bounded VT collector and remain pane-local metadata in core/mux snapshots. Parsing never opens a URI, invokes a native notification, or executes a command. Semantic actions retain stable origin-pane targeting and read only detached bounded history.
+
+The GLFW OS thread owns centralized effect policy and fakeable adapters. Link opening requires a fresh explicit activation and validated absolute HTTP(S) authority. Every BEL is delivered monotonically to mux/Lua while optional sinks alone are focus-filtered or throttled. Native notification consent defaults off, is focus/freshness/rate gated, and uses projection-owned Windows resources; non-Windows adapters fail closed. Diagnostics are coalesced and omit terminal-provided URI query/payload and notification content.
+
+## Native projection capability seam
+
+Platform services that GLFW does not model use separate optional interfaces owned by one native projection on the locked OS thread. Composition and accessibility use distinct capabilities and privacy/snapshot contracts; the Windows adapters share one bounded transactional WndProc router without sharing behavior interfaces. No native type crosses into core, VT, input, render or mux.
+
+Composition state is bounded and frontend-only. It captures a stable pane/search/modal activation, renders preedit without changing terminal snapshots, and routes only a validated commit exactly once. Any target/focus/window/modal ambiguity cancels rather than transfers. Windows may subclass the GLFW HWND transactionally, but callback deactivation and exact WndProc restoration must complete through one pre-unbind coordinator before ordinary resource closure and HWND destruction. Disabled/unavailable installation preserves the legacy GLFW character path.
+
+Accessibility uses a separate bounded semantic-document capability. The GLFW owner thread derives immutable visible-only text, focus, caret and selection snapshots from detached render/mux/modal values; off-thread native providers read only the atomic publication. Logical grapheme order defines ranges while rendered BiDi mappings define rectangles. Accessibility and IME share one transactional native message router, and providers disconnect before existing WndProc restoration and HWND destruction. Scrollback and hidden metadata are not exposed by the initial policy.
+
+The Windows UIA adapter is production-wired only behind strict restart-scoped `accessibility.enabled`; it remains visible-only, default-off and experimental. Semantic changes coalesce once per projection cycle, native events are listener-gated, and capture/publication/event failures disconnect that window's provider while preserving terminal input and rendering.
+
+## Phase 13 bounded terminal-image path and ownership
+
+Terminal graphics remain a restart-scoped, experimental opt-in. When `graphics.kitty.enabled=true`, the only production path is bounded and one-way:
+
+```text
+PTY bytes -> VT APC framing -> Kitty command adapter -> bounded decode worker
+          -> mux/terminal owner-thread commit -> detached render/mux snapshot
+          -> exact-generation detached acquisition -> projection/GL-context cache -> pane-clipped draw
+```
+
+`internal/vt` frames APC/DCS incrementally, discards through ST after overflow, and never turns control payload back into text. A pane-local `internal/kitty.Adapter` accepts only Kitty `APC G` commands, owns encoded-transfer leases, and hands sealed direct-data jobs to the mux-owned scheduler. At most one job per pane and two process-wide workers decode into candidate RGBA storage already charged to pane/process budgets. A worker owns only the job, sealed payload and candidate; it cannot mutate terminal, mux, snapshots or OpenGL state.
+
+Worker completion returns to the serialized mux/terminal owner. The owner revalidates pane object, store epoch/image generation and the 250 ms acceptance deadline before `core.Terminal.CommitImage` prepares and publishes resource plus placement state atomically. Rejection or late completion closes the candidate and its leases, preserves the prior generation/placements, and emits no success reply. Protocol replies use the sequenced pane reply queue only after owner-thread disposition. Decode timeout is an acceptance deadline, not a claim of forced CPU preemption.
+
+`render.Snapshot` and `Mux.PaneView` contain detached placement descriptors and stable `(PaneObject, ImageID, ResourceGeneration)` references, never pixels, stores, workers, textures or GL handles. A cache miss may call `Mux.AcquireImageResource`, which revalidates the live pane and exact generation and returns a detached RGBA copy. Each native projection owns a separate cache for its current GL context; visible keys are pinned for the frame, unpinned entries are deterministically LRU-evicted, and pane transfer causes destination-context upload rather than GL-handle transfer. Negative z-order draws below text; zero/positive draws above text and below cursor/application overlays, always inside the pane clip.
+
+Disabled behavior is deliberately nil, not a partially initialized mode. With the default `graphics.kitty.enabled=false`, mux options carry no image limits or Kitty activation, no process image budget, pane store, adapter, scheduler, worker, deadline, context cache, texture or image damage state is created, and support is not advertised. APC/DCS framing still consumes bounded control strings safely; the nil frame/cache branches perform no mux lookup, cache access, draw, redraw request, idle deadline, mutation or allocation.
+
+Ownership unwinds in acquisition order. Startup first validates/creates the mux image owner, then creates one cache only after its projection renderer/atlas and current GL context exist, and commits startup configuration last. Any activation, child-window, restore or bind failure closes candidate context caches before rolling back projections and mux ownership. Projection close deletes that context's textures while current; pane close/reset cancels pending transfers and invalidates CPU generations; mux shutdown closes workers before pane/session stores. Upload failure never rolls model state back or blocks input: the image is omitted and retries are bounded. Operational limits may only lower ADR-0014 hard caps; rollback is restart with Kitty disabled, retaining inert parser/model code and the unchanged text-only `core.Cell`.
+
+## Phase 14 bounded Sixel/iTerm adapters and public-output projection
+
+Phase 14 preserves the Phase 13 one-way image path rather than creating protocol-specific stores, pools, budgets, snapshots, or GL ownership:
+
+```text
+PTY bytes -> VT selected DCS/OSC framing -> pure sixel/itermimage adapter
+          -> shared bounded decode scheduler/termimage candidate
+          -> mux owner revalidation -> core atomic ephemeral commit
+          -> detached snapshot/acquisition -> projection-local GL cache/draw
+          -> parser-coupled redacted PaneOutput projection for public observers
+```
+
+`internal/sixel` and `internal/itermimage` are pure leaves over `internal/termimage`. The Phase 14 import allowlist prevents dependencies on core, render, mux, frontend, config, VT, filesystem, network, process, unsafe, or third-party packages. Sixel accepts only the approved raster/RGB/repeat/band grammar; iTerm accepts only direct inline strict-base64 PNG with exact decoded size and at most one cell dimension. No adapter can open a file, resolve a URL, start a process, download content, write terminal-provided data externally, or mutate the terminal/model/GL from a worker.
+
+One process FIFO scheduler serves Kitty, Sixel, and iTerm with two workers, one outstanding job per pane, and queue capacity 32. Queue time counts toward the 250 ms acceptance deadline, while pane activity and payload ownership remain held until worker return and owner cleanup. Pane/process transfer, encoded, decoded, image, placement, chunk, operation, and texture limits are shared rather than multiplied. The owner captures pane/store epoch, model and anchor generations, exact cell metrics, palette, canonical cursor-neutral anchor, and internal high-half IDs at frame termination; completion revalidates every value before publication.
+
+Sixel/iTerm image and placement IDs use the monotonic non-reused high half (`0x80000000..0xffffffff`); Kitty wire IDs stay in the low half. Each Phase 14 success is one create-only ephemeral resource/placement transaction. Existing screen lifecycle preparation retires the resource atomically when its final placement disappears, while Kitty durability remains unchanged. Sixel/iTerm produce no replies and do not reserve reply-order slots.
+
+The parser security repair makes `PaneOutput.Data` a projection of parser decisions instead of a copy of raw ingress, while `PaneOutput.BytesRead` preserves raw PTY byte accounting for runtime metrics. `AdvancePublic` and `EndOfInputPublic` use the same selected APC/DCS/OSC state transitions as terminal parsing, omit only enabled selected image envelopes across arbitrary fragmentation, and preserve disabled/unselected bytes. The GLFW Lua output callback sees only non-empty projected payload. An empty projection still preserves the mux `PaneOutput`/pane-dirty activity semantics but does not invoke the Lua output callback. A fixed 16-byte selector hold bounds undecided public data.
+
+Independent strict-v2 `graphics.sixel.enabled` and `graphics.iterm.enabled` flags are default-off and restart-scoped. `imagesEnabled = kitty || sixel || iterm` is the only shared-owner activation condition; all-disabled remains literal nil. Initial, child, and restored projection preparation publishes old-or-new state, uses one distinct cache per current GL context, and unwinds provisional caches/projections/mux ownership in reverse acquisition order. Operational rollback disables only the affected flag and restarts; code rollback proceeds activation, config, mux routes, workers/adapters/shared codec, scheduler, parser transports/projection, ephemeral lifecycle, IDs, then anchor.
+
 
 ## Verifiable measurements
 

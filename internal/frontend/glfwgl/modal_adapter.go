@@ -21,7 +21,7 @@ func (a *App) handleModalKey(key glfw.Key, eventAction glfw.Action, _ glfw.Modif
 	before := a.modal.Revision()
 	switch key {
 	case glfw.KeyEscape:
-		a.applyModalIntents(a.modal.Close())
+		a.applyModalIntents(a.closeModal())
 	case glfw.KeyEnter, glfw.KeyKPEnter:
 		intents := a.modal.Accept()
 		if eventAction == glfw.Press && a.modal.Mode() == modal.ModeQuickSelect && len(intents) != 0 {
@@ -93,6 +93,9 @@ func (a *App) modalVisibleRows() int {
 func (a *App) redrawModalMutation(before uint64) {
 	if a.modal.Revision() != before {
 		a.requestRedraw()
+		if a.accessibilityRuntime != nil {
+			a.accessibilityRuntime.Invalidate(accessibilityAllSemanticIntents)
+		}
 	}
 }
 
@@ -123,7 +126,7 @@ func (a *App) applyModalIntents(intents []modal.Intent) {
 				a.requestRedraw()
 				continue
 			}
-			a.applyModalIntents(a.modal.Close())
+			a.applyModalIntents(a.closeModal())
 		case modal.IntentRestoreFocus:
 			if intent.Pane != 0 && a.mux != nil {
 				_ = a.focusPane(termmux.PaneID(intent.Pane))

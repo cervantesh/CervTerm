@@ -135,8 +135,9 @@ func (r *Runtime) DispatchRef(ref CallbackRef, label string, host Host) error {
 // can skip converting output chunks when no handler will consume them.
 func (r *Runtime) WantsOutput() bool { return r.events.output != nil }
 
-// FireOutput runs the on-output handler with the raw output chunk. It is a no-op
-// when no handler is registered.
+// FireOutput runs the on-output handler with one non-empty public-output chunk.
+// Selected enabled image envelopes are removed by the terminal parser before this
+// boundary. It is a no-op when no handler is registered.
 func (r *Runtime) FireOutput(host Host, data string) error {
 	if r.events.output == nil {
 		return nil

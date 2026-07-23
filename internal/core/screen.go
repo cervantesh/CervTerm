@@ -181,13 +181,6 @@ func (t *Terminal) restoreScreen(s *screenState) {
 	}
 }
 
-func (t *Terminal) fillBlank(cells []Cell) {
-	blank := t.blank()
-	for i := range cells {
-		cells[i] = blank
-	}
-}
-
 func cloneCellRow(row []Cell) []Cell {
 	out := make([]Cell, len(row))
 	copy(out, row)
@@ -399,22 +392,25 @@ func (t *Terminal) scrollUpRegion(top, bottom, lines int) {
 	if lines > height {
 		lines = height
 	}
-	if top == 0 && bottom == t.rows-1 {
+	fullScreen := top == 0 && bottom == t.rows-1
+	if fullScreen {
+		if t.alternateScreen && t.imageSidecars != nil {
+			t.imagesScrollUp(top, bottom, lines)
+		}
 		for line := 0; line < lines; line++ {
 			rowStart := line * t.cols
 			t.appendScrollbackLine(t.cells[rowStart:rowStart+t.cols], len(t.rowWrapped) > line && t.rowWrapped[line])
 		}
+	} else if t.imageSidecars != nil {
+		t.imagesScrollUp(top, bottom, lines)
 	}
 	start := top * t.cols
 	copyStart := (top + lines) * t.cols
 	end := (bottom + 1) * t.cols
 	copy(t.cells[start:end-lines*t.cols], t.cells[copyStart:end])
 	copy(t.rowWrapped[top:bottom-lines+1], t.rowWrapped[top+lines:bottom+1])
-	blank := t.blank()
 	blankStart := (bottom - lines + 1) * t.cols
-	for i := blankStart; i < end; i++ {
-		t.cells[i] = blank
-	}
+	t.fillBlank(t.cells[blankStart:end])
 	for row := bottom - lines + 1; row <= bottom; row++ {
 		t.rowWrapped[row] = false
 	}
@@ -437,23 +433,30 @@ func (t *Terminal) scrollDownRegion(top, bottom, lines int) {
 	if lines > height {
 		lines = height
 	}
+	if t.imageSidecars != nil {
+		t.imagesScrollDown(top, bottom, lines)
+	}
 	start := top * t.cols
 	copyEnd := (bottom - lines + 1) * t.cols
 	end := (bottom + 1) * t.cols
 	copy(t.cells[start+lines*t.cols:end], t.cells[start:copyEnd])
 	copy(t.rowWrapped[top+lines:bottom+1], t.rowWrapped[top:bottom-lines+1])
-	blank := t.blank()
 	blankEnd := (top + lines) * t.cols
-	for i := start; i < blankEnd; i++ {
-		t.cells[i] = blank
-	}
+	t.fillBlank(t.cells[start:blankEnd])
 	for row := top; row < top+lines; row++ {
 		t.rowWrapped[row] = false
 	}
 }
 
 func (t *Terminal) appendScrollbackLine(line []Cell, wrapped bool) {
-	if t.alternateScreen || t.scrollbackCapacity == 0 {
+	if t.alternateScreen {
+		t.displayOffset = 0
+		return
+	}
+	if t.scrollbackCapacity == 0 {
+		if t.imageSidecars != nil {
+			t.dropPrimaryImageRows(1)
+		}
 		t.displayOffset = 0
 		return
 	}
@@ -466,6 +469,9 @@ func (t *Terminal) appendScrollbackLine(line []Cell, wrapped bool) {
 
 	writeRow := (t.scrollbackStart + t.scrollbackRows) % t.scrollbackCapacity
 	if t.scrollbackRows == t.scrollbackCapacity {
+		if t.imageSidecars != nil {
+			t.dropPrimaryImageRows(1)
+		}
 		writeRow = t.scrollbackStart
 		t.scrollbackStart = (t.scrollbackStart + 1) % t.scrollbackCapacity
 	} else {

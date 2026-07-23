@@ -39,7 +39,7 @@ func (a *App) dispatchScriptTableKey(key glfw.Key, mods glfw.ModifierKey, repeat
 		a.dispatchScriptBinding(*result.binding, key, mods, repeat, result.origin)
 	}
 	if result.consume {
-		a.suppressNextChar = scriptKeyProducesChar(key, mods)
+		a.charSuppression.armBinding(scriptKeyProducesChar(key, mods))
 	}
 	return result.consume
 }
@@ -59,10 +59,11 @@ func (a *App) dispatchScriptKey(key glfw.Key, mods glfw.ModifierKey, repeat bool
 		if binding.ToTable != "" {
 			table, exists := a.scriptRT.BindingSet().Table(binding.ToTable)
 			if !exists {
+				a.charSuppression.armBinding(scriptKeyProducesChar(key, mods))
 				return true
 			}
 			a.keyTable = keyTableState{mode: keyTableNamed, table: table.Name, deadline: time.Now().Add(time.Duration(table.TimeoutMS) * time.Millisecond), origin: uint64(a.focusedPane)}
-			a.suppressNextChar = scriptKeyProducesChar(key, mods)
+			a.charSuppression.armBinding(scriptKeyProducesChar(key, mods))
 			return true
 		}
 		return a.dispatchScriptBinding(binding, key, mods, repeat, uint64(a.focusedPane))
@@ -105,7 +106,10 @@ func (a *App) markResizeEvent(cols, rows int) {
 // Coalescing per loop iteration (last offset wins) means a burst of wheel ticks
 // fires the handler once with the final offset, not once per tick. Called from
 // the wheel callback and term:scroll / term:scroll_to_bottom.
-func (a *App) markScrollEvent() { a.recordPaneScroll(a.focusedPane) }
+func (a *App) markScrollEvent() {
+	a.invalidateCandidateGeometry()
+	a.recordPaneScroll(a.focusedPane)
+}
 
 func (a *App) recordPaneScroll(id termmux.PaneID) {
 	if view, ok := a.mux.PaneView(id); ok {

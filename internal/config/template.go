@@ -170,6 +170,49 @@ return {
     -- Clipboard reads via OSC 52 are always denied.
     osc52 = %q,
   },
+  ime = {
+    -- Native Windows IME/preedit integration; restart required. Disabled by default.
+    enabled = %t,
+  },
+	accessibility = {
+		-- Windows UI Automation integration; restart required. Disabled by default.
+		enabled = %t,
+		scope = %q, -- visible is the only supported privacy scope
+	},
+	graphics = {
+		kitty = {
+			-- Experimental direct-data Kitty subset; default off and restart required.
+			enabled = %t,
+		},
+		sixel = {
+			-- Experimental bounded inline Sixel subset; default off and restart required.
+			enabled = %t,
+		},
+		iterm = {
+			-- Experimental bounded inline iTerm subset; default off and restart required.
+			enabled = %t,
+		},
+		limits = {
+			encoded_bytes_per_pane = %d,
+			decoded_bytes_per_pane = %d,
+			image_count_per_pane = %d,
+			placement_count_per_pane = %d,
+			gpu_bytes_per_context = %d,
+		},
+	},
+  bell = {
+    -- Sink effects are disabled by default; Lua bell callbacks remain lossless.
+    mode = %q, -- disabled, audible, visual, or taskbar
+    focus = %q, -- always or unfocused
+    throttle_ms = %d,
+    visual_duration_ms = %d,
+  },
+  notification = {
+    -- Explicit consent; terminal output cannot enable this policy.
+    enabled = %t,
+    focus = %q, -- always or unfocused
+    rate_limit_ms = %d,
+  },
   render = {
     -- go, auto (DirectWrite on Windows), or subpixel (horizontal RGB LCDs)
     text_raster = %q,
@@ -210,6 +253,7 @@ return {
   --   -- Typed actions are validated while loading and share built-in behavior:
   --   { key = "c", mods = "ctrl+shift", action = cervterm.action.CopySelection },
   --   { key = "o", mods = "ctrl+shift", action = cervterm.action.CopySemanticZone("output") },
+  --   { key = "i", mods = "ctrl+shift", action = cervterm.action.SelectSemanticZone("input") },
   --   { key = "p", mods = "ctrl+shift", action = cervterm.action.ActivateCommandPalette },
   --   { key = "q", mods = "ctrl+shift", action = cervterm.action.ActivateQuickSelect },
   --   { key = "l", mods = "ctrl+shift", action = cervterm.action.ActivateLaunchMenu },
@@ -282,6 +326,12 @@ return {
 		cfg.TabBar.Mode, cfg.TabBar.Position, cfg.TabBar.HeightPX, cfg.TabBar.MinWidthPX, cfg.TabBar.MaxWidthPX, cfg.TabBar.PaddingX, cfg.TabBar.ShowNewButton, cfg.TabBar.ShowCloseButton,
 		cfg.Cursor.Shape, cfg.Cursor.Blink, cfg.Cursor.BlinkIntervalMS, cfg.Cursor.Thickness,
 		cfg.Clipboard.OSC52,
+		cfg.IME.Enabled,
+		cfg.Accessibility.Enabled, cfg.Accessibility.Scope,
+		cfg.Graphics.Kitty.Enabled, cfg.Graphics.Sixel.Enabled, cfg.Graphics.ITerm.Enabled,
+		cfg.Graphics.Limits.EncodedBytesPerPane, cfg.Graphics.Limits.DecodedBytesPerPane, cfg.Graphics.Limits.ImageCountPerPane, cfg.Graphics.Limits.PlacementCountPerPane, cfg.Graphics.Limits.GPUBytesPerContext,
+		cfg.Bell.Mode, cfg.Bell.Focus, cfg.Bell.ThrottleMS, cfg.Bell.VisualDurationMS,
+		cfg.Notification.Enabled, cfg.Notification.Focus, cfg.Notification.RateLimitMS,
 		cfg.Render.TextRaster, cfg.Render.TextGamma, cfg.Render.TextDarken, cfg.Render.StatsHotkey, cfg.Render.ZoomInHotkey, cfg.Render.ZoomOutHotkey, cfg.Render.ZoomResetHotkey, cfg.Render.VSync, cfg.Render.MaxFPS, cfg.Render.Redraw, cfg.Render.Damage, cfg.Render.Bidi,
 		cfg.Shell.Program, cfg.Shell.WorkingDirectory)
 }

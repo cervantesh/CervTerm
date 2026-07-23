@@ -137,3 +137,107 @@ Enable `layout_persistence`, use two monitors/DPI scales when available, and ver
 - Inject/induce a launch failure in one restored pane and confirm the entire candidate closes before the normal fresh-window fallback appears.
 
 Automated evidence is recorded at `docs/validation/phase-9-windows-workspaces-layout-persistence.md`. Windows GUI multi-monitor verification remains manual; Linux is headless-qualified and macOS/Linux GUI behavior is not claimed.
+
+## Phase 10 shell semantics and trusted effects qualification
+
+Use a shell integration that emits OSC 133 or OSC 633, plus a temporary v2 config that explicitly enables each desired bell/notification sink. Verify:
+
+- Prompt navigation, input/output copy, and viewport-safe selection follow the current shell cycle after scrollback, resize, soft wrap, and alternate-screen entry/exit.
+- OSC 8 and detected HTTP(S) links never open on output alone; a press/release on the same fresh region opens once. `file:`, `javascript:`, credentials, malformed authorities, and stale regions remain blocked.
+- Every BEL invokes the Lua callback even when native effects are disabled, focused, or throttled. Audible/visual/taskbar modes obey their configured focus and throttle policy.
+- With notifications at their default, OSC 9/777 produces no native effect. After explicit enablement, unfocused/focus-always and rate settings behave as configured; changing `enabled` back to false removes the projection-owned notification icon.
+- On Windows, accepted notifications use the native notification-area balloon, respect quiet time, truncate Unicode safely, and remove their icon on window close/rollback. Adapter errors must not reveal title/body.
+
+Automated cross-slice evidence is recorded at `docs/validation/phase-10-closeout.md`. Windows native API behavior still requires the manual checks above. Linux is headless-qualified; macOS and Linux GUI link/bell/notification behavior is explicitly skipped and no native notification support is claimed.
+
+## Phase 11 native IME qualification
+
+Native Windows IME support is experimental and restart-scoped. Set `config_version = 2` and `ime = { enabled = true }`, restart CervTerm, and retain the default `false` on machines that have not completed this matrix.
+
+For each installed Microsoft Japanese, Pinyin, and Korean IME:
+
+- Compose and commit ASCII, BMP CJK and supplementary-plane text; verify exactly one PTY write and no duplicate GLFW echo.
+- Exercise converted and unconverted target spans, moving the IME cursor through surrogate pairs and grapheme clusters.
+- Verify the candidate window follows terminal, search and command-palette carets across padding, splits, independent pane zoom, DPI changes and RTL text.
+- Change pane/tab/window/modal focus during preedit; verify cancellation targets the captured activation and never writes preedit to the PTY.
+- Resize, scroll, zoom, switch workspaces, create/close child windows and restore a saved multi-window layout while composing.
+- Trigger malformed/oversized input through the fake test harness; verify cancellation, bounded diagnostics and continued GLFW fallback.
+- Disable `ime.enabled`, restart, and verify no native subclass/candidate activity and unchanged legacy GLFW character input.
+
+Record exact Windows build, CervTerm commit, Go architecture, IME names/versions and PASS/SKIP/FAIL for every row in `docs/validation/phase-11-ime-qualification.md`. A missing J/C/K IME is SKIP, never PASS, and cannot justify default enablement.
+
+## Phase 12 Windows UI Automation qualification
+
+Accessibility remains experimental, restart-scoped, visible-only, and default-off. On Windows 11, test both Narrator and a current NVDA release with `accessibility = { enabled = true, scope = "visible" }`:
+
+- Read simple ASCII, wide CJK, emoji/combining clusters, soft wraps, RTL/BiDi rows, cursor and selected text in one pane and multiple independently zoomed panes.
+- Enter and leave alternate screen, scroll beyond the visible viewport, switch tabs/workspaces, and hide/show windows; verify inactive/hidden content and offscreen scrollback are never announced or inspectable.
+- Open search, command palette, launch menu and quick select; edit queries and move modal focus. Verify stable controls, focus, whole-text replacement and no stale terminal document.
+- Enable IME separately, compose Japanese/Chinese/Korean preedit, and verify text, caret and target spans follow the active target without exposing PTY-bound content prematurely.
+- Inspect the UIA tree with Accessibility Insights: verify no OSC 8 URI, shell command, environment value, native handle, provider token, raw pane title, or unbounded user label appears.
+- Create/close child windows and restore a saved layout. Verify fresh provider identity, monotonic generations, no stale window roots, no duplicate controls, and no focus leakage.
+- Exercise rapid output/resize/scroll and forced test-hook publication failure. Verify coalesced updates, responsive input/rendering, one bounded fallback notice, and no native callbacks after close.
+- Restart with `accessibility.enabled = false`; verify CervTerm installs no UIA provider and legacy terminal behavior is unchanged.
+
+Record Windows build, CervTerm commit, architecture, screen-reader/version, config, and PASS/SKIP/FAIL per row in `docs/validation/phase-12-accessibility-qualification.md`. Automated ABI/projection/privacy tests do not replace this matrix and do not establish a support claim.
+
+Automated performance, process-sample, gate and tool-availability evidence is recorded in `docs/validation/phase-12-accessibility-closeout.md`. Its assistive-technology rows are explicit SKIP and do not replace this manual matrix.
+
+## Phase 13 experimental Kitty images — Windows/OpenGL qualification
+
+Phase 13 is delivered as a restart-scoped, default-off experiment, not as a stable support claim. Use a strict v2 temporary config with `graphics.kitty.enabled=true`, keep all configured limits at or below their built-in caps, restart for every enabled/disabled comparison, and record the exact Windows build, GPU/driver, OpenGL vendor/renderer/version, Go architecture, CervTerm commit, test application/fixture and config. A row not personally exercised is **UNRUN**, never PASS.
+
+Before enabling, run the normal build gates above plus the focused Phase 13 automated suites. Those suites cover bounded framing/decoding, atomic model lifecycle, detached snapshots, mux ownership, cache/GL fakes, clipping/layer order and disabled-frame allocation/idle behavior; they do not replace a real Windows/OpenGL run.
+
+| Windows 11 / OpenGL manual check | Result | Required evidence |
+|---|---|---|
+| Default-off launch, Kitty query and malformed/oversized APC remain visually inert; ordinary UTF-8 input, idle cadence and text rendering are unchanged | UNRUN | config, query bytes/tool, screenshot or trace, idle observation |
+| Opt-in direct RGB24, RGBA32 and PNG transmit-and-place render with correct colors/alpha; raw zlib and multi-APC chunking complete once | UNRUN | fixture hashes/commands and screenshots |
+| Separate transmit then place, query reply policy (`q=0/1/2`), delete all/image/under-cursor variants and generation replacement behave deterministically | UNRUN | captured replies plus before/after screenshots |
+| Cell spans, source crop and negative versus nonnegative z-order render in the documented layers; cursor and application overlays remain above images | UNRUN | screenshots for crop and both z bands |
+| Images remain clipped to their pane through splits, independent zoom, divider drag, scrollback, erase, insert/delete line/char, resize/reflow and alternate-screen enter/exit | UNRUN | scripted sequence and screenshots/video |
+| Moving a pane/tab between native windows and workspaces preserves CPU image identity but uploads independently in the destination GL context; closing the source window does not invalidate the moved image | UNRUN | two-window trace/screenshots and cache counters if available |
+| Repeated image replacement plus window create/close exercises cache bounds, deterministic omission/eviction and bounded upload retry without input stalls or cross-context texture reuse | UNRUN | GPU/debug trace, responsiveness notes, final resource counts |
+| Timeout, cancellation, malformed base64/PNG/zlib, over-budget payload and close-during-decode produce no partial placement/success reply and leave the prior image usable | UNRUN | fixture command, reply capture and before/after state |
+| RIS, pane close, failed child-window/restore preparation and application shutdown release pending work, CPU reservations and context textures without crash or stale redraw | UNRUN | failure-injection or reproducible sequence and teardown trace |
+
+### Phase 13 platform disposition
+
+| Platform row | Result | Claim boundary |
+|---|---|---|
+| Windows 11 `windows/amd64`, real GLFW/OpenGL GUI | UNRUN | Automated Windows tests/benchmarks exist, but no Phase 13.16 real-GUI matrix was recorded; Kitty remains experimental/default-off. |
+| Windows 11 `windows/arm64`, real GLFW/OpenGL GUI | UNRUN | No run or support claim recorded. |
+| Linux, headless/non-GL tests | UNRUN for this closeout | Prior slice evidence is not a fresh Phase 13.16 platform run. |
+| Linux, real GLFW/OpenGL GUI | UNRUN | No GUI qualification or Kitty support claim recorded. |
+| macOS, real GLFW/OpenGL GUI | UNRUN | No GUI qualification or Kitty support claim recorded. |
+
+Record any future run in a dedicated validation artifact before changing these rows, `docs/parity-support-matrix.json`, release notes, or the default. Partial completion stays experimental/default-off; a failed security, ownership, rollback or context-isolation row blocks a support/default-on proposal.
+
+## Phase 14 experimental Sixel and iTerm images — real-GUI qualification
+
+Phase 14 is delivered as a restart-scoped, default-off experiment with `support_claim=none`, not as a platform or full-protocol support claim. Use a strict-v2 temporary config, enable only the protocol combination named by the row, restart for every comparison, and keep every configured limit at or below the generated defaults. Record Windows build, architecture, GPU/driver, OpenGL vendor/renderer/version, CervTerm commit, emitting application/fixture plus hashes, exact config, observed diagnostics/replies, and screenshots/video. A row not personally exercised is **UNRUN**, never PASS.
+
+Automated parser, grammar, decode, scheduler, lifecycle, rollback, diagnostics, public-output redaction, import/no-I/O, performance, and fuzz evidence is recorded in [`validation/phase-14-qualification.md`](validation/phase-14-qualification.md) and [`validation/phase-14-closeout.md`](validation/phase-14-closeout.md). It does not change any row below.
+
+| Windows 11 / real GLFW/OpenGL manual check | Result | Required evidence |
+|---|---|---|
+| All graphics flags false: ordinary UTF-8, disabled Sixel/iTerm frames, text rendering, Lua output callbacks, idle cadence, and shutdown remain compatible with the text-only path | UNRUN | exact config, emitted bytes/tool, callback trace, idle observation, screenshot |
+| Sixel only: each accepted preamble, raster declaration, RGB palette select/define, repeats, `$`, `-`, transparent pixels, non-divisible cell spans, pane clipping, and fixed `z=0` ordering render as documented | UNRUN | fixture hashes/commands, cell metrics, screenshots for tokens/spans/layers |
+| iTerm only: BEL and ST forms, strict padded base64 PNG, exact `size`, intrinsic/width-only/height-only aspect sizing, alpha, pane clipping, and fixed `z=0` ordering render as documented | UNRUN | fixture hashes/commands, cell metrics, screenshots for all sizing modes |
+| Kitty/Sixel/iTerm combinations: all eight enable masks create only requested adapters, share one bounded FIFO/two-worker scheduler and pane/process budgets, preserve Kitty/DSR/OSC reply order, and never produce a Sixel/iTerm reply | UNRUN | eight configs/restarts, captured replies, scheduler/budget observations |
+| Cursor neutrality: successful, malformed, cancelled, timed-out, and over-limit Sixel/iTerm frames leave cursor row/column and subsequent text placement unchanged | UNRUN | before/after CPR or deterministic text grid plus screenshot/trace |
+| Lifecycle: edit/erase/scroll/history eviction/ED3/reflow/alternate exit/delete/reset/close retires an ephemeral resource only with its final placement; pane/tab/window/workspace movement preserves valid CPU identity | UNRUN | scripted sequence, before/after screenshots/video, final resource observations |
+| Cross-window GL ownership: moved images upload in the destination context; source-window close, cache pressure, upload failure/retry, context teardown, and shutdown never reuse a foreign texture or stall input | UNRUN | two-window trace, GL diagnostics/counters if available, responsiveness notes |
+| Failure/rollback: malformed grammar/base64/PNG, external-I/O/name/path/URL attempts, bombs, stale metrics/generation, close-during-decode, and child/restore activation failure commit no partial state and leave prior text/image state usable | UNRUN | adversarial fixtures, diagnostics, before/after state, failure-injection trace |
+| Public output privacy: enabled selected Kitty/Sixel/iTerm envelopes never reach `PaneOutput`/Lua output callbacks across fragmentation, cancel, overflow, reset, or EOF; disabled/unselected controls remain byte-identical; diagnostics contain only allowed fields | UNRUN | callback capture with payload markers, diagnostics record, raw emitting command kept private/redacted |
+
+### Phase 14 platform disposition
+
+| Real-GUI platform row | Result | Claim boundary |
+|---|---|---|
+| Windows 11 `windows/amd64`, real GLFW/OpenGL GUI | UNRUN | Automated Windows tests/fuzz/benchmarks are not a real-GUI run; Sixel/iTerm remain experimental/default-off with support none. |
+| Windows 11 `windows/arm64`, real GLFW/OpenGL GUI | UNRUN | No Phase 14 GUI run or support claim recorded. |
+| Linux, real GLFW/OpenGL GUI | UNRUN | Headless/tagged compilation or tests do not qualify GUI behavior. |
+| macOS, real GLFW/OpenGL GUI | UNRUN | No Phase 14 GUI run or support claim recorded. |
+
+Record any future run in a dedicated validation artifact before changing these rows, `docs/parity-support-matrix.json`, release notes, defaults, or support claims. Partial completion stays experimental/default-off. Any payload leakage, external I/O, cursor/reply side effect, ownership/rollback failure, cross-context GL reuse, cap widening/multiplication, or unstable input blocks a status proposal.

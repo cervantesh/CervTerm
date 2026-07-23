@@ -2,12 +2,15 @@ package mux
 
 import (
 	"context"
-	"io"
 	"sync"
 
 	"cervterm/internal/core"
+	"cervterm/internal/itermimage"
+	"cervterm/internal/kitty"
 	"cervterm/internal/pty"
 	"cervterm/internal/render"
+	"cervterm/internal/sixel"
+	"cervterm/internal/termimage"
 	"cervterm/internal/vt"
 )
 
@@ -28,6 +31,14 @@ type pane struct {
 	state          PaneState
 	terminal       *core.Terminal
 	parser         vt.Parser
+	imageStore     *termimage.Store
+	kittyAdapter   *kitty.Adapter
+	kittyOutcomes  []kitty.Outcome
+	kittyEvents    []Event
+	sixelAdapter   *sixel.Adapter
+	sixelOutcomes  []sixel.Outcome
+	itermAdapter   *itermimage.Adapter
+	itermOutcomes  []itermimage.Outcome
 	session        pty.Session
 	launch         FreshLaunch
 	snapshot       render.Snapshot
@@ -37,14 +48,16 @@ type pane struct {
 	reflowGen      uint64
 	viewportGen    uint64
 
-	pendingReplies [][]byte
-	desiredSize    pty.Size
-	appliedSize    pty.Size
-	resizeErr      error
+	replies     replyQueue
+	desiredSize pty.Size
+	appliedSize pty.Size
+	resizeErr   error
 
-	title     string
-	cwd       string
-	bellCount int
+	title               string
+	cwd                 string
+	bellCount           int
+	notificationSeq     uint64
+	notificationScratch []core.NotificationRequest
 
 	done      chan struct{}
 	closeOnce sync.Once
@@ -64,12 +77,10 @@ func newPane(id PaneID, cols, rows int, scrollbackCapacity *int, hideCursorWhenS
 		id:             id,
 		state:          PaneStateStarting,
 		terminal:       terminal,
-		captureOptions: render.CaptureOptions{HideCursorWhenScrolled: hideCursor},
+		captureOptions: render.CaptureOptions{HideCursorWhenScrolled: hideCursor, PaneObject: uint64(id)},
 		done:           make(chan struct{}),
 	}
-	p.parser.Reply = func(data []byte) {
-		p.pendingReplies = append(p.pendingReplies, append([]byte(nil), data...))
-	}
+	p.parser.Reply = func(data []byte) { p.queueReply(data) }
 	p.capture()
 	return p
 }
@@ -133,32 +144,35 @@ func (p *pane) close() error {
 	p.closeOnce.Do(func() {
 		p.state = PaneStateClosing
 		close(p.done)
+		if p.kittyAdapter != nil {
+			p.kittyAdapter.Close()
+		}
+		if p.sixelAdapter != nil {
+			p.sixelAdapter.Close()
+		}
+		if p.itermAdapter != nil {
+			p.itermAdapter.Close()
+		}
+		for index := range p.sixelOutcomes {
+			if p.sixelOutcomes[index].Command != nil {
+				p.sixelOutcomes[index].Command.Close()
+			}
+		}
+		for index := range p.itermOutcomes {
+			if p.itermOutcomes[index].Command != nil {
+				p.itermOutcomes[index].Command.Close()
+			}
+		}
+		p.kittyOutcomes = nil
+		p.kittyEvents = nil
+		p.sixelOutcomes = nil
+		p.itermOutcomes = nil
+		p.terminal.CloseImageStore()
+		p.clearReplies()
 		if p.session != nil {
 			p.closeErr = p.session.Close()
 		}
 		p.state = PaneStateClosed
 	})
 	return p.closeErr
-}
-
-func (p *pane) flushReplies() []Event {
-	if len(p.pendingReplies) == 0 {
-		return nil
-	}
-	replies := p.pendingReplies
-	p.pendingReplies = nil
-	if p.session == nil {
-		return nil
-	}
-	var events []Event
-	for _, reply := range replies {
-		n, err := p.session.Write(reply)
-		if err == nil && n != len(reply) {
-			err = io.ErrShortWrite
-		}
-		if err != nil {
-			events = append(events, Event{Kind: PaneWriteFailed, Pane: p.id, Err: err})
-		}
-	}
-	return events
 }

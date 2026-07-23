@@ -1,26 +1,45 @@
 {
-  "slug": "cervterm",
-  "name": "CervTerm",
-  "stage": "MVP / pre-beta renderer hardening",
-  "domain": "terminal emulator",
-  "goal": "Robust Unicode and emoji rendering without per-emoji hardcoding",
-  "confirmedFacts": [
-    "Go terminal emulator",
-    "GLFW/OpenGL frontend",
-    "Windows DirectWrite shaping path",
-    "Current emoji fixes use ranges and Segoe UI Emoji COLRv0 compatibility"
+  "project_name": "CervTerm",
+  "stage": "plan",
+  "updated_at": "2026-07-23",
+  "phase": "14",
+  "objective": "Add bounded default-off Sixel DCS and iTerm OSC 1337 inline PNG adapters over the Phase 13 image model.",
+  "baseline": {
+    "target_worktree": "C:/dev/golang-terminal-emulator-dev",
+    "target_branch": "dev",
+    "expected_commit": "be30c587dac9422fe500294e83380a41d26b6a42",
+    "note": "Use dedicated clean slice worktrees; do not touch the dirty primary fix/windows-version-resource-from-tag worktree."
+  },
+  "in_scope": [
+    "canonical cursor-neutral image anchor",
+    "low-half Kitty and high-half internal ID namespaces",
+    "ephemeral final-placement resource retirement",
+    "selected bounded Sixel DCS and streaming iTerm OSC framing",
+    "pure bounded adapters and shared decode scheduler",
+    "strict v2 independent default-off restart configuration",
+    "transactional any-protocol model and GL cache activation",
+    "security, fuzz, performance and manual qualification"
   ],
-  "architectureDirection": [
-    "Generated Unicode property tables",
-    "Grapheme cluster segmentation",
-    "Cluster display width",
-    "Per-cluster font fallback",
-    "Visual regression coverage"
+  "excluded": [
+    "renderer selection",
+    "C1 control forms",
+    "cursor effects and Phase 14 replies",
+    "file, path, URL, download, temp or shared-memory transport",
+    "animation and broad protocol conformance",
+    "default-on activation or stable support claims"
   ],
-  "risks": [
-    "Manual Unicode range drift",
-    "Host font limitations for national flags",
-    "Complex emoji ZWJ/VS16 handling"
+  "authority": [
+    "ADR 0014",
+    "ADR 0016",
+    "Phase 14 preflight and guardrails",
+    "reviewed Phase 14 feature design",
+    "verified Phase 14 implementation plan"
   ],
-  "updatedAt": "2026-07-10"
+  "invariants": [
+    "core.Cell stays text-only and exactly 32 bytes",
+    "owner-thread parser, core and mux publication",
+    "workers return immutable candidates only",
+    "detached snapshots contain no pixels, stores or GL handles",
+    "all image protocols disabled creates no image infrastructure or idle cadence"
+  ]
 }

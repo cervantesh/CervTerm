@@ -3,6 +3,8 @@
 package glfwgl
 
 import (
+	"unicode"
+
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
@@ -20,17 +22,27 @@ import (
 // All fields are main-thread only. While active is true, key and char callbacks
 // route to the search bar and nothing reaches the PTY. Match position is stored
 // in the global (physical-row) index space; draw() converts it to a viewport row.
-type searchController struct {
-	active   bool
-	query    []rune
-	hasMatch bool
-	matchRow int // global row (scrollback+live index space)
-	matchCol int // start cell column of the match
-	matchLen int // match length in runes (highlight cell span, v1)
-	viewRow  int // frame-local: match's viewport row, or -1 when off-screen
+type searchActivationID uint64
 
-	term   searchTerminal
-	redraw func()
+const (
+	maxSearchQueryRunes = 1024
+	maxSearchActivation = ^searchActivationID(0)
+)
+
+type searchController struct {
+	active         bool
+	activation     searchActivationID
+	nextActivation searchActivationID
+	query          []rune
+	hasMatch       bool
+	matchRow       int // global row (scrollback+live index space)
+	matchCol       int // start cell column of the match
+	matchLen       int // match length in runes (highlight cell span, v1)
+	viewRow        int // frame-local: match's viewport row, or -1 when off-screen
+
+	term              searchTerminal
+	redraw            func()
+	activationChanged func()
 }
 
 // init wires the App services the controller depends on. Called once after the
@@ -38,6 +50,10 @@ type searchController struct {
 func (s *searchController) init(term searchTerminal, redraw func()) {
 	s.term = term
 	s.redraw = redraw
+}
+
+func (s *searchController) bindActivationChange(changed func()) {
+	s.activationChanged = changed
 }
 
 // handleKey processes the search hotkey and, while the bar is open, all keyboard
@@ -64,29 +80,63 @@ func (s *searchController) handleKey(key glfw.Key, mods glfw.ModifierKey) bool {
 	return true
 }
 
-func (s *searchController) open() {
+func (s *searchController) open() bool {
+	if s.nextActivation == maxSearchActivation {
+		return false
+	}
+	s.nextActivation++
+	s.activation = s.nextActivation
 	s.active = true
 	s.query = s.query[:0]
 	s.hasMatch = false
 	s.redraw()
+	if s.activationChanged != nil {
+		s.activationChanged()
+	}
+	return true
 }
 
 // close returns to the live view input flow. It leaves the viewport where the
 // last match scrolled it; the user scrolls back to the bottom as usual.
 func (s *searchController) close() {
+	wasActive := s.active
 	s.active = false
 	s.hasMatch = false
 	s.redraw()
+	if wasActive && s.activationChanged != nil {
+		s.activationChanged()
+	}
 }
 
 // appendRune adds a printable rune to the query. Editing is rune-based, so
 // multibyte input is never split (trap 4). Control runes are ignored.
 func (s *searchController) appendRune(r rune) {
-	if r < 0x20 || r == 0x7f {
+	if unicode.IsControl(r) || len(s.query) >= maxSearchQueryRunes {
 		return
 	}
 	s.query = append(s.query, r)
 	s.redraw()
+}
+
+func (s *searchController) appendText(activation searchActivationID, text string) bool {
+	if !s.active || activation == 0 || s.activation != activation {
+		return false
+	}
+	runes := []rune(text)
+	if len(s.query)+len(runes) > maxSearchQueryRunes {
+		return false
+	}
+	for _, r := range runes {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	if len(runes) == 0 {
+		return true
+	}
+	s.query = append(s.query, runes...)
+	s.redraw()
+	return true
 }
 
 func (s *searchController) backspace() {

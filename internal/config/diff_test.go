@@ -88,6 +88,24 @@ func fullyDifferentConfig(base Config) Config {
 	value.TabBar.ShowNewButton = !value.TabBar.ShowNewButton
 	value.TabBar.ShowCloseButton = !value.TabBar.ShowCloseButton
 	value.Clipboard.OSC52 = "write"
+	value.IME.Enabled = !value.IME.Enabled
+	value.Accessibility.Enabled = !value.Accessibility.Enabled
+	value.Accessibility.Scope = "different"
+	value.Graphics.Kitty.Enabled = !value.Graphics.Kitty.Enabled
+	value.Graphics.Sixel.Enabled = !value.Graphics.Sixel.Enabled
+	value.Graphics.ITerm.Enabled = !value.Graphics.ITerm.Enabled
+	value.Graphics.Limits.EncodedBytesPerPane--
+	value.Graphics.Limits.DecodedBytesPerPane--
+	value.Graphics.Limits.ImageCountPerPane--
+	value.Graphics.Limits.PlacementCountPerPane--
+	value.Graphics.Limits.GPUBytesPerContext--
+	value.Bell.Mode = "visual"
+	value.Bell.Focus = "always"
+	value.Bell.ThrottleMS++
+	value.Bell.VisualDurationMS++
+	value.Notification.Enabled = true
+	value.Notification.Focus = "always"
+	value.Notification.RateLimitMS++
 	value.Render.Bidi = !value.Render.Bidi
 	value.Render.TextGamma += 0.01
 	value.Render.TextDarken += 0.01
@@ -126,8 +144,8 @@ func TestDiffConfigCoversEveryConfigLeafInSchemaOrder(t *testing.T) {
 	if !reflect.DeepEqual(changes, expected) {
 		t.Fatalf("changes mismatch\n got: %#v\nwant: %#v", changes, expected)
 	}
-	if len(changes) != 96 {
-		t.Fatalf("config leaf count = %d, want 96", len(changes))
+	if len(changes) != 114 {
+		t.Fatalf("config leaf count = %d, want 114", len(changes))
 	}
 }
 

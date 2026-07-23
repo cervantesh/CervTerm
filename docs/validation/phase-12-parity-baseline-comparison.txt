@@ -1,0 +1,83 @@
+BASELINE 820c389
+
+# CervTerm parity baseline
+
+captured_utc: 2026-07-20T21:23:27Z
+host: windows/amd64
+go: go1.25.8
+commit: 820c389d727f8ca6670baeb6dedc36952eb8666c
+dirty: false
+
+## VT parser and reuse benchmarks
+
+$ go test ./internal/vt -run ^$ -bench Benchmark(ParserThroughput|CoreReuseVsNew)$ -benchmem -count 3
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/vt
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkParserThroughput-32    	   37705	     31401 ns/op	   0.70 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	   38534	     32348 ns/op	   0.68 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	   32841	     34867 ns/op	   0.63 MB/s	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	   34875	     35260 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	   34850	     35839 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	   33958	     36033 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   16286	     71326 ns/op	  157872 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   15978	     74789 ns/op	  157872 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   16496	     76066 ns/op	  157872 B/op	       4 allocs/op
+PASS
+ok  	cervterm/internal/vt	15.719s
+
+## render snapshot benchmark
+
+$ go test ./internal/render -run ^$ -bench BenchmarkCaptureReuse$ -benchmem -count 3
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkCaptureReuse-32    	  132282	      8947 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  131560	      8968 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  132289	      9883 ns/op	       2 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/render	4.284s
+
+CANDIDATE 1dfded5
+
+# CervTerm parity baseline
+
+captured_utc: 2026-07-20T22:01:24Z
+host: windows/amd64
+go: go1.25.8
+commit: 1dfded50ef5d443c8edf0cea91abf3e02e0db264
+dirty: false
+
+## VT parser and reuse benchmarks
+
+$ go test ./internal/vt -run ^$ -bench Benchmark(ParserThroughput|CoreReuseVsNew)$ -benchmem -count 3
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/vt
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkParserThroughput-32    	   36528	     32416 ns/op	   0.68 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	   37000	     34585 ns/op	   0.64 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	   32073	     37310 ns/op	   0.59 MB/s	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	   29748	     37401 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	   34984	     36561 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	   33763	     36250 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   16075	     72027 ns/op	  157872 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   16851	     72346 ns/op	  157872 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   16333	     81859 ns/op	  157872 B/op	       4 allocs/op
+PASS
+ok  	cervterm/internal/vt	15.856s
+
+## render snapshot benchmark
+
+$ go test ./internal/render -run ^$ -bench BenchmarkCaptureReuse$ -benchmem -count 3
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkCaptureReuse-32    	  132036	      8991 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  133418	      9100 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  134034	     10195 ns/op	       2 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/render	4.391s

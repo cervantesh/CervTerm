@@ -61,7 +61,7 @@ func (a *App) openWorkspaceSwitcher() error {
 		entries = append(entries, modal.Entry{ID: id, Label: workspace.Name, Detail: detail, Category: "workspace"})
 		activations[id] = workspaceSwitcherActivation{workspace: workspace.ID, revision: workspace.Revision}
 	}
-	if !a.modal.Open(modal.ModeWorkspaceSwitcher, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
+	if !a.openModal(modal.ModeWorkspaceSwitcher, modal.PaneIdentity(pane), modal.FocusIdentity(pane), entries) {
 		return fmt.Errorf("workspace switcher could not open")
 	}
 	a.workspaceSwitcher = activations

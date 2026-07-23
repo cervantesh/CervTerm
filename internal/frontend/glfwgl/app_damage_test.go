@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"cervterm/internal/core"
+	"cervterm/internal/ime"
 	"cervterm/internal/render"
 )
 
@@ -70,5 +71,68 @@ func TestCursorDamageBufferAge(t *testing.T) {
 	d6, _ := run(5)
 	if d6[0] {
 		t.Fatalf("frame 6: row 0 should no longer be damaged")
+	}
+}
+
+func TestPreeditRevisionDamagesOnlyOnMutation(t *testing.T) {
+	const rows, cols = 4, 8
+	app := &App{contentScaleX: 1, contentScaleY: 1}
+	app.snap = render.Snapshot{Cols: cols, Rows: rows, Cells: make([]core.Cell, rows*cols)}
+	background := color.RGBA{A: 0xff}
+	record := func() bool {
+		full, _ := app.prepareDamage(320, 160, 0, false, false, background)
+		app.recordDamageFrame(320, 160, 0, false, false, background, 0)
+		return full
+	}
+	record()
+	record()
+	if record() {
+		t.Fatal("stable baseline remained globally damaged")
+	}
+
+	target := ime.Target{Kind: ime.TargetPane, ID: 1, Activation: 1}
+	app.composition.bind(func() (ime.Target, error) { return target, nil }, func(ime.Target, string) error { return nil })
+	generation, err := app.composition.start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !record() || !record() || record() {
+		t.Fatal("start must damage both back buffers without pinning redraw")
+	}
+	if err := app.composition.update(generation, ime.NativeUpdate{UTF16: utf16Text("日"), CursorUTF16: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if !record() || !record() || record() {
+		t.Fatal("update must damage both back buffers without pinning redraw")
+	}
+	if err := app.composition.cancel(ime.CancelExplicit); err != nil {
+		t.Fatal(err)
+	}
+	if !record() || !record() || record() {
+		t.Fatal("cancel must damage both back buffers without pinning redraw")
+	}
+}
+
+func TestImageGenerationIsExcludedFromGlobalDamageIdentity(t *testing.T) {
+	app := &App{contentScaleX: 1, contentScaleY: 1}
+	app.snap = render.Snapshot{Cols: 4, Rows: 2, Cells: make([]core.Cell, 8), ImageGeneration: 1, PaneObject: 1}
+	background := color.RGBA{A: 0xff}
+	record := func() bool {
+		full, _ := app.prepareDamage(320, 160, 0, false, false, background)
+		app.recordDamageFrame(320, 160, 0, false, false, background, 0)
+		return full
+	}
+	record()
+	record()
+	if record() {
+		t.Fatal("stable baseline remained globally damaged")
+	}
+	app.snap.ImageGeneration++
+	if record() {
+		t.Fatal("image-only change entered global text damage")
+	}
+	app.snap.PaneObject = 2
+	if record() {
+		t.Fatal("pane image identity entered global text damage")
 	}
 }

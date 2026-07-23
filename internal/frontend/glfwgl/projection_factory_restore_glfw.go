@@ -47,13 +47,17 @@ func (a *App) configWithRestoreAppearance(base config.Config) config.Config {
 }
 
 func (a *App) projectionBase() config.Config {
-	if a != nil && a.projectionBaseConfig != nil {
-		return a.projectionBaseConfig.Clone()
-	}
 	if a == nil {
 		return config.Config{}
 	}
-	return a.cfg.Clone()
+	base := a.cfg.Clone()
+	if a.projectionBaseConfig != nil {
+		base = a.projectionBaseConfig.Clone()
+	}
+	// Graphics is restart-scoped. A pending desired/projection base must never
+	// activate or deactivate image resources in a child or restored window.
+	base.Graphics = a.cfg.Graphics
+	return base
 }
 
 // glfwRestoreProjectionFactory realizes prepared blueprint windows in exact

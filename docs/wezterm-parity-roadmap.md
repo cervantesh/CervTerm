@@ -226,44 +226,52 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 **Rollback:** disable restore and fall back to one fresh window; persisted file is non-authoritative.
 
 ## Phase 10 — Shell Semantics, Links, Bell, and Notifications
-**Scope:** OSC 8, OSC 133/633, prompt navigation, command selection, custom links, trusted notifications.
+**Scope:** OSC 8, OSC 133/633, prompt navigation, command selection/copy, trusted HTTP(S) activation, bell policies, and trusted notifications.
+
+**Status:** Complete through Phase 10.6c and the final qualification recorded in [`docs/validation/phase-10-closeout.md`](validation/phase-10-closeout.md).
 
 **Work**
 - Accept ADR-0008.
-- Add OSC 8 hyperlink identity/lifetime and configurable safe hyperlink rules.
+- Add OSC 8 hyperlink identity/lifetime and a centralized safe HTTP(S) activation policy.
 - Add semantic prompt/command/output zones tied to logical rows and propagated via snapshots/events.
 - Add previous/next prompt, select command/output, copy command/output actions.
-- Add bell policies: disabled, audible, visual, taskbar, notification, with throttling.
-- Add native notification requests through allow/deny, rate-limit, focus, and URI validation policy.
+- Add bell policies: disabled, audible, visual, and taskbar, with focus filtering and throttling.
+- Add bounded OSC 9/777 notification requests behind default-off consent, rate-limit, focus, freshness, and native-adapter policy.
 - Expose read-only semantic metadata to Lua; terminal output cannot directly execute arbitrary commands.
 
 **Success:** metadata survives scroll/resize/alternate-screen rules; malicious OSC cannot launch arbitrary code or spam; existing OSC 7/52 behavior remains intact.
 
 **Tests:** BEL/ST parsing, malformed/oversized payloads, row mutations, alt screen, trust/rate limits, shell E2E on supported shells.
 
+**Evidence:** bounded OSC 8 and OSC 9/777 metadata, OSC 133/633 semantic history, typed prompt/copy/select actions, explicit HTTP(S) activation policy, lossless bell delivery with bounded sinks, default-off notification consent, Windows native notification lifecycle, cross-slice shell fixtures, malicious-output regression tests, and platform pass/skip boundaries are linked from the Phase 10 close-out report.
+
 **Rollback:** side effects default disabled or prompt-gated; semantic parsing can remain internal.
 
 ## Phase 11 — IME and Preedit
 **Scope:** composition lifecycle, preedit display, candidate positioning, committed-text routing.
 
+**Status:** Architecture approved. ADR-0005, the Windows feasibility preflight, default-off rollout, and slices 11.1–11.10 are recorded in [`docs/validation/phase-11-preflight.md`](validation/phase-11-preflight.md).
+
 **Work**
 - Accept ADR-0005 and add a narrow native host interface around GLFW.
 - Model start/update/commit/cancel, preedit selection/caret, candidate rectangle, focus loss.
-- Render preedit as frontend overlay anchored to the focused pane cursor.
-- Send only committed text to input encoder; suppress duplicate character callbacks.
-- Ship Windows adapter first, then platform adapters/explicit capability reporting.
+- Render bounded frontend-only preedit at the captured terminal/modal/search caret.
+- Route only committed text through one target-validated exactly-once router; suppress matching native character echoes before every destination.
+- Ship a default-off Windows adapter first with explicit disabled/unavailable fallback; qualify before any default-on change.
 
-**Success:** preedit never reaches PTY; commits are grapheme-safe and exactly once; candidate location tracks pane/zoom/DPI; modal UI and focus changes cancel/transfer deterministically.
+**Success:** preedit never reaches PTY; commits are cluster-safe and exactly once; candidate location tracks target/pane/zoom/DPI; modal, focus and lifecycle drift cancel deterministically rather than transferring composition.
 
 **Tests:** composition state machine, Unicode/graphemes, duplicate suppression, pane focus/zoom/DPI, native manual matrix.
 
-**Rollback:** adapter can be disabled, preserving current character callbacks.
+**Rollback:** set restart-scoped `ime.enabled=false`; automatic host-install failure preserves current GLFW character callbacks.
 
 ## Phase 12 — Accessibility
 **Scope:** screen-reader representation and events for windows, tabs, panes, terminal content, cursor, selection, and semantic zones.
 
+**Status (2026-07-20):** experimental implementation complete on Windows behind restart-scoped `accessibility.enabled=false`. Visible-only snapshots, UIA Text/Text2, semantic events, lifecycle, privacy bounds and automated qualification are complete. Narrator/NVDA rows remain SKIP, so support/default-on and macOS/Linux adapters remain future work.
 **Work**
-- Extend the accepted ADR-0005 contract with roles/names/focus/value/text-range/event mapping.
+- Keep accessibility as the separate ADR-0013 projection capability; do not widen the Phase 11 composition interface.
+- Define roles/names/focus/value/text-range/event mapping in the Phase 12 design.
 - Build immutable accessibility snapshots from render/core/mux state.
 - Add bounded/coalesced events for text, caret, selection, focus, tabs, panes, bells/notifications.
 - Add Windows adapter first; define macOS/Linux capability roadmap.
@@ -271,41 +279,49 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 
 **Success:** navigation order matches window/tab/pane topology; screen readers receive focused content/caret changes without reading every repaint; no frontend toolkit dependency enters core/mux.
 
-**Tests:** snapshot goldens, event coalescing, text ranges/graphemes, focus topology, privacy policy, manual Narrator/NVDA matrix.
+**Tests:** snapshot goldens, event coalescing, text ranges/graphemes, focus topology, privacy policy and allocation/process gates pass; manual Narrator/NVDA matrix remains explicit SKIP.
 
 **Rollback:** native adapter is optional; snapshot model remains testable.
 
 ## Phase 13 — Image Model and Kitty Graphics
-**Scope:** bounded protocol-neutral image store/placements plus Kitty APC implementation.
+**Scope:** bounded protocol-neutral image storage/placements plus a constrained Kitty APC adapter and OpenGL projection.
 
-**Work**
-- Accept ADR-0006.
-- Add streaming APC/DCS support with hard encoded/decoded byte, pixel, count, time, and per-pane/global budgets.
-- Keep `core.Cell` text-only; store image resources/placements adjacent to screen state.
-- Define IDs, placement anchors, scroll/erase/resize/alternate-screen/delete/z-order semantics.
-- Add renderer-neutral snapshot references and pane-clipped GPU texture cache/damage.
-- Implement Kitty transmit/place/delete/query/replies incrementally; defer animation unless explicitly accepted.
+**Status:** Delivered as **experimental and default-off** through Phase 13.16. `graphics.kitty.enabled` is strict-v2 and restart-scoped; disabled remains the compatibility path. Automated parser, budget, lifecycle, worker, snapshot, mux, cache, GL-fake, draw and performance evidence exists, but the Phase 13 Windows/OpenGL manual matrix is still UNRUN. This status is not a stable support or default-on claim.
 
-**Success:** protocol fixtures render correctly; scroll/erase/resize behavior is deterministic; oversized/malformed input cannot cause unbounded allocation or UI stalls; text-only workloads show negligible regression.
+**Delivered**
+- Accepted ADR-0014 while keeping `core.Cell` text-only and renderer selection excluded.
+- Added bounded APC/DCS framing, pane/process image budgets, pane-owned stores, placement lifecycle, atomic owner-thread commits and sequenced fixed replies.
+- Added the Kitty direct-data subset: transmit, transmit-and-place, place, delete and query for bounded RGB24/RGBA32/PNG, raw zlib, chunking, crop, cell span and z-order.
+- Added two process-wide decode workers with one active job per pane, deadline/store/generation revalidation, exact cancellation and rollback.
+- Added detached placement snapshots and exact-generation mux acquisition; pixels, stores and GPU handles never enter snapshots.
+- Added projection/GL-context-local texture caches with visible pins, bounded unpinned LRU, bounded upload retry, pane clipping and below/above-text layer ordering.
+- Activated startup, child-window and restored-window ownership transactionally only when opted in; disabled nil behavior creates no image owner, worker, cache, draw work or idle deadline.
 
-**Tests:** parser golden/fuzz, budget/timeout/decompression-bomb tests, placement lifecycle, snapshots, clipping/damage/cache eviction, performance benchmarks.
+**Phase 13-specific exclusions:** its Kitty adapter has no file/path/temporary/shared-memory transport, animation/frame composition, Unicode placeholders, Sixel, iTerm OSC 1337, renderer selector, remote I/O, or support advertisement while disabled. Phase 14 supplies separate bounded Sixel/iTerm adapters; unknown Kitty fields/actions still reject rather than imply parity.
 
-**Rollback:** protocol disabled by default until conformance/security gates pass; parser safely ignores unsupported commands.
+**Qualification boundary:** automated gates do not replace the manual matrix in `docs/manual-verification.md`. Windows real-OpenGL, Windows arm64, Linux GUI and macOS GUI rows remain unrun/unqualified; the feature must stay experimental/default-off until recorded evidence supports a separate status decision.
+
+**Rollback:** restart with `graphics.kitty.enabled=false`. Activation failure closes projection/context caches before mux ownership; late/failed decode closes candidates without replacing prior state; upload failure omits/retries without rolling back the terminal model or blocking input.
 
 ## Phase 14 — Sixel and iTerm Inline Images
-**Scope:** adapters onto the Phase 13 shared model.
+**Status:** Delivered as **experimental, default-off, restart-scoped, support-claim none** through Slice 14.16. Automated parser, grammar, decode, lifecycle, scheduler, budget, activation, privacy, fuzz, and performance evidence passes. Every Windows/Linux/macOS real-GUI row is UNRUN, so no platform/full-conformance claim or default-on decision is made.
 
-**Work**
-- Implement streaming Sixel decoder/palette/raster attributes with limits.
-- Implement iTerm OSC 1337 inline-file image subset; reject unsafe file/path operations and unsupported metadata clearly.
-- Normalize decoded images and placements into the shared store.
-- Publish supported-subset documentation and fixtures.
+**Scope:** independent exact Sixel DCS and iTerm OSC 1337 direct-inline PNG adapters on the accepted Phase 13 ownership, lifecycle, snapshot, and cache model.
 
-**Success:** both protocols share lifecycle/cache/budgets; text parsing recovers after malformed/truncated streams; no remote file read or arbitrary write is possible.
+**Delivered**
+- Exact 7-bit Sixel preambles `q`, `0q`, `0;0q`, `0;0;0q`, ST termination, one `"1;1;W;H` declaration, RGB palette/repeat/carriage/new-band tokens, checked two-pass raster decode, and atomic rejection outside the bounded subset.
+- Exact 7-bit `OSC 1337;File=` with BEL/ST, lexical `inline=1`, positive exact decoded `size`, strict padded base64, one PNG with EOF, and optional one cell-only width xor height while preserving aspect ratio.
+- Cursor-neutral frame-termination anchors, no Sixel/iTerm replies or reply slots, monotonic internal high-half IDs, and atomic ephemeral resource retirement with the final placement.
+- One FIFO two-worker scheduler, one outstanding job per pane, queue capacity 32, queue-inclusive 250 ms acceptance, and shared Phase 13 pane/process/chunk/decode/image/placement/GL budgets.
+- Independent strict-v2 flags plus transactional initial/child/restore activation, reverse rollback, distinct GL-context caches, and literal-nil all-disabled behavior.
+- Parser-coupled `PaneOutput` projection that removes enabled selected Kitty/Sixel/iTerm envelopes before Lua output callbacks while preserving disabled/unselected control strings.
+- Fixed diagnostics limited to protocol, reason, count, and duration; leaf imports and grammar exclude filesystem/network/process/unsafe access and all external-I/O modes.
 
-**Tests:** reference fixtures, fuzz/truncation, palette/size/aspect cases, budget enforcement, cross-protocol placement parity.
+**Normative exclusions:** C1 DCS/OSC, broad Sixel/iTerm conformance, Sixel HLS/scrolling/DECSDM, iTerm name/auto/pixel/percent/two-axis/stretch/multipart forms, external file/path/URL/temporary/shared-memory/download/write I/O, JPEG/GIF, animation, cursor effects, invented replies, renderer selection, and non-OpenGL image rendering.
 
-**Rollback:** independent feature flags per protocol.
+**Qualification boundary:** the automated close-out and all 13 relevant 60-second fuzz targets pass, but automation does not replace [`docs/manual-verification.md`](manual-verification.md). Every real-GUI/platform row remains UNRUN; `docs/parity-support-matrix.json` therefore records `experimental`, `default_enabled=false`, `manual_qualification=unrun`, and `support_claim=none`.
+
+**Rollback:** disable `graphics.sixel.enabled` and/or `graphics.iterm.enabled` independently and restart. Activation/restore publishes old-or-new and closes provisional resources in reverse order; failed/late decode closes candidates without partial publication; Phase 13 Kitty remains independently available.
 
 ## Phase 15 — Integration, Performance, Migration, and Release
 **Scope:** cross-feature hardening and staged delivery.
@@ -339,7 +355,7 @@ Named workspaces remain local and in-process. Persistence stores layout/config o
 - Tabs: mux model PR, action integration PR, tab bar PR, move/lifecycle hardening PR.
 - Windows/workspaces: host controller PR, move actions PR, persistence PR.
 - Shell integration: OSC 8 PR, semantic zones PR, actions/UI PR, notification policy PR.
-- IME/accessibility: host seam PR, Windows adapter PR, later platform adapter PRs.
+- IME: state/router PRs, render/geometry PRs, dormant Windows decoder/host PRs, default-off activation PR, then qualification/default decision. Accessibility follows its own capability/design PRs.
 - Images: parser/model PR, budgets/fuzz PR, snapshot/renderer PR, then one protocol PR at a time.
 
 ## Stop Conditions
@@ -354,4 +370,4 @@ Stop and return to architecture review if:
 - renderer selection becomes a prerequisite.
 
 ## Immediate Next Action
-Implement Phase 2 slice 1 only: presence-aware raw v1/v2 documents, schema metadata, strict v2 validation, in-memory migrations, and compatibility goldens. Do not add includes until the v1 compatibility gate passes.
+Proceed to Phase 15 integration/release hardening while retaining Phase 14's experimental/default-off/no-support disposition. The next status-changing action is to run and attach the real Windows/GLFW/OpenGL manual matrix; until then every real-GUI row stays UNRUN and no broader conformance or default-on proposal is justified.
