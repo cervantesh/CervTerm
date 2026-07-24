@@ -1,0 +1,77 @@
+Slice 6.3c scope and commit evidence
+capture state: final review-repaired W before G
+branch: arch/l1-01c-app-script-native-prep
+base: 7656960bd334640b5e4c377bbde71b1dc9d6a3c1
+final W SHA: 7787b49f0003b3ce5b68da02ca7a27937fa7b7d3
+G SHA: pending
+
+[immutable committed sequence before G]
+T 412a5ce test(frontend): characterize script and native lifecycle
+A 43afad3 refactor(frontend): add script and native controller seams
+M 5d9628c refactor(frontend): split script and native adapters
+W 7787b49 refactor(frontend): wire script and native controllers
+G pending; required subject: refactor(frontend): guard script and native controller delegation; required parent: W
+
+[scope semantics]
+Before G, the maturity guard checks immutable base..W plus tracked, staged, and nonignored untracked worktree paths. Once G exists on the active Slice 6.3c branch, it requires HEAD == G and a clean nonignored worktree. On merge/main history it checks only immutable base..G; later unrelated main commits are intentionally outside the slice range and do not fail the scope guard.
+The in-script synthetic policy self-test proves rejection of an active-branch commit after G and an active-branch dirty worktree, and proves that later merge/main history is not rejected.
+
+[exact changed-path allowlist]
+docs/architecture-maturity/implementation-plan.md
+docs/architecture.md
+docs/validation/architecture-maturity-slice-6.3c.md
+docs/validation/architecture-maturity-slice-6.3c/benchmarks-base.txt
+docs/validation/architecture-maturity-slice-6.3c/benchmarks-candidate.txt
+docs/validation/architecture-maturity-slice-6.3c/gates.txt
+docs/validation/architecture-maturity-slice-6.3c/scope-and-commits.txt
+internal/frontend/glfwgl/action_bindings.go
+internal/frontend/glfwgl/action_executor.go
+internal/frontend/glfwgl/app.go
+internal/frontend/glfwgl/app_bell.go
+internal/frontend/glfwgl/app_callbacks.go
+internal/frontend/glfwgl/app_host.go
+internal/frontend/glfwgl/app_loop.go
+internal/frontend/glfwgl/app_mux.go
+internal/frontend/glfwgl/app_mux_test.go
+internal/frontend/glfwgl/app_overlay.go
+internal/frontend/glfwgl/app_script_native_characterization_test.go
+internal/frontend/glfwgl/app_status.go
+internal/frontend/glfwgl/command_palette.go
+internal/frontend/glfwgl/events_glfw.go
+internal/frontend/glfwgl/initial_projection.go
+internal/frontend/glfwgl/mouse_bindings.go
+internal/frontend/glfwgl/native_capability_controller.go
+internal/frontend/glfwgl/native_capability_controller_app.go
+internal/frontend/glfwgl/native_capability_controller_test.go
+internal/frontend/glfwgl/projection_factory_glfw.go
+internal/frontend/glfwgl/projection_ime_windows_test.go
+internal/frontend/glfwgl/reload.go
+internal/frontend/glfwgl/script_host_controller.go
+internal/frontend/glfwgl/script_host_controller_app.go
+internal/frontend/glfwgl/script_host_controller_test.go
+internal/frontend/glfwgl/script_lifecycle_controller.go
+internal/frontend/glfwgl/script_lifecycle_controller_app.go
+internal/frontend/glfwgl/script_lifecycle_controller_test.go
+scripts/check-maturity-gates.go
+
+[review-restored files absent from scope]
+internal/frontend/glfwgl/mux_test_helpers_test.go: restored to HEAD
+internal/frontend/glfwgl/pane_zoom_test.go: restored to HEAD
+internal/frontend/glfwgl/app_mux_test.go: retains only the T timing change, with the compatibility host literal captured before focus changes
+
+[controller state and budgets]
+scriptHostController: fields pane termmux.PaneID, initialized bool; port budget 21
+scriptLifecycleController: zero fields; port budget 14
+nativeCapabilityController: zero fields; port budget 8
+controller dynamic App backreferences: 0
+
+[benchmark source identity]
+Base capture remains docs/validation/architecture-maturity-slice-6.3c/benchmarks-base.txt because benchmark semantics did not change.
+Repaired direct candidate capture uses 7 samples at -benchtime=500ms.
+FireOutput overlay allocation result: production_baseline 11960 B/op, 95 allocs/op; active_app_route 11960 B/op, 95 allocs/op; delta 0.
+
+[diff check]
+No whitespace errors; Git emitted only core.autocrlf LF-to-CRLF advisories for touched files.
+
+[release/changelog]
+Unchanged; no release, changelog or deployment produced. W was committed after review repair; G remains pending at capture.

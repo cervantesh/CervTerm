@@ -1,0 +1,66 @@
+command: go test -tags glfw ./internal/frontend/glfwgl -run ^$ -bench <Slice6.3c+Phase13+presentation+accessibility> -benchmem -count=7 -benchtime=500ms
+commit: 7656960 (origin/main comparison base)
+fixture: temporary untracked slice63c_compare_benchmark_test.go defines only the three direct comparison benchmarks; existing benchmarks are repository-native
+
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics        
+BenchmarkPhase13DisabledDraw-32                   	   13568	     43142 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32                   	   13784	     43653 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32                   	   13890	     43294 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32                   	   13479	     43700 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32                   	   13572	     44048 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32                   	   13188	     43435 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32                   	   13321	     43508 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32                  	81865440	         7.112 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32                  	86868393	         7.020 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32                  	87764206	         6.958 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32                  	86873425	         7.015 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32                  	86961562	         7.026 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32                  	87641138	         7.015 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32                  	79599877	         7.076 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPresentationGateRejectedAdmission-32     	25370728	        24.58 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPresentationGateRejectedAdmission-32     	25211566	        23.99 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPresentationGateRejectedAdmission-32     	25349184	        24.07 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPresentationGateRejectedAdmission-32     	21009727	        26.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPresentationGateRejectedAdmission-32     	24079364	        23.92 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPresentationGateRejectedAdmission-32     	25314212	        24.29 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPresentationGateRejectedAdmission-32     	23732110	        24.07 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32           	61405573	         9.782 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32           	62024478	         9.898 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32           	56524318	         9.829 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32           	64081340	         9.579 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32           	64116949	         9.523 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32           	64301788	         9.521 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32           	56359724	         9.513 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32             	161998017	         3.653 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32             	164483558	         3.696 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32             	163141052	         3.663 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32             	160698674	         3.668 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32             	163922109	         3.715 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32             	164477380	         3.700 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32             	164127163	         3.724 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32              	100000000	         5.774 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32              	100000000	         5.672 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32              	100000000	         5.661 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32              	100000000	         5.773 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32              	100000000	         5.690 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32              	100000000	         5.665 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32              	100000000	         5.670 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 3772194	       165.8 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 3398522	       164.1 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 3717862	       176.9 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 3226927	       169.2 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 3284416	       185.3 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 3603548	       195.5 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIAProviderHelperRead-32    	 3233602	       177.9 ns/op	     352 B/op	       2 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1000000	       547.8 ns/op	     768 B/op	       8 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1000000	       504.0 ns/op	     768 B/op	       8 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1000000	       505.4 ns/op	     768 B/op	       8 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1000000	       500.1 ns/op	     768 B/op	       8 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1000000	       504.2 ns/op	     768 B/op	       8 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1000000	       507.2 ns/op	     768 B/op	       8 allocs/op
+BenchmarkAccessibilityUIACallbackRead-32          	 1000000	       508.5 ns/op	     768 B/op	       8 allocs/op
+PASS
+ok  	cervterm/internal/frontend/glfwgl	40.944s

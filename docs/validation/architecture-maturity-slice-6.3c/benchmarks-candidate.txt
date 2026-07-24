@@ -1,0 +1,45 @@
+command: go test -tags glfw ./internal/frontend/glfwgl -run ^$ -bench "^(BenchmarkAppScriptLifecycleNoRuntime|BenchmarkPaneHostWarmedStableReads|BenchmarkPaneHostRealFireOutput|BenchmarkProjectionNativeDisabled)$" -benchmem -count=7 -benchtime=500ms
+commit: 7787b49f0003b3ce5b68da02ca7a27937fa7b7d3 (W); G pending; candidate working tree contains evidence only
+comparison note: direct candidate rerun after review repair; base semantics are unchanged, so benchmarks-base.txt was not rerun. BenchmarkPaneHostRealFireOutput compares the active App route with a base-compatible direct Runtime.FireOutput overlay in the same candidate process.
+
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics        
+BenchmarkAppScriptLifecycleNoRuntime-32    	32651461	        18.44 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32    	32039472	        18.57 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32    	33833504	        18.48 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32    	30653533	        18.54 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32    	32965402	        18.69 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32    	31689358	        18.68 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAppScriptLifecycleNoRuntime-32    	32410532	        18.65 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32      	100000000	         6.213 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32      	100000000	         6.212 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32      	93241542	         6.245 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32      	100000000	         6.234 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32      	100000000	         6.209 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32      	95347063	         6.184 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostWarmedStableReads-32      	100000000	         6.175 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPaneHostRealFireOutput/production_baseline-32         	   81502	      7791 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/production_baseline-32         	   76228	      7376 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/production_baseline-32         	   65398	      8355 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/production_baseline-32         	   68312	      7806 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/production_baseline-32         	   78020	      8779 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/production_baseline-32         	   76327	      8010 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/production_baseline-32         	   72165	      7897 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/active_app_route-32            	   74836	      8699 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/active_app_route-32            	   73803	      8001 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/active_app_route-32            	   81074	      8041 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/active_app_route-32            	   72164	      7786 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/active_app_route-32            	   69174	      8284 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/active_app_route-32            	   66622	      8310 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkPaneHostRealFireOutput/active_app_route-32            	   81344	      7835 ns/op	   11960 B/op	      95 allocs/op
+BenchmarkProjectionNativeDisabled-32                           	100000000	         5.704 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32                           	100000000	         5.718 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32                           	100000000	         5.688 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32                           	100000000	         5.668 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32                           	100000000	         5.830 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32                           	100000000	         5.729 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProjectionNativeDisabled-32                           	100000000	         5.792 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/frontend/glfwgl	23.270s
