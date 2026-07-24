@@ -207,3 +207,9 @@ This is preparatory parity work under ADR-0021, not formal closure of L1-01. The
 Slice 6.3b delegates only presentation order and reload request/watch/dispatch order to private per-projection controllers. `App` continues to own the renderer and GL-context resources, pane scratch, damage and frame accounting, config/runtime/bundle resources, pending/watch/worker/generation state, and the complete old-or-new activation transaction. Frame accounting remains outside `withCurrent`; GPU work remains on the current locked OS thread; reload workers remain CPU-only.
 
 This remains preparatory ADR-0021 parity work, not L1-01 closure. Pane render context work expires in Slice 6.1a, typed reload states in Slice 6.1c, process-shared config in Slice 3.4, and the temporary App facade adapters in Slice 6.3d.
+
+### Preparatory App scripting/native capability delegation
+
+Slice 6.3c delegates only pane-bound script host routing, script callback/deferred-event/projection ordering, and native IME/accessibility activation ordering to private per-projection controllers. `App` remains authoritative for the script runtime, configuration, mux/pane state, pending event maps, timers, status and overlays, and for the native window, projection bundle, WndProc, IME/accessibility objects, resource adoption and rollback. Controllers retain no lifecycle resource or mutable owner and contain zero dynamic `App` backreferences: the script-host controller stores only a pane ID plus an initialized scalar, while lifecycle and native controllers are zero-field values.
+
+This is completed preparatory ADR-0021 parity work, not L1-01 closure. The narrow ports and facade adapters expire in Slice 6.3d; formal closure remains deferred until L1-02 through L1-06 and the 6.3d execution predecessor have merged.

@@ -1,0 +1,74 @@
+Slice 6.3c review-repair validation
+platform: windows/amd64
+working state: W 7787b49f0003b3ce5b68da02ca7a27937fa7b7d3; G pending; evidence not yet committed
+
+[focused]
+$ go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -count=1
+ok  	cervterm/internal/frontend/glfwgl	4.740s
+ok  	cervterm/cmd/cervterm	1.186s
+exit: 0
+
+[full]
+$ go test ./...
+ok  	cervterm/cmd/cervterm	1.590s
+ok  	cervterm/internal/accessibility	(cached)
+ok  	cervterm/internal/action	(cached)
+ok  	cervterm/internal/applog	(cached)
+ok  	cervterm/internal/background	(cached)
+ok  	cervterm/internal/bellpolicy	(cached)
+ok  	cervterm/internal/buildinfo	(cached)
+ok  	cervterm/internal/config	(cached)
+ok  	cervterm/internal/core	(cached)
+ok  	cervterm/internal/fontdesc	0.816s
+ok  	cervterm/internal/fontglyph	(cached)
+ok  	cervterm/internal/frontend/glfwgl	(cached)
+ok  	cervterm/internal/frontend/gpu	(cached)
+ok  	cervterm/internal/ime	(cached)
+ok  	cervterm/internal/input	(cached)
+ok  	cervterm/internal/itermimage	(cached)
+ok  	cervterm/internal/kitty	(cached)
+ok  	cervterm/internal/layoutrestore	(cached)
+ok  	cervterm/internal/layoutstate	(cached)
+ok  	cervterm/internal/linkpolicy	(cached)
+ok  	cervterm/internal/metrics	(cached)
+ok  	cervterm/internal/modal	(cached)
+ok  	cervterm/internal/mux	(cached)
+ok  	cervterm/internal/notificationpolicy	(cached)
+ok  	cervterm/internal/pty	(cached)
+ok  	cervterm/internal/quickselect	(cached)
+ok  	cervterm/internal/render	(cached)
+ok  	cervterm/internal/script	(cached)
+ok  	cervterm/internal/selection	(cached)
+ok  	cervterm/internal/sixel	(cached)
+ok  	cervterm/internal/termimage	(cached)
+ok  	cervterm/internal/theme	(cached)
+ok  	cervterm/internal/unicodecluster	(cached)
+ok  	cervterm/internal/unicodeprops	(cached)
+ok  	cervterm/internal/vt	(cached)
+ok  	cervterm/internal/windowbounds	(cached)
+ok  	cervterm/internal/workscheduler	(cached)
+exit: 0
+
+[race]
+$ go test -race -tags glfw ./internal/frontend/glfwgl -count=1
+ok  	cervterm/internal/frontend/glfwgl	5.090s
+exit: 0
+
+[maturity]
+$ go run ./scripts/check-maturity-gates.go
+maturity gates ok
+known large-file exception: internal/fontglyph/backend.go (known font fallback/raster orchestration split target)
+known large-file exception: internal/fontglyph/color_colr_render.go (known COLRv1 render split target)
+exit: 0
+
+[focused allocation regression]
+$ go test -tags glfw ./internal/frontend/glfwgl -run TestPaneHostRealFireOutputAddsNoAllocationBeyondWarmedBaseline -count=1
+ok  	cervterm/internal/frontend/glfwgl	0.907s
+exit: 0
+
+[whitespace]
+$ git diff-index --check HEAD --
+exit: 0; only core.autocrlf LF-to-CRLF advisories were emitted
+
+[direct candidate benchmarks]
+See benchmarks-candidate.txt: seven samples at -benchtime=500ms. FireOutput production baseline and active App route both measured 11960 B/op and 95 allocs/op, allocation delta 0.

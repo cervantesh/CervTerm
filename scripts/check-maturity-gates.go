@@ -10,9 +10,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -84,6 +90,7 @@ var requiredDocs = []string{
 	"docs/validation/phase-15-process-comparison.json",
 	"docs/validation/phase-15-security-accessibility.md",
 	"docs/validation/phase-15-security-manifest.json",
+	"docs/validation/architecture-maturity-slice-6.3c.md",
 	"scripts/capture-parity-baseline.go",
 	"scripts/capture-phase15-benchmarks.go",
 	"scripts/capture-phase15-process.py",
@@ -108,6 +115,7 @@ func main() {
 	findings = append(findings, checkCIGates()...)
 	findings = append(findings, checkPhase15Evidence()...)
 	findings = append(findings, checkPhase15SupportMatrix()...)
+	findings = append(findings, checkSlice63cGuard()...)
 	if len(findings) > 0 {
 		fmt.Fprintln(os.Stderr, "maturity gate failures:")
 		for _, f := range findings {
@@ -385,4 +393,407 @@ func countLines(path string) (int, error) {
 		lines++
 	}
 	return lines, scanner.Err()
+}
+
+type slice63cControllerSpec struct {
+	path       string
+	controller string
+	budgetName string
+	budget     int
+	fields     []string
+	ports      map[string]int
+}
+
+var slice63cAllowedPaths = []string{
+	"docs/architecture-maturity/implementation-plan.md",
+	"docs/architecture.md",
+	"docs/validation/architecture-maturity-slice-6.3c.md",
+	"docs/validation/architecture-maturity-slice-6.3c/benchmarks-base.txt",
+	"docs/validation/architecture-maturity-slice-6.3c/benchmarks-candidate.txt",
+	"docs/validation/architecture-maturity-slice-6.3c/gates.txt",
+	"docs/validation/architecture-maturity-slice-6.3c/scope-and-commits.txt",
+	"internal/frontend/glfwgl/action_bindings.go",
+	"internal/frontend/glfwgl/action_executor.go",
+	"internal/frontend/glfwgl/app.go",
+	"internal/frontend/glfwgl/app_bell.go",
+	"internal/frontend/glfwgl/app_callbacks.go",
+	"internal/frontend/glfwgl/app_host.go",
+	"internal/frontend/glfwgl/app_loop.go",
+	"internal/frontend/glfwgl/app_mux.go",
+	"internal/frontend/glfwgl/app_mux_test.go",
+	"internal/frontend/glfwgl/app_overlay.go",
+	"internal/frontend/glfwgl/app_script_native_characterization_test.go",
+	"internal/frontend/glfwgl/app_status.go",
+	"internal/frontend/glfwgl/command_palette.go",
+	"internal/frontend/glfwgl/events_glfw.go",
+	"internal/frontend/glfwgl/initial_projection.go",
+	"internal/frontend/glfwgl/mouse_bindings.go",
+	"internal/frontend/glfwgl/native_capability_controller.go",
+	"internal/frontend/glfwgl/native_capability_controller_app.go",
+	"internal/frontend/glfwgl/native_capability_controller_test.go",
+	"internal/frontend/glfwgl/projection_factory_glfw.go",
+	"internal/frontend/glfwgl/projection_ime_windows_test.go",
+	"internal/frontend/glfwgl/reload.go",
+	"internal/frontend/glfwgl/script_host_controller.go",
+	"internal/frontend/glfwgl/script_host_controller_app.go",
+	"internal/frontend/glfwgl/script_host_controller_test.go",
+	"internal/frontend/glfwgl/script_lifecycle_controller.go",
+	"internal/frontend/glfwgl/script_lifecycle_controller_app.go",
+	"internal/frontend/glfwgl/script_lifecycle_controller_test.go",
+	"scripts/check-maturity-gates.go",
+}
+
+var slice63cControllerSpecs = []slice63cControllerSpec{
+	{
+		path: "internal/frontend/glfwgl/script_host_controller.go", controller: "scriptHostController",
+		budgetName: "scriptHostControllerPortBudget", budget: 21,
+		fields: []string{"pane:termmux.PaneID", "initialized:bool"},
+		ports:  map[string]int{"scriptHostConfigPort": 3, "scriptHostInputPort": 1, "scriptHostNotificationPort": 3, "scriptHostFontPort": 2, "scriptHostSelectionPort": 4, "scriptHostViewPort": 5, "scriptHostMutationPort": 3},
+	},
+	{
+		path: "internal/frontend/glfwgl/script_lifecycle_controller.go", controller: "scriptLifecycleController",
+		budgetName: "scriptLifecycleControllerPortBudget", budget: 14,
+		fields: nil,
+		ports:  map[string]int{"scriptLifecycleRuntimePort": 2, "scriptLifecycleEventPort": 5, "scriptLifecycleFailurePort": 1, "scriptLifecyclePendingPort": 3, "scriptLifecycleTimerPort": 1, "scriptLifecycleProjectionPort": 2},
+	},
+	{
+		path: "internal/frontend/glfwgl/native_capability_controller.go", controller: "nativeCapabilityController",
+		budgetName: "nativeCapabilityControllerPortBudget", budget: 8,
+		fields: nil,
+		ports:  map[string]int{"nativeInitialCapabilityPort": 4, "nativeChildCapabilityPort": 4},
+	},
+}
+
+func checkSlice63cGuard() []finding {
+	var findings []finding
+	findings = append(findings, checkSlice63cPostGPolicySelfTest()...)
+	for _, spec := range slice63cControllerSpecs {
+		findings = append(findings, checkSlice63cController(spec)...)
+	}
+	findings = append(findings, checkSlice63cCommitsAndPaths()...)
+	return findings
+}
+
+func checkSlice63cController(spec slice63cControllerSpec) []finding {
+	data, err := os.ReadFile(spec.path)
+	if err != nil {
+		return []finding{{path: spec.path, reason: err.Error()}}
+	}
+	var findings []finding
+	const expiry = "TODO(L1-01; expires Slice 6.3d): remove the preparatory facade adapters."
+	if count := strings.Count(string(data), expiry); count != 1 {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("must contain exactly one 6.3d facade-expiry TODO, found %d", count)})
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, spec.path, data, 0)
+	if err != nil {
+		return append(findings, finding{path: spec.path, reason: "cannot parse controller guard surface: " + err.Error()})
+	}
+	budgetFound := false
+	controllerFound := false
+	portCount := 0
+	for _, declaration := range file.Decls {
+		generic, ok := declaration.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, item := range generic.Specs {
+			switch node := item.(type) {
+			case *ast.ValueSpec:
+				for index, name := range node.Names {
+					if name.Name != spec.budgetName || index >= len(node.Values) {
+						continue
+					}
+					budgetFound = true
+					literal, ok := node.Values[index].(*ast.BasicLit)
+					value, parseErr := strconv.Atoi(strings.TrimSpace(literalValue(literal, ok)))
+					if parseErr != nil || value != spec.budget {
+						findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s must equal %d", spec.budgetName, spec.budget)})
+					}
+				}
+			case *ast.TypeSpec:
+				if node.Name.Name == spec.controller {
+					controllerFound = true
+					structure, ok := node.Type.(*ast.StructType)
+					if !ok {
+						findings = append(findings, finding{path: spec.path, reason: spec.controller + " must remain a private struct"})
+						continue
+					}
+					fields := renderedFields(fset, structure)
+					if strings.Join(fields, "|") != strings.Join(spec.fields, "|") {
+						findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s fields changed: got %v want %v", spec.controller, fields, spec.fields)})
+					}
+					for _, field := range fields {
+						findings = append(findings, forbiddenSlice63cType(spec.path, spec.controller+" field "+field, field)...)
+					}
+				}
+				wantMethods, isPort := spec.ports[node.Name.Name]
+				if !isPort {
+					continue
+				}
+				port, ok := node.Type.(*ast.InterfaceType)
+				if !ok {
+					findings = append(findings, finding{path: spec.path, reason: node.Name.Name + " must remain a private interface"})
+					continue
+				}
+				methods := len(port.Methods.List)
+				if methods != wantMethods || methods == 0 || methods > 5 {
+					findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s methods=%d want=%d and <=5", node.Name.Name, methods, wantMethods)})
+				}
+				portCount += methods
+				for _, method := range port.Methods.List {
+					function, ok := method.Type.(*ast.FuncType)
+					if !ok {
+						findings = append(findings, finding{path: spec.path, reason: node.Name.Name + " embeds a non-method surface"})
+						continue
+					}
+					for _, list := range []*ast.FieldList{function.Params, function.Results} {
+						if list == nil {
+							continue
+						}
+						for _, parameter := range list.List {
+							var rendered bytes.Buffer
+							_ = format.Node(&rendered, fset, parameter.Type)
+							findings = append(findings, forbiddenSlice63cType(spec.path, node.Name.Name, rendered.String())...)
+						}
+					}
+				}
+			}
+		}
+	}
+	if !budgetFound {
+		findings = append(findings, finding{path: spec.path, reason: "missing fixed port budget " + spec.budgetName})
+	}
+	if !controllerFound {
+		findings = append(findings, finding{path: spec.path, reason: "missing private controller " + spec.controller})
+	}
+	if portCount != spec.budget {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("aggregate port methods=%d budget=%d", portCount, spec.budget)})
+	}
+	return findings
+}
+
+func literalValue(literal *ast.BasicLit, ok bool) string {
+	if !ok || literal == nil {
+		return ""
+	}
+	return literal.Value
+}
+
+func renderedFields(fset *token.FileSet, structure *ast.StructType) []string {
+	var fields []string
+	for _, field := range structure.Fields.List {
+		var rendered bytes.Buffer
+		_ = format.Node(&rendered, fset, field.Type)
+		for _, name := range field.Names {
+			fields = append(fields, name.Name+":"+rendered.String())
+		}
+	}
+	return fields
+}
+
+func forbiddenSlice63cType(path, owner, typeText string) []finding {
+	lower := strings.ToLower(typeText)
+	for _, forbidden := range []string{
+		"*app", "*mux.mux", "*glfw.window", "*script.runtime", "nativeprojectionbundle",
+		"compositionbeforeunbind", "wndproc", "gpu.", "prepared", "projectionresource", "map[", "func(", "chan ",
+	} {
+		if strings.Contains(lower, forbidden) {
+			return []finding{{path: path, reason: owner + " has forbidden ownership/structural type " + typeText}}
+		}
+	}
+	return nil
+}
+
+func checkSlice63cCommitsAndPaths() []finding {
+	const (
+		base        = "7656960bd334640b5e4c377bbde71b1dc9d6a3c1"
+		tCommit     = "412a5ce"
+		aCommit     = "43afad3"
+		mCommit     = "5d9628c"
+		wSubject    = "refactor(frontend): wire script and native controllers"
+		gSubject    = "refactor(frontend): guard script and native controller delegation"
+		sliceBranch = "arch/l1-01c-app-script-native-prep"
+	)
+	var findings []finding
+	stages := []struct {
+		class, commit, parent, subject string
+	}{
+		{"T", tCommit, base, "test(frontend): characterize script and native lifecycle"},
+		{"A", aCommit, tCommit, "refactor(frontend): add script and native controller seams"},
+		{"M", mCommit, aCommit, "refactor(frontend): split script and native adapters"},
+	}
+	if shallow, _ := gitText("rev-parse", "--is-shallow-repository"); shallow == "true" {
+		for _, commit := range []string{base, tCommit, aCommit, mCommit} {
+			if _, err := gitText("cat-file", "-e", commit+"^{commit}"); err != nil {
+				return checkSlice63cDocumentedSequence(gSubject)
+			}
+		}
+	}
+	for _, stage := range stages {
+		identity, err := gitFields("show", "-s", "--format=%H%x00%P%x00%s", stage.commit)
+		if err != nil || len(identity) != 3 {
+			findings = append(findings, finding{path: "git:" + stage.class, reason: "missing Slice 6.3c commit " + stage.commit})
+			continue
+		}
+		parent, parentErr := gitText("rev-parse", stage.parent+"^{commit}")
+		if parentErr != nil || identity[1] != parent || identity[2] != stage.subject {
+			findings = append(findings, finding{path: "git:" + stage.class, reason: fmt.Sprintf("unexpected parent/subject for %s: parent=%s subject=%q", identity[0], identity[1], identity[2])})
+		}
+	}
+
+	wCommit, wErr := findSlice63cCommit(wSubject, mCommit)
+	if wErr != nil {
+		return append(findings, finding{path: "git:W", reason: wErr.Error()})
+	}
+	gCommit, _ := findSlice63cCommit(gSubject, wCommit)
+	head, _ := gitText("rev-parse", "HEAD")
+	end := gCommit
+	if gCommit == "" {
+		if head != wCommit {
+			findings = append(findings, finding{path: "git:G", reason: "before G, HEAD must be the exact W commit"})
+			return findings
+		}
+		end = wCommit
+	} else {
+		branch, _ := gitText("symbolic-ref", "--quiet", "--short", "HEAD")
+		worktree, _ := gitText("status", "--porcelain=v1", "--untracked-files=all")
+		findings = append(findings, checkSlice63cPostGActiveState(branch == sliceBranch, head, gCommit, worktree)...)
+	}
+
+	pathsText, pathErr := gitText("diff", "--name-only", base+".."+end)
+	if pathErr != nil {
+		return append(findings, finding{path: "git:paths", reason: pathErr.Error()})
+	}
+	paths := nonEmptyLines(pathsText)
+	if gCommit == "" {
+		// Before G freezes the slice, include every tracked and nonignored untracked
+		// worktree path in addition to the immutable base..W commit range.
+		unstaged, _ := gitText("diff", "--name-only")
+		staged, _ := gitText("diff", "--cached", "--name-only")
+		untracked, _ := gitText("ls-files", "--others", "--exclude-standard")
+		paths = append(paths, nonEmptyLines(unstaged)...)
+		paths = append(paths, nonEmptyLines(staged)...)
+		paths = append(paths, nonEmptyLines(untracked)...)
+	}
+	actual := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		actual[filepath.ToSlash(path)] = true
+	}
+	expected := make(map[string]bool, len(slice63cAllowedPaths))
+	for _, path := range slice63cAllowedPaths {
+		expected[path] = true
+		if !actual[path] {
+			findings = append(findings, finding{path: path, reason: "missing from exact Slice 6.3c changed-path set"})
+		}
+	}
+	for path := range actual {
+		if !expected[path] {
+			findings = append(findings, finding{path: path, reason: "outside exact Slice 6.3c changed-path allowlist"})
+		}
+	}
+	return findings
+}
+
+func findSlice63cCommit(subject, parent string) (string, error) {
+	parentFull, err := gitText("rev-parse", parent+"^{commit}")
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve expected parent %s", parent)
+	}
+	log, err := gitText("log", "--format=%H%x00%P%x00%s", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(log, "\n") {
+		parts := strings.Split(line, "\x00")
+		if len(parts) == 3 && parts[1] == parentFull && parts[2] == subject {
+			return parts[0], nil
+		}
+	}
+	return "", fmt.Errorf("missing commit with exact subject %q and parent %s", subject, parentFull)
+}
+
+func checkSlice63cPostGActiveState(active bool, head, gCommit, worktree string) []finding {
+	if !active {
+		return nil
+	}
+	var findings []finding
+	if head != gCommit {
+		findings = append(findings, finding{path: "git:G", reason: "after G exists on the active Slice 6.3c branch, HEAD must equal G exactly"})
+	}
+	if strings.TrimSpace(worktree) != "" {
+		findings = append(findings, finding{path: "git:worktree", reason: "after G exists on the active Slice 6.3c branch, the nonignored worktree must be clean"})
+	}
+	return findings
+}
+
+func checkSlice63cPostGPolicySelfTest() []finding {
+	if got := checkSlice63cPostGActiveState(true, "later", "g", ""); len(got) != 1 || got[0].path != "git:G" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "post-G policy self-test did not reject an active-branch commit after G"}}
+	}
+	if got := checkSlice63cPostGActiveState(true, "g", "g", " M dirty.go"); len(got) != 1 || got[0].path != "git:worktree" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "post-G policy self-test did not reject an active-branch dirty worktree"}}
+	}
+	if got := checkSlice63cPostGActiveState(false, "later", "g", " M unrelated.go"); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "post-G policy self-test rejected later merge/main history"}}
+	}
+	return nil
+}
+
+func checkSlice63cDocumentedSequence(gSubject string) []finding {
+	const path = "docs/validation/architecture-maturity-slice-6.3c.md"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	text := string(data)
+	required := []string{
+		"| T | `412a5ce` |",
+		"| A | `43afad3` |",
+		"| M | `5d9628c` |",
+		"| W | `7787b49` |",
+		"| G | pending |",
+		gSubject,
+		"L1-01 remains **partial**",
+		"formal closure is deferred to Slice 6.3d",
+	}
+	var findings []finding
+	for _, value := range required {
+		if !strings.Contains(text, value) {
+			findings = append(findings, finding{path: path, reason: "shallow checkout is missing documented commit/closure contract " + value})
+		}
+	}
+	for _, allowed := range slice63cAllowedPaths {
+		if !strings.Contains(text, "\n"+allowed+"\n") {
+			findings = append(findings, finding{path: path, reason: "shallow checkout allowlist is missing " + allowed})
+		}
+	}
+	return findings
+}
+
+func gitText(args ...string) (string, error) {
+	command := exec.Command("git", args...)
+	output, err := command.Output()
+	if err != nil {
+		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func gitFields(args ...string) ([]string, error) {
+	text, err := gitText(args...)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(text, "\x00"), nil
+}
+
+func nonEmptyLines(text string) []string {
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }

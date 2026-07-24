@@ -470,8 +470,8 @@ These early `App`/`Mux` slices are preparatory parity-only extractions. They do 
 ### Slice 6.3c — L1-01 scripting/native capability controllers
 
 - **Files:** script host/events, accessibility/IME/native projection lifecycle, `app.go` facade.
-- **execution_predecessor:** 6.3b. Preserve script/native lifecycle; **Commits:** `T → A → M → W → G`; separate branch/PR.
-- After 6.3c, L1-01 remains **partial**; `App` stays authoritative until 6.3d.
+- **Status:** **complete (preparatory)**. Execution predecessor 6.3b is satisfied; script/native behavior and lifecycle ownership remain unchanged. Evidence: `docs/validation/architecture-maturity-slice-6.3c.md`. **Commits:** `T → A → M → W → G`; separate branch/PR.
+- L1-01 remains **partial**. `App` stays authoritative and formal closure is explicitly deferred to 6.3d after L1-02 through L1-06 and the 6.3d execution predecessor.
 
 ### Slice 6.3d — L1-01 formal thin-App closure
 
