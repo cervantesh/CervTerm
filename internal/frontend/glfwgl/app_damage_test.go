@@ -113,7 +113,9 @@ func TestPreeditRevisionDamagesOnlyOnMutation(t *testing.T) {
 	}
 }
 
-func TestImageGenerationIsExcludedFromGlobalDamageIdentity(t *testing.T) {
+// TestKnownDefect_L1_06_GlobalDamageExcludesPaneIdentity pins the current cross-pane identity gap.
+// expires Slice 6.1a
+func TestKnownDefect_L1_06_GlobalDamageExcludesPaneIdentity(t *testing.T) {
 	app := &App{contentScaleX: 1, contentScaleY: 1}
 	app.snap = render.Snapshot{Cols: 4, Rows: 2, Cells: make([]core.Cell, 8), ImageGeneration: 1, PaneObject: 1}
 	background := color.RGBA{A: 0xff}

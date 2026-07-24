@@ -1181,3 +1181,21 @@ func TestSameFailureSetChangeDuringAttemptRequeuesOnce(t *testing.T) {
 		t.Fatal("stable identical failure set caused an immediate retry loop")
 	}
 }
+
+// TestKnownDefect_L1_02_ChildReloadRequestDoesNotQueueOwner pins projection-local reload ownership.
+// expires Slice 3.4
+func TestKnownDefect_L1_02_ChildReloadRequestDoesNotQueueOwner(t *testing.T) {
+	cfg := config.Defaults()
+	owner := &App{
+		cfg: cfg, desiredCfg: cfg.Clone(), composedCfg: cfg.Clone(),
+		configStateInitialized: true, configPath: "cervterm.lua",
+	}
+	child := newProjectionApp(owner)
+
+	if !child.RequestConfigReload() {
+		t.Fatal("child reload request was rejected")
+	}
+	if !child.reloadPending || owner.reloadPending {
+		t.Fatalf("reload ownership: child pending=%v owner pending=%v", child.reloadPending, owner.reloadPending)
+	}
+}
