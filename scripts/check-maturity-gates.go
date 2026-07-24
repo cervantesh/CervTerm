@@ -91,6 +91,7 @@ var requiredDocs = []string{
 	"docs/validation/phase-15-security-accessibility.md",
 	"docs/validation/phase-15-security-manifest.json",
 	"docs/validation/architecture-maturity-slice-6.3c.md",
+	"docs/validation/architecture-maturity-slice-6.2a.md",
 	"scripts/capture-parity-baseline.go",
 	"scripts/capture-phase15-benchmarks.go",
 	"scripts/capture-phase15-process.py",
@@ -104,6 +105,7 @@ var requiredDocs = []string{
 var largeGoAllowlist = map[string]string{
 	filepath.ToSlash("internal/fontglyph/backend.go"):           "known font fallback/raster orchestration split target",
 	filepath.ToSlash("internal/fontglyph/color_colr_render.go"): "known COLRv1 render split target",
+	filepath.ToSlash("internal/mux/mux.go"):                     "L3-01 preparatory facade; formal split target Slice 6.2d",
 }
 
 func main() {
@@ -116,6 +118,7 @@ func main() {
 	findings = append(findings, checkPhase15Evidence()...)
 	findings = append(findings, checkPhase15SupportMatrix()...)
 	findings = append(findings, checkSlice63cGuard()...)
+	findings = append(findings, checkSlice62aGuard()...)
 	if len(findings) > 0 {
 		fmt.Fprintln(os.Stderr, "maturity gate failures:")
 		for _, f := range findings {
@@ -642,11 +645,11 @@ func checkSlice63cCommitsAndPaths() []finding {
 		}
 	}
 
-	wCommit, wErr := findSlice63cCommit(wSubject, mCommit)
+	wCommit, wErr := findMaturitySliceCommit(wSubject, mCommit)
 	if wErr != nil {
 		return append(findings, finding{path: "git:W", reason: wErr.Error()})
 	}
-	gCommit, _ := findSlice63cCommit(gSubject, wCommit)
+	gCommit, _ := findMaturitySliceCommit(gSubject, wCommit)
 	head, _ := gitText("rev-parse", "HEAD")
 	end := gCommit
 	if gCommit == "" {
@@ -695,7 +698,7 @@ func checkSlice63cCommitsAndPaths() []finding {
 	return findings
 }
 
-func findSlice63cCommit(subject, parent string) (string, error) {
+func findMaturitySliceCommit(subject, parent string) (string, error) {
 	parentFull, err := gitText("rev-parse", parent+"^{commit}")
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve expected parent %s", parent)
@@ -769,6 +772,808 @@ func checkSlice63cDocumentedSequence(gSubject string) []finding {
 		}
 	}
 	return findings
+}
+
+type slice62aControllerSpec struct {
+	path       string
+	controller string
+	budgetName string
+	budget     int
+	maxMethods int
+	ports      map[string]int
+}
+
+var slice62aAllowedPaths = []string{
+	"docs/architecture-maturity/implementation-plan.md",
+	"docs/architecture.md",
+	"docs/validation/architecture-maturity-slice-6.2a.md",
+	"docs/validation/architecture-maturity-slice-6.2a/benchmarks-base.txt",
+	"docs/validation/architecture-maturity-slice-6.2a/benchmarks-candidate.txt",
+	"docs/validation/architecture-maturity-slice-6.2a/gates.txt",
+	"docs/validation/architecture-maturity-slice-6.2a/scope-and-commits.txt",
+	"internal/mux/mux.go",
+	"internal/mux/mux_kitty_test.go",
+	"internal/mux/mux_session_ingress_test.go",
+	"internal/mux/session_ingress_controller.go",
+	"internal/mux/session_ingress_controller_test.go",
+	"internal/mux/session_registry.go",
+	"scripts/check-maturity-gates.go",
+}
+
+var slice62aController = slice62aControllerSpec{
+	path:       "internal/mux/session_ingress_controller.go",
+	controller: "sessionIngressController",
+	budgetName: "sessionIngressControllerPortBudget",
+	budget:     3,
+	maxMethods: 2,
+	ports: map[string]int{
+		"sessionIngressOwnerPort": 1,
+		"sessionIngressApplyPort": 2,
+	},
+}
+
+var slice62aExactPortMethods = map[string][]string{
+	"sessionIngressOwnerPort": {"acceptSessionIngress() bool"},
+	"sessionIngressApplyPort": {
+		"applySessionIngressData([]Event, []byte) []Event",
+		"applySessionIngressEnd([]Event, error) []Event",
+	},
+}
+
+const (
+	slice62aExactConstructorSignature = "func[ownerPort sessionIngressOwnerPort, applyPort sessionIngressApplyPort]() sessionIngressController[ownerPort, applyPort]"
+	slice62aExactRouteReceiver        = "sessionIngressController[ownerPort, applyPort]"
+	slice62aExactRouteSignature       = "func(events []Event, owner ownerPort, apply applyPort, data []byte, end error) []Event"
+)
+
+func checkSlice62aGuard() []finding {
+	var findings []finding
+	findings = append(findings, checkSlice62aPostGPolicySelfTest()...)
+	findings = append(findings, checkSlice62aCombinedShallowPostGSelfTest()...)
+	findings = append(findings, checkSlice62aRouteAliasSelfTest()...)
+	findings = append(findings, checkSlice62aDocumentedSequence()...)
+	findings = append(findings, checkSlice62aController(slice62aController)...)
+	findings = append(findings, checkSlice62aIngressSurface()...)
+	findings = append(findings, checkSlice62aCommitsAndPaths()...)
+	return findings
+}
+
+func checkSlice62aController(spec slice62aControllerSpec) []finding {
+	data, err := os.ReadFile(spec.path)
+	if err != nil {
+		return []finding{{path: spec.path, reason: err.Error()}}
+	}
+	var findings []finding
+	const expiry = "TODO(L3-01; expires Slice 6.2d): remove the preparatory facade adapter."
+	if count := strings.Count(string(data), expiry); count != 1 {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("must contain exactly one 6.2d facade-expiry TODO, found %d", count)})
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, spec.path, data, 0)
+	if err != nil {
+		return append(findings, finding{path: spec.path, reason: "cannot parse controller guard surface: " + err.Error()})
+	}
+	if len(file.Imports) != 0 {
+		findings = append(findings, finding{path: spec.path, reason: "generic session-ingress controller must remain import-free"})
+	}
+
+	wantDeclarations := map[string]int{
+		spec.budgetName:               1,
+		"sessionIngressOwnerPort":     1,
+		"sessionIngressApplyPort":     1,
+		spec.controller:               1,
+		"newSessionIngressController": 1,
+		"method:route":                1,
+	}
+	declarations := make(map[string]int)
+	portCount := 0
+	methodInventory := make(map[string]int)
+	for _, declaration := range file.Decls {
+		switch declaration := declaration.(type) {
+		case *ast.GenDecl:
+			for _, item := range declaration.Specs {
+				switch node := item.(type) {
+				case *ast.ValueSpec:
+					for index, name := range node.Names {
+						declarations[name.Name]++
+						if token.IsExported(name.Name) {
+							findings = append(findings, finding{path: spec.path, reason: "controller declaration must remain private: " + name.Name})
+						}
+						if name.Name != spec.budgetName || index >= len(node.Values) {
+							continue
+						}
+						literal, ok := node.Values[index].(*ast.BasicLit)
+						value, parseErr := strconv.Atoi(strings.TrimSpace(literalValue(literal, ok)))
+						if parseErr != nil || value != spec.budget {
+							findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s must equal %d", spec.budgetName, spec.budget)})
+						}
+					}
+				case *ast.TypeSpec:
+					declarations[node.Name.Name]++
+					if token.IsExported(node.Name.Name) {
+						findings = append(findings, finding{path: spec.path, reason: "controller type must remain private: " + node.Name.Name})
+					}
+					if node.Name.Name == spec.controller {
+						structure, ok := node.Type.(*ast.StructType)
+						if !ok {
+							findings = append(findings, finding{path: spec.path, reason: spec.controller + " must remain a private zero-field struct"})
+						} else if len(structure.Fields.List) != 0 {
+							findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s must retain no Mux or mutable state; got %d field declarations", spec.controller, len(structure.Fields.List))})
+						}
+						gotParams := renderedNamedFields(fset, node.TypeParams)
+						wantParams := []string{"ownerPort:sessionIngressOwnerPort", "applyPort:sessionIngressApplyPort"}
+						if strings.Join(gotParams, "|") != strings.Join(wantParams, "|") {
+							findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s generic parameters=%v want=%v", spec.controller, gotParams, wantParams)})
+						}
+					}
+					wantMethods, isPort := slice62aExactPortMethods[node.Name.Name]
+					if !isPort {
+						continue
+					}
+					port, ok := node.Type.(*ast.InterfaceType)
+					if !ok {
+						findings = append(findings, finding{path: spec.path, reason: node.Name.Name + " must remain a private interface"})
+						continue
+					}
+					gotMethods := make([]string, 0, len(port.Methods.List))
+					for _, method := range port.Methods.List {
+						gotMethods = append(gotMethods, renderSlice62aInterfaceMethod(fset, method))
+						function, ok := method.Type.(*ast.FuncType)
+						if !ok || len(method.Names) != 1 || token.IsExported(method.Names[0].Name) {
+							findings = append(findings, finding{path: spec.path, reason: node.Name.Name + " must contain only exact private methods"})
+							continue
+						}
+						for _, list := range []*ast.FieldList{function.Params, function.Results} {
+							for _, typeText := range renderedUnnamedFields(fset, list) {
+								findings = append(findings, forbiddenSlice62aType(spec.path, node.Name.Name, typeText)...)
+							}
+						}
+					}
+					if strings.Join(gotMethods, "|") != strings.Join(wantMethods, "|") {
+						findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s methods=%v want exact %v", node.Name.Name, gotMethods, wantMethods)})
+					}
+					if len(gotMethods) == 0 || len(gotMethods) > spec.maxMethods || len(gotMethods) > 5 {
+						findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s methods=%d must be nonzero, <=%d and <=5", node.Name.Name, len(gotMethods), spec.maxMethods)})
+					}
+					portCount += len(gotMethods)
+				}
+			}
+		case *ast.FuncDecl:
+			if token.IsExported(declaration.Name.Name) {
+				findings = append(findings, finding{path: spec.path, reason: "controller function must remain private: " + declaration.Name.Name})
+			}
+			if declaration.Recv == nil {
+				declarations[declaration.Name.Name]++
+				if declaration.Name.Name == "newSessionIngressController" && renderSlice62aNode(fset, declaration.Type) != slice62aExactConstructorSignature {
+					findings = append(findings, finding{path: spec.path, reason: "constructor signature changed: " + renderSlice62aNode(fset, declaration.Type)})
+				}
+				continue
+			}
+			key := "method:" + declaration.Name.Name
+			declarations[key]++
+			methodInventory[declaration.Name.Name]++
+			if declaration.Name.Name != "route" {
+				continue
+			}
+			gotReceiver := strings.Join(renderedUnnamedFields(fset, declaration.Recv), "|")
+			gotSignature := renderSlice62aNode(fset, declaration.Type)
+			if gotReceiver != slice62aExactRouteReceiver || gotSignature != slice62aExactRouteSignature {
+				findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("route contract receiver=%q signature=%q", gotReceiver, gotSignature)})
+			}
+			var phaseCalls []string
+			ast.Inspect(declaration.Body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				selector, ok := call.Fun.(*ast.SelectorExpr)
+				if ok && (selector.Sel.Name == "acceptSessionIngress" || selector.Sel.Name == "applySessionIngressData" || selector.Sel.Name == "applySessionIngressEnd") {
+					phaseCalls = append(phaseCalls, selector.Sel.Name)
+				}
+				return true
+			})
+			wantOrder := []string{"acceptSessionIngress", "applySessionIngressData", "applySessionIngressEnd"}
+			if strings.Join(phaseCalls, "|") != strings.Join(wantOrder, "|") {
+				findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("route phase source order=%v want accept->data->end", phaseCalls)})
+			}
+		}
+	}
+	if !mapsEqualStringInt(declarations, wantDeclarations) {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("controller declarations=%v want exact %v", declarations, wantDeclarations)})
+	}
+	if len(methodInventory) != 1 || methodInventory["route"] != 1 {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("controller method inventory=%v want exactly route", methodInventory)})
+	}
+	if portCount != spec.budget {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("aggregate port methods=%d budget=%d", portCount, spec.budget)})
+	}
+	return findings
+}
+
+func renderSlice62aNode(fset *token.FileSet, node any) string {
+	var rendered bytes.Buffer
+	_ = format.Node(&rendered, fset, node)
+	return rendered.String()
+}
+
+func renderSlice62aInterfaceMethod(fset *token.FileSet, method *ast.Field) string {
+	if len(method.Names) != 1 {
+		return renderSlice62aNode(fset, method)
+	}
+	return method.Names[0].Name + strings.TrimPrefix(renderSlice62aNode(fset, method.Type), "func")
+}
+
+func mapsEqualStringInt(got, want map[string]int) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for key, value := range want {
+		if got[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func renderedNamedFields(fset *token.FileSet, fields *ast.FieldList) []string {
+	if fields == nil {
+		return nil
+	}
+	var rendered []string
+	for _, field := range fields.List {
+		var typeText bytes.Buffer
+		_ = format.Node(&typeText, fset, field.Type)
+		for _, name := range field.Names {
+			rendered = append(rendered, name.Name+":"+typeText.String())
+		}
+	}
+	return rendered
+}
+
+func renderedUnnamedFields(fset *token.FileSet, fields *ast.FieldList) []string {
+	if fields == nil {
+		return nil
+	}
+	var rendered []string
+	for _, field := range fields.List {
+		var typeText bytes.Buffer
+		_ = format.Node(&typeText, fset, field.Type)
+		rendered = append(rendered, typeText.String())
+	}
+	return rendered
+}
+
+func forbiddenSlice62aType(path, owner, typeText string) []finding {
+	lower := strings.ToLower(typeText)
+	for _, forbidden := range []string{"*mux", "*localsessionregistry", "*pane", "map[", "func(", "chan ", "interface{}", "any"} {
+		if strings.Contains(lower, forbidden) {
+			return []finding{{path: path, reason: owner + " has forbidden retained-owner/state type " + typeText}}
+		}
+	}
+	return nil
+}
+
+type slice62aRouteCall struct {
+	path        string
+	declaration *ast.FuncDecl
+	call        *ast.CallExpr
+	receiver    ast.Expr
+}
+
+func checkSlice62aIngressSurface() []finding {
+	const root = "internal/mux"
+	fset := token.NewFileSet()
+	var findings []finding
+	muxControllerFields := 0
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return []finding{{path: root, reason: err.Error()}}
+	}
+	files := make(map[string]*ast.File)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		path := filepath.Join(root, entry.Name())
+		file, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			findings = append(findings, finding{path: filepath.ToSlash(path), reason: parseErr.Error()})
+			continue
+		}
+		files[filepath.ToSlash(path)] = file
+	}
+	for path, file := range files {
+		for _, declaration := range file.Decls {
+			switch declaration := declaration.(type) {
+			case *ast.GenDecl:
+				for _, item := range declaration.Specs {
+					typeSpec, ok := item.(*ast.TypeSpec)
+					if ok && token.IsExported(typeSpec.Name.Name) && strings.Contains(strings.ToLower(typeSpec.Name.Name), "ingress") {
+						findings = append(findings, finding{path: path, reason: "exported ingress type bypass " + typeSpec.Name.Name})
+					}
+					if !ok || typeSpec.Name.Name != "Mux" {
+						continue
+					}
+					structure, ok := typeSpec.Type.(*ast.StructType)
+					if !ok {
+						continue
+					}
+					for _, field := range structure.Fields.List {
+						for _, name := range field.Names {
+							if name.Name != "sessionIngress" {
+								continue
+							}
+							muxControllerFields++
+							want := "sessionIngressController[sessionIngressRecordAdapter, muxSessionIngressOperationAdapter]"
+							if got := renderSlice62aNode(fset, field.Type); got != want {
+								findings = append(findings, finding{path: path, reason: "Mux.sessionIngress type=" + got + " want " + want})
+							}
+						}
+					}
+				}
+			case *ast.FuncDecl:
+				if token.IsExported(declaration.Name.Name) && strings.Contains(strings.ToLower(declaration.Name.Name), "ingress") {
+					findings = append(findings, finding{path: path, reason: "exported ingress function/method bypass " + declaration.Name.Name})
+				}
+				if declaration.Body == nil {
+					continue
+				}
+				ast.Inspect(declaration.Body, func(node ast.Node) bool {
+					call, ok := node.(*ast.CallExpr)
+					if !ok {
+						return true
+					}
+					selector, ok := call.Fun.(*ast.SelectorExpr)
+					if ok && selector.Sel.Name == "adaptSessionIngressRecord" && (declaration.Name.Name != "Drain" || !receiverNamed(declaration.Recv, "Mux")) {
+						findings = append(findings, finding{path: path, reason: "session-ingress owner adaptation bypass outside (*Mux).Drain"})
+					}
+					return true
+				})
+			}
+		}
+	}
+	findings = append(findings, checkSlice62aProductionControllerMethodInventory(files)...)
+	findings = append(findings, checkSlice62aRouteExclusivity(files)...)
+	if muxControllerFields != 1 {
+		findings = append(findings, finding{path: "internal/mux/mux.go", reason: fmt.Sprintf("Mux session-ingress controller fields=%d want=1", muxControllerFields)})
+	}
+	return findings
+}
+
+func slice62aControllerTypeNames(files map[string]*ast.File) map[string]bool {
+	typeNames := map[string]bool{"sessionIngressController": true}
+	for {
+		changed := false
+		for _, file := range files {
+			for _, declaration := range file.Decls {
+				generic, ok := declaration.(*ast.GenDecl)
+				if !ok {
+					continue
+				}
+				for _, item := range generic.Specs {
+					typeSpec, ok := item.(*ast.TypeSpec)
+					if ok && !typeNames[typeSpec.Name.Name] && slice62aControllerTypeExpression(typeSpec.Type, typeNames) {
+						typeNames[typeSpec.Name.Name] = true
+						changed = true
+					}
+				}
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+	return typeNames
+}
+
+func checkSlice62aProductionControllerMethodInventory(files map[string]*ast.File) []finding {
+	typeNames := slice62aControllerTypeNames(files)
+	methodCount := 0
+	var findings []finding
+	for path, file := range files {
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Recv == nil || len(function.Recv.List) != 1 || !slice62aControllerTypeExpression(function.Recv.List[0].Type, typeNames) {
+				continue
+			}
+			methodCount++
+			if path != "internal/mux/session_ingress_controller.go" || function.Name.Name != "route" {
+				findings = append(findings, finding{path: path, reason: "sessionIngressController production method inventory permits only route in session_ingress_controller.go"})
+			}
+		}
+	}
+	if methodCount != 1 {
+		findings = append(findings, finding{path: "internal/mux/session_ingress_controller.go", reason: fmt.Sprintf("production sessionIngressController methods=%d want exactly route", methodCount)})
+	}
+	return findings
+}
+
+func checkSlice62aRouteExclusivity(files map[string]*ast.File) []finding {
+	var calls []slice62aRouteCall
+	for path, file := range files {
+		for _, declaration := range file.Decls {
+			function, _ := declaration.(*ast.FuncDecl)
+			var root ast.Node = declaration
+			if function != nil {
+				if function.Body == nil {
+					continue
+				}
+				root = function.Body
+			}
+			ast.Inspect(root, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				selector, ok := call.Fun.(*ast.SelectorExpr)
+				if ok && selector.Sel.Name == "route" {
+					calls = append(calls, slice62aRouteCall{path: path, declaration: function, call: call, receiver: selector.X})
+				}
+				return true
+			})
+		}
+	}
+	var findings []finding
+	for _, route := range calls {
+		if !slice62aCanonicalRouteCall(route) {
+			findings = append(findings, finding{path: route.path, reason: "private production mux selector method name route is reserved through Slice 6.2d; only the exact m.sessionIngress.route call inside (*Mux).Drain in mux.go is permitted"})
+		}
+	}
+	if len(calls) != 1 {
+		findings = append(findings, finding{path: "internal/mux/mux.go", reason: fmt.Sprintf("production mux selector route calls=%d want exactly 1 exact m.sessionIngress.route call in (*Mux).Drain", len(calls))})
+	}
+	return findings
+}
+
+func slice62aControllerTypeExpression(expression ast.Expr, names map[string]bool) bool {
+	switch expression := expression.(type) {
+	case nil:
+		return false
+	case *ast.Ident:
+		return names[expression.Name]
+	case *ast.IndexExpr:
+		return slice62aControllerTypeExpression(expression.X, names)
+	case *ast.IndexListExpr:
+		return slice62aControllerTypeExpression(expression.X, names)
+	case *ast.ParenExpr:
+		return slice62aControllerTypeExpression(expression.X, names)
+	case *ast.StarExpr:
+		return slice62aControllerTypeExpression(expression.X, names)
+	}
+	return false
+}
+
+func slice62aCanonicalRouteCall(route slice62aRouteCall) bool {
+	if route.declaration == nil || filepath.ToSlash(route.path) != "internal/mux/mux.go" || route.declaration.Name.Name != "Drain" {
+		return false
+	}
+	if route.declaration.Recv == nil || len(route.declaration.Recv.List) != 1 || len(route.declaration.Recv.List[0].Names) != 1 || route.declaration.Recv.List[0].Names[0].Name != "m" {
+		return false
+	}
+	pointer, ok := route.declaration.Recv.List[0].Type.(*ast.StarExpr)
+	if !ok || !slice62aIdentifierNamed(pointer.X, "Mux") {
+		return false
+	}
+	controller, ok := route.receiver.(*ast.SelectorExpr)
+	if !ok || !slice62aIdentifierNamed(controller.X, "m") || controller.Sel.Name != "sessionIngress" {
+		return false
+	}
+	args := route.call.Args
+	return len(args) == 5 && slice62aIdentifierNamed(args[0], "events") && slice62aIdentifierNamed(args[1], "accepted") &&
+		slice62aIdentifierNamed(args[2], "operation") && slice62aSelectorNamed(args[3], "record", "data") && slice62aSelectorNamed(args[4], "record", "err")
+}
+
+func slice62aIdentifierNamed(expression ast.Expr, name string) bool {
+	identifier, ok := expression.(*ast.Ident)
+	return ok && identifier.Name == name
+}
+
+func slice62aSelectorNamed(expression ast.Expr, owner, field string) bool {
+	selector, ok := expression.(*ast.SelectorExpr)
+	return ok && slice62aIdentifierNamed(selector.X, owner) && selector.Sel.Name == field
+}
+
+func checkSlice62aRouteAliasSelfTest() []finding {
+	fixtures := []struct {
+		name   string
+		source string
+	}{
+		{
+			name: "local controller alias",
+			source: `package mux
+				type Mux struct { sessionIngress int }
+				func (m *Mux) Drain() {
+					var events, accepted, operation, record any
+					m.sessionIngress.route(events, accepted, operation, record.data, record.err)
+					controller := m.sessionIngress
+					controller.route(events, accepted, operation, record.data, record.err)
+				}`,
+		},
+		{
+			name: "transitive global controller aliases",
+			source: `package mux
+				type sessionIngressController[T any] struct{}
+				type Mux struct { sessionIngress sessionIngressController[int] }
+				var routeRoot = sessionIngressController[int]{}
+				var routeAlias = routeRoot
+				var transitiveRouteAlias = routeAlias
+				var globalAliasBypass = transitiveRouteAlias.route(nil, nil, nil, nil, nil)
+				func (m *Mux) Drain() {
+					var events, accepted, operation, record any
+					m.sessionIngress.route(events, accepted, operation, record.data, record.err)
+				}`,
+		},
+		{
+			name: "controller stored under another struct field",
+			source: `package mux
+				type sessionIngressController[T any] struct{}
+				type Mux struct { sessionIngress sessionIngressController[int] }
+				type routeHolder struct { controller sessionIngressController[int] }
+				var alternate routeHolder
+				func (m *Mux) Drain() {
+					var events, accepted, operation, record any
+					m.sessionIngress.route(events, accepted, operation, record.data, record.err)
+				}
+				func storedFieldBypass(events, accepted, operation, record any) {
+					alternate.controller.route(events, accepted, operation, record.data, record.err)
+				}`,
+		},
+	}
+	var findings []finding
+	for _, fixture := range fixtures {
+		file, err := parser.ParseFile(token.NewFileSet(), "internal/mux/mux.go", fixture.source, 0)
+		if err != nil {
+			findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: "cannot parse Slice 6.2a route-exclusivity self-test " + fixture.name + ": " + err.Error()})
+			continue
+		}
+		got := checkSlice62aRouteExclusivity(map[string]*ast.File{"internal/mux/mux.go": file})
+		rejected := false
+		for _, item := range got {
+			if strings.Contains(item.reason, "selector method name route is reserved") {
+				rejected = true
+				break
+			}
+		}
+		if !rejected {
+			findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: "route-exclusivity self-test did not reject " + fixture.name})
+		}
+	}
+	return findings
+}
+
+func receiverNamed(fields *ast.FieldList, name string) bool {
+	if fields == nil || len(fields.List) != 1 {
+		return false
+	}
+	typeExpr := fields.List[0].Type
+	if pointer, ok := typeExpr.(*ast.StarExpr); ok {
+		typeExpr = pointer.X
+	}
+	identifier, ok := typeExpr.(*ast.Ident)
+	return ok && identifier.Name == name
+}
+
+func checkSlice62aCommitsAndPaths() []finding {
+	const (
+		base        = "c2a0137c50c099ce28014a7582eac3ee6a4340f1"
+		tCommit     = "271325ba47efe7e948f58fa314475f37e1176bc3"
+		aCommit     = "45514c813494351e7608b858aa6ab35e7643d33a"
+		mCommit     = "66072c984f6df723412cadb0cc43a8fb147c255e"
+		wCommit     = "aa1bfd4a830cd7fc88e7f6e25288ed4eb3879ae2"
+		gSubject    = "refactor(mux): guard session ingress controller delegation"
+		sliceBranch = "arch/l3-01a-mux-session-ingress"
+	)
+	stages := []struct {
+		class, commit, parent, subject string
+	}{
+		{"T", tCommit, base, "test(mux): characterize session ingress ordering"},
+		{"A", aCommit, tCommit, "refactor(mux): add session ingress controller seam"},
+		{"M", mCommit, aCommit, "refactor(mux): split session ingress adapters"},
+		{"W", wCommit, mCommit, "refactor(mux): wire session ingress controller"},
+	}
+	branch, _ := gitText("symbolic-ref", "--quiet", "--short", "HEAD")
+	head, _ := gitText("rev-parse", "HEAD")
+	worktree, _ := gitText("status", "--porcelain=v1", "--untracked-files=all")
+	if shallow, _ := gitText("rev-parse", "--is-shallow-repository"); shallow == "true" {
+		missingHistory := false
+		for _, stage := range append([]struct{ class, commit, parent, subject string }{{class: "base", commit: base}}, stages...) {
+			if _, err := gitText("cat-file", "-e", stage.commit+"^{commit}"); err != nil {
+				missingHistory = true
+				break
+			}
+		}
+		if missingHistory {
+			gCommit, _ := findMaturitySliceCommitBySubject(gSubject)
+			return checkSlice62aShallowFallback(branch == sliceBranch, head, wCommit, gCommit, worktree)
+		}
+	}
+	var findings []finding
+	for _, stage := range stages {
+		identity, err := gitFields("show", "-s", "--format=%H%x00%P%x00%s", stage.commit)
+		if err != nil || len(identity) != 3 {
+			findings = append(findings, finding{path: "git:" + stage.class, reason: "missing Slice 6.2a commit " + stage.commit})
+			continue
+		}
+		parent, parentErr := gitText("rev-parse", stage.parent+"^{commit}")
+		if parentErr != nil || identity[0] != stage.commit || identity[1] != parent || identity[2] != stage.subject {
+			findings = append(findings, finding{path: "git:" + stage.class, reason: fmt.Sprintf("unexpected identity/parent/subject for %s: parent=%s subject=%q", identity[0], identity[1], identity[2])})
+		}
+	}
+	gCommit, _ := findMaturitySliceCommit(gSubject, wCommit)
+	end := gCommit
+	includeWorktree := false
+	if gCommit == "" {
+		if head != wCommit {
+			findings = append(findings, finding{path: "git:G", reason: "before Slice 6.2a G, HEAD must be the exact immutable W commit"})
+			return findings
+		}
+		end = wCommit
+		includeWorktree = true
+	} else {
+		findings = append(findings, checkSlice62aPostGActiveState(branch == sliceBranch, head, gCommit, worktree)...)
+	}
+	findings = append(findings, checkSlice62aExactPaths(base, end, includeWorktree)...)
+	return findings
+}
+
+func findMaturitySliceCommitBySubject(subject string) (string, error) {
+	log, err := gitText("log", "--format=%H%x00%s", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(log, "\n") {
+		parts := strings.Split(line, "\x00")
+		if len(parts) == 2 && parts[1] == subject {
+			return parts[0], nil
+		}
+	}
+	return "", fmt.Errorf("missing commit with exact subject %q", subject)
+}
+
+func checkSlice62aExactPaths(base, end string, includeWorktree bool) []finding {
+	pathsText, err := gitText("diff", "--name-only", base+".."+end)
+	if err != nil {
+		return []finding{{path: "git:paths", reason: err.Error()}}
+	}
+	paths := nonEmptyLines(pathsText)
+	if includeWorktree {
+		for _, args := range [][]string{{"diff", "--name-only"}, {"diff", "--cached", "--name-only"}, {"ls-files", "--others", "--exclude-standard"}} {
+			text, _ := gitText(args...)
+			paths = append(paths, nonEmptyLines(text)...)
+		}
+	}
+	actual := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		actual[filepath.ToSlash(path)] = true
+	}
+	expected := make(map[string]bool, len(slice62aAllowedPaths))
+	var findings []finding
+	for _, path := range slice62aAllowedPaths {
+		expected[path] = true
+		if !actual[path] {
+			findings = append(findings, finding{path: path, reason: "missing from exact Slice 6.2a changed-path set"})
+		}
+	}
+	for path := range actual {
+		if !expected[path] {
+			findings = append(findings, finding{path: path, reason: "outside exact Slice 6.2a changed-path allowlist"})
+		}
+	}
+	return findings
+}
+
+func checkSlice62aPostGActiveState(active bool, head, gCommit, worktree string) []finding {
+	if !active {
+		return nil
+	}
+	var findings []finding
+	if head != gCommit {
+		findings = append(findings, finding{path: "git:G", reason: "after G exists on the active Slice 6.2a branch, HEAD must equal G exactly"})
+	}
+	if strings.TrimSpace(worktree) != "" {
+		findings = append(findings, finding{path: "git:worktree", reason: "after G exists on the active Slice 6.2a branch, the nonignored worktree must be clean"})
+	}
+	return findings
+}
+
+func checkSlice62aPostGPolicySelfTest() []finding {
+	if got := checkSlice62aPostGActiveState(true, "later", "g", ""); len(got) != 1 || got[0].path != "git:G" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2a post-G policy self-test did not reject an active-branch commit after G"}}
+	}
+	if got := checkSlice62aPostGActiveState(true, "g", "g", " M dirty.go"); len(got) != 1 || got[0].path != "git:worktree" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2a post-G policy self-test did not reject an active-branch dirty worktree"}}
+	}
+	if got := checkSlice62aPostGActiveState(false, "later", "g", " M unrelated.go"); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2a post-G policy self-test rejected later merge/main history"}}
+	}
+	return nil
+}
+
+func slice62aDocumentRequirements() []string {
+	return []string{
+		"| T | `271325b` |",
+		"| A | `45514c8` |",
+		"| M | `66072c9` |",
+		"| W | `aa1bfd4` |",
+		"| G | pending |",
+		"refactor(mux): guard session ingress controller delegation",
+		"L3-01 remains **partial**",
+		"formal closure is deferred to Slice 6.2d",
+	}
+}
+
+func slice62aDocumentFindings(text string) []finding {
+	const path = "docs/validation/architecture-maturity-slice-6.2a.md"
+	var findings []finding
+	for _, value := range slice62aDocumentRequirements() {
+		if !strings.Contains(text, value) {
+			findings = append(findings, finding{path: path, reason: "shallow checkout is missing documented commit/closure contract " + value})
+		}
+	}
+	for _, allowed := range slice62aAllowedPaths {
+		if !strings.Contains(text, "\n"+allowed+"\n") {
+			findings = append(findings, finding{path: path, reason: "shallow checkout allowlist is missing " + allowed})
+		}
+	}
+	return findings
+}
+
+func checkSlice62aDocumentedSequence() []finding {
+	const path = "docs/validation/architecture-maturity-slice-6.2a.md"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	return slice62aDocumentFindings(string(data))
+}
+
+func checkSlice62aShallowFallback(active bool, head, wCommit, gCommit, worktree string) []finding {
+	const path = "docs/validation/architecture-maturity-slice-6.2a.md"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	return slice62aShallowFallbackFindings(string(data), active, head, wCommit, gCommit, worktree)
+}
+
+func slice62aShallowFallbackFindings(document string, active bool, head, wCommit, gCommit, worktree string) []finding {
+	findings := slice62aDocumentFindings(document)
+	if !active {
+		return findings
+	}
+	if gCommit != "" {
+		return append(findings, checkSlice62aPostGActiveState(true, head, gCommit, worktree)...)
+	}
+	if head != wCommit {
+		findings = append(findings, finding{path: "git:G", reason: "history-limited active Slice 6.2a branch without identifiable G must remain at immutable W"})
+	}
+	return findings
+}
+
+func checkSlice62aCombinedShallowPostGSelfTest() []finding {
+	valid := "\n" + strings.Join(slice62aDocumentRequirements(), "\n") + "\n" + strings.Join(slice62aAllowedPaths, "\n") + "\n"
+	if got := slice62aDocumentFindings(valid); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2a shallow-doc self-test rejected a complete synthetic contract"}}
+	}
+	missingContract := strings.Replace(valid, slice62aDocumentRequirements()[0], "", 1)
+	if got := slice62aDocumentFindings(missingContract); len(got) != 1 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2a shallow-doc self-test did not reject one missing commit contract"}}
+	}
+	missingPath := strings.Replace(valid, "\n"+slice62aAllowedPaths[0]+"\n", "\n", 1)
+	if got := slice62aDocumentFindings(missingPath); len(got) != 1 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2a shallow-doc self-test did not reject one missing allowlist path"}}
+	}
+	postG := slice62aShallowFallbackFindings(valid, true, "later", "w", "g", " M dirty.go")
+	if len(postG) != 2 || postG[0].path != "git:G" || postG[1].path != "git:worktree" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "combined shallow/post-G self-test did not enforce active-branch HEAD and clean-worktree policy"}}
+	}
+	if got := slice62aShallowFallbackFindings(valid, false, "later-main", "w", "g", " M unrelated.go"); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "combined shallow/post-G self-test rejected later main history"}}
+	}
+	if got := slice62aShallowFallbackFindings(valid, true, "later", "w", "", ""); len(got) != 1 || got[0].path != "git:G" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "combined shallow/pre-G self-test did not reject an unidentified active-branch commit beyond W"}}
+	}
+	return nil
 }
 
 func gitText(args ...string) (string, error) {

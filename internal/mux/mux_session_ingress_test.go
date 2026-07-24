@@ -191,6 +191,37 @@ func TestMuxSessionIngressRejectedRecordConsumesDrainLimit(t *testing.T) {
 	}
 }
 
+func TestMuxClosePaneDropsAlreadyQueuedSessionIngress(t *testing.T) {
+	m, _, _ := newTestMux(t)
+	if m.imageScheduler != nil {
+		t.Fatal("test requires image-disabled mux so Drain selects only queued ingress")
+	}
+	pane := lookupPaneForTest(t, m.sessions, 1)
+	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: []byte("must-not-apply")}
+
+	closeEvents, err := m.ClosePane(pane.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(closeEvents) == 0 || closeEvents[0].Kind != PaneClosed {
+		t.Fatalf("close events=%#v want PaneClosed first", closeEvents)
+	}
+	// Shutdown joins the reader so any close-induced EOF is queued before the
+	// unbounded drain; both the original data and EOF must be rejected.
+	if err := m.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+	if events := m.Drain(0); len(events) != 0 {
+		t.Fatalf("queued ingress for closed pane emitted events=%#v", events)
+	}
+	if got := len(m.sessions.incoming); got != 0 {
+		t.Fatalf("queued ingress records after joined drain=%d want=0", got)
+	}
+	if _, ok := m.PaneView(pane.id); ok {
+		t.Fatal("closed pane remained publicly visible after queued ingress rejection")
+	}
+}
+
 func TestMuxSessionIngressPreservesCallbackEnqueue(t *testing.T) {
 	factory := &fakeFactory{}
 	var m *Mux
@@ -370,6 +401,105 @@ func TestKnownDefect_L3_08_GenericEventEnvelopeAcceptsInvalidPayloadCombination(
 }
 
 var benchmarkMuxSessionIngressEvents []Event
+
+func drainMuxSessionIngressStaleInlineAcceptanceForBenchmark(m *Mux) []Event {
+	var events []Event
+	events = append(events, m.expireImages(m.options.Now())...)
+	for count := 0; count < 1; count++ {
+		var imageReady <-chan struct{}
+		if m.imageScheduler != nil {
+			imageReady = m.imageScheduler.ready()
+		}
+		select {
+		case <-imageReady:
+			completion, ok := m.imageScheduler.takeCompletion()
+			if !ok {
+				continue
+			}
+			events = append(events, m.applyImageCompletion(completion)...)
+		case record := <-m.sessions.incoming:
+			registered, found := m.sessions.lookup(record.pane)
+			if !found || registered != record.owner || registered.state == PaneStateClosed || registered.state == PaneStateClosing {
+				return m.ResolveEventAddresses(events)
+			}
+			operation := muxSessionIngressOperationAdapter{mux: m, pane: registered}
+			if len(record.data) > 0 {
+				events = operation.applySessionIngressData(events, record.data)
+			}
+			if record.err != nil {
+				events = operation.applySessionIngressEnd(events, record.err)
+			}
+		default:
+			return m.ResolveEventAddresses(events)
+		}
+	}
+	return m.ResolveEventAddresses(events)
+}
+
+func drainMuxSessionIngressOperationAdapterAcceptanceForBenchmark(m *Mux) []Event {
+	var events []Event
+	events = append(events, m.expireImages(m.options.Now())...)
+	for count := 0; count < 1; count++ {
+		var imageReady <-chan struct{}
+		if m.imageScheduler != nil {
+			imageReady = m.imageScheduler.ready()
+		}
+		select {
+		case <-imageReady:
+			completion, ok := m.imageScheduler.takeCompletion()
+			if !ok {
+				continue
+			}
+			events = append(events, m.applyImageCompletion(completion)...)
+		case record := <-m.sessions.incoming:
+			accepted := m.sessions.adaptSessionIngressRecord(record)
+			operation := muxSessionIngressOperationAdapter{mux: m, pane: accepted.registered}
+			if !accepted.acceptSessionIngress() {
+				return m.ResolveEventAddresses(events)
+			}
+			if len(record.data) > 0 {
+				events = operation.applySessionIngressData(events, record.data)
+			}
+			if record.err != nil {
+				events = operation.applySessionIngressEnd(events, record.err)
+			}
+		default:
+			return m.ResolveEventAddresses(events)
+		}
+	}
+	return m.ResolveEventAddresses(events)
+}
+
+func BenchmarkMuxSessionIngressStaleAcceptancePaths(b *testing.B) {
+	benchmarks := []struct {
+		name  string
+		drain func(*Mux) []Event
+	}{
+		{name: "stale-inline-acceptance", drain: drainMuxSessionIngressStaleInlineAcceptanceForBenchmark},
+		{name: "operation-adapter-acceptance", drain: drainMuxSessionIngressOperationAdapterAcceptanceForBenchmark},
+		{name: "active-generic-controller-route", drain: func(m *Mux) []Event { return m.Drain(1) }},
+	}
+	for _, benchmark := range benchmarks {
+		b.Run(benchmark.name, func(b *testing.B) {
+			m := New(&fakeFactory{}, Options{IngressCapacity: 1})
+			b.Cleanup(func() { _ = m.Shutdown() })
+			if m.imageScheduler != nil {
+				b.Fatal("benchmark requires image-disabled mux")
+			}
+			record := ingressRecord{pane: 999, data: []byte("stale")}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				m.sessions.incoming <- record
+				benchmarkMuxSessionIngressEvents = benchmark.drain(m)
+			}
+			b.StopTimer()
+			if len(benchmarkMuxSessionIngressEvents) != 0 {
+				b.Fatalf("stale ingress events=%#v", benchmarkMuxSessionIngressEvents)
+			}
+		})
+	}
+}
 
 func BenchmarkMuxSessionIngressRejectedStale(b *testing.B) {
 	m := New(&fakeFactory{}, Options{IngressCapacity: 1})
