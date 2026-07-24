@@ -44,6 +44,11 @@ type FreshLaunch struct {
 }
 
 func (m *Mux) FreshSessionSnapshot() (FreshSessionSnapshot, error) {
+	return (muxRestorePreparationOperationAdapter{mux: m}).freshSessionSnapshot()
+}
+
+func (a muxRestorePreparationOperationAdapter) freshSessionSnapshot() (FreshSessionSnapshot, error) {
+	m := a.mux
 	if err := m.model.CheckInvariants(); err != nil {
 		return FreshSessionSnapshot{}, err
 	}
