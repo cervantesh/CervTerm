@@ -196,16 +196,22 @@ func BenchmarkMuxRestoreCoordinatorAttribution(b *testing.B) {
 		name string
 		run  func()
 	}{
-		{name: "invalid/direct-adapter", run: func() {
+		{name: "fresh-invalid/direct-adapter", run: func() {
+			muxRestoreWiringSnapshot, muxRestoreWiringError = (muxRestorePreparationOperationAdapter{mux: direct}).freshSessionSnapshot()
+		}},
+		{name: "fresh-invalid/coordinator", run: func() {
+			muxRestoreWiringSnapshot, muxRestoreWiringError = wired.FreshSessionSnapshot()
+		}},
+		{name: "invalid-window-ids/direct-adapter", run: func() {
 			muxRestoreWiringIDs, muxRestoreWiringError = (muxRestorePublicationOperationAdapter{mux: direct}).restoreWindowIDs(nil)
 		}},
-		{name: "invalid/coordinator", run: func() {
+		{name: "invalid-window-ids/coordinator", run: func() {
 			muxRestoreWiringIDs, muxRestoreWiringError = wired.RestoreWindowIDs(nil)
 		}},
-		{name: "pending/direct-adapter", run: func() {
+		{name: "pending-prepare/direct-adapter", run: func() {
 			muxRestoreWiringCandidate, muxRestoreWiringError = (muxRestorePreparationOperationAdapter{mux: direct, blueprint: blueprint, geometries: geometries}).prepareRestore()
 		}},
-		{name: "pending/coordinator", run: func() {
+		{name: "pending-prepare/coordinator", run: func() {
 			muxRestoreWiringCandidate, muxRestoreWiringError = wired.PrepareRestore(blueprint, geometries)
 		}},
 		{name: "window-ids/direct-adapter", run: func() {
@@ -213,6 +219,18 @@ func BenchmarkMuxRestoreCoordinatorAttribution(b *testing.B) {
 		}},
 		{name: "window-ids/coordinator", run: func() {
 			muxRestoreWiringIDs, muxRestoreWiringError = wired.RestoreWindowIDs(wiredCandidate)
+		}},
+		{name: "commit-invalid/direct-adapter", run: func() {
+			muxRestoreWiringEvents, muxRestoreWiringError = (muxRestorePublicationOperationAdapter{mux: direct}).commitRestore(nil)
+		}},
+		{name: "commit-invalid/coordinator", run: func() {
+			muxRestoreWiringEvents, muxRestoreWiringError = wired.CommitRestore(nil)
+		}},
+		{name: "abort-invalid/direct-adapter", run: func() {
+			muxRestoreWiringError = (muxRestorePublicationOperationAdapter{mux: direct}).abortRestore(nil)
+		}},
+		{name: "abort-invalid/coordinator", run: func() {
+			muxRestoreWiringError = wired.AbortRestore(nil)
 		}},
 	}
 	for _, benchmark := range benchmarks {
