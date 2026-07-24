@@ -4,8 +4,7 @@ package glfwgl
 
 import (
 	"cervterm/internal/ime"
-	termmux "cervterm/internal/mux"
-	"errors"
+
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
@@ -69,12 +68,6 @@ func (a *App) adoptInitialProjection(window *glfw.Window) error {
 	}
 	appendTerminalImageCacheResource(bundle, a)
 	bundle.resources = append(bundle.resources, projectionResourceFunc(a.closeNotificationEffectSink))
-	a.activateProjectionIME(window, bundle.beforeUnbind)
-	if accessibilityErr := prepareProjectionAccessibility(a, window, bundle.beforeUnbind); accessibilityErr != nil {
-		return errors.Join(accessibilityErr, bundle.beforeUnbind.close())
-	}
-	if err := a.controller.adoptProjectionBundle(termmux.WindowID(initialWindowID), bundle); err != nil {
-		return errors.Join(err, bundle.beforeUnbind.close())
-	}
-	return nil
+	capabilities := &initialNativeCapabilityAdapter{app: a, window: window, bundle: bundle}
+	return newNativeCapabilityController().activateInitial(capabilities)
 }

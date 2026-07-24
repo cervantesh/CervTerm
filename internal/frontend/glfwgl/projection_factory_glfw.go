@@ -3,7 +3,6 @@
 package glfwgl
 
 import (
-	"fmt"
 	"time"
 
 	"cervterm/internal/config"
@@ -127,25 +126,18 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 	}}
 	title = "CervTerm"
 	bundle.handle = child.applyMuxEvents
+	capabilities := &childNativeCapabilityAdapter{app: child, window: window, bundle: bundle}
+	if activationErr := newNativeCapabilityController().prepareChild(capabilities); activationErr != nil {
+		return fail(activationErr)
+	}
 	bundle.bind = func(id termmux.WindowID) error {
-		if id == 0 {
-			return fmt.Errorf("bind projection: %w", errWindowProjectionMissing)
-		}
-		child.windowID = id
-		if accessibilityErr := prepareProjectionAccessibility(child, window, bundle.beforeUnbind); accessibilityErr != nil {
-			child.windowID = 0
-			return accessibilityErr
-		}
-		child.catchUpBellEvents()
-		child.installCallbacks()
-		child.needsRedraw = true
-		return nil
+		capabilities := &childNativeCapabilityAdapter{app: child, window: window, bundle: bundle}
+		return newNativeCapabilityController().bindChild(capabilities, id)
 	}
 	bundle.unbind = func() error {
 		child.windowID = 0
 		return nil
 	}
-	child.activateProjectionIME(window, bundle.beforeUnbind)
 	return bundle, spec, content, metrics, title, nil
 }
 
@@ -168,6 +160,7 @@ func newProjectionApp(owner *App) *App {
 	child.initInputController()
 	child.initRenderController()
 	child.initReloadController()
+	child.initScriptLifecycleController()
 	child.initActionBindings()
 	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {
 		child.statsSpec, child.statsSpecOK = spec, true

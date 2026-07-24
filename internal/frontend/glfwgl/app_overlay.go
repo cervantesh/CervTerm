@@ -21,21 +21,7 @@ type overlayRender struct {
 // shouldRedraw, mirroring syncStatusSegments. It surfaces any deduped build-time
 // notices and re-fetches the committed scenes on a seq change, requesting a
 // repaint so the new scene lands promptly on an on-demand frame.
-func (a *App) syncOverlays() {
-	if a.scriptRT == nil {
-		return
-	}
-	for _, msg := range a.scriptRT.DrainOverlayNotices() {
-		a.Notify("script error: " + msg)
-	}
-	seq := a.scriptRT.OverlaySeq()
-	if seq == a.overlays.seq {
-		return
-	}
-	a.overlays.seq = seq
-	a.overlays.scenes = a.scriptRT.Overlays()
-	a.requestRedraw()
-}
+func (a *App) syncOverlays() { a.ensureScriptLifecycleController().syncOverlays(a, a) }
 
 // markOverlayDamage marks every visible overlay's covered rows damaged. Called
 // each frame from prepareDamage: a translucent overlay must recomposite over a

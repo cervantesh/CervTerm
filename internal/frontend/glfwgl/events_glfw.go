@@ -12,11 +12,11 @@ import (
 // fireScriptEvent runs a terminal-event handler when a runtime is present,
 // surfacing any script error as a transient notice. Called on the main thread.
 func (a *App) fireScriptEvent(fire func() error) {
-	if a.scriptRT == nil {
+	if !a.scriptLifecycleRuntimeAvailable() {
 		return
 	}
 	if err := fire(); err != nil {
-		a.Notify("script error: " + err.Error())
+		a.reportScriptLifecycleError(err)
 	}
 }
 
@@ -122,23 +122,7 @@ func (a *App) recordPaneScroll(id termmux.PaneID) {
 // draw(). Each pending event fires at most once per iteration with the final
 // coalesced value.
 func (a *App) fireLifecycleEvents() {
-	if a.scriptRT == nil {
-		clear(a.pendingPaneResize)
-		clear(a.pendingPaneScroll)
-		return
-	}
-	resizeEvents := a.pendingPaneResize
-	a.pendingPaneResize = make(map[termmux.PaneID]termmux.PaneGeometry)
-	for pane, geometry := range resizeEvents {
-		host := paneHost{app: a, pane: pane}
-		a.fireScriptEvent(func() error { return a.scriptRT.FireResize(host, geometry.Cols, geometry.Rows) })
-	}
-	scrollEvents := a.pendingPaneScroll
-	a.pendingPaneScroll = make(map[termmux.PaneID]int)
-	for pane, offset := range scrollEvents {
-		host := paneHost{app: a, pane: pane}
-		a.fireScriptEvent(func() error { return a.scriptRT.FireScroll(host, offset) })
-	}
+	a.ensureScriptLifecycleController().dispatchPending(a, a)
 }
 
 // fireDueTimers runs any script timers whose deadline has passed. No timers (or
@@ -147,8 +131,5 @@ func (a *App) fireLifecycleEvents() {
 // thread; a timer they schedule is seen by the next nextWakeTimeout because both
 // mutate the table on this same thread (no cross-thread wake needed).
 func (a *App) fireDueTimers(now time.Time) {
-	if a.scriptRT == nil {
-		return
-	}
-	a.scriptRT.FireDueTimers(now, a.hostForFocused())
+	a.ensureScriptLifecycleController().fireDueTimers(a, a, now)
 }

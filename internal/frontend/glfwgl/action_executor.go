@@ -21,7 +21,7 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 func (a *App) executeActionCommand(envelope termaction.Envelope, context termaction.Context, pane termmux.PaneID) error {
 	switch command := envelope.Action.(type) {
 	case termaction.CopySelection:
-		text := (paneHost{app: a, pane: pane}).Selection()
+		text := newPaneHost(a, pane).Selection()
 		if text != "" {
 			a.SetClipboard(text)
 		}
@@ -208,7 +208,7 @@ func (a *App) executeActionCommand(envelope termaction.Envelope, context termact
 		if a.scriptRT == nil {
 			return actionExecutionError(command, termaction.ErrorScript, errors.New("script runtime is unavailable"))
 		}
-		if err := a.scriptRT.Dispatch(command.BindingIndex, paneHost{app: a, pane: pane}); err != nil {
+		if err := a.scriptRT.Dispatch(command.BindingIndex, newPaneHost(a, pane)); err != nil {
 			return actionExecutionError(command, termaction.ErrorScript, err)
 		}
 	default:

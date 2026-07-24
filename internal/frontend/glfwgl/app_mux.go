@@ -128,7 +128,6 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 		if announcement != accessibility.AnnouncementNone {
 			accessibilityAnnouncements = append(accessibilityAnnouncements, announcement)
 		}
-		host := paneHost{app: a, pane: event.Pane}
 		switch event.Kind {
 		case termmux.PaneStarted:
 			a.ensurePaneUI(event.Pane)
@@ -140,11 +139,7 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 				}
 				a.tabActivity[tab] = true
 			}
-			if len(event.Data) > 0 && a.scriptRT != nil && a.scriptRT.WantsOutput() {
-				if err := a.scriptRT.FireOutput(host, string(event.Data)); err != nil {
-					a.Notify("script error: " + err.Error())
-				}
-			}
+			a.ensureScriptLifecycleController().outputBytes(a, a, a, event.Pane, event.Data)
 			consumed = true
 		case termmux.PaneDirty:
 			consumed = true
@@ -152,9 +147,9 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 			if event.Pane == a.focusedPane {
 				a.updateWindowTitle(event.Text)
 			}
-			a.fireScriptEvent(func() error { return a.scriptRT.FireTitle(host, event.Text) })
+			a.ensureScriptLifecycleController().title(a, a, a, event.Pane, event.Text)
 		case termmux.PaneCWDChanged:
-			a.fireScriptEvent(func() error { return a.scriptRT.FireCwd(host, event.Text) })
+			a.ensureScriptLifecycleController().cwd(a, a, a, event.Pane, event.Text)
 		case termmux.PaneBell:
 			a.deliverBellEvent(event.Pane)
 		case termmux.PaneNotificationRequested:
