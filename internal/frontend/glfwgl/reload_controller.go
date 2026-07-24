@@ -30,7 +30,7 @@ type reloadWorkerPort interface {
 }
 
 type reloadFailurePort interface {
-	reportMissingReloadSource(time.Time)
+	reportMissingReloadSource()
 }
 
 // reloadController owns only reload request and dispatch ordering. Pending state,
@@ -62,7 +62,7 @@ func (c *reloadController) pollReload(now time.Time) {
 	}
 }
 
-func (c *reloadController) applyReload(now time.Time) {
+func (c *reloadController) applyReload() {
 	c.workers.drainReloadResults()
 	if !c.pending.reloadIsPending() {
 		return
@@ -72,7 +72,7 @@ func (c *reloadController) applyReload(now time.Time) {
 	}
 	c.pending.consumeReloadPending()
 	if !c.source.reloadSourceActive() {
-		c.failure.reportMissingReloadSource(now)
+		c.failure.reportMissingReloadSource()
 		return
 	}
 	c.workers.startReloadWorker()

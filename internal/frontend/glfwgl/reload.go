@@ -46,22 +46,16 @@ func (a *App) startReloadWorker() {
 	a.startConfigReloadWorker()
 }
 
-func (a *App) reportMissingReloadSource(now time.Time) {
-	a.reportConfigReloadFailure(fmt.Errorf("no config source is active"), now)
+func (a *App) reportMissingReloadSource() {
+	a.reportConfigReloadFailure(fmt.Errorf("no config source is active"), time.Now())
 }
 
 func (a *App) requestConfigReload() bool {
-	if !a.reloadSourceActive() {
-		return false
-	}
-	a.markReloadPending()
-	return true
+	return a.ensureReloadController().requestReload()
 }
 
 func (a *App) pollConfigReload(now time.Time) {
-	if a.pollReloadWatch(now) {
-		a.markReloadPending()
-	}
+	a.ensureReloadController().pollReload(now)
 }
 
 const configReloadFailureNoticeInterval = 30 * time.Second
@@ -92,19 +86,7 @@ func (a *App) acknowledgeConfigReloadFailure(before configWatchSnapshot, expecta
 }
 
 func (a *App) applyPendingConfigReload() {
-	a.drainReloadResults()
-	if !a.reloadIsPending() {
-		return
-	}
-	if a.reloadWorkerCount() >= 2 {
-		return
-	}
-	a.consumeReloadPending()
-	if !a.reloadSourceActive() {
-		a.reportMissingReloadSource(time.Now())
-		return
-	}
-	a.startReloadWorker()
+	a.ensureReloadController().applyReload()
 }
 
 func (a *App) reloadConfig() (resultErr error) {

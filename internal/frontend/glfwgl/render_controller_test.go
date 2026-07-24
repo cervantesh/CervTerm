@@ -10,22 +10,32 @@ import (
 )
 
 type fakeRenderPorts struct {
-	log       []string
-	ready     bool
-	panicBody bool
+	log        []string
+	now        time.Time
+	readyAt    time.Time
+	throttleAt time.Time
+	ready      bool
+	panicBody  bool
 }
 
 func (f *fakeRenderPorts) tickRenderProjection() {
 	f.log = append(f.log, "tick")
 }
 
-func (f *fakeRenderPorts) renderReady(time.Time) bool {
+func (f *fakeRenderPorts) renderNow() time.Time {
+	f.log = append(f.log, "now")
+	return f.now
+}
+
+func (f *fakeRenderPorts) renderReady(now time.Time) bool {
 	f.log = append(f.log, "ready")
+	f.readyAt = now
 	return f.ready
 }
 
-func (f *fakeRenderPorts) throttleRender(time.Time) {
+func (f *fakeRenderPorts) throttleRender(now time.Time) {
 	f.log = append(f.log, "throttle")
+	f.throttleAt = now
 }
 
 func (f *fakeRenderPorts) beginRenderFrame() {
@@ -48,7 +58,7 @@ func (f *fakeRenderPorts) endRenderFrame() {
 }
 
 func newFakeRenderController(ports *fakeRenderPorts) *renderController {
-	return newRenderController(ports, ports, ports)
+	return newRenderController(ports, ports, ports, ports)
 }
 
 func assertRenderTrace(t *testing.T, got, want []string) {
@@ -59,47 +69,54 @@ func assertRenderTrace(t *testing.T, got, want []string) {
 }
 
 func TestRenderControllerOnDemandReadyDrawOrder(t *testing.T) {
-	ports := &fakeRenderPorts{ready: true}
-	if !newFakeRenderController(ports).renderProjection(time.Unix(1, 0), false) {
+	now := time.Unix(1, 0)
+	ports := &fakeRenderPorts{now: now, ready: true}
+	if !newFakeRenderController(ports).renderProjection(false) {
 		t.Fatal("ready on-demand projection did not draw")
 	}
-	assertRenderTrace(t, ports.log, []string{"tick", "ready", "begin", "body", "finish", "end"})
+	assertRenderTrace(t, ports.log, []string{"tick", "now", "ready", "begin", "body", "finish", "end"})
+	if !ports.readyAt.Equal(now) {
+		t.Fatalf("readiness time = %v, want captured post-tick time %v", ports.readyAt, now)
+	}
 }
 
 func TestRenderControllerOnDemandRejectionStopsAfterReadiness(t *testing.T) {
-	ports := &fakeRenderPorts{}
-	if newFakeRenderController(ports).renderProjection(time.Unix(1, 0), false) {
+	ports := &fakeRenderPorts{now: time.Unix(1, 0)}
+	if newFakeRenderController(ports).renderProjection(false) {
 		t.Fatal("rejected on-demand projection reported a draw")
 	}
-	assertRenderTrace(t, ports.log, []string{"tick", "ready"})
+	assertRenderTrace(t, ports.log, []string{"tick", "now", "ready"})
 }
 
 func TestRenderControllerContinuousThrottlesWithoutReadinessCheck(t *testing.T) {
-	ports := &fakeRenderPorts{}
-	if !newFakeRenderController(ports).renderProjection(time.Unix(1, 0), true) {
+	now := time.Unix(1, 0)
+	ports := &fakeRenderPorts{now: now}
+	if !newFakeRenderController(ports).renderProjection(true) {
 		t.Fatal("continuous projection did not draw")
 	}
-	assertRenderTrace(t, ports.log, []string{"tick", "throttle", "begin", "body", "finish", "end"})
+	assertRenderTrace(t, ports.log, []string{"tick", "now", "throttle", "begin", "body", "finish", "end"})
+	if !ports.throttleAt.Equal(now) {
+		t.Fatalf("throttle time = %v, want captured post-tick time %v", ports.throttleAt, now)
+	}
 }
 
 func TestRenderControllerFinishesDrawOnPanicWithoutEndingFrame(t *testing.T) {
-	ports := &fakeRenderPorts{ready: true, panicBody: true}
+	ports := &fakeRenderPorts{now: time.Unix(1, 0), ready: true, panicBody: true}
 	defer func() {
 		if recovered := recover(); recovered == nil {
 			t.Fatal("draw body did not panic")
 		}
-		assertRenderTrace(t, ports.log, []string{"tick", "ready", "begin", "body", "finish"})
+		assertRenderTrace(t, ports.log, []string{"tick", "now", "ready", "begin", "body", "finish"})
 	}()
-	newFakeRenderController(ports).renderProjection(time.Unix(1, 0), false)
+	newFakeRenderController(ports).renderProjection(false)
 }
 
 func TestRenderControllerRejectedPathDoesNotAllocate(t *testing.T) {
-	ports := &fakeRenderPorts{log: make([]string, 0, 2)}
+	ports := &fakeRenderPorts{log: make([]string, 0, 3), now: time.Unix(1, 0)}
 	controller := newFakeRenderController(ports)
-	now := time.Unix(1, 0)
 	allocs := testing.AllocsPerRun(1000, func() {
 		ports.log = ports.log[:0]
-		if controller.renderProjection(now, false) {
+		if controller.renderProjection(false) {
 			panic("rejected projection drew")
 		}
 	})
@@ -108,9 +125,41 @@ func TestRenderControllerRejectedPathDoesNotAllocate(t *testing.T) {
 	}
 }
 
+func TestAppRenderReloadControllersAreEagerAndProjectionLocal(t *testing.T) {
+	owner, _ := newRecordingActionApp(t)
+	owner.initRenderController()
+	owner.initReloadController()
+	if owner.renderFlow == nil || owner.reloadFlow == nil {
+		t.Fatal("root controllers were not eagerly initialized")
+	}
+	child := newProjectionApp(owner)
+	if child.renderFlow == nil || child.reloadFlow == nil {
+		t.Fatal("child controllers were not eagerly initialized")
+	}
+	if child.renderFlow == owner.renderFlow || child.reloadFlow == owner.reloadFlow {
+		t.Fatal("child retained a root controller")
+	}
+}
+
+func TestAppRenderReloadControllersAreLazyAndIdempotent(t *testing.T) {
+	app := &App{}
+	if app.renderFlow != nil || app.reloadFlow != nil {
+		t.Fatal("zero App unexpectedly has controllers")
+	}
+	renderFlow := app.ensureRenderController()
+	reloadFlow := app.ensureReloadController()
+	if renderFlow == nil || reloadFlow == nil {
+		t.Fatal("lazy controller initialization failed")
+	}
+	if app.ensureRenderController() != renderFlow || app.ensureReloadController() != reloadFlow {
+		t.Fatal("ensure replaced a controller")
+	}
+}
+
 func TestRenderControllerPortsStayNarrowAndFieldsStayDetached(t *testing.T) {
 	ports := []reflect.Type{
 		reflect.TypeOf((*renderTickPort)(nil)).Elem(),
+		reflect.TypeOf((*renderClockPort)(nil)).Elem(),
 		reflect.TypeOf((*renderPresentationPort)(nil)).Elem(),
 		reflect.TypeOf((*renderFramePort)(nil)).Elem(),
 	}

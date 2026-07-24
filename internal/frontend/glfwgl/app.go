@@ -66,6 +66,8 @@ type App struct {
 	controller                *windowController
 	actions                   *actionController
 	input                     *inputController
+	renderFlow                *renderController
+	reloadFlow                *reloadController
 	r                         gpu.Renderer
 	terminalImageCacheFactory terminalImageCacheFactory
 	terminalImageCache        *terminalImageCache
@@ -178,6 +180,15 @@ var (
 	_ inputCursorContentPort  = (*App)(nil)
 	_ inputWheelPort          = (*App)(nil)
 	_ inputFocusPort          = (*App)(nil)
+	_ renderTickPort          = (*App)(nil)
+	_ renderClockPort         = (*App)(nil)
+	_ renderPresentationPort  = (*App)(nil)
+	_ renderFramePort         = (*App)(nil)
+	_ reloadSourcePort        = (*App)(nil)
+	_ reloadWatchPort         = (*App)(nil)
+	_ reloadPendingPort       = (*App)(nil)
+	_ reloadWorkerPort        = (*App)(nil)
+	_ reloadFailurePort       = (*App)(nil)
 )
 
 func (a *App) initActionController() {
@@ -200,6 +211,28 @@ func (a *App) ensureInputController() *inputController {
 		a.initInputController()
 	}
 	return a.input
+}
+
+func (a *App) initRenderController() {
+	a.renderFlow = newRenderController(a, a, a, a)
+}
+
+func (a *App) ensureRenderController() *renderController {
+	if a.renderFlow == nil {
+		a.initRenderController()
+	}
+	return a.renderFlow
+}
+
+func (a *App) initReloadController() {
+	a.reloadFlow = newReloadController(a, a, a, a, a)
+}
+
+func (a *App) ensureReloadController() *reloadController {
+	if a.reloadFlow == nil {
+		a.initReloadController()
+	}
+	return a.reloadFlow
 }
 
 func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, watchPaths []string, watchHashes map[string][32]byte, sourcePath string, options script.CandidateOptions) error {
@@ -240,6 +273,8 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 	}
 	app.initActionController()
 	app.initInputController()
+	app.initRenderController()
+	app.initReloadController()
 	app.initCompositionCoordinator()
 	app.linkLauncher = platformURLLauncher{}
 	app.configScope = app.runtimeScopes.NewScope()

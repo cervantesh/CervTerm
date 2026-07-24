@@ -19,7 +19,7 @@ type fakeReloadPorts struct {
 	drainTo    int
 	starts     int
 	reports    int
-	reportAt   time.Time
+	pollAt     time.Time
 }
 
 func (f *fakeReloadPorts) reloadSourceActive() bool {
@@ -27,8 +27,9 @@ func (f *fakeReloadPorts) reloadSourceActive() bool {
 	return f.source
 }
 
-func (f *fakeReloadPorts) pollReloadWatch(time.Time) bool {
+func (f *fakeReloadPorts) pollReloadWatch(now time.Time) bool {
 	f.log = append(f.log, "poll")
+	f.pollAt = now
 	return f.watch
 }
 
@@ -66,10 +67,9 @@ func (f *fakeReloadPorts) startReloadWorker() {
 	f.workers++
 }
 
-func (f *fakeReloadPorts) reportMissingReloadSource(now time.Time) {
+func (f *fakeReloadPorts) reportMissingReloadSource() {
 	f.log = append(f.log, "report")
 	f.reports++
-	f.reportAt = now
 }
 
 func newFakeReloadController(ports *fakeReloadPorts) *reloadController {
@@ -111,9 +111,13 @@ func TestReloadControllerPollMarksOnlyStableWatchChangePending(t *testing.T) {
 		t.Fatal("unchanged watch queued a reload")
 	}
 	ports.watch = true
-	controller.pollReload(time.Unix(2, 0))
+	now := time.Unix(2, 0)
+	controller.pollReload(now)
 	if !ports.pending {
 		t.Fatal("watch change did not queue a reload")
+	}
+	if !ports.pollAt.Equal(now) {
+		t.Fatalf("poll time = %v, want caller-provided %v", ports.pollAt, now)
 	}
 	assertReloadTrace(t, ports.log, []string{"poll", "poll", "mark"})
 }
@@ -122,14 +126,14 @@ func TestReloadControllerApplyDrainsBeforeEveryShortCircuit(t *testing.T) {
 	t.Run("inactive", func(t *testing.T) {
 		ports := &fakeReloadPorts{drainTo: -1}
 		controller := newFakeReloadController(ports)
-		controller.applyReload(time.Unix(1, 0))
+		controller.applyReload()
 		assertReloadTrace(t, ports.log, []string{"drain", "pending"})
 	})
 
 	t.Run("worker cap retains App pending state", func(t *testing.T) {
 		ports := &fakeReloadPorts{pending: true, workers: reloadControllerWorkerCap, drainTo: -1}
 		controller := newFakeReloadController(ports)
-		controller.applyReload(time.Unix(1, 0))
+		controller.applyReload()
 		if !ports.pending || ports.starts != 0 || ports.reports != 0 {
 			t.Fatalf("capped apply: pending=%v starts=%d reports=%d", ports.pending, ports.starts, ports.reports)
 		}
@@ -139,7 +143,7 @@ func TestReloadControllerApplyDrainsBeforeEveryShortCircuit(t *testing.T) {
 	t.Run("drain can lower cap before dispatch", func(t *testing.T) {
 		ports := &fakeReloadPorts{source: true, pending: true, workers: reloadControllerWorkerCap, drainTo: 1}
 		controller := newFakeReloadController(ports)
-		controller.applyReload(time.Unix(1, 0))
+		controller.applyReload()
 		if ports.pending || ports.starts != 1 || ports.workers != reloadControllerWorkerCap {
 			t.Fatalf("post-drain dispatch: pending=%v starts=%d workers=%d", ports.pending, ports.starts, ports.workers)
 		}
@@ -148,13 +152,12 @@ func TestReloadControllerApplyDrainsBeforeEveryShortCircuit(t *testing.T) {
 }
 
 func TestReloadControllerApplyConsumesBeforeMissingSourceReportOrStart(t *testing.T) {
-	now := time.Unix(7, 0)
 	t.Run("missing source", func(t *testing.T) {
 		ports := &fakeReloadPorts{pending: true, drainTo: -1}
 		controller := newFakeReloadController(ports)
-		controller.applyReload(now)
-		if ports.pending || ports.reports != 1 || ports.starts != 0 || !ports.reportAt.Equal(now) {
-			t.Fatalf("missing-source apply: pending=%v reports=%d starts=%d at=%v", ports.pending, ports.reports, ports.starts, ports.reportAt)
+		controller.applyReload()
+		if ports.pending || ports.reports != 1 || ports.starts != 0 {
+			t.Fatalf("missing-source apply: pending=%v reports=%d starts=%d", ports.pending, ports.reports, ports.starts)
 		}
 		assertReloadTrace(t, ports.log, []string{"drain", "pending", "workers", "consume", "source", "report"})
 	})
@@ -162,7 +165,7 @@ func TestReloadControllerApplyConsumesBeforeMissingSourceReportOrStart(t *testin
 	t.Run("active source", func(t *testing.T) {
 		ports := &fakeReloadPorts{source: true, pending: true, drainTo: -1}
 		controller := newFakeReloadController(ports)
-		controller.applyReload(now)
+		controller.applyReload()
 		if ports.pending || ports.starts != 1 || ports.reports != 0 {
 			t.Fatalf("active-source apply: pending=%v starts=%d reports=%d", ports.pending, ports.starts, ports.reports)
 		}
@@ -180,7 +183,6 @@ func TestReloadControllerApplyPathsDoNotAllocate(t *testing.T) {
 		{name: "worker cap", ports: &fakeReloadPorts{pending: true, workers: reloadControllerWorkerCap, drainTo: -1}, logLimit: 3},
 		{name: "dispatch", ports: &fakeReloadPorts{source: true, pending: true, drainTo: -1}, logLimit: 6},
 	}
-	now := time.Unix(1, 0)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			test.ports.log = make([]string, 0, test.logLimit)
@@ -193,12 +195,37 @@ func TestReloadControllerApplyPathsDoNotAllocate(t *testing.T) {
 				if test.name == "dispatch" {
 					test.ports.workers = 0
 				}
-				controller.applyReload(now)
+				controller.applyReload()
 			})
 			if allocs != 0 {
 				t.Fatalf("allocations per %s reload apply = %v, want 0", test.name, allocs)
 			}
 		})
+	}
+}
+
+func TestAppReloadEntryPointsForwardThroughLazyController(t *testing.T) {
+	app := &App{configPath: "cervterm.lua"}
+	if !app.requestConfigReload() || !app.reloadPending {
+		t.Fatal("App request entry point did not preserve App-owned pending state")
+	}
+	flow := app.reloadFlow
+	if flow == nil {
+		t.Fatal("App request entry point did not initialize reload controller")
+	}
+	app.pollConfigReload(time.Unix(1, 0))
+	app.reloadPending = false
+	app.applyPendingConfigReload()
+	if app.reloadFlow != flow {
+		t.Fatal("App reload entry points replaced the controller")
+	}
+}
+
+func TestAppMissingReloadSourceAdapterCapturesFailureTime(t *testing.T) {
+	app := &App{}
+	app.reportMissingReloadSource()
+	if app.configReloadAsync.lastNoticeAt.IsZero() {
+		t.Fatal("missing-source adapter did not capture its failure time")
 	}
 }
 

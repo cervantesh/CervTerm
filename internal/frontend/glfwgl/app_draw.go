@@ -59,9 +59,7 @@ func terminalImagePaneClip(geometry termmux.PaneGeometry) gpu.ClipRect {
 }
 
 func (a *App) draw() {
-	a.beginRenderFrame()
-	defer a.finishRenderFrame()
-	a.drawRenderFrameBody()
+	a.ensureRenderController().drawFrame()
 }
 
 func (a *App) beginRenderFrame() {

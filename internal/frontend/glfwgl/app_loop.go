@@ -105,17 +105,7 @@ func (a *App) runProcessLoop(continuous bool) error {
 			}
 			drew := false
 			if err := a.controller.withCurrent(id, func() {
-				projection.tickRenderProjection()
-				now = time.Now()
-				if !continuous && !projection.renderReady(now) {
-					return
-				}
-				if continuous {
-					projection.throttleRender(now)
-				}
-				projection.draw()
-				projection.endRenderFrame()
-				drew = true
+				drew = projection.ensureRenderController().renderProjection(continuous)
 			}); err != nil {
 				return err
 			}
@@ -135,6 +125,10 @@ func (a *App) runProcessLoop(continuous bool) error {
 
 func (a *App) tickRenderProjection() {
 	a.tickProjection()
+}
+
+func (a *App) renderNow() time.Time {
+	return time.Now()
 }
 
 func (a *App) renderReady(now time.Time) bool {
