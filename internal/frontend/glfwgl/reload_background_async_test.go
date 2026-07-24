@@ -232,3 +232,42 @@ func TestShutdownRacingBackgroundWorkerDiscardsGenerationAndClosesPool(t *testin
 		t.Fatalf("shutdown cleanup: closed=%v workers=%d", pool.isClosed(), app.configReloadAsync.workers)
 	}
 }
+
+func TestApplyPendingConfigReloadRetainsPendingAtWorkerCap(t *testing.T) {
+	app := &App{configPath: "unused.lua", reloadPending: true}
+	app.configReloadAsync.workers = 2
+	app.configReloadAsync.results = make(chan *PreparedAppearanceGeneration, 1)
+
+	app.applyPendingConfigReload()
+
+	if !app.reloadPending || app.configReloadAsync.workers != 2 || app.configReloadAsync.generation != 0 {
+		t.Fatalf("capped dispatch: pending=%v workers=%d generation=%d", app.reloadPending, app.configReloadAsync.workers, app.configReloadAsync.generation)
+	}
+}
+
+func TestApplyPendingConfigReloadDrainsResultsBeforeCapAndReportsMissingSource(t *testing.T) {
+	result := &PreparedAppearanceGeneration{
+		configReloadCPUResult: configReloadCPUResult{generation: 1},
+		state:                 appearancePreparedCPU,
+	}
+	app := &App{reloadPending: true}
+	app.configReloadAsync.generation = 2
+	app.configReloadAsync.workers = 2
+	app.configReloadAsync.results = make(chan *PreparedAppearanceGeneration, 1)
+	app.configReloadAsync.results <- result
+
+	app.applyPendingConfigReload()
+
+	if app.configReloadAsync.workers != 1 {
+		t.Fatalf("completed result was not drained before cap check: workers=%d", app.configReloadAsync.workers)
+	}
+	if !result.closed || result.state != appearanceClosed {
+		t.Fatalf("stale result lifecycle: closed=%v state=%d", result.closed, result.state)
+	}
+	if app.reloadPending {
+		t.Fatal("missing-source dispatch did not consume pending request")
+	}
+	if app.lastReloadNoticeError != "no config source is active" || !strings.Contains(app.notice, "no config source is active") {
+		t.Fatalf("missing-source report: error=%q notice=%q", app.lastReloadNoticeError, app.notice)
+	}
+}
