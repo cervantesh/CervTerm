@@ -24,10 +24,24 @@ type fakeProtocolSchedulingPort struct {
 	completeInput Event
 }
 
-type fakeProtocolSchedulingController = protocolSchedulingController[*fakeProtocolSchedulingPort, *fakeProtocolSchedulingPort]
+type fakeProtocolSchedulingApplyPort struct {
+	port *fakeProtocolSchedulingPort
+}
+
+type fakeProtocolSchedulingController = protocolSchedulingController[
+	*fakeProtocolSchedulingPort,
+	fakeProtocolSchedulingApplyPort,
+]
 
 func newFakeProtocolSchedulingController() fakeProtocolSchedulingController {
-	return newProtocolSchedulingController[*fakeProtocolSchedulingPort, *fakeProtocolSchedulingPort]()
+	return newProtocolSchedulingController[
+		*fakeProtocolSchedulingPort,
+		fakeProtocolSchedulingApplyPort,
+	]()
+}
+
+func newFakeProtocolSchedulingApplyPort(port *fakeProtocolSchedulingPort) fakeProtocolSchedulingApplyPort {
+	return fakeProtocolSchedulingApplyPort{port: port}
 }
 
 func (p *fakeProtocolSchedulingPort) dispatchKitty(events []Event) []Event {
@@ -56,6 +70,14 @@ func (p *fakeProtocolSchedulingPort) applyCompletion(events []Event) []Event {
 	return append(events, p.completeEvent)
 }
 
+func (p fakeProtocolSchedulingApplyPort) applyExpiry(events []Event) []Event {
+	return p.port.applyExpiry(events)
+}
+
+func (p fakeProtocolSchedulingApplyPort) applyCompletion(events []Event) []Event {
+	return p.port.applyCompletion(events)
+}
+
 func protocolSchedulingPrefix() Event {
 	return Event{
 		Kind: PaneTransferred, Window: 11, SourceWindow: 12, Pane: 13,
@@ -65,7 +87,7 @@ func protocolSchedulingPrefix() Event {
 	}
 }
 
-func TestProtocolSchedulingControllerDispatchesExactEventsInOrder(t *testing.T) {
+func TestProtocolSchedulingControllerDispatchesIndependently(t *testing.T) {
 	controller := newFakeProtocolSchedulingController()
 	prefix := protocolSchedulingPrefix()
 	kitty := Event{Kind: PaneDirty, Pane: 21, SourceWindow: 22, SourceWorkspace: 23, SourceTab: 24, Revision: 25}
@@ -73,18 +95,27 @@ func TestProtocolSchedulingControllerDispatchesExactEventsInOrder(t *testing.T) 
 	events := make([]Event, 1, 2)
 	events[0] = prefix
 
-	got := controller.dispatch(events, port)
-	if want := []string{"kitty", "sixel", "iterm"}; !reflect.DeepEqual(port.trace, want) {
-		t.Fatalf("dispatch trace=%v want=%v", port.trace, want)
+	got := controller.dispatchKitty(events, port)
+	if want := []string{"kitty"}; !reflect.DeepEqual(port.trace, want) {
+		t.Fatalf("Kitty trace=%v want=%v", port.trace, want)
 	}
 	if len(got) != 2 || !reflect.DeepEqual(got[0], prefix) || !reflect.DeepEqual(got[1], kitty) {
-		t.Fatalf("dispatch events=%#v want prefix=%#v kitty=%#v", got, prefix, kitty)
+		t.Fatalf("Kitty events=%#v want prefix=%#v kitty=%#v", got, prefix, kitty)
 	}
 	if !reflect.DeepEqual(port.kittyInput, prefix) {
 		t.Fatalf("Kitty input=%#v want exact prefix=%#v", port.kittyInput, prefix)
 	}
 	if &got[0] != &events[0] {
-		t.Fatal("dispatch replaced the caller event backing store")
+		t.Fatal("Kitty dispatch replaced the caller event backing store")
+	}
+
+	controller.dispatchSixel(port)
+	if want := []string{"kitty", "sixel"}; !reflect.DeepEqual(port.trace, want) {
+		t.Fatalf("Sixel trace=%v want=%v", port.trace, want)
+	}
+	controller.dispatchITerm(port)
+	if want := []string{"kitty", "sixel", "iterm"}; !reflect.DeepEqual(port.trace, want) {
+		t.Fatalf("iTerm trace=%v want=%v", port.trace, want)
 	}
 }
 
@@ -101,7 +132,8 @@ func TestProtocolSchedulingControllerAppliesExactEvents(t *testing.T) {
 			name: "expiry", wantTrace: "expiry",
 			wantEvent: Event{Kind: PaneWriteFailed, Pane: 31, SourceWindow: 32, SourceWorkspace: 33, SourceTab: 34, Revision: 35},
 			apply: func(controller fakeProtocolSchedulingController, events []Event, port *fakeProtocolSchedulingPort) []Event {
-				return controller.applyExpiry(events, port)
+				operation := newFakeProtocolSchedulingApplyPort(port)
+				return controller.applyExpiry(events, operation)
 			},
 			input: func(port *fakeProtocolSchedulingPort) Event { return port.expiryInput },
 		},
@@ -109,7 +141,8 @@ func TestProtocolSchedulingControllerAppliesExactEvents(t *testing.T) {
 			name: "completion", wantTrace: "completion",
 			wantEvent: Event{Kind: PaneResizeFailed, Pane: 41, SourceWindow: 42, SourceWorkspace: 43, SourceTab: 44, Revision: 45},
 			apply: func(controller fakeProtocolSchedulingController, events []Event, port *fakeProtocolSchedulingPort) []Event {
-				return controller.applyCompletion(events, port)
+				operation := newFakeProtocolSchedulingApplyPort(port)
+				return controller.applyCompletion(events, operation)
 			},
 			input: func(port *fakeProtocolSchedulingPort) Event { return port.completeInput },
 		},
@@ -154,6 +187,7 @@ func TestProtocolSchedulingControllerEagerAndZeroValuesMatch(t *testing.T) {
 				expiryEvent:   Event{Kind: PaneWriteFailed, Pane: 52},
 				completeEvent: Event{Kind: PaneResizeFailed, Pane: 53},
 			}
+			apply := newFakeProtocolSchedulingApplyPort(port)
 			dispatchEvents := make([]Event, 1, 2)
 			dispatchEvents[0] = prefix
 			expiryEvents := make([]Event, 1, 2)
@@ -161,9 +195,11 @@ func TestProtocolSchedulingControllerEagerAndZeroValuesMatch(t *testing.T) {
 			completionEvents := make([]Event, 1, 2)
 			completionEvents[0] = prefix
 
-			dispatched := test.controller.dispatch(dispatchEvents, port)
-			expired := test.controller.applyExpiry(expiryEvents, port)
-			completed := test.controller.applyCompletion(completionEvents, port)
+			dispatched := test.controller.dispatchKitty(dispatchEvents, port)
+			test.controller.dispatchSixel(port)
+			test.controller.dispatchITerm(port)
+			expired := test.controller.applyExpiry(expiryEvents, apply)
+			completed := test.controller.applyCompletion(completionEvents, apply)
 			if want := []string{"kitty", "sixel", "iterm", "expiry", "completion"}; !reflect.DeepEqual(port.trace, want) {
 				t.Fatalf("trace=%v want=%v", port.trace, want)
 			}
@@ -185,24 +221,37 @@ func TestProtocolSchedulingControllerOperationsDoNotAllocate(t *testing.T) {
 		expiryEvent:   Event{Kind: PaneWriteFailed, Pane: 63},
 		completeEvent: Event{Kind: PaneResizeFailed, Pane: 64},
 	}
+	apply := newFakeProtocolSchedulingApplyPort(port)
 	events := make([]Event, 1, 2)
 	events[0] = prefix
 
 	tests := []struct {
-		name string
-		run  func()
+		name       string
+		wantTrace  string
+		wantEvents bool
+		run        func()
 	}{
-		{name: "dispatch", run: func() {
+		{name: "kitty", wantTrace: "kitty", wantEvents: true, run: func() {
 			port.trace = port.trace[:0]
-			protocolSchedulingControllerEvents = controller.dispatch(events[:1], port)
+			protocolSchedulingControllerEvents = controller.dispatchKitty(events[:1], port)
 		}},
-		{name: "expiry", run: func() {
+		{name: "sixel", wantTrace: "sixel", run: func() {
 			port.trace = port.trace[:0]
-			protocolSchedulingControllerEvents = controller.applyExpiry(events[:1], port)
+			protocolSchedulingControllerEvents = nil
+			controller.dispatchSixel(port)
 		}},
-		{name: "completion", run: func() {
+		{name: "iterm", wantTrace: "iterm", run: func() {
 			port.trace = port.trace[:0]
-			protocolSchedulingControllerEvents = controller.applyCompletion(events[:1], port)
+			protocolSchedulingControllerEvents = nil
+			controller.dispatchITerm(port)
+		}},
+		{name: "expiry", wantTrace: "expiry", wantEvents: true, run: func() {
+			port.trace = port.trace[:0]
+			protocolSchedulingControllerEvents = controller.applyExpiry(events[:1], apply)
+		}},
+		{name: "completion", wantTrace: "completion", wantEvents: true, run: func() {
+			port.trace = port.trace[:0]
+			protocolSchedulingControllerEvents = controller.applyCompletion(events[:1], apply)
 		}},
 	}
 	for _, test := range tests {
@@ -211,7 +260,10 @@ func TestProtocolSchedulingControllerOperationsDoNotAllocate(t *testing.T) {
 			if allocs != 0 {
 				t.Fatalf("%s allocations=%v want=0", test.name, allocs)
 			}
-			if len(protocolSchedulingControllerEvents) != 2 || &protocolSchedulingControllerEvents[0] != &events[0] {
+			if want := []string{test.wantTrace}; !reflect.DeepEqual(port.trace, want) {
+				t.Fatalf("%s trace=%v want=%v", test.name, port.trace, want)
+			}
+			if test.wantEvents && (len(protocolSchedulingControllerEvents) != 2 || &protocolSchedulingControllerEvents[0] != &events[0]) {
 				t.Fatalf("%s result=%#v", test.name, protocolSchedulingControllerEvents)
 			}
 		})
@@ -243,6 +295,14 @@ func TestProtocolSchedulingControllerPortsAndFieldsAreExact(t *testing.T) {
 		t.Fatalf("aggregate port methods=%d budget=%d", got, protocolSchedulingControllerPortBudget)
 	}
 
+	adapter := reflect.TypeOf(muxProtocolSchedulingApplyOperationAdapter{})
+	if !adapter.Implements(apply) {
+		t.Fatalf("apply adapter %s does not implement value apply port", adapter)
+	}
+	completionField, ok := adapter.FieldByName("completion")
+	if !ok || completionField.Type != reflect.TypeOf(imageDecodeCompletion{}) || completionField.Type.Kind() == reflect.Pointer {
+		t.Fatalf("apply adapter completion field=%#v found=%t want imageDecodeCompletion value", completionField, ok)
+	}
 	eventsType := reflect.TypeOf([]Event(nil))
 	assertProtocolSchedulingMethod(t, dispatch, "dispatchKitty", []reflect.Type{eventsType}, []reflect.Type{eventsType})
 	assertProtocolSchedulingMethod(t, dispatch, "dispatchSixel", nil, nil)
@@ -300,7 +360,7 @@ func assertProtocolSchedulingBoundaryType(t *testing.T, name string, typ reflect
 	}
 }
 
-func TestProtocolSchedulingControllerSourceIsExactPrivateAndUnwired(t *testing.T) {
+func TestProtocolSchedulingControllerSourceIsExactPrivateAndWired(t *testing.T) {
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("locate test source")
@@ -367,7 +427,9 @@ func TestProtocolSchedulingControllerSourceIsExactPrivateAndUnwired(t *testing.T
 		"protocolSchedulingApplyPort":            1,
 		"protocolSchedulingController":           1,
 		"newProtocolSchedulingController":        1,
-		"method:dispatch":                        1,
+		"method:dispatchKitty":                   1,
+		"method:dispatchSixel":                   1,
+		"method:dispatchITerm":                   1,
 		"method:applyExpiry":                     1,
 		"method:applyCompletion":                 1,
 	}
@@ -375,38 +437,140 @@ func TestProtocolSchedulingControllerSourceIsExactPrivateAndUnwired(t *testing.T
 		t.Fatalf("controller declarations=%v want=%v", declarations, wantDeclarations)
 	}
 
-	assertProtocolSchedulingControllerMethod(t, fileSet, methods["dispatch"], "func(events []Event, port dispatchPort) []Event", []string{"dispatchKitty", "dispatchSixel", "dispatchITerm"})
+	assertProtocolSchedulingControllerMethod(t, fileSet, methods["dispatchKitty"], "func(events []Event, port dispatchPort) []Event", []string{"dispatchKitty"})
+	assertProtocolSchedulingControllerMethod(t, fileSet, methods["dispatchSixel"], "func(port dispatchPort)", []string{"dispatchSixel"})
+	assertProtocolSchedulingControllerMethod(t, fileSet, methods["dispatchITerm"], "func(port dispatchPort)", []string{"dispatchITerm"})
 	assertProtocolSchedulingControllerMethod(t, fileSet, methods["applyExpiry"], "func(events []Event, port applyPort) []Event", []string{"applyExpiry"})
 	assertProtocolSchedulingControllerMethod(t, fileSet, methods["applyCompletion"], "func(events []Event, port applyPort) []Event", []string{"applyCompletion"})
 	assertProtocolSchedulingExactBodies(t, methods)
+	assertProtocolSchedulingMuxWiring(t, dir, fileSet)
+}
 
+func assertProtocolSchedulingMuxWiring(t *testing.T, dir string, fileSet *token.FileSet) {
+	t.Helper()
+	muxPath := filepath.Join(dir, "mux.go")
+	muxFile, err := parser.ParseFile(fileSet, muxPath, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var controllerFields, constructorInitializers int
+	for _, declaration := range muxFile.Decls {
+		switch declaration := declaration.(type) {
+		case *ast.GenDecl:
+			for _, spec := range declaration.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok || typeSpec.Name.Name != "Mux" {
+					continue
+				}
+				structure, ok := typeSpec.Type.(*ast.StructType)
+				if !ok {
+					t.Fatal("Mux is not a struct")
+				}
+				for _, field := range structure.Fields.List {
+					for _, name := range field.Names {
+						if name.Name == "protocolScheduling" {
+							controllerFields++
+							if !protocolSchedulingInstantiation(field.Type, "protocolSchedulingController", "muxProtocolSchedulingDispatchOperationAdapter", "muxProtocolSchedulingApplyOperationAdapter") {
+								t.Errorf("Mux.protocolScheduling type=%s", renderProtocolSchedulingNode(fileSet, field.Type))
+							}
+						}
+					}
+				}
+			}
+		case *ast.FuncDecl:
+			if declaration.Name.Name != "New" {
+				continue
+			}
+			ast.Inspect(declaration.Body, func(node ast.Node) bool {
+				keyValue, ok := node.(*ast.KeyValueExpr)
+				if !ok || !protocolSchedulingIdent(keyValue.Key, "protocolScheduling") {
+					return true
+				}
+				call, ok := keyValue.Value.(*ast.CallExpr)
+				if !ok || len(call.Args) != 0 || !protocolSchedulingInstantiation(call.Fun, "newProtocolSchedulingController", "muxProtocolSchedulingDispatchOperationAdapter", "muxProtocolSchedulingApplyOperationAdapter") {
+					t.Errorf("New protocolScheduling initializer=%s", renderProtocolSchedulingNode(fileSet, keyValue.Value))
+					return true
+				}
+				constructorInitializers++
+				return true
+			})
+		}
+	}
+	if controllerFields != 1 || constructorInitializers != 1 {
+		t.Fatalf("Mux protocolScheduling fields=%d New initializers=%d want 1/1", controllerFields, constructorInitializers)
+	}
+
+	wantShims := map[string]string{
+		"processKittyOutcomes": "{\n\treturn m.protocolScheduling.dispatchKitty(nil, muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
+		"processSixelOutcomes": "{\n\tm.protocolScheduling.dispatchSixel(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
+		"processITermOutcomes": "{\n\tm.protocolScheduling.dispatchITerm(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
+		"expireImages":         "{\n\treturn m.protocolScheduling.applyExpiry(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now})\n}",
+		"applyImageCompletion": "{\n\treturn m.protocolScheduling.applyCompletion(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: completion})\n}",
+	}
+	foundShims := make(map[string]int)
+	selectorCalls := make(map[string]int)
 	paths, err := filepath.Glob(filepath.Join(dir, "*.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	seamNames := map[string]bool{
-		"protocolSchedulingControllerPortBudget": true,
-		"protocolSchedulingDispatchPort":         true,
-		"protocolSchedulingApplyPort":            true,
-		"protocolSchedulingController":           true,
-		"newProtocolSchedulingController":        true,
-	}
 	for _, path := range paths {
-		if path == productionPath || strings.HasSuffix(path, "_test.go") {
+		if strings.HasSuffix(path, "_test.go") {
 			continue
 		}
 		production, parseErr := parser.ParseFile(fileSet, path, nil, 0)
 		if parseErr != nil {
 			t.Fatalf("parse %s: %v", path, parseErr)
 		}
+		for _, declaration := range production.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			if want, guarded := wantShims[function.Name.Name]; guarded {
+				foundShims[function.Name.Name]++
+				if got := renderProtocolSchedulingNode(fileSet, function.Body); got != want {
+					t.Errorf("%s body=%q want=%q", function.Name.Name, got, want)
+				}
+			}
+		}
 		ast.Inspect(production, func(node ast.Node) bool {
-			identifier, found := node.(*ast.Ident)
-			if found && seamNames[identifier.Name] {
-				t.Errorf("old production path %s references unwired seam %s", filepath.Base(path), identifier.Name)
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if ok {
+				switch selector.Sel.Name {
+				case "dispatchKitty", "dispatchSixel", "dispatchITerm", "applyExpiry", "applyCompletion":
+					selectorCalls[selector.Sel.Name]++
+				}
 			}
 			return true
 		})
 	}
+	for name := range wantShims {
+		if foundShims[name] != 1 {
+			t.Errorf("private Mux shim %s declarations=%d want=1", name, foundShims[name])
+		}
+	}
+	for _, name := range []string{"dispatchKitty", "dispatchSixel", "dispatchITerm", "applyExpiry", "applyCompletion"} {
+		if selectorCalls[name] != 2 {
+			t.Errorf("%s production selector calls=%d want controller-port plus Mux-shim wiring", name, selectorCalls[name])
+		}
+	}
+}
+
+func protocolSchedulingInstantiation(expression ast.Expr, name string, arguments ...string) bool {
+	instantiation, ok := expression.(*ast.IndexListExpr)
+	if !ok || !protocolSchedulingIdent(instantiation.X, name) || len(instantiation.Indices) != len(arguments) {
+		return false
+	}
+	for index, argument := range arguments {
+		if renderProtocolSchedulingNode(token.NewFileSet(), instantiation.Indices[index]) != argument {
+			return false
+		}
+	}
+	return true
 }
 
 func assertProtocolSchedulingControllerMethod(t *testing.T, fileSet *token.FileSet, declaration *ast.FuncDecl, wantSignature string, wantCalls []string) {
@@ -439,26 +603,16 @@ func assertProtocolSchedulingControllerMethod(t *testing.T, fileSet *token.FileS
 
 func assertProtocolSchedulingExactBodies(t *testing.T, methods map[string]*ast.FuncDecl) {
 	t.Helper()
-	dispatch := methods["dispatch"].Body.List
-	if len(dispatch) != 4 {
-		t.Fatalf("dispatch statements=%d want=4", len(dispatch))
+	want := map[string]string{
+		"dispatchKitty":   "{\n\treturn port.dispatchKitty(events)\n}",
+		"dispatchSixel":   "{\n\tport.dispatchSixel()\n}",
+		"dispatchITerm":   "{\n\tport.dispatchITerm()\n}",
+		"applyExpiry":     "{\n\treturn port.applyExpiry(events)\n}",
+		"applyCompletion": "{\n\treturn port.applyCompletion(events)\n}",
 	}
-	assignment, ok := dispatch[0].(*ast.AssignStmt)
-	if !ok || assignment.Tok != token.ASSIGN || len(assignment.Lhs) != 1 || len(assignment.Rhs) != 1 || !protocolSchedulingIdent(assignment.Lhs[0], "events") || !protocolSchedulingPortCall(assignment.Rhs[0], "port", "dispatchKitty", "events") {
-		t.Errorf("dispatch first statement must be events = port.dispatchKitty(events)")
-	}
-	if !protocolSchedulingCallStatement(dispatch[1], "port", "dispatchSixel") || !protocolSchedulingCallStatement(dispatch[2], "port", "dispatchITerm") {
-		t.Errorf("dispatch void delegation must be Sixel then iTerm")
-	}
-	result, ok := dispatch[3].(*ast.ReturnStmt)
-	if !ok || len(result.Results) != 1 || !protocolSchedulingIdent(result.Results[0], "events") {
-		t.Errorf("dispatch must return the exact delegated events value")
-	}
-	for _, method := range []string{"applyExpiry", "applyCompletion"} {
-		body := methods[method].Body.List
-		result, ok := firstProtocolSchedulingReturn(body)
-		if len(body) != 1 || !ok || len(result.Results) != 1 || !protocolSchedulingPortCall(result.Results[0], "port", method, "events") {
-			t.Errorf("%s must directly return port.%s(events)", method, method)
+	for name, body := range want {
+		if got := renderProtocolSchedulingNode(token.NewFileSet(), methods[name].Body); got != body {
+			t.Errorf("%s body=%q want=%q", name, got, body)
 		}
 	}
 }
@@ -541,7 +695,7 @@ func assertProtocolSchedulingTypeExpression(t *testing.T, expression ast.Expr) {
 				}
 				function, ok := method.Type.(*ast.FuncType)
 				if !ok {
-					t.Errorf("controller port embeds non-method type at %v", method.Pos())
+					t.Errorf("controller port embeds unexpected non-method type at %v", method.Pos())
 					continue
 				}
 				assertProtocolSchedulingFieldList(t, function.Params)

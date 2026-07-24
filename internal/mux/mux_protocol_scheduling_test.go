@@ -127,6 +127,162 @@ func TestMuxProtocolSchedulingAllDisabledIdle(t *testing.T) {
 	}
 }
 
+func TestMuxProtocolSchedulingIndependentSingleProtocolCalls(t *testing.T) {
+	tests := []struct {
+		name           string
+		run            func(*Mux, *pane) []Event
+		wantQueued     [3]int
+		wantDiagnostic ImageDiagnosticProtocol
+		wantKittyReply bool
+	}{
+		{
+			name:       "kitty",
+			run:        func(m *Mux, p *pane) []Event { return m.processKittyOutcomes(p) },
+			wantQueued: [3]int{0, 1, 1}, wantKittyReply: true,
+		},
+		{
+			name:       "sixel",
+			run:        func(m *Mux, p *pane) []Event { m.processSixelOutcomes(p); return nil },
+			wantQueued: [3]int{1, 0, 1}, wantDiagnostic: ImageDiagnosticProtocolSixel,
+		},
+		{
+			name:       "iterm",
+			run:        func(m *Mux, p *pane) []Event { m.processITermOutcomes(p); return nil },
+			wantQueued: [3]int{1, 1, 0}, wantDiagnostic: ImageDiagnosticProtocolITerm,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var diagnostics []ImageDiagnostic
+			m, session, p := newMuxProtocolSchedulingTestMux(t, Options{ImageDiagnostic: func(diagnostic ImageDiagnostic) {
+				diagnostics = append(diagnostics, diagnostic)
+			}})
+			p.kittyOutcomes = append(p.kittyOutcomes, kitty.Outcome{Failure: kitty.ReplyFailed})
+			p.sixelOutcomes = append(p.sixelOutcomes, sixel.Outcome{Failure: sixel.FailureFailed})
+			p.itermOutcomes = append(p.itermOutcomes, itermimage.Outcome{Failure: itermimage.FailureFailed})
+
+			if events := test.run(m, p); events != nil {
+				t.Fatalf("single-protocol events=%#v want nil", events)
+			}
+			if got := [3]int{len(p.kittyOutcomes), len(p.sixelOutcomes), len(p.itermOutcomes)}; got != test.wantQueued {
+				t.Fatalf("remaining Kitty/Sixel/iTerm outcomes=%v want=%v", got, test.wantQueued)
+			}
+			written := session.written()
+			if test.wantKittyReply {
+				if want := (kitty.ReplyPlan{}).Encode(kitty.ReplyFailed); !bytes.Equal(written, want) {
+					t.Fatalf("Kitty reply=%q want=%q", written, want)
+				}
+			} else if len(written) != 0 {
+				t.Fatalf("non-Kitty call wrote reply=%q", written)
+			}
+			if test.wantDiagnostic == "" {
+				if len(diagnostics) != 0 {
+					t.Fatalf("unexpected diagnostics=%#v", diagnostics)
+				}
+			} else if len(diagnostics) != 1 || diagnostics[0].Protocol != test.wantDiagnostic {
+				t.Fatalf("diagnostics=%#v want protocol=%s", diagnostics, test.wantDiagnostic)
+			}
+		})
+	}
+}
+
+func TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity(t *testing.T) {
+	active, _, activePane := newMuxProtocolSchedulingTestMux(t, Options{})
+	baseline, _, baselinePane := newMuxProtocolSchedulingTestMux(t, Options{})
+	activeResult := &muxProtocolBenchmarkResult{}
+	baselineResult := &muxProtocolBenchmarkResult{}
+	activeCompletion := imageDecodeCompletion{Key: activePane.id, Owner: imageDecodeOwner{protocol: imageDecodeProtocol(255)}, Result: activeResult}
+	baselineCompletion := imageDecodeCompletion{Key: baselinePane.id, Owner: imageDecodeOwner{protocol: imageDecodeProtocol(255)}, Result: baselineResult}
+
+	tests := []struct {
+		name     string
+		baseline func()
+		wired    func()
+	}{
+		{
+			name: "kitty",
+			baseline: func() {
+				benchmarkMuxProtocolEvents = (muxProtocolSchedulingDispatchOperationAdapter{mux: baseline, pane: baselinePane}).dispatchKitty(nil)
+			},
+			wired: func() { benchmarkMuxProtocolEvents = active.processKittyOutcomes(activePane) },
+		},
+		{
+			name: "sixel",
+			baseline: func() {
+				(muxProtocolSchedulingDispatchOperationAdapter{mux: baseline, pane: baselinePane}).dispatchSixel()
+			},
+			wired: func() { active.processSixelOutcomes(activePane) },
+		},
+		{
+			name: "iterm",
+			baseline: func() {
+				(muxProtocolSchedulingDispatchOperationAdapter{mux: baseline, pane: baselinePane}).dispatchITerm()
+			},
+			wired: func() { active.processITermOutcomes(activePane) },
+		},
+		{
+			name: "expiry",
+			baseline: func() {
+				benchmarkMuxProtocolEvents = (muxProtocolSchedulingApplyOperationAdapter{mux: baseline}).applyExpiry(nil)
+			},
+			wired: func() { benchmarkMuxProtocolEvents = active.expireImages(time.Time{}) },
+		},
+		{
+			name: "completion",
+			baseline: func() {
+				benchmarkMuxProtocolEvents = (muxProtocolSchedulingApplyOperationAdapter{mux: baseline, completion: baselineCompletion}).applyCompletion(nil)
+			},
+			wired: func() { benchmarkMuxProtocolEvents = active.applyImageCompletion(activeCompletion) },
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			test.baseline()
+			test.wired()
+			baselineAllocs := testing.AllocsPerRun(1000, test.baseline)
+			wiredAllocs := testing.AllocsPerRun(1000, test.wired)
+			if wiredAllocs > baselineAllocs {
+				t.Fatalf("%s controller allocations=%v direct adapter=%v delta=%v", test.name, wiredAllocs, baselineAllocs, wiredAllocs-baselineAllocs)
+			}
+		})
+	}
+}
+
+func BenchmarkMuxProtocolControllerAttribution(b *testing.B) {
+	m, _, p := newMuxProtocolSchedulingTestMux(b, Options{})
+	result := &muxProtocolBenchmarkResult{}
+	completion := imageDecodeCompletion{Key: p.id, Owner: imageDecodeOwner{protocol: imageDecodeProtocol(255)}, Result: result}
+	benchmarks := []struct {
+		name string
+		run  func()
+	}{
+		{name: "expiry/direct-adapter", run: func() {
+			benchmarkMuxProtocolEvents = (muxProtocolSchedulingApplyOperationAdapter{mux: m}).applyExpiry(nil)
+		}},
+		{name: "expiry/controller", run: func() {
+			benchmarkMuxProtocolEvents = m.expireImages(time.Time{})
+		}},
+		{name: "completion/direct-adapter", run: func() {
+			benchmarkMuxProtocolEvents = (muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: completion}).applyCompletion(nil)
+		}},
+		{name: "completion/controller", run: func() {
+			benchmarkMuxProtocolEvents = m.applyImageCompletion(completion)
+		}},
+	}
+	for _, benchmark := range benchmarks {
+		b.Run(benchmark.name, func(b *testing.B) {
+			if allocs := testing.AllocsPerRun(1000, benchmark.run); allocs != 0 {
+				b.Fatalf("allocations=%v want=0", allocs)
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				benchmark.run()
+			}
+		})
+	}
+}
+
 // TestKnownDefect_L3_09_ErasedSchedulerResultRequiresRuntimeRouting expires Slice 4.8.
 func TestKnownDefect_L3_09_ErasedSchedulerResultRequiresRuntimeRouting(t *testing.T) {
 	m, _, p := newMuxProtocolSchedulingTestMux(t, Options{})
