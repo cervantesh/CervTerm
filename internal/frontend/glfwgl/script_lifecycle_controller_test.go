@@ -81,24 +81,18 @@ func (f *fakeScriptLifecyclePorts) clearPendingScriptLifecycle() {
 	f.scrolls = f.scrolls[:0]
 }
 
-func (f *fakeScriptLifecyclePorts) takePendingScriptResize() (scriptResizeEvent, bool) {
-	if len(f.resizes) == 0 {
-		return scriptResizeEvent{}, false
-	}
-	event := f.resizes[0]
-	f.resizes = f.resizes[1:]
-	f.log = append(f.log, "take-resize")
-	return event, true
+func (f *fakeScriptLifecyclePorts) snapshotPendingScriptResizes() []scriptResizeEvent {
+	f.log = append(f.log, "snapshot-resize")
+	events := f.resizes
+	f.resizes = nil
+	return events
 }
 
-func (f *fakeScriptLifecyclePorts) takePendingScriptScroll() (scriptScrollEvent, bool) {
-	if len(f.scrolls) == 0 {
-		return scriptScrollEvent{}, false
-	}
-	event := f.scrolls[0]
-	f.scrolls = f.scrolls[1:]
-	f.log = append(f.log, "take-scroll")
-	return event, true
+func (f *fakeScriptLifecyclePorts) snapshotPendingScriptScrolls() []scriptScrollEvent {
+	f.log = append(f.log, "snapshot-scroll")
+	events := f.scrolls
+	f.scrolls = nil
+	return events
 }
 
 func (f *fakeScriptLifecyclePorts) fireDueScriptTimers(now time.Time) {
@@ -184,7 +178,7 @@ func TestScriptLifecycleControllerDrainsResizeBeforeScrollAndReportsWithoutStopp
 	}
 	newFakeScriptLifecycleController(ports).dispatchPending()
 	assertScriptLifecycleTrace(t, ports.log, []string{
-		"runtime", "take-resize", "resize", "report", "take-resize", "resize", "report", "take-scroll", "scroll",
+		"runtime", "snapshot-resize", "resize", "report", "resize", "report", "snapshot-scroll", "scroll",
 	})
 	if len(ports.resizes) != 0 || len(ports.scrolls) != 0 {
 		t.Fatal("drained pending records survived")

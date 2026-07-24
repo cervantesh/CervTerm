@@ -12,11 +12,11 @@ import (
 // fireScriptEvent runs a terminal-event handler when a runtime is present,
 // surfacing any script error as a transient notice. Called on the main thread.
 func (a *App) fireScriptEvent(fire func() error) {
-	if a.scriptRT == nil {
+	if !a.scriptLifecycleRuntimeAvailable() {
 		return
 	}
 	if err := fire(); err != nil {
-		a.Notify("script error: " + err.Error())
+		a.reportScriptLifecycleError(err)
 	}
 }
 
@@ -122,22 +122,15 @@ func (a *App) recordPaneScroll(id termmux.PaneID) {
 // draw(). Each pending event fires at most once per iteration with the final
 // coalesced value.
 func (a *App) fireLifecycleEvents() {
-	if a.scriptRT == nil {
-		clear(a.pendingPaneResize)
-		clear(a.pendingPaneScroll)
+	if !a.scriptLifecycleRuntimeAvailable() {
+		a.clearPendingScriptLifecycle()
 		return
 	}
-	resizeEvents := a.pendingPaneResize
-	a.pendingPaneResize = make(map[termmux.PaneID]termmux.PaneGeometry)
-	for pane, geometry := range resizeEvents {
-		host := paneHost{app: a, pane: pane}
-		a.fireScriptEvent(func() error { return a.scriptRT.FireResize(host, geometry.Cols, geometry.Rows) })
+	for _, event := range a.snapshotPendingScriptResizes() {
+		a.fireScriptEvent(func() error { return a.fireScriptResize(event.pane, event.cols, event.rows) })
 	}
-	scrollEvents := a.pendingPaneScroll
-	a.pendingPaneScroll = make(map[termmux.PaneID]int)
-	for pane, offset := range scrollEvents {
-		host := paneHost{app: a, pane: pane}
-		a.fireScriptEvent(func() error { return a.scriptRT.FireScroll(host, offset) })
+	for _, event := range a.snapshotPendingScriptScrolls() {
+		a.fireScriptEvent(func() error { return a.fireScriptScroll(event.pane, event.offset) })
 	}
 }
 
@@ -147,8 +140,8 @@ func (a *App) fireLifecycleEvents() {
 // thread; a timer they schedule is seen by the next nextWakeTimeout because both
 // mutate the table on this same thread (no cross-thread wake needed).
 func (a *App) fireDueTimers(now time.Time) {
-	if a.scriptRT == nil {
+	if !a.scriptLifecycleRuntimeAvailable() {
 		return
 	}
-	a.scriptRT.FireDueTimers(now, a.hostForFocused())
+	a.fireDueScriptTimers(now)
 }
