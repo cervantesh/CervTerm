@@ -1,0 +1,49 @@
+Slice 6.2a Windows validation
+platform: windows/amd64; Windows 10.0.26200.8894; Go 1.25.8
+working state: W aa1bfd4a830cd7fc88e7f6e25288ed4eb3879ae2; G pending; guard/docs/evidence uncommitted
+
+[benchmarks]
+PASS: valid same-host base raw remains two run orders with seven samples per order at c2a0137; final retained-source candidate full suite and focused attribution confirmation each reran seven samples with -benchtime=500ms -cpu=1.
+PASS: original combined medians remain stale 48.485 -> 58.680 ns/op (+10.195 ns, +21.03%); ASCII 9345.5 -> 9288.0 ns/op; all-disabled idle 27.420 -> 27.705 ns/op.
+PASS: focused retained BenchmarkMuxSessionIngressStaleAcceptancePaths reproduces attribution from source: stale inline 48.81 -> operation-adapter 55.35 -> active generic 58.61 ns/op; staged +9.80 ns is within 0.395 ns of original +10.195 ns. All three are 0 B/op, 0 allocs/op.
+PASS: fresh full-suite seven-sample candidate medians: production rejected stale 59.14 ns/op (0 allocs), ASCII 9422 ns/op (3 allocs), all-disabled idle 27.78 ns/op (0 allocs).
+COMMAND: go test ./internal/mux -run '^$' -bench '^(BenchmarkMuxSessionIngressStaleAcceptancePaths|BenchmarkMuxSessionIngressRejectedStale|BenchmarkMuxSessionIngressASCII|BenchmarkMuxAllDisabledImageIdle)$' -benchmem -benchtime=500ms -count=7 -cpu=1
+COMMAND: go test ./internal/mux -run '^$' -bench '^BenchmarkMuxSessionIngressStaleAcceptancePaths$' -benchmem -benchtime=500ms -count=7 -cpu=1
+
+[automation; adversarial-repair rerun]
+PASS: go run ./scripts/check-maturity-gates.go
+  maturity gates ok; alias-bypass, exact-contract, source-order, shallow/post-G and scope self-tests included.
+PASS: go test ./... -count=1
+  all 37 listed packages passed.
+PASS: go vet -unsafeptr=false ./...
+  no output; exit 0.
+PASS: go test -race ./internal/mux ./internal/pty -count=1
+  mux 3.039s; pty 1.253s.
+PASS: go test ./internal/mux -run '^(TestMuxClosePaneDropsAlreadyQueuedSessionIngress|TestMuxSessionIngress|TestSessionIngressController)' -count=1
+  focused controller, ordering, allocation and deterministic ClosePane queued-ingress characterization passed.
+PASS: go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -count=1
+  glfwgl 5.208s; cmd/cervterm 1.224s.
+PASS: go test -race -tags glfw ./internal/frontend/glfwgl -count=1
+  glfwgl 4.982s.
+PASS: go run ./scripts/check-phase15-recovery.go -race
+  logging, layout storage, config/restore/transient-image recovery and redaction gates passed.
+PASS: go test ./internal/vt -run '^$' -fuzz=FuzzParserAdvanceDoesNotPanic -fuzztime=2s
+  105028 executions; 1 new interesting input; package PASS.
+PASS: go run ./scripts/generate-windows-resource.go -arch amd64
+  generated ignored cmd/cervterm/resource_windows_amd64.syso; tracked files unchanged.
+PASS: go run ./scripts/package-beta.go -version 0.1.0-ci -outdir dist/slice62a-ci
+  wrote the ignored local Windows zip; a previously verified matching font cache avoided network access.
+PASS WITH OPTIONAL WARNING: go run ./scripts/release-preflight.go -version 0.1.0-ci -outdir dist/slice62a-ci -windows-zip dist/slice62a-ci/cervterm-0.1.0-ci-windows.zip
+  39 pass, 0 required fail, 1 optional warning: vttest executable unavailable.
+PASS: go run ./scripts/smoke-installed-package.go -zip dist/slice62a-ci/cervterm-0.1.0-ci-windows.zip -expected-version 0.1.0-ci
+  version/build-info/doctor/raw-PTY installed-package smoke passed.
+PASS: go run ./scripts/daily-driver-smoke.go -cervterm dist/slice62a-ci/cervterm-0.1.0-ci-windows/cervterm.exe -workdir dist/slice62a-ci/daily-driver-smoke
+  cmd, git log, pager, alternate screen, 40/100-column reflow and long-session smokes passed.
+PASS: git diff --check
+  no whitespace errors; only line-ending advisories where applicable.
+
+[real GUI]
+UNRUN: no real window, OpenGL context, pixel inspection, IME, accessibility or native interaction was attempted.
+
+[release]
+NOT-APPLICABLE: no release, changelog, deployment or commit requested.

@@ -1,0 +1,45 @@
+Slice 6.2a scope and commit evidence
+capture state: immutable W aa1bfd4; G pending; guard/docs/evidence uncommitted
+branch: arch/l3-01a-mux-session-ingress
+base/origin-main: c2a0137c50c099ce28014a7582eac3ee6a4340f1
+T: 271325ba47efe7e948f58fa314475f37e1176bc3 test(mux): characterize session ingress ordering
+A: 45514c813494351e7608b858aa6ab35e7643d33a refactor(mux): add session ingress controller seam
+M: 66072c984f6df723412cadb0cc43a8fb147c255e refactor(mux): split session ingress adapters
+W: aa1bfd4a830cd7fc88e7f6e25288ed4eb3879ae2 refactor(mux): wire session ingress controller
+G: pending; required subject: refactor(mux): guard session ingress controller delegation; required parent: W
+
+[range policy]
+T/A/M/W identities, subjects and direct parents are immutable. Before G, HEAD == W and changed paths are base..W plus tracked/staged/nonignored worktree paths. On the active branch after G, HEAD == G and the nonignored worktree is clean. Merge/main validates immutable base..G only. A history-limited shallow fallback still reads branch/HEAD/worktree, validates the documented sequence and current production structure, enforces exact G/clean state when G is identifiable, and otherwise keeps the active slice branch at W. Combined shallow/post-G and later-main synthetic policy self-tests run on every maturity invocation.
+
+[controller contract]
+sessionIngressController: private generic zero-field value
+controller retained Mux/registry/pane/mutable state: 0
+sessionIngressOwnerPort: exact interface name and exact `acceptSessionIngress() bool` method
+sessionIngressApplyPort: exact interface name and exact data/end method names and full signatures
+sessionIngressController parameters: exact owner/apply names and constraints
+controller method inventory: exactly one production method, exact `route` receiver/signature
+controller phase AST source order: accept -> data -> end
+aggregate port budget: exact 3; largest port: 2; hard maximum: 5
+TODO: exactly one TODO(L3-01; expires Slice 6.2d)
+production controller route calls: exactly one direct `Mux.sessionIngress.route` inside (*Mux).Drain
+production route scan: tests excluded; local/type/value aliases rejected; durable alias-bypass self-test PASS
+exported ingress bypass declarations: 0
+
+[exact changed-path allowlist]
+docs/architecture-maturity/implementation-plan.md
+docs/architecture.md
+docs/validation/architecture-maturity-slice-6.2a.md
+docs/validation/architecture-maturity-slice-6.2a/benchmarks-base.txt
+docs/validation/architecture-maturity-slice-6.2a/benchmarks-candidate.txt
+docs/validation/architecture-maturity-slice-6.2a/gates.txt
+docs/validation/architecture-maturity-slice-6.2a/scope-and-commits.txt
+internal/mux/mux.go
+internal/mux/mux_kitty_test.go
+internal/mux/mux_session_ingress_test.go
+internal/mux/session_ingress_controller.go
+internal/mux/session_ingress_controller_test.go
+internal/mux/session_registry.go
+scripts/check-maturity-gates.go
+
+[release/changelog]
+unchanged; no release, changelog, deployment or commit produced

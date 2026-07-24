@@ -1,8 +1,10 @@
 package mux
 
 import (
+	"bytes"
 	"errors"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"path/filepath"
@@ -162,11 +164,11 @@ func TestSessionIngressControllerPortsAndFieldsAreExact(t *testing.T) {
 
 	owner := reflect.TypeOf((*sessionIngressOwnerPort)(nil)).Elem()
 	apply := reflect.TypeOf((*sessionIngressApplyPort)(nil)).Elem()
-	if owner.NumMethod() > 1 {
-		t.Fatalf("owner acceptance methods=%d want<=1", owner.NumMethod())
+	if owner.NumMethod() != 1 {
+		t.Fatalf("owner acceptance methods=%d want exactly 1", owner.NumMethod())
 	}
-	if apply.NumMethod() > 2 {
-		t.Fatalf("apply methods=%d want<=2", apply.NumMethod())
+	if apply.NumMethod() != 2 {
+		t.Fatalf("apply methods=%d want exactly 2", apply.NumMethod())
 	}
 	got := owner.NumMethod() + apply.NumMethod()
 	if got != sessionIngressControllerPortBudget {
@@ -253,6 +255,8 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 	}
 
 	declarations := make(map[string]int)
+	var routeSourceOrder []string
+	var routeContractFound bool
 	for _, declaration := range file.Decls {
 		switch declaration := declaration.(type) {
 		case *ast.GenDecl:
@@ -262,6 +266,13 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 					assertSessionIngressPrivateName(t, spec.Name)
 					declarations[spec.Name.Name]++
 					assertSessionIngressTypeExpression(t, spec.Type)
+					if spec.Name.Name == "sessionIngressController" {
+						got := renderSessionIngressNamedFields(fileSet, spec.TypeParams)
+						want := []string{"ownerPort sessionIngressOwnerPort", "applyPort sessionIngressApplyPort"}
+						if !reflect.DeepEqual(got, want) {
+							t.Errorf("controller generic parameters=%v want=%v", got, want)
+						}
+					}
 				case *ast.ValueSpec:
 					for _, name := range spec.Names {
 						assertSessionIngressPrivateName(t, name)
@@ -279,6 +290,27 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 			assertSessionIngressFieldList(t, declaration.Recv)
 			assertSessionIngressFieldList(t, declaration.Type.Params)
 			assertSessionIngressFieldList(t, declaration.Type.Results)
+			if declaration.Recv != nil && declaration.Name.Name == "route" {
+				routeContractFound = true
+				gotReceiver := strings.Join(renderSessionIngressFieldTypes(fileSet, declaration.Recv), "|")
+				gotSignature := renderSessionIngressNode(fileSet, declaration.Type)
+				wantReceiver := "sessionIngressController[ownerPort, applyPort]"
+				wantSignature := "func(events []Event, owner ownerPort, apply applyPort, data []byte, end error) []Event"
+				if gotReceiver != wantReceiver || gotSignature != wantSignature {
+					t.Errorf("route contract receiver=%q signature=%q want %q / %q", gotReceiver, gotSignature, wantReceiver, wantSignature)
+				}
+				ast.Inspect(declaration.Body, func(node ast.Node) bool {
+					call, ok := node.(*ast.CallExpr)
+					if !ok {
+						return true
+					}
+					selector, ok := call.Fun.(*ast.SelectorExpr)
+					if ok && (selector.Sel.Name == "acceptSessionIngress" || selector.Sel.Name == "applySessionIngressData" || selector.Sel.Name == "applySessionIngressEnd") {
+						routeSourceOrder = append(routeSourceOrder, selector.Sel.Name)
+					}
+					return true
+				})
+			}
 		}
 	}
 	wantDeclarations := map[string]int{
@@ -291,6 +323,9 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 	}
 	if !reflect.DeepEqual(declarations, wantDeclarations) {
 		t.Fatalf("controller declarations=%v want=%v", declarations, wantDeclarations)
+	}
+	if !routeContractFound || !reflect.DeepEqual(routeSourceOrder, []string{"acceptSessionIngress", "applySessionIngressData", "applySessionIngressEnd"}) {
+		t.Fatalf("route source contract found=%t phase order=%v want accept->data->end", routeContractFound, routeSourceOrder)
 	}
 
 	muxFile, err := parser.ParseFile(fileSet, filepath.Join(dir, "mux.go"), nil, 0)
@@ -475,4 +510,36 @@ func assertSessionIngressTypeExpression(t *testing.T, expression ast.Expr) {
 		}
 		return true
 	})
+}
+
+func renderSessionIngressNode(fileSet *token.FileSet, node any) string {
+	var rendered bytes.Buffer
+	if err := format.Node(&rendered, fileSet, node); err != nil {
+		return "<format-error>"
+	}
+	return rendered.String()
+}
+
+func renderSessionIngressFieldTypes(fileSet *token.FileSet, fields *ast.FieldList) []string {
+	if fields == nil {
+		return nil
+	}
+	var rendered []string
+	for _, field := range fields.List {
+		rendered = append(rendered, renderSessionIngressNode(fileSet, field.Type))
+	}
+	return rendered
+}
+
+func renderSessionIngressNamedFields(fileSet *token.FileSet, fields *ast.FieldList) []string {
+	if fields == nil {
+		return nil
+	}
+	var rendered []string
+	for _, field := range fields.List {
+		for _, name := range field.Names {
+			rendered = append(rendered, name.Name+" "+renderSessionIngressNode(fileSet, field.Type))
+		}
+	}
+	return rendered
 }
