@@ -1,0 +1,32 @@
+Slice 6.2c immutable scope and commit evidence
+Date: 2026-07-24
+
+base 36450fed2b22f6ae4894a7e0051f98d0fd9192ee
+T bec3126e00acc76e3303d4bc65259f379e9750ab parent 36450fed2b22f6ae4894a7e0051f98d0fd9192ee subject test(mux): characterize restore transaction parity
+A d073df16d9ba0ec810d35c7b2ac9e17dfd196e6c parent bec3126e00acc76e3303d4bc65259f379e9750ab subject refactor(mux): add restore coordinator seam
+M fe91ce085b985aff4cf5be5b5527b67a3c88d0fa parent d073df16d9ba0ec810d35c7b2ac9e17dfd196e6c subject refactor(mux): split restore operation adapters
+W 294b2f20ab3afd8c3fdbfd4d876e02a9fd86a7f1 parent fe91ce085b985aff4cf5be5b5527b67a3c88d0fa subject refactor(mux): wire restore coordinator
+G pending subject refactor(mux): guard restore coordinator delegation; exact W parent required
+
+Immutable base..W paths:
+internal/mux/fresh_session.go
+internal/mux/mux.go
+internal/mux/mux_restore.go
+internal/mux/mux_restore_characterization_test.go
+internal/mux/mux_restore_test.go
+internal/mux/mux_restore_wiring_test.go
+internal/mux/restore_coordinator.go
+internal/mux/restore_coordinator_test.go
+
+G additions/edits (all remain inside the exact base-through-G allowlist):
+docs/architecture-maturity/implementation-plan.md
+docs/architecture.md
+docs/validation/architecture-maturity-slice-6.2c.md
+docs/validation/architecture-maturity-slice-6.2c/benchmarks-base.txt
+docs/validation/architecture-maturity-slice-6.2c/benchmarks-candidate.txt
+docs/validation/architecture-maturity-slice-6.2c/gates.txt
+docs/validation/architecture-maturity-slice-6.2c/scope-and-commits.txt
+internal/mux/mux_restore_wiring_test.go
+scripts/check-maturity-gates.go
+
+No frontend/layoutstate/model/registry/image production path is in G.
