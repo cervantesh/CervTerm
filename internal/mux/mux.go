@@ -47,8 +47,12 @@ type PaneView struct {
 }
 
 type Mux struct {
-	sessions       *localSessionRegistry
-	sessionIngress sessionIngressController[sessionIngressRecordAdapter, muxSessionIngressOperationAdapter]
+	sessions           *localSessionRegistry
+	sessionIngress     sessionIngressController[sessionIngressRecordAdapter, muxSessionIngressOperationAdapter]
+	protocolScheduling protocolSchedulingController[
+		muxProtocolSchedulingDispatchOperationAdapter,
+		muxProtocolSchedulingApplyOperationAdapter,
+	]
 	options        Options
 	model          *Model
 	imageBudget    *termimage.ProcessBudget
@@ -84,7 +88,13 @@ func New(factory SessionFactory, options Options) *Mux {
 	}
 	sessions := newLocalSessionRegistry(factory, options.IngressCapacity, options.Wake)
 	mux := &Mux{
-		sessions: sessions, sessionIngress: newSessionIngressController[sessionIngressRecordAdapter, muxSessionIngressOperationAdapter](), options: options, model: NewModel(),
+		sessions:       sessions,
+		sessionIngress: newSessionIngressController[sessionIngressRecordAdapter, muxSessionIngressOperationAdapter](),
+		protocolScheduling: newProtocolSchedulingController[
+			muxProtocolSchedulingDispatchOperationAdapter,
+			muxProtocolSchedulingApplyOperationAdapter,
+		](),
+		options: options, model: NewModel(),
 		paneMetrics: make(map[PaneID]CellMetrics), paletteBase: core.DefaultPaletteBase(),
 	}
 	if options.ImageLimits != nil {

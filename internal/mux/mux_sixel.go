@@ -10,7 +10,7 @@ import (
 )
 
 func (m *Mux) processSixelOutcomes(p *pane) {
-	(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p}).dispatchSixel()
+	m.protocolScheduling.dispatchSixel(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})
 }
 
 func (a muxProtocolSchedulingDispatchOperationAdapter) dispatchSixel() {

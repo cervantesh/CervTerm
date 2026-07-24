@@ -10,7 +10,7 @@ import (
 )
 
 func (m *Mux) processITermOutcomes(p *pane) {
-	(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p}).dispatchITerm()
+	m.protocolScheduling.dispatchITerm(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})
 }
 
 func (a muxProtocolSchedulingDispatchOperationAdapter) dispatchITerm() {

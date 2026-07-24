@@ -14,7 +14,7 @@ type muxProtocolSchedulingDispatchOperationAdapter struct {
 }
 
 func (m *Mux) processKittyOutcomes(p *pane) []Event {
-	return (muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p}).dispatchKitty(nil)
+	return m.protocolScheduling.dispatchKitty(nil, muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})
 }
 
 func (a muxProtocolSchedulingDispatchOperationAdapter) dispatchKitty(events []Event) []Event {
@@ -109,15 +109,15 @@ func (m *Mux) submitKittyDecode(p *pane, outcome kitty.Outcome) {
 type muxProtocolSchedulingApplyOperationAdapter struct {
 	mux        *Mux
 	now        time.Time
-	completion *imageDecodeCompletion
+	completion imageDecodeCompletion
 }
 
 func (m *Mux) applyImageCompletion(completion imageDecodeCompletion) []Event {
-	return (&muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: &completion}).applyCompletion(nil)
+	return m.protocolScheduling.applyCompletion(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: completion})
 }
 
-func (a *muxProtocolSchedulingApplyOperationAdapter) applyCompletion(events []Event) []Event {
-	completed := applyImageCompletionOperation(a.mux, *a.completion)
+func (a muxProtocolSchedulingApplyOperationAdapter) applyCompletion(events []Event) []Event {
+	completed := applyImageCompletionOperation(a.mux, a.completion)
 	if len(events) == 0 {
 		return completed
 	}
@@ -280,10 +280,10 @@ func (m *Mux) NextImageDeadline() (time.Time, bool) {
 }
 
 func (m *Mux) expireImages(now time.Time) []Event {
-	return (&muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now}).applyExpiry(nil)
+	return m.protocolScheduling.applyExpiry(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now})
 }
 
-func (a *muxProtocolSchedulingApplyOperationAdapter) applyExpiry(events []Event) []Event {
+func (a muxProtocolSchedulingApplyOperationAdapter) applyExpiry(events []Event) []Event {
 	return applyImageExpiryOperation(events, a.mux, a.now)
 }
 

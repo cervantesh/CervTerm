@@ -13,20 +13,33 @@ type protocolSchedulingApplyPort interface {
 	applyCompletion([]Event) []Event
 }
 
-// protocolSchedulingController owns protocol dispatch/apply ordering only. All
+// protocolSchedulingController owns protocol dispatch/apply delegation only. All
 // mutable effects and operation values remain behind operation-scoped ports.
+// Its private value pairing keeps operation adapters concrete across the generic
+// boundary; allocation tests protect this shape.
 // TODO(L3-01; expires Slice 6.2d): remove the preparatory facade adapter.
-type protocolSchedulingController[dispatchPort protocolSchedulingDispatchPort, applyPort protocolSchedulingApplyPort] struct{}
+type protocolSchedulingController[
+	dispatchPort protocolSchedulingDispatchPort,
+	applyPort protocolSchedulingApplyPort,
+] struct{}
 
-func newProtocolSchedulingController[dispatchPort protocolSchedulingDispatchPort, applyPort protocolSchedulingApplyPort]() protocolSchedulingController[dispatchPort, applyPort] {
+func newProtocolSchedulingController[
+	dispatchPort protocolSchedulingDispatchPort,
+	applyPort protocolSchedulingApplyPort,
+]() protocolSchedulingController[dispatchPort, applyPort] {
 	return protocolSchedulingController[dispatchPort, applyPort]{}
 }
 
-func (protocolSchedulingController[dispatchPort, applyPort]) dispatch(events []Event, port dispatchPort) []Event {
-	events = port.dispatchKitty(events)
+func (protocolSchedulingController[dispatchPort, applyPort]) dispatchKitty(events []Event, port dispatchPort) []Event {
+	return port.dispatchKitty(events)
+}
+
+func (protocolSchedulingController[dispatchPort, applyPort]) dispatchSixel(port dispatchPort) {
 	port.dispatchSixel()
+}
+
+func (protocolSchedulingController[dispatchPort, applyPort]) dispatchITerm(port dispatchPort) {
 	port.dispatchITerm()
-	return events
 }
 
 func (protocolSchedulingController[dispatchPort, applyPort]) applyExpiry(events []Event, port applyPort) []Event {
