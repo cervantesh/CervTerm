@@ -56,6 +56,10 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 		}
 	}
 
+	return a.executeActionCommand(envelope, context, pane)
+}
+
+func (a *App) executeActionCommand(envelope termaction.Envelope, context termaction.Context, pane termmux.PaneID) error {
 	switch command := envelope.Action.(type) {
 	case termaction.CopySelection:
 		text := (paneHost{app: a, pane: pane}).Selection()

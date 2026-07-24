@@ -187,6 +187,10 @@ func reloadChord(key glfw.Key, mods glfw.ModifierKey) bool {
 }
 
 func (a *App) handleKeyEvent(key glfw.Key, eventAction glfw.Action, mods glfw.ModifierKey) {
+	a.handleKeyEventLegacy(key, eventAction, mods)
+}
+
+func (a *App) handleKeyEventLegacy(key glfw.Key, eventAction glfw.Action, mods glfw.ModifierKey) {
 	if eventAction == glfw.Press || eventAction == glfw.Repeat {
 		a.charSuppression.clearOnNonEchoInput()
 	}
