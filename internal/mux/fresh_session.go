@@ -44,7 +44,7 @@ type FreshLaunch struct {
 }
 
 func (m *Mux) FreshSessionSnapshot() (FreshSessionSnapshot, error) {
-	return (muxRestorePreparationOperationAdapter{mux: m}).freshSessionSnapshot()
+	return m.restoreCoordinator.freshSessionSnapshot(muxRestorePreparationOperationAdapter{mux: m})
 }
 
 func (a muxRestorePreparationOperationAdapter) freshSessionSnapshot() (FreshSessionSnapshot, error) {
