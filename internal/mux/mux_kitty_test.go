@@ -36,7 +36,8 @@ func TestKittyRuntimeAsyncReplyPrecedesLaterDSRAndCommits(t *testing.T) {
 	m, session, wakes := newKittyRuntimeMux(t, true)
 	pane, _ := m.sessions.lookup(1)
 	input := []byte("\x1b_Ga=t,i=1,s=1,v=1;AQIDBA==\x1b\\\x1b[5n")
-	events := m.advancePane(pane, input)
+	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: input}
+	events := m.Drain(1)
 	if len(events) == 0 {
 		t.Fatal("no output events")
 	}
