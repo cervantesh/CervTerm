@@ -1,0 +1,26 @@
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics        
+BenchmarkArchitectureSliceUnhandledKey-32     	100000000	        11.73 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	99542106	        11.86 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	98910337	        12.78 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	78418558	        13.53 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	85949418	        13.22 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	88288868	        13.82 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	99785461	        13.23 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	100000000	        13.97 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	92021241	        13.63 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	79432323	        14.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	24830170	        47.54 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	26425315	        48.37 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	24348820	        46.36 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	25889073	        44.61 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	23371038	        45.83 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	24016666	        45.14 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	22308812	        45.98 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	27928669	        45.23 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	27511198	        45.86 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	26868658	        45.69 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/frontend/glfwgl	27.095s

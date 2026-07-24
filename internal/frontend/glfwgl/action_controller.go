@@ -34,16 +34,15 @@ type actionContextPort interface {
 	refreshFocusedActionContext(termaction.Context) termaction.Context
 }
 
-// actionCommandPort is a temporary typed delegation seam. Later mechanical
-// commits can move concrete effects behind this single method without giving
-// the controller a facade or callback bag.
+// actionCommandPort is a temporary typed delegation seam that keeps concrete
+// App effects behind one concern-specific method without exposing a facade.
+// TODO(L1-01; expires Slice 6.3d): replace it with final owned collaborators.
 type actionCommandPort interface {
 	executeActionCommand(termaction.Envelope, termaction.Context, termmux.PaneID) error
 }
 
 // actionController coordinates validation, target selection, and sequential
-// action routing. It is intentionally private and unwired while App remains
-// authoritative during the additive A commit.
+// action routing while App retains concrete effect and mutable-state ownership.
 type actionController struct {
 	projections actionProjectionPort
 	panes       actionPanePort

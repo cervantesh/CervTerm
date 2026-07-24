@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	termaction "cervterm/internal/action"
 	terminput "cervterm/internal/input"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -430,6 +431,63 @@ func TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder(t *testing.
 	})
 }
 
+func TestInputControllerUnboundTerminalKeyRouteDoesNotAllocate(t *testing.T) {
+	routes := &fakeInputRoutes{log: make([]string, 0, 16)}
+	controller := newFakeInputController(routes)
+	allocs := testing.AllocsPerRun(1000, func() {
+		routes.log = routes.log[:0]
+		controller.handleKey(glfw.KeyB, glfw.Press, 0)
+	})
+	if allocs != 0 {
+		t.Fatalf("allocations per unbound terminal key = %v, want 0", allocs)
+	}
+}
+
+func TestAppControllersAreProjectionLocalLazyAndIdempotent(t *testing.T) {
+	owner, _ := newRecordingActionApp(t)
+	ownerActions := owner.ensureActionController()
+	ownerInput := owner.ensureInputController()
+	if owner.ensureActionController() != ownerActions || owner.ensureInputController() != ownerInput {
+		t.Fatal("owner ensure replaced a controller")
+	}
+	child := newProjectionApp(owner)
+	if child.actions == nil || child.input == nil {
+		t.Fatal("child controllers were not eagerly initialized")
+	}
+	if child.actions == ownerActions || child.input == ownerInput {
+		t.Fatal("child retained an owner controller")
+	}
+	if child.ensureActionController() != child.actions || child.ensureInputController() != child.input {
+		t.Fatal("child ensure replaced a controller")
+	}
+}
+
+func TestAppControllerRoutesDoNotAllocateAfterWarmup(t *testing.T) {
+	a, _ := newRecordingActionApp(t)
+	a.handleKeyEvent(glfw.KeyUnknown, glfw.Press, 0)
+	keyAllocs := testing.AllocsPerRun(1000, func() {
+		a.handleKeyEvent(glfw.KeyUnknown, glfw.Press, 0)
+	})
+	if keyAllocs != 0 {
+		t.Fatalf("allocations per App unhandled key = %v, want 0", keyAllocs)
+	}
+	envelope := actionEnvelope(termaction.ToggleStats{})
+	context := a.actionContext(termaction.SourceKeyboard)
+	if err := a.executeAction(envelope, context); err != nil {
+		t.Fatal(err)
+	}
+	var actionErr error
+	actionAllocs := testing.AllocsPerRun(1000, func() {
+		actionErr = a.executeAction(envelope, context)
+	})
+	if actionErr != nil {
+		t.Fatal(actionErr)
+	}
+	if actionAllocs != 0 {
+		t.Fatalf("allocations per App non-pane action = %v, want 0", actionAllocs)
+	}
+}
+
 func TestControllerPortsStayNarrowAndControllerFieldsAvoidFacadePointers(t *testing.T) {
 	ports := []reflect.Type{
 		reflect.TypeOf((*actionExecutionRoute)(nil)).Elem(),
@@ -450,7 +508,9 @@ func TestControllerPortsStayNarrowAndControllerFieldsAvoidFacadePointers(t *test
 		reflect.TypeOf((*inputWheelPort)(nil)).Elem(),
 		reflect.TypeOf((*inputFocusPort)(nil)).Elem(),
 	}
+	portSet := make(map[reflect.Type]struct{}, len(ports))
 	for _, port := range ports {
+		portSet[port] = struct{}{}
 		if port.NumMethod() > 5 {
 			t.Errorf("%s has %d methods", port.Name(), port.NumMethod())
 		}
@@ -460,6 +520,7 @@ func TestControllerPortsStayNarrowAndControllerFieldsAvoidFacadePointers(t *test
 		reflect.TypeOf(actionController{}),
 		reflect.TypeOf(inputController{}),
 	}
+	inputMethods := 0
 	for _, controller := range controllers {
 		for i := 0; i < controller.NumField(); i++ {
 			field := controller.Field(i)
@@ -467,6 +528,19 @@ func TestControllerPortsStayNarrowAndControllerFieldsAvoidFacadePointers(t *test
 			if field.Type.Kind() == reflect.Map || field.Type.Kind() == reflect.Func || strings.Contains(typeName, "*glfwgl.App") || strings.Contains(typeName, "*mux.Mux") || strings.Contains(typeName, "*glfw.Window") || strings.Contains(typeName, "*script.Runtime") {
 				t.Errorf("%s.%s has forbidden field type %s", controller.Name(), field.Name, typeName)
 			}
+			if field.Type.Kind() != reflect.Interface {
+				t.Errorf("%s.%s is not a narrow port: %s", controller.Name(), field.Name, typeName)
+				continue
+			}
+			if _, ok := portSet[field.Type]; !ok {
+				t.Errorf("%s.%s uses unlisted port %s", controller.Name(), field.Name, typeName)
+			}
+			if controller.Name() == "inputController" {
+				inputMethods += field.Type.NumMethod()
+			}
 		}
+	}
+	if inputMethods != inputControllerTemporaryPortBudget {
+		t.Fatalf("aggregate input controller methods = %d, budget = %d", inputMethods, inputControllerTemporaryPortBudget)
 	}
 }

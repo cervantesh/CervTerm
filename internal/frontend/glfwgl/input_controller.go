@@ -108,9 +108,14 @@ type inputFocusPort interface {
 	routeTerminalFocus(bool)
 }
 
+// inputControllerTemporaryPortBudget explicitly bounds the aggregate App adapter
+// while this preparatory slice preserves all existing input concerns.
+// TODO(L1-01; expires Slice 6.3d): replace the aggregate adapter at facade closure.
+const inputControllerTemporaryPortBudget = 36
+
 // inputController owns input precedence only. Concrete App state and native
-// handles remain behind consumer-defined ports while the old paths stay
-// authoritative during the additive A commit.
+// handles remain behind consumer-defined concern-specific ports.
+// TODO(L1-06; expires Slice 6.1b): replace fixed route order with typed routes.
 type inputController struct {
 	modal          inputModalPort
 	positions      inputCursorPositionPort

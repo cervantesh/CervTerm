@@ -190,58 +190,6 @@ func (a *App) handleKeyEvent(key glfw.Key, eventAction glfw.Action, mods glfw.Mo
 	a.ensureInputController().handleKey(key, eventAction, mods)
 }
 
-func (a *App) handleKeyEventLegacy(key glfw.Key, eventAction glfw.Action, mods glfw.ModifierKey) {
-	if eventAction == glfw.Press || eventAction == glfw.Repeat {
-		a.charSuppression.clearOnNonEchoInput()
-	}
-	if a.handleModalKey(key, eventAction, mods) {
-		return
-	}
-	if eventAction != glfw.Press && eventAction != glfw.Repeat {
-		return
-	}
-	repeat := eventAction == glfw.Repeat
-	// Active modal capture remains first. The inactive search activation chord
-	// is a reserved typed action and therefore still precedes user bindings.
-	if a.search.active {
-		if a.search.handleKey(key, mods) {
-			return
-		}
-	} else if searchActivationChord(key, mods) {
-		if a.dispatchReservedAction(termaction.ToggleSearch{}, key, mods, repeat) {
-			return
-		}
-	}
-	if reloadChord(key, mods) {
-		if a.dispatchReservedAction(termaction.ReloadConfig{}, key, mods, repeat) {
-			return
-		}
-	}
-	if a.dispatchScriptTableKey(key, mods, repeat) {
-		return
-	}
-	if a.dispatchScriptKey(key, mods, repeat) {
-		return
-	}
-	if a.dispatchBuiltinAction(key, mods, repeat) {
-		return
-	}
-	event, hasEvent := inputEventFromGLFW(key, mods)
-	// Plain Ctrl+C copies only when a selection exists; otherwise it must still
-	// reach the PTY as an interrupt byte.
-	if key == glfw.KeyC && mods&glfw.ModControl != 0 && a.Selection() != "" {
-		if a.dispatchReservedAction(termaction.CopySelection{}, key, mods, repeat) {
-			return
-		}
-	}
-	if !hasEvent {
-		return
-	}
-	if encoded, ok := input.EncodeWithMode(event, a.inputMode()); ok {
-		a.writeInputBytes(encoded)
-	}
-}
-
 func (a *App) clearKeyCharacterSuppression() {
 	a.charSuppression.clearOnNonEchoInput()
 }
