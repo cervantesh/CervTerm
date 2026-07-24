@@ -46,7 +46,7 @@ type muxRestorePublicationOperationAdapter struct {
 
 // PrepareRestore validates and provisions a detached startup restore transaction.
 func (m *Mux) PrepareRestore(blueprint layoutrestore.Blueprint, geometries []RestoreWindowGeometry) (*RestoreCandidate, error) {
-	return (muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries}).prepareRestore()
+	return m.restoreCoordinator.prepareRestore(muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries})
 }
 
 func (a muxRestorePreparationOperationAdapter) prepareRestore() (*RestoreCandidate, error) {
@@ -76,7 +76,7 @@ func (a muxRestorePreparationOperationAdapter) prepareRestore() (*RestoreCandida
 
 // CommitRestore atomically publishes the exact pending restore transaction.
 func (m *Mux) CommitRestore(candidate *RestoreCandidate) ([]Event, error) {
-	return (muxRestorePublicationOperationAdapter{mux: m}).commitRestore(candidate)
+	return m.restoreCoordinator.commitRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})
 }
 
 func (a muxRestorePublicationOperationAdapter) commitRestore(candidate *RestoreCandidate) ([]Event, error) {
@@ -138,7 +138,7 @@ func (a muxRestorePublicationOperationAdapter) commitRestore(candidate *RestoreC
 
 // RestoreWindowIDs returns the candidate's ordered workspace/window traversal mapping.
 func (m *Mux) RestoreWindowIDs(candidate *RestoreCandidate) ([]WindowID, error) {
-	return (muxRestorePublicationOperationAdapter{mux: m}).restoreWindowIDs(candidate)
+	return m.restoreCoordinator.restoreWindowIDs(candidate, muxRestorePublicationOperationAdapter{mux: m})
 }
 
 func (a muxRestorePublicationOperationAdapter) restoreWindowIDs(candidate *RestoreCandidate) ([]WindowID, error) {
@@ -151,7 +151,7 @@ func (a muxRestorePublicationOperationAdapter) restoreWindowIDs(candidate *Resto
 
 // AbortRestore idempotently tears down an unpublished restore transaction.
 func (m *Mux) AbortRestore(candidate *RestoreCandidate) error {
-	return (muxRestorePublicationOperationAdapter{mux: m}).abortRestore(candidate)
+	return m.restoreCoordinator.abortRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})
 }
 
 func (a muxRestorePublicationOperationAdapter) abortRestore(candidate *RestoreCandidate) error {

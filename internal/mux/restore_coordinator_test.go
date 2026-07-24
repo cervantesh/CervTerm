@@ -286,7 +286,7 @@ func assertRestoreCoordinatorBoundaryType(t *testing.T, name string, typ reflect
 	}
 }
 
-func TestRestoreCoordinatorSourceIsExactPrivateAndUnwired(t *testing.T) {
+func TestRestoreCoordinatorSourceIsExactPrivateAndWired(t *testing.T) {
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("locate test source")
@@ -382,33 +382,143 @@ func TestRestoreCoordinatorSourceIsExactPrivateAndUnwired(t *testing.T) {
 		assertRestoreCoordinatorMethod(t, fileSet, methods[name], name, contract.signature, contract.port, contract.arguments)
 	}
 
+	assertRestoreCoordinatorMuxWiring(t, dir, fileSet)
+}
+
+func assertRestoreCoordinatorMuxWiring(t *testing.T, dir string, fileSet *token.FileSet) {
+	t.Helper()
+	muxPath := filepath.Join(dir, "mux.go")
+	muxFile, err := parser.ParseFile(fileSet, muxPath, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var coordinatorFields, constructorInitializers int
+	for _, declaration := range muxFile.Decls {
+		switch declaration := declaration.(type) {
+		case *ast.GenDecl:
+			for _, spec := range declaration.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok || typeSpec.Name.Name != "Mux" {
+					continue
+				}
+				structure, ok := typeSpec.Type.(*ast.StructType)
+				if !ok {
+					t.Fatal("Mux is not a struct")
+				}
+				for _, field := range structure.Fields.List {
+					for _, name := range field.Names {
+						if name.Name == "restoreCoordinator" {
+							coordinatorFields++
+							if !restoreCoordinatorInstantiation(field.Type, "restoreCoordinator", "muxRestorePreparationOperationAdapter", "muxRestorePublicationOperationAdapter") {
+								t.Errorf("Mux.restoreCoordinator type=%s", renderRestoreCoordinatorNode(fileSet, field.Type))
+							}
+						}
+					}
+				}
+			}
+		case *ast.FuncDecl:
+			if declaration.Name.Name != "New" {
+				continue
+			}
+			ast.Inspect(declaration.Body, func(node ast.Node) bool {
+				keyValue, ok := node.(*ast.KeyValueExpr)
+				if !ok || !restoreCoordinatorIdent(keyValue.Key, "restoreCoordinator") {
+					return true
+				}
+				call, ok := keyValue.Value.(*ast.CallExpr)
+				if !ok || len(call.Args) != 0 || !restoreCoordinatorInstantiation(call.Fun, "newRestoreCoordinator", "muxRestorePreparationOperationAdapter", "muxRestorePublicationOperationAdapter") {
+					t.Errorf("New restoreCoordinator initializer=%s", renderRestoreCoordinatorNode(fileSet, keyValue.Value))
+					return true
+				}
+				constructorInitializers++
+				return true
+			})
+		}
+	}
+	if coordinatorFields != 1 || constructorInitializers != 1 {
+		t.Fatalf("Mux restoreCoordinator fields=%d New initializers=%d want 1/1", coordinatorFields, constructorInitializers)
+	}
+
+	wantFacades := map[string]string{
+		"FreshSessionSnapshot": "{\n\treturn m.restoreCoordinator.freshSessionSnapshot(muxRestorePreparationOperationAdapter{mux: m})\n}",
+		"PrepareRestore":       "{\n\treturn m.restoreCoordinator.prepareRestore(muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries})\n}",
+		"RestoreWindowIDs":     "{\n\treturn m.restoreCoordinator.restoreWindowIDs(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
+		"CommitRestore":        "{\n\treturn m.restoreCoordinator.commitRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
+		"AbortRestore":         "{\n\treturn m.restoreCoordinator.abortRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
+	}
+	foundFacades := make(map[string]int)
+	selectorCalls := make(map[string]int)
 	paths, err := filepath.Glob(filepath.Join(dir, "*.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	seamNames := map[string]bool{
-		"restoreCoordinatorPortBudget": true,
-		"restorePreparationPort":       true,
-		"restorePublicationPort":       true,
-		"restoreCoordinator":           true,
-		"newRestoreCoordinator":        true,
-	}
 	for _, path := range paths {
-		if path == productionPath || strings.HasSuffix(path, "_test.go") {
+		if strings.HasSuffix(path, "_test.go") {
 			continue
 		}
 		production, parseErr := parser.ParseFile(fileSet, path, nil, 0)
 		if parseErr != nil {
 			t.Fatalf("parse %s: %v", path, parseErr)
 		}
+		for _, declaration := range production.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			if want, guarded := wantFacades[function.Name.Name]; guarded {
+				foundFacades[function.Name.Name]++
+				if got := renderRestoreCoordinatorNode(fileSet, function.Body); got != want {
+					t.Errorf("%s body=%q want=%q", function.Name.Name, got, want)
+				}
+			}
+		}
 		ast.Inspect(production, func(node ast.Node) bool {
-			identifier, found := node.(*ast.Ident)
-			if found && seamNames[identifier.Name] {
-				t.Errorf("existing production path %s references unwired seam %s", filepath.Base(path), identifier.Name)
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if ok {
+				switch selector.Sel.Name {
+				case "freshSessionSnapshot", "prepareRestore", "restoreWindowIDs", "commitRestore", "abortRestore":
+					selectorCalls[selector.Sel.Name]++
+				}
 			}
 			return true
 		})
 	}
+	for name := range wantFacades {
+		if foundFacades[name] != 1 {
+			t.Errorf("public Mux facade %s declarations=%d want=1", name, foundFacades[name])
+		}
+	}
+	wantSelectorCalls := map[string]int{
+		"freshSessionSnapshot": 2,
+		"prepareRestore":       2,
+		"restoreWindowIDs":     2,
+		"commitRestore":        2,
+		// Three existing private cleanup/helper calls remain in addition to the
+		// coordinator-port and public-facade calls.
+		"abortRestore": 5,
+	}
+	for name, want := range wantSelectorCalls {
+		if selectorCalls[name] != want {
+			t.Errorf("%s production selector calls=%d want=%d", name, selectorCalls[name], want)
+		}
+	}
+}
+
+func restoreCoordinatorInstantiation(expression ast.Expr, name string, arguments ...string) bool {
+	instantiation, ok := expression.(*ast.IndexListExpr)
+	if !ok || !restoreCoordinatorIdent(instantiation.X, name) || len(instantiation.Indices) != len(arguments) {
+		return false
+	}
+	for index, argument := range arguments {
+		if renderRestoreCoordinatorNode(token.NewFileSet(), instantiation.Indices[index]) != argument {
+			return false
+		}
+	}
+	return true
 }
 
 func assertRestoreCoordinatorConstructor(t *testing.T, fileSet *token.FileSet, declaration *ast.FuncDecl) {
