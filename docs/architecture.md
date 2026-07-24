@@ -201,3 +201,9 @@ ADRs 0017–0021 define these directions. [`architecture-scoring-protocol.md`](a
 Slice 6.3a delegates action validation/targeting/sequencing and keyboard/pointer/focus route precedence to private per-projection controllers. GLFW callback registration and every mutable binding, modal, search, mouse, pane, mux, config and script value remain owned by `App`; concrete action effects remain behind a temporary typed command port. Controllers carry only narrow concern-specific ports, no native window/mux/App pointer field, and add zero allocations on the pinned non-pane action and unhandled-key routes.
 
 This is preparatory parity work under ADR-0021, not formal closure of L1-01. The typed command compatibility port expires in Slice 6.3d; fixed input ordering expires in Slice 6.1b after its ownership and behavior dependencies merge.
+
+### Preparatory App render/reload delegation
+
+Slice 6.3b delegates only presentation order and reload request/watch/dispatch order to private per-projection controllers. `App` continues to own the renderer and GL-context resources, pane scratch, damage and frame accounting, config/runtime/bundle resources, pending/watch/worker/generation state, and the complete old-or-new activation transaction. Frame accounting remains outside `withCurrent`; GPU work remains on the current locked OS thread; reload workers remain CPU-only.
+
+This remains preparatory ADR-0021 parity work, not L1-01 closure. Pane render context work expires in Slice 6.1a, typed reload states in Slice 6.1c, process-shared config in Slice 3.4, and the temporary App facade adapters in Slice 6.3d.

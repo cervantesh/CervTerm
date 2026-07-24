@@ -166,6 +166,8 @@ func newProjectionApp(owner *App) *App {
 	child.initZoomHotkeys()
 	child.initActionController()
 	child.initInputController()
+	child.initRenderController()
+	child.initReloadController()
 	child.initActionBindings()
 	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {
 		child.statsSpec, child.statsSpecOK = spec, true

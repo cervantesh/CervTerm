@@ -15,17 +15,11 @@ import (
 )
 
 func (a *App) requestConfigReload() bool {
-	if a.configPath == "" {
-		return false
-	}
-	a.reloadPending = true
-	return true
+	return a.ensureReloadController().requestReload()
 }
 
 func (a *App) pollConfigReload(now time.Time) {
-	if a.configWatch.poll(now) {
-		a.reloadPending = true
-	}
+	a.ensureReloadController().pollReload(now)
 }
 
 const configReloadFailureNoticeInterval = 30 * time.Second
@@ -56,19 +50,7 @@ func (a *App) acknowledgeConfigReloadFailure(before configWatchSnapshot, expecta
 }
 
 func (a *App) applyPendingConfigReload() {
-	a.applyConfigReloadWorkerResults()
-	if !a.reloadPending {
-		return
-	}
-	if a.configReloadAsync.workers >= 2 {
-		return
-	}
-	a.reloadPending = false
-	if a.configPath == "" {
-		a.reportConfigReloadFailure(fmt.Errorf("no config source is active"), time.Now())
-		return
-	}
-	a.startConfigReloadWorker()
+	a.ensureReloadController().applyReload()
 }
 
 func (a *App) reloadConfig() (resultErr error) {

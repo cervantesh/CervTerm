@@ -1,0 +1,36 @@
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics        
+BenchmarkArchitectureSliceDrawDispatch-32           	  687848	      1679 ns/op	       8 B/op	       1 allocs/op
+BenchmarkArchitectureSliceDrawDispatch-32           	  709738	      1700 ns/op	       8 B/op	       1 allocs/op
+BenchmarkArchitectureSliceDrawDispatch-32           	  683954	      1799 ns/op	       8 B/op	       1 allocs/op
+BenchmarkArchitectureSliceDrawDispatch-32           	  550197	      1905 ns/op	       8 B/op	       1 allocs/op
+BenchmarkArchitectureSliceDrawDispatch-32           	  591931	      1891 ns/op	       8 B/op	       1 allocs/op
+BenchmarkArchitectureSliceDrawDispatch-32           	  554210	      1865 ns/op	       8 B/op	       1 allocs/op
+BenchmarkArchitectureSliceDrawDispatch-32           	  716742	      1836 ns/op	       8 B/op	       1 allocs/op
+BenchmarkArchitectureSliceDrawDispatch-32           	  751173	      1870 ns/op	       8 B/op	       1 allocs/op
+BenchmarkArchitectureSliceDrawDispatch-32           	  613836	      1946 ns/op	       8 B/op	       1 allocs/op
+BenchmarkArchitectureSliceDrawDispatch-32           	  684696	      1935 ns/op	       8 B/op	       1 allocs/op
+BenchmarkArchitectureSliceReloadRequest-32          	1000000000	         0.5132 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadRequest-32          	1000000000	         0.5097 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadRequest-32          	1000000000	         0.5396 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadRequest-32          	1000000000	         0.5183 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadRequest-32          	1000000000	         0.5174 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadRequest-32          	1000000000	         0.5488 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadRequest-32          	1000000000	         0.4942 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadRequest-32          	1000000000	         0.5056 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadRequest-32          	1000000000	         0.4790 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadRequest-32          	1000000000	         0.4891 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadInactiveApply-32    	433001185	         2.944 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadInactiveApply-32    	382254106	         3.245 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadInactiveApply-32    	381475668	         3.101 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadInactiveApply-32    	371049252	         3.033 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadInactiveApply-32    	396316239	         3.035 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadInactiveApply-32    	398196963	         2.859 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadInactiveApply-32    	375998510	         3.020 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadInactiveApply-32    	436046986	         3.074 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadInactiveApply-32    	368395700	         3.084 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceReloadInactiveApply-32    	418255018	         3.027 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/frontend/glfwgl	34.765s

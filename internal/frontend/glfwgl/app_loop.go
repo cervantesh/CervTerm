@@ -105,19 +105,7 @@ func (a *App) runProcessLoop(continuous bool) error {
 			}
 			drew := false
 			if err := a.controller.withCurrent(id, func() {
-				projection.tickProjection()
-				now = time.Now()
-				if !continuous && !projection.shouldRedraw(now) {
-					return
-				}
-				if continuous {
-					if wait := projection.presentation.wait(now, projection.cfg.Render.MaxFPS); wait > 0 {
-						time.Sleep(wait)
-					}
-				}
-				projection.draw()
-				projection.r.EndFrame()
-				drew = true
+				drew = projection.ensureRenderController().renderProjection(continuous)
 			}); err != nil {
 				return err
 			}
@@ -133,6 +121,28 @@ func (a *App) runProcessLoop(continuous bool) error {
 		}
 	}
 	return nil
+}
+
+func (a *App) tickRenderProjection() {
+	a.tickProjection()
+}
+
+func (a *App) renderNow() time.Time {
+	return time.Now()
+}
+
+func (a *App) renderReady(now time.Time) bool {
+	return a.shouldRedraw(now)
+}
+
+func (a *App) throttleRender(now time.Time) {
+	if wait := a.presentation.wait(now, a.cfg.Render.MaxFPS); wait > 0 {
+		time.Sleep(wait)
+	}
+}
+
+func (a *App) endRenderFrame() {
+	a.r.EndFrame()
 }
 
 func (a *App) tickProjection() {

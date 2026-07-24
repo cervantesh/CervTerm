@@ -59,8 +59,18 @@ func terminalImagePaneClip(geometry termmux.PaneGeometry) gpu.ClipRect {
 }
 
 func (a *App) draw() {
+	a.ensureRenderController().drawFrame()
+}
+
+func (a *App) beginRenderFrame() {
 	a.beginCandidateGeometryFrame()
-	defer a.finishCandidateGeometryFrame()
+}
+
+func (a *App) finishRenderFrame() {
+	a.finishCandidateGeometryFrame()
+}
+
+func (a *App) drawRenderFrameBody() {
 	frameNow := time.Now()
 	frameBlink := a.blinkPhaseAt(frameNow)
 	if a.notice != "" && frameNow.After(a.noticeUntil) {
