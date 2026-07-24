@@ -31,147 +31,274 @@ func (a *App) installCallbacks() {
 	})
 
 	a.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
-		if a.handleModalMouseButton(button, action, mods) {
+		event := buttonRouteEvent{button: button, action: action, mods: mods}
+		if a.routeModalButton(event) {
 			return
 		}
-		x, y := a.window.GetCursorPos()
-		if a.handleTabBarButton(button, action, x, y) {
+		position := a.inputCursorPosition()
+		if a.routeTabBarButton(event, position) {
 			return
 		}
-		if a.handleConfiguredMouseButton(button, action, mods, x, y) {
+		if a.routeReportedOrConfiguredButton(event, position) {
 			return
 		}
-		if a.divider.active {
-			if button == glfw.MouseButtonLeft && action == glfw.Release {
-				a.finishDividerDrag()
-				a.updateDividerCursor(x, y)
-			}
+		if a.routeActiveDividerButton(event, position) {
 			return
 		}
-		if button == glfw.MouseButtonLeft && action == glfw.Press && a.mouseCapturePane == 0 && a.beginDividerDrag(x, y) {
+		if a.routeBeginDividerButton(event, position) {
 			return
 		}
-		fx, fy := a.windowToFramebuffer(x, y)
-		if a.handleScrollbarButton(button, action, fx, fy) {
-			a.clearDividerCursor()
+		if a.routeScrollbarButton(event, position) {
 			return
 		}
-		if button != glfw.MouseButtonLeft {
-			return
-		}
-		point := a.pointFromPixels(float32(x), float32(y))
-		if action == glfw.Press {
-			a.captureLinkPress(point)
-			a.selection.dragging = true
-			a.selection.active = false
-			a.selection.start = point
-			a.selection.end = point
-			a.clearHover()
-			a.requestAccessibilityRedraw()
-			return
-		}
-		if action == glfw.Release {
-			a.selection.end = point
-			a.selection.dragging = false
-			if !a.selection.active && a.handleLinkClick(point) {
-				a.requestRedraw()
-				return
-			}
-			a.requestAccessibilityRedraw()
-		}
+		a.routeSelectionButton(event, position)
 	})
 	a.window.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
-		if a.handleModalCursorPos(x, y) {
+		position := cursorRouteEvent{x: x, y: y}
+		if a.routeModalCursor(position) {
 			return
 		}
-		if a.pointerOverTabBar(x, y) {
-			a.clearDividerCursor()
+		if a.routeTabBarCursor(position) {
 			return
 		}
-		if a.mouseCapturePane != 0 {
-			a.clearDividerCursor()
-			a.sendMouseMove(x, y)
+		if a.routeCapturedCursor(position) {
 			return
 		}
-		if a.handleConfiguredMouseDrag(x, y) {
+		if a.routeConfiguredDrag(position) {
 			return
 		}
-		if a.dragDivider(x, y) {
+		if a.routeDividerDrag(position) {
 			return
 		}
-		fx, fy := a.windowToFramebuffer(x, y)
-		if a.handleScrollbarMove(fx, fy) {
-			a.clearDividerCursor()
+		if a.routeScrollbarCursor(position) {
 			return
 		}
-		reported := a.sendMouseMove(x, y)
-		if a.updateDividerCursor(x, y) {
+		reported := a.routeTerminalMouseMove(position)
+		if a.routeDividerCursor(position) {
 			return
 		}
 		if reported {
 			return
 		}
-		if !a.selection.dragging {
-			if pane, _, ok := a.paneAtWindowPosition(x, y); ok {
-				a.updateHoverForPane(pane, x, y)
-			} else {
-				a.clearHover()
-			}
-			return
-		}
-		a.selection.end = a.pointFromPixels(float32(x), float32(y))
-		a.selection.active = true
-		a.requestAccessibilityRedraw()
+		a.routeSelectionCursor(position)
 	})
 	a.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {
-		if a.handleModalScroll(xoff, yoff) {
+		event := wheelRouteEvent{xoff: xoff, yoff: yoff}
+		if a.routeModalWheel(event) {
 			return
 		}
-		x, y := a.window.GetCursorPos()
-		if a.pointerOverTabBar(x, y) {
+		position := a.inputCursorPosition()
+		if a.routeTabBarWheel(position) {
 			return
 		}
-		if a.handleConfiguredMouseWheel(yoff, x, y) {
+		if a.routeReportedOrConfiguredWheel(event, position) {
 			return
 		}
-		if a.handleZoomWheel(yoff) {
+		if a.routeZoomWheel(event) {
 			return
 		}
-		fx, fy := a.windowToFramebuffer(x, y)
-		if a.handleScrollbarWheel(yoff, fx, fy) {
+		if a.routeScrollbarWheel(event, position) {
 			return
 		}
-		rows := scrollRowsFromWheelDelta(yoff, a.cfg.Scrolling.WheelMultiplier)
-		if rows == 0 {
-			return
-		}
-		moved, _ := a.mux.ScrollViewport(a.focusedPane, rows)
-		if moved {
-			a.scrollbar.lastActivity = time.Now()
-			a.requestAccessibilityRedraw()
-			a.markScrollEvent()
-		}
+		a.routeTerminalWheel(event)
 	})
 	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
-		a.recordNativeFocus(focused)
+		a.recordInputFocus(focused)
 		if !focused {
-			a.compositionNativeFocusChanged(false)
-			a.keyTable.cancel()
-			a.finishDividerDrag()
-			a.clearDividerCursor()
-			a.cancelMouseCapture()
-			a.mouseBindingCapture = mouseBindingCapture{}
+			a.cleanupBlurInput()
 		}
-		a.fireScriptEvent(func() error { return a.scriptRT.FireFocus(a.hostForFocused(), focused) })
-		_, view, ok := a.focusedView()
-		enabled := ok && view.FocusEvents
-		if !enabled {
+		a.routeScriptFocus(focused)
+		a.routeTerminalFocus(focused)
+	})
+}
+
+func (a *App) routeModalButton(event buttonRouteEvent) bool {
+	return a.handleModalMouseButton(event.button, event.action, event.mods)
+}
+
+func (a *App) inputCursorPosition() cursorRouteEvent {
+	x, y := a.window.GetCursorPos()
+	return cursorRouteEvent{x: x, y: y}
+}
+
+func (a *App) routeTabBarButton(event buttonRouteEvent, position cursorRouteEvent) bool {
+	return a.handleTabBarButton(event.button, event.action, position.x, position.y)
+}
+
+func (a *App) routeReportedOrConfiguredButton(event buttonRouteEvent, position cursorRouteEvent) bool {
+	return a.handleConfiguredMouseButton(event.button, event.action, event.mods, position.x, position.y)
+}
+
+func (a *App) routeActiveDividerButton(event buttonRouteEvent, position cursorRouteEvent) bool {
+	if !a.divider.active {
+		return false
+	}
+	if event.button == glfw.MouseButtonLeft && event.action == glfw.Release {
+		a.finishDividerDrag()
+		a.updateDividerCursor(position.x, position.y)
+	}
+	return true
+}
+
+func (a *App) routeBeginDividerButton(event buttonRouteEvent, position cursorRouteEvent) bool {
+	return event.button == glfw.MouseButtonLeft && event.action == glfw.Press && a.mouseCapturePane == 0 && a.beginDividerDrag(position.x, position.y)
+}
+
+func (a *App) routeScrollbarButton(event buttonRouteEvent, position cursorRouteEvent) bool {
+	fx, fy := a.windowToFramebuffer(position.x, position.y)
+	if !a.handleScrollbarButton(event.button, event.action, fx, fy) {
+		return false
+	}
+	a.clearDividerCursor()
+	return true
+}
+
+func (a *App) routeSelectionButton(event buttonRouteEvent, position cursorRouteEvent) {
+	if event.button != glfw.MouseButtonLeft {
+		return
+	}
+	point := a.pointFromPixels(float32(position.x), float32(position.y))
+	if event.action == glfw.Press {
+		a.captureLinkPress(point)
+		a.selection.dragging = true
+		a.selection.active = false
+		a.selection.start = point
+		a.selection.end = point
+		a.clearHover()
+		a.requestAccessibilityRedraw()
+		return
+	}
+	if event.action == glfw.Release {
+		a.selection.end = point
+		a.selection.dragging = false
+		if !a.selection.active && a.handleLinkClick(point) {
+			a.requestRedraw()
 			return
 		}
-		if focused {
-			a.writeInput("\x1b[I")
+		a.requestAccessibilityRedraw()
+	}
+}
+
+func (a *App) routeModalCursor(position cursorRouteEvent) bool {
+	return a.handleModalCursorPos(position.x, position.y)
+}
+
+func (a *App) routeTabBarCursor(position cursorRouteEvent) bool {
+	if !a.pointerOverTabBar(position.x, position.y) {
+		return false
+	}
+	a.clearDividerCursor()
+	return true
+}
+
+func (a *App) routeCapturedCursor(position cursorRouteEvent) bool {
+	if a.mouseCapturePane == 0 {
+		return false
+	}
+	a.clearDividerCursor()
+	a.sendMouseMove(position.x, position.y)
+	return true
+}
+
+func (a *App) routeConfiguredDrag(position cursorRouteEvent) bool {
+	return a.handleConfiguredMouseDrag(position.x, position.y)
+}
+
+func (a *App) routeDividerDrag(position cursorRouteEvent) bool {
+	return a.dragDivider(position.x, position.y)
+}
+
+func (a *App) routeScrollbarCursor(position cursorRouteEvent) bool {
+	fx, fy := a.windowToFramebuffer(position.x, position.y)
+	if !a.handleScrollbarMove(fx, fy) {
+		return false
+	}
+	a.clearDividerCursor()
+	return true
+}
+
+func (a *App) routeTerminalMouseMove(position cursorRouteEvent) bool {
+	return a.sendMouseMove(position.x, position.y)
+}
+
+func (a *App) routeDividerCursor(position cursorRouteEvent) bool {
+	return a.updateDividerCursor(position.x, position.y)
+}
+
+func (a *App) routeSelectionCursor(position cursorRouteEvent) {
+	if !a.selection.dragging {
+		if pane, _, ok := a.paneAtWindowPosition(position.x, position.y); ok {
+			a.updateHoverForPane(pane, position.x, position.y)
 		} else {
-			a.writeInput("\x1b[O")
+			a.clearHover()
 		}
-	})
+		return
+	}
+	a.selection.end = a.pointFromPixels(float32(position.x), float32(position.y))
+	a.selection.active = true
+	a.requestAccessibilityRedraw()
+}
+
+func (a *App) routeModalWheel(event wheelRouteEvent) bool {
+	return a.handleModalScroll(event.xoff, event.yoff)
+}
+
+func (a *App) routeTabBarWheel(position cursorRouteEvent) bool {
+	return a.pointerOverTabBar(position.x, position.y)
+}
+
+func (a *App) routeReportedOrConfiguredWheel(event wheelRouteEvent, position cursorRouteEvent) bool {
+	return a.handleConfiguredMouseWheel(event.yoff, position.x, position.y)
+}
+
+func (a *App) routeZoomWheel(event wheelRouteEvent) bool {
+	return a.handleZoomWheel(event.yoff)
+}
+
+func (a *App) routeScrollbarWheel(event wheelRouteEvent, position cursorRouteEvent) bool {
+	fx, fy := a.windowToFramebuffer(position.x, position.y)
+	return a.handleScrollbarWheel(event.yoff, fx, fy)
+}
+
+func (a *App) routeTerminalWheel(event wheelRouteEvent) {
+	rows := scrollRowsFromWheelDelta(event.yoff, a.cfg.Scrolling.WheelMultiplier)
+	if rows == 0 {
+		return
+	}
+	moved, _ := a.mux.ScrollViewport(a.focusedPane, rows)
+	if moved {
+		a.scrollbar.lastActivity = time.Now()
+		a.requestAccessibilityRedraw()
+		a.markScrollEvent()
+	}
+}
+
+func (a *App) recordInputFocus(focused bool) {
+	a.recordNativeFocus(focused)
+}
+
+func (a *App) cleanupBlurInput() {
+	a.compositionNativeFocusChanged(false)
+	a.keyTable.cancel()
+	a.finishDividerDrag()
+	a.clearDividerCursor()
+	a.cancelMouseCapture()
+	a.mouseBindingCapture = mouseBindingCapture{}
+}
+
+func (a *App) routeScriptFocus(focused bool) {
+	a.fireScriptEvent(func() error { return a.scriptRT.FireFocus(a.hostForFocused(), focused) })
+}
+
+func (a *App) routeTerminalFocus(focused bool) {
+	_, view, ok := a.focusedView()
+	enabled := ok && view.FocusEvents
+	if !enabled {
+		return
+	}
+	if focused {
+		a.writeInput("\x1b[I")
+	} else {
+		a.writeInput("\x1b[O")
+	}
 }
