@@ -15,6 +15,10 @@ import (
 )
 
 func (a *App) executeAction(envelope termaction.Envelope, context termaction.Context) error {
+	return a.ensureActionController().executeAction(envelope, context)
+}
+
+func (a *App) executeActionLegacy(envelope termaction.Envelope, context termaction.Context) error {
 	if err := envelope.Validate(); err != nil {
 		return actionExecutionError(envelope.Action, termaction.ErrorAction, err)
 	}
@@ -30,7 +34,7 @@ func (a *App) executeAction(envelope termaction.Envelope, context termaction.Con
 				}
 			}
 			context = executor.refreshFocusedActionContext(context)
-			if err := executor.executeAction(child, context); err != nil {
+			if err := executor.executeActionLegacy(child, context); err != nil {
 				return err
 			}
 		}

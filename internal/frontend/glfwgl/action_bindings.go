@@ -187,7 +187,7 @@ func reloadChord(key glfw.Key, mods glfw.ModifierKey) bool {
 }
 
 func (a *App) handleKeyEvent(key glfw.Key, eventAction glfw.Action, mods glfw.ModifierKey) {
-	a.handleKeyEventLegacy(key, eventAction, mods)
+	a.ensureInputController().handleKey(key, eventAction, mods)
 }
 
 func (a *App) handleKeyEventLegacy(key glfw.Key, eventAction glfw.Action, mods glfw.ModifierKey) {
@@ -237,6 +237,50 @@ func (a *App) handleKeyEventLegacy(key glfw.Key, eventAction glfw.Action, mods g
 	if !hasEvent {
 		return
 	}
+	if encoded, ok := input.EncodeWithMode(event, a.inputMode()); ok {
+		a.writeInputBytes(encoded)
+	}
+}
+
+func (a *App) clearKeyCharacterSuppression() {
+	a.charSuppression.clearOnNonEchoInput()
+}
+
+func (a *App) routeModalKey(event keyRouteEvent) bool {
+	return a.handleModalKey(event.key, event.action, event.mods)
+}
+
+func (a *App) routeSearchKey(event keyRouteEvent, repeat bool) bool {
+	if a.search.active {
+		return a.search.handleKey(event.key, event.mods)
+	}
+	return searchActivationChord(event.key, event.mods) && a.dispatchReservedAction(termaction.ToggleSearch{}, event.key, event.mods, repeat)
+}
+
+func (a *App) routeReloadKey(event keyRouteEvent, repeat bool) bool {
+	return reloadChord(event.key, event.mods) && a.dispatchReservedAction(termaction.ReloadConfig{}, event.key, event.mods, repeat)
+}
+
+func (a *App) routeScriptTableKey(event keyRouteEvent, repeat bool) bool {
+	return a.dispatchScriptTableKey(event.key, event.mods, repeat)
+}
+
+func (a *App) routeScriptKey(event keyRouteEvent, repeat bool) bool {
+	return a.dispatchScriptKey(event.key, event.mods, repeat)
+}
+
+func (a *App) routeBuiltinKey(event keyRouteEvent, repeat bool) bool {
+	return a.dispatchBuiltinAction(event.key, event.mods, repeat)
+}
+
+func (a *App) routeSelectionCopyKey(event keyRouteEvent, repeat bool) bool {
+	if a.Selection() == "" {
+		return false
+	}
+	return a.dispatchReservedAction(termaction.CopySelection{}, event.key, event.mods, repeat)
+}
+
+func (a *App) routeTerminalKey(event input.Event) {
 	if encoded, ok := input.EncodeWithMode(event, a.inputMode()); ok {
 		a.writeInputBytes(encoded)
 	}
