@@ -56,15 +56,20 @@ func TestWindowActionExecutorCreateFocusCloseAndRejectStale(t *testing.T) {
 	if controller.active != 2 {
 		t.Fatalf("active=%d", controller.active)
 	}
-	multiple, err := termaction.NewMultiple(windowEnvelope(termaction.FocusWindow{WindowID: 2}), windowEnvelope(termaction.ToggleStats{}))
+	multiple, err := termaction.NewMultiple(
+		windowEnvelope(termaction.FocusWindow{WindowID: 1}),
+		windowEnvelope(termaction.ToggleStats{}),
+		windowEnvelope(termaction.FocusWindow{WindowID: 2}),
+		windowEnvelope(termaction.ToggleStats{}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := a.executeAction(windowEnvelope(multiple), ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !child.showStats || a.showStats {
-		t.Fatalf("projection-local sequence root=%v child=%v", a.showStats, child.showStats)
+	if !a.showStats || !child.showStats || controller.active != 2 {
+		t.Fatalf("per-child projection retarget root=%v child=%v active=%d", a.showStats, child.showStats, controller.active)
 	}
 	if err := a.executeAction(windowEnvelope(termaction.CloseWindow{WindowID: 2}), ctx); err != nil {
 		t.Fatal(err)
