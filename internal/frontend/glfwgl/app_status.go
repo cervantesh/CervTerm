@@ -21,7 +21,7 @@ type statusState struct {
 // syncStatusSegments rebuilds the composed status string only after a real
 // script-store mutation. It runs after all script handlers for the loop pass so
 // timer/event updates request a prompt on-demand repaint.
-func (a *App) syncStatusSegments() { a.syncScriptStatus() }
+func (a *App) syncStatusSegments() { a.ensureScriptLifecycleController().syncStatus(a, a) }
 
 // prepareStatusBand derives the window-dependent display text and geometry
 // before damage selection. The untruncated composed line remains cached by seq.

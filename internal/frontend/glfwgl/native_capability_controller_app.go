@@ -70,5 +70,7 @@ func (a *childNativeCapabilityAdapter) markChildCapabilitiesReady() {
 
 func (a *childNativeCapabilityAdapter) rollbackChildCapabilities() error {
 	a.app.windowID = 0
-	return a.bundle.beforeUnbind.close()
+	// The candidate transaction owns the bundle rollback and preserves its
+	// runtime-window-before-native-resource cleanup order.
+	return nil
 }

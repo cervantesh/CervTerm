@@ -75,15 +75,34 @@ func (a *App) scriptHostFontSize(pane termmux.PaneID) float64 {
 	if pane != 0 {
 		return a.paneFontSize(pane)
 	}
-	return a.FontSize()
+	// Preserve the pre-controller paneHost literal adapter: an unspecified pane
+	// follows the focused pane once mux bootstrap has completed.
+	if focused, ok := a.focusedFontPane(); ok {
+		return a.paneFontSize(focused)
+	}
+	return a.cfg.Font.Size
 }
 
 func (a *App) setScriptHostFontSize(pane termmux.PaneID, points float64) {
+	points = clampZoomFontSize(points)
 	if pane != 0 {
 		a.setPaneFontSize(pane, points)
 		return
 	}
-	a.SetFontSize(points)
+	// Preserve the pre-controller paneHost literal adapter without retargeting
+	// production hosts, whose initialized controller retains its stable pane ID.
+	if focused, ok := a.focusedFontPane(); ok {
+		state := a.ensurePaneUI(focused)
+		if state.font.fontSize == points && !state.font.pending {
+			return
+		}
+		a.setPaneFontSize(focused, points)
+		return
+	}
+	// Before mux bootstrap, scripting configures the base used by the initial
+	// pane and by reset; there is no pane-local state or PTY to update yet.
+	a.cfg.Font.Size = points
+	a.zoom.base = points
 }
 
 func (a *App) scriptHostSelection(pane termmux.PaneID) string {

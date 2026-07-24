@@ -153,8 +153,7 @@ func (a *App) tickProjection() {
 	a.applyPendingDividerResize()
 	a.resizeToWindow()
 	a.fireLifecycleEvents()
-	a.syncStatusSegments()
-	a.syncOverlays()
+	a.ensureScriptLifecycleController().syncProjections(a, a)
 	if a.accessibilityRuntime != nil {
 		if err := a.accessibilityRuntime.Refresh(); err != nil {
 			a.failAccessibilityRuntime(err)

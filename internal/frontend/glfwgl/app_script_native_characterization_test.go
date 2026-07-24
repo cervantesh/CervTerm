@@ -12,7 +12,7 @@ import (
 	"cervterm/internal/script"
 )
 
-func loadFrontendScriptRuntime(t *testing.T, source string) (config.Config, *script.Runtime) {
+func loadFrontendScriptRuntime(t testing.TB, source string) (config.Config, *script.Runtime) {
 	t.Helper()
 	path := t.TempDir() + "/cervterm.lua"
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
@@ -150,7 +150,7 @@ end } }`)
 	if app.notice != "output:x" {
 		t.Fatalf("non-empty output notice=%q", app.notice)
 	}
-	expectedErr := runtime.FireOutput(paneHost{app: app, pane: pane}, "boom")
+	expectedErr := runtime.FireOutput(newPaneHost(app, pane), "boom")
 	if expectedErr == nil {
 		t.Fatal("erroring output handler returned nil")
 	}
@@ -190,8 +190,8 @@ func TestKnownDefect_L1_02_SiblingRuntimeConfigDiverges(t *testing.T) {
 	if err := controller.syncSharedProjectionState(owner); err != nil {
 		t.Fatal(err)
 	}
-	ownerConfig := (paneHost{app: owner}).RuntimeConfig()
-	childConfig := (paneHost{app: child}).RuntimeConfig()
+	ownerConfig := newPaneHost(owner, 0).RuntimeConfig()
+	childConfig := newPaneHost(child, 0).RuntimeConfig()
 	if ownerConfig.Window.Opacity != 0.42 || childConfig.Window.Opacity == ownerConfig.Window.Opacity {
 		t.Fatalf("runtime configs converged unexpectedly: owner=%v child=%v", ownerConfig.Window.Opacity, childConfig.Window.Opacity)
 	}
@@ -222,5 +222,132 @@ return {}`)
 	}
 	if _, ok := runtime.NextTimerDeadline(); ok {
 		t.Fatal("one-shot timer registrations survived execution")
+	}
+}
+
+func newScriptBenchmarkMuxApp(b *testing.B, cols, rows int) *App {
+	b.Helper()
+	m := termmux.New(failingTestFactory{}, termmux.Options{})
+	_, pane, events, _ := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: cols, Height: rows}, termmux.CellMetrics{CellWidth: 1, CellHeight: 1})
+	app := &App{
+		mux:               m,
+		focusedPane:       pane,
+		paneUI:            make(map[termmux.PaneID]*paneUIState),
+		pendingPaneScroll: make(map[termmux.PaneID]int),
+		cellW:             1,
+		cellH:             1,
+	}
+	app.handleMuxEvents(events)
+	app.syncFocusedProjection()
+	resetEvents, resetErr := m.FeedFallback(pane, []byte("\x1bc"))
+	if resetErr != nil {
+		b.Fatal(resetErr)
+	}
+	app.handleMuxEvents(resetEvents)
+	b.Cleanup(func() { _ = m.Shutdown() })
+	return app
+}
+
+func BenchmarkAppScriptLifecycleNoRuntime(b *testing.B) {
+	app := &App{}
+	now := time.Unix(1, 0)
+	app.fireLifecycleEvents() // Warm the candidate controller; base remains a no-op.
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		app.fireLifecycleEvents()
+		app.fireDueTimers(now)
+		app.syncStatusSegments()
+		app.syncOverlays()
+	}
+}
+
+func BenchmarkPaneHostWarmedStableReads(b *testing.B) {
+	app := newScriptBenchmarkMuxApp(b, 20, 10)
+	host := newPaneHost(app, app.focusedPane)
+	wantFontSize := host.FontSize()
+	if host.Clipboard() != "" {
+		b.Fatal("unexpected warmed clipboard read")
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if host.Clipboard() != "" || host.FontSize() != wantFontSize {
+			b.Fatal("unexpected warmed host read")
+		}
+	}
+}
+
+func paneHostFireOutputBaseline(runtime *script.Runtime, app *App, pane termmux.PaneID, data string) error {
+	return runtime.FireOutput(newPaneHost(app, pane), data)
+}
+
+func TestPaneHostRealFireOutputAddsNoAllocationBeyondWarmedBaseline(t *testing.T) {
+	cfg, runtime := loadFrontendScriptRuntime(t, `return { events = { output = function(term, data)
+  local _ = term:clipboard()
+  local __ = term:font_size()
+end } }`)
+	app := newMuxTestApp(t, 20, 10)
+	app.cfg, app.scriptRT = cfg, runtime
+	pane := app.focusedPane
+	host := newPaneHost(app, pane)
+	if err := runtime.FireOutput(host, "warm"); err != nil {
+		t.Fatal(err)
+	}
+	baseline := testing.AllocsPerRun(100, func() {
+		if err := paneHostFireOutputBaseline(runtime, app, pane, "baseline"); err != nil {
+			panic(err)
+		}
+	})
+	active := testing.AllocsPerRun(100, func() {
+		if err := app.fireScriptOutput(pane, "active"); err != nil {
+			panic(err)
+		}
+	})
+	if active != baseline {
+		t.Fatalf("FireOutput allocations: active=%v baseline=%v delta=%v, want delta 0", active, baseline, active-baseline)
+	}
+}
+
+func BenchmarkPaneHostRealFireOutput(b *testing.B) {
+	cfg, runtime := loadFrontendScriptRuntime(b, `return { events = { output = function(term, data)
+  local _ = term:clipboard()
+  local __ = term:font_size()
+end } }`)
+	app := newScriptBenchmarkMuxApp(b, 20, 10)
+	app.cfg, app.scriptRT = cfg, runtime
+	pane := app.focusedPane
+	host := newPaneHost(app, pane)
+	if err := runtime.FireOutput(host, "warm"); err != nil {
+		b.Fatal(err)
+	}
+	b.Run("production_baseline", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			if err := paneHostFireOutputBaseline(runtime, app, pane, "baseline"); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("active_app_route", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			if err := app.fireScriptOutput(pane, "active"); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+func BenchmarkProjectionNativeDisabled(b *testing.B) {
+	app := &App{cfg: config.Defaults()}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if activation := app.activateProjectionIME(nil, nil); activation.State != imeActivationDisabled {
+			b.Fatalf("IME activation state = %v, want disabled", activation.State)
+		}
+		if err := prepareProjectionAccessibility(app, nil, nil); err != nil || app.accessibilityActivation.State != accessibilityActivationDisabled {
+			b.Fatalf("accessibility activation = %#v, err = %v", app.accessibilityActivation, err)
+		}
 	}
 }

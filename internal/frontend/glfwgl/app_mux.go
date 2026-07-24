@@ -139,11 +139,7 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 				}
 				a.tabActivity[tab] = true
 			}
-			if len(event.Data) > 0 && a.scriptLifecycleRuntimeAvailable() && a.scriptLifecycleWantsOutput() {
-				if err := a.fireScriptOutput(event.Pane, string(event.Data)); err != nil {
-					a.reportScriptLifecycleError(err)
-				}
-			}
+			a.ensureScriptLifecycleController().outputBytes(a, a, a, event.Pane, event.Data)
 			consumed = true
 		case termmux.PaneDirty:
 			consumed = true
@@ -151,9 +147,9 @@ func (a *App) applyMuxEvents(events []termmux.Event) bool {
 			if event.Pane == a.focusedPane {
 				a.updateWindowTitle(event.Text)
 			}
-			a.fireScriptEvent(func() error { return a.fireScriptTitle(event.Pane, event.Text) })
+			a.ensureScriptLifecycleController().title(a, a, a, event.Pane, event.Text)
 		case termmux.PaneCWDChanged:
-			a.fireScriptEvent(func() error { return a.fireScriptCWD(event.Pane, event.Text) })
+			a.ensureScriptLifecycleController().cwd(a, a, a, event.Pane, event.Text)
 		case termmux.PaneBell:
 			a.deliverBellEvent(event.Pane)
 		case termmux.PaneNotificationRequested:

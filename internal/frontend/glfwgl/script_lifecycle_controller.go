@@ -8,7 +8,7 @@ import (
 	termmux "cervterm/internal/mux"
 )
 
-const scriptLifecycleControllerPortBudget = 16
+const scriptLifecycleControllerPortBudget = 14
 
 type scriptLifecycleRuntimePort interface {
 	scriptLifecycleRuntimeAvailable() bool
@@ -23,19 +23,14 @@ type scriptLifecycleEventPort interface {
 	fireScriptFocus(termmux.PaneID, bool) error
 }
 
-type scriptLifecycleDeferredEventPort interface {
-	fireScriptResize(termmux.PaneID, int, int) error
-	fireScriptScroll(termmux.PaneID, int) error
-}
-
 type scriptLifecycleFailurePort interface {
 	reportScriptLifecycleError(error)
 }
 
 type scriptLifecyclePendingPort interface {
 	clearPendingScriptLifecycle()
-	snapshotPendingScriptResizes() []scriptResizeEvent
-	snapshotPendingScriptScrolls() []scriptScrollEvent
+	dispatchPendingScriptResizes()
+	dispatchPendingScriptScrolls()
 }
 
 type scriptLifecycleTimerPort interface {
@@ -47,109 +42,95 @@ type scriptLifecycleProjectionPort interface {
 	syncScriptOverlays()
 }
 
-type scriptResizeEvent struct {
-	pane       termmux.PaneID
-	cols, rows int
-}
-
-type scriptScrollEvent struct {
-	pane   termmux.PaneID
-	offset int
-}
-
-// scriptLifecycleController owns script callback ordering only. Runtime,
-// pending maps, timers, status, overlays, and pane state remain authoritative
-// behind ports; pending values cross in detached scalar slices.
+// scriptLifecycleController owns callback phase ordering only. It is a
+// zero-field value retained per App; every operation receives its ports
+// ephemerally, so no App-to-controller-to-App dynamic backreference exists.
 // TODO(L1-01; expires Slice 6.3d): remove the preparatory facade adapters.
-type scriptLifecycleController struct {
-	runtime     scriptLifecycleRuntimePort
-	events      scriptLifecycleEventPort
-	deferred    scriptLifecycleDeferredEventPort
-	failures    scriptLifecycleFailurePort
-	pending     scriptLifecyclePendingPort
-	timers      scriptLifecycleTimerPort
-	projections scriptLifecycleProjectionPort
+type scriptLifecycleController struct{}
+
+func newScriptLifecycleController() scriptLifecycleController {
+	return scriptLifecycleController{}
 }
 
-func newScriptLifecycleController(
-	runtime scriptLifecycleRuntimePort,
-	events scriptLifecycleEventPort,
-	deferred scriptLifecycleDeferredEventPort,
-	failures scriptLifecycleFailurePort,
-	pending scriptLifecyclePendingPort,
-	timers scriptLifecycleTimerPort,
-	projections scriptLifecycleProjectionPort,
-) *scriptLifecycleController {
-	return &scriptLifecycleController{
-		runtime: runtime, events: events, deferred: deferred, failures: failures,
-		pending: pending, timers: timers, projections: projections,
-	}
-}
-
-func (c *scriptLifecycleController) output(pane termmux.PaneID, data string) {
-	if data == "" || !c.runtime.scriptLifecycleRuntimeAvailable() || !c.runtime.scriptLifecycleWantsOutput() {
+func (*scriptLifecycleController) output(runtime scriptLifecycleRuntimePort, events scriptLifecycleEventPort, failures scriptLifecycleFailurePort, pane termmux.PaneID, data string) {
+	if data == "" || !runtime.scriptLifecycleRuntimeAvailable() || !runtime.scriptLifecycleWantsOutput() {
 		return
 	}
-	c.report(c.events.fireScriptOutput(pane, data))
+	reportScriptLifecycleError(failures, events.fireScriptOutput(pane, data))
 }
 
-func (c *scriptLifecycleController) title(pane termmux.PaneID, title string) {
-	if !c.runtime.scriptLifecycleRuntimeAvailable() {
+func (*scriptLifecycleController) outputBytes(runtime scriptLifecycleRuntimePort, events scriptLifecycleEventPort, failures scriptLifecycleFailurePort, pane termmux.PaneID, data []byte) {
+	if len(data) == 0 || !runtime.scriptLifecycleRuntimeAvailable() || !runtime.scriptLifecycleWantsOutput() {
 		return
 	}
-	c.report(c.events.fireScriptTitle(pane, title))
+	reportScriptLifecycleError(failures, events.fireScriptOutput(pane, string(data)))
 }
 
-func (c *scriptLifecycleController) cwd(pane termmux.PaneID, cwd string) {
-	if !c.runtime.scriptLifecycleRuntimeAvailable() {
+func (*scriptLifecycleController) title(runtime scriptLifecycleRuntimePort, events scriptLifecycleEventPort, failures scriptLifecycleFailurePort, pane termmux.PaneID, title string) {
+	if !runtime.scriptLifecycleRuntimeAvailable() {
 		return
 	}
-	c.report(c.events.fireScriptCWD(pane, cwd))
+	reportScriptLifecycleError(failures, events.fireScriptTitle(pane, title))
 }
 
-func (c *scriptLifecycleController) bell(pane termmux.PaneID) {
-	if !c.runtime.scriptLifecycleRuntimeAvailable() {
+func (*scriptLifecycleController) cwd(runtime scriptLifecycleRuntimePort, events scriptLifecycleEventPort, failures scriptLifecycleFailurePort, pane termmux.PaneID, cwd string) {
+	if !runtime.scriptLifecycleRuntimeAvailable() {
 		return
 	}
-	c.report(c.events.fireScriptBell(pane))
+	reportScriptLifecycleError(failures, events.fireScriptCWD(pane, cwd))
 }
 
-func (c *scriptLifecycleController) focus(pane termmux.PaneID, focused bool) {
-	if !c.runtime.scriptLifecycleRuntimeAvailable() {
+func (*scriptLifecycleController) bell(runtime scriptLifecycleRuntimePort, events scriptLifecycleEventPort, failures scriptLifecycleFailurePort, pane termmux.PaneID) {
+	if !runtime.scriptLifecycleRuntimeAvailable() {
 		return
 	}
-	c.report(c.events.fireScriptFocus(pane, focused))
+	reportScriptLifecycleError(failures, events.fireScriptBell(pane))
 }
 
-func (c *scriptLifecycleController) dispatchPending() {
-	if !c.runtime.scriptLifecycleRuntimeAvailable() {
-		c.pending.clearPendingScriptLifecycle()
+func (*scriptLifecycleController) focus(runtime scriptLifecycleRuntimePort, events scriptLifecycleEventPort, failures scriptLifecycleFailurePort, pane termmux.PaneID, focused bool) {
+	if !runtime.scriptLifecycleRuntimeAvailable() {
 		return
 	}
-	for _, event := range c.pending.snapshotPendingScriptResizes() {
-		c.report(c.deferred.fireScriptResize(event.pane, event.cols, event.rows))
-	}
-	for _, event := range c.pending.snapshotPendingScriptScrolls() {
-		c.report(c.deferred.fireScriptScroll(event.pane, event.offset))
-	}
+	reportScriptLifecycleError(failures, events.fireScriptFocus(pane, focused))
 }
 
-func (c *scriptLifecycleController) fireDueTimers(now time.Time) {
-	if c.runtime.scriptLifecycleRuntimeAvailable() {
-		c.timers.fireDueScriptTimers(now)
-	}
-}
-
-func (c *scriptLifecycleController) syncProjections() {
-	if !c.runtime.scriptLifecycleRuntimeAvailable() {
+func (*scriptLifecycleController) dispatchPending(runtime scriptLifecycleRuntimePort, pending scriptLifecyclePendingPort) {
+	if !runtime.scriptLifecycleRuntimeAvailable() {
+		pending.clearPendingScriptLifecycle()
 		return
 	}
-	c.projections.syncScriptStatus()
-	c.projections.syncScriptOverlays()
+	pending.dispatchPendingScriptResizes()
+	pending.dispatchPendingScriptScrolls()
 }
 
-func (c *scriptLifecycleController) report(err error) {
+func (*scriptLifecycleController) fireDueTimers(runtime scriptLifecycleRuntimePort, timers scriptLifecycleTimerPort, now time.Time) {
+	if runtime.scriptLifecycleRuntimeAvailable() {
+		timers.fireDueScriptTimers(now)
+	}
+}
+
+func (*scriptLifecycleController) syncStatus(runtime scriptLifecycleRuntimePort, projections scriptLifecycleProjectionPort) {
+	if runtime.scriptLifecycleRuntimeAvailable() {
+		projections.syncScriptStatus()
+	}
+}
+
+func (*scriptLifecycleController) syncOverlays(runtime scriptLifecycleRuntimePort, projections scriptLifecycleProjectionPort) {
+	if runtime.scriptLifecycleRuntimeAvailable() {
+		projections.syncScriptOverlays()
+	}
+}
+
+func (*scriptLifecycleController) syncProjections(runtime scriptLifecycleRuntimePort, projections scriptLifecycleProjectionPort) {
+	if !runtime.scriptLifecycleRuntimeAvailable() {
+		return
+	}
+	projections.syncScriptStatus()
+	projections.syncScriptOverlays()
+}
+
+func reportScriptLifecycleError(failures scriptLifecycleFailurePort, err error) {
 	if err != nil {
-		c.failures.reportScriptLifecycleError(err)
+		failures.reportScriptLifecycleError(err)
 	}
 }

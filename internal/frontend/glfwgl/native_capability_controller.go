@@ -24,37 +24,45 @@ type nativeChildCapabilityPort interface {
 	rollbackChildCapabilities() error
 }
 
-// nativeCapabilityController owns capability activation ordering only. It
-// retains narrow ports and never owns a window, projection bundle, WndProc,
-// prepared object, GPU/GL object, or rollback resource.
+// nativeCapabilityController owns capability activation ordering only. Initial
+// and child adapters are operation-scoped and are never retained with their
+// windows, projection bundles, WndProcs, prepared objects, or rollback resources.
 // TODO(L1-01; expires Slice 6.3d): remove the preparatory facade adapters.
-type nativeCapabilityController struct {
-	initial nativeInitialCapabilityPort
-	child   nativeChildCapabilityPort
+type nativeCapabilityController struct{}
+
+func newNativeCapabilityController() nativeCapabilityController {
+	return nativeCapabilityController{}
 }
 
-func newNativeCapabilityController(initial nativeInitialCapabilityPort, child nativeChildCapabilityPort) *nativeCapabilityController {
-	return &nativeCapabilityController{initial: initial, child: child}
-}
-
-func (c *nativeCapabilityController) activateInitial() error {
-	c.initial.activateInitialIME()
-	if err := c.initial.prepareInitialAccessibility(); err != nil {
-		return errors.Join(err, c.initial.rollbackInitialCapabilities())
+func (nativeCapabilityController) activateInitial(initial nativeInitialCapabilityPort) error {
+	initial.activateInitialIME()
+	if err := initial.prepareInitialAccessibility(); err != nil {
+		return errors.Join(err, initial.rollbackInitialCapabilities())
 	}
-	if err := c.initial.adoptInitialCapabilities(); err != nil {
-		return errors.Join(err, c.initial.rollbackInitialCapabilities())
+	if err := initial.adoptInitialCapabilities(); err != nil {
+		return errors.Join(err, initial.rollbackInitialCapabilities())
 	}
 	return nil
 }
 
-func (c *nativeCapabilityController) activateChild(id termmux.WindowID) error {
-	if err := c.child.activateChildCapabilities(); err != nil {
-		return errors.Join(err, c.child.rollbackChildCapabilities())
+func (nativeCapabilityController) prepareChild(child nativeChildCapabilityPort) error {
+	if err := child.activateChildCapabilities(); err != nil {
+		return errors.Join(err, child.rollbackChildCapabilities())
 	}
-	if err := c.child.bindChildCapabilities(id); err != nil {
-		return errors.Join(err, c.child.rollbackChildCapabilities())
-	}
-	c.child.markChildCapabilitiesReady()
 	return nil
+}
+
+func (nativeCapabilityController) bindChild(child nativeChildCapabilityPort, id termmux.WindowID) error {
+	if err := child.bindChildCapabilities(id); err != nil {
+		return errors.Join(err, child.rollbackChildCapabilities())
+	}
+	child.markChildCapabilitiesReady()
+	return nil
+}
+
+func (c nativeCapabilityController) activateChild(child nativeChildCapabilityPort, id termmux.WindowID) error {
+	if err := c.prepareChild(child); err != nil {
+		return err
+	}
+	return c.bindChild(child, id)
 }

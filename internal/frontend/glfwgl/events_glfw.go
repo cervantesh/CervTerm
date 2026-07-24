@@ -122,16 +122,7 @@ func (a *App) recordPaneScroll(id termmux.PaneID) {
 // draw(). Each pending event fires at most once per iteration with the final
 // coalesced value.
 func (a *App) fireLifecycleEvents() {
-	if !a.scriptLifecycleRuntimeAvailable() {
-		a.clearPendingScriptLifecycle()
-		return
-	}
-	for _, event := range a.snapshotPendingScriptResizes() {
-		a.fireScriptEvent(func() error { return a.fireScriptResize(event.pane, event.cols, event.rows) })
-	}
-	for _, event := range a.snapshotPendingScriptScrolls() {
-		a.fireScriptEvent(func() error { return a.fireScriptScroll(event.pane, event.offset) })
-	}
+	a.ensureScriptLifecycleController().dispatchPending(a, a)
 }
 
 // fireDueTimers runs any script timers whose deadline has passed. No timers (or
@@ -140,8 +131,5 @@ func (a *App) fireLifecycleEvents() {
 // thread; a timer they schedule is seen by the next nextWakeTimeout because both
 // mutate the table on this same thread (no cross-thread wake needed).
 func (a *App) fireDueTimers(now time.Time) {
-	if !a.scriptLifecycleRuntimeAvailable() {
-		return
-	}
-	a.fireDueScriptTimers(now)
+	a.ensureScriptLifecycleController().fireDueTimers(a, a, now)
 }
