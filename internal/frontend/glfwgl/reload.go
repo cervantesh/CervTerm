@@ -14,17 +14,53 @@ import (
 	"cervterm/internal/script"
 )
 
+func (a *App) reloadSourceActive() bool {
+	return a.configPath != ""
+}
+
+func (a *App) pollReloadWatch(now time.Time) bool {
+	return a.configWatch.poll(now)
+}
+
+func (a *App) markReloadPending() {
+	a.reloadPending = true
+}
+
+func (a *App) reloadIsPending() bool {
+	return a.reloadPending
+}
+
+func (a *App) consumeReloadPending() {
+	a.reloadPending = false
+}
+
+func (a *App) drainReloadResults() {
+	a.applyConfigReloadWorkerResults()
+}
+
+func (a *App) reloadWorkerCount() int {
+	return a.configReloadAsync.workers
+}
+
+func (a *App) startReloadWorker() {
+	a.startConfigReloadWorker()
+}
+
+func (a *App) reportMissingReloadSource(now time.Time) {
+	a.reportConfigReloadFailure(fmt.Errorf("no config source is active"), now)
+}
+
 func (a *App) requestConfigReload() bool {
-	if a.configPath == "" {
+	if !a.reloadSourceActive() {
 		return false
 	}
-	a.reloadPending = true
+	a.markReloadPending()
 	return true
 }
 
 func (a *App) pollConfigReload(now time.Time) {
-	if a.configWatch.poll(now) {
-		a.reloadPending = true
+	if a.pollReloadWatch(now) {
+		a.markReloadPending()
 	}
 }
 
@@ -56,19 +92,19 @@ func (a *App) acknowledgeConfigReloadFailure(before configWatchSnapshot, expecta
 }
 
 func (a *App) applyPendingConfigReload() {
-	a.applyConfigReloadWorkerResults()
-	if !a.reloadPending {
+	a.drainReloadResults()
+	if !a.reloadIsPending() {
 		return
 	}
-	if a.configReloadAsync.workers >= 2 {
+	if a.reloadWorkerCount() >= 2 {
 		return
 	}
-	a.reloadPending = false
-	if a.configPath == "" {
-		a.reportConfigReloadFailure(fmt.Errorf("no config source is active"), time.Now())
+	a.consumeReloadPending()
+	if !a.reloadSourceActive() {
+		a.reportMissingReloadSource(time.Now())
 		return
 	}
-	a.startConfigReloadWorker()
+	a.startReloadWorker()
 }
 
 func (a *App) reloadConfig() (resultErr error) {
