@@ -296,6 +296,10 @@ func assertScriptNativeControllerType(t *testing.T, name string, typ reflect.Typ
 	if typ == reflect.TypeOf(config.Config{}) || typ == reflect.TypeOf(time.Time{}) {
 		return // Explicit detached value types; config detachment has mutation tests.
 	}
+	if typ == reflect.TypeOf([]scriptResizeEvent(nil)) || typ == reflect.TypeOf([]scriptScrollEvent(nil)) {
+		assertScriptNativeControllerType(t, name, typ.Elem())
+		return // Explicit detached scalar snapshots; lifecycle tests verify drain ordering.
+	}
 	typeName := strings.ToLower(typ.String())
 	packagePath := strings.ToLower(typ.PkgPath())
 	for _, forbidden := range []string{

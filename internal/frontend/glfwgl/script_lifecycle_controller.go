@@ -34,8 +34,8 @@ type scriptLifecycleFailurePort interface {
 
 type scriptLifecyclePendingPort interface {
 	clearPendingScriptLifecycle()
-	takePendingScriptResize() (scriptResizeEvent, bool)
-	takePendingScriptScroll() (scriptScrollEvent, bool)
+	snapshotPendingScriptResizes() []scriptResizeEvent
+	snapshotPendingScriptScrolls() []scriptScrollEvent
 }
 
 type scriptLifecycleTimerPort interface {
@@ -59,7 +59,7 @@ type scriptScrollEvent struct {
 
 // scriptLifecycleController owns script callback ordering only. Runtime,
 // pending maps, timers, status, overlays, and pane state remain authoritative
-// behind ports; pending values cross one at a time as detached scalar records.
+// behind ports; pending values cross in detached scalar slices.
 // TODO(L1-01; expires Slice 6.3d): remove the preparatory facade adapters.
 type scriptLifecycleController struct {
 	runtime     scriptLifecycleRuntimePort
@@ -126,18 +126,10 @@ func (c *scriptLifecycleController) dispatchPending() {
 		c.pending.clearPendingScriptLifecycle()
 		return
 	}
-	for {
-		event, ok := c.pending.takePendingScriptResize()
-		if !ok {
-			break
-		}
+	for _, event := range c.pending.snapshotPendingScriptResizes() {
 		c.report(c.deferred.fireScriptResize(event.pane, event.cols, event.rows))
 	}
-	for {
-		event, ok := c.pending.takePendingScriptScroll()
-		if !ok {
-			break
-		}
+	for _, event := range c.pending.snapshotPendingScriptScrolls() {
 		c.report(c.deferred.fireScriptScroll(event.pane, event.offset))
 	}
 }

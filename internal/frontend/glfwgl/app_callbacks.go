@@ -219,7 +219,7 @@ func (a *App) cleanupBlurInput() {
 }
 
 func (a *App) routeScriptFocus(focused bool) {
-	a.fireScriptEvent(func() error { return a.scriptRT.FireFocus(a.hostForFocused(), focused) })
+	a.fireScriptEvent(func() error { return a.fireScriptFocus(a.hostForFocused().pane, focused) })
 }
 
 func (a *App) routeTerminalFocus(focused bool) {

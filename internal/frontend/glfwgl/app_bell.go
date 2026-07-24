@@ -38,8 +38,7 @@ func (a *App) deliverBell(pane termmux.PaneID, effect bool) {
 		a.bellDelivered = make(map[termmux.PaneID]int)
 	}
 	a.bellDelivered[pane]++
-	host := paneHost{app: a, pane: pane}
-	a.fireScriptEvent(func() error { return a.scriptRT.FireBell(host) })
+	a.fireScriptEvent(func() error { return a.fireScriptBell(pane) })
 	if effect {
 		a.applyBellEffect()
 	}

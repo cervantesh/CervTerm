@@ -2,10 +2,7 @@
 
 package glfwgl
 
-import (
-	"math"
-	"strings"
-)
+import "math"
 
 type statusGeometry struct {
 	visible  bool
@@ -24,18 +21,7 @@ type statusState struct {
 // syncStatusSegments rebuilds the composed status string only after a real
 // script-store mutation. It runs after all script handlers for the loop pass so
 // timer/event updates request a prompt on-demand repaint.
-func (a *App) syncStatusSegments() {
-	if a.scriptRT == nil {
-		return
-	}
-	seq := a.scriptRT.StatusSeq()
-	if seq == a.status.seq {
-		return
-	}
-	a.status.seq = seq
-	a.status.line = strings.Join(a.scriptRT.StatusSegments(), " · ")
-	a.requestRedraw()
-}
+func (a *App) syncStatusSegments() { a.syncScriptStatus() }
 
 // prepareStatusBand derives the window-dependent display text and geometry
 // before damage selection. The untruncated composed line remains cached by seq.

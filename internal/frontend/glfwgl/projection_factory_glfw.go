@@ -3,7 +3,6 @@
 package glfwgl
 
 import (
-	"fmt"
 	"time"
 
 	"cervterm/internal/config"
@@ -127,25 +126,21 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 	}}
 	title = "CervTerm"
 	bundle.handle = child.applyMuxEvents
+	capabilities := &childNativeCapabilityAdapter{app: child, window: window, bundle: bundle}
 	bundle.bind = func(id termmux.WindowID) error {
-		if id == 0 {
-			return fmt.Errorf("bind projection: %w", errWindowProjectionMissing)
+		if err := capabilities.bindChildCapabilities(id); err != nil {
+			return err
 		}
-		child.windowID = id
-		if accessibilityErr := prepareProjectionAccessibility(child, window, bundle.beforeUnbind); accessibilityErr != nil {
-			child.windowID = 0
-			return accessibilityErr
-		}
-		child.catchUpBellEvents()
-		child.installCallbacks()
-		child.needsRedraw = true
+		capabilities.markChildCapabilitiesReady()
 		return nil
 	}
 	bundle.unbind = func() error {
 		child.windowID = 0
 		return nil
 	}
-	child.activateProjectionIME(window, bundle.beforeUnbind)
+	if activationErr := capabilities.activateChildCapabilities(); activationErr != nil {
+		return fail(activationErr)
+	}
 	return bundle, spec, content, metrics, title, nil
 }
 
