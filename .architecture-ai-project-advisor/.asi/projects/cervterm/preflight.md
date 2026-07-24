@@ -1,24 +1,35 @@
-# Architecture Preflight — Phase 15 Integration and Release Hardening
+# Architecture Preflight — Maturity Remediation
 
 Date: 2026-07-23
-Decision: **PROCEED WITH CONSTRAINTS; NO NEW ADR WHILE BOUNDARIES HOLD**
+Baseline: `origin/main` at `e9f9b2c`
+Decision: **PROCEED WITH CONSTRAINTS**
 
-Phase 15 is diagnostics, qualification, migration evidence, recovery proof, benchmark, documentation, and release-gate work under ADR-0002, ADR-0007, ADR-0008, ADR-0014, and ADR-0016.
+## Scope
 
-## Locked interpretations
+Thirty accepted findings across architecture maturity, Clean Code, GRASP, dependency hygiene, domain isolation, ownership/transactions, and test/guardrail maturity. Work continues until every accepted finding is closed and each independently scored dimension is at least 8.0.
 
-- Config migration is in-memory and read-only.
-- Layout state is non-authoritative and falls back to a fresh usable window.
-- Image-cache recovery is transient context-local close/recreate or activation rollback; no disk cache.
-- Doctor uses static detached capability descriptors and never establishes runtime activation.
-- PASS, FAIL, SKIP, UNRUN, and NOT-APPLICABLE have distinct entry criteria.
-- Experimental/default-off features retain their current support boundaries without real evidence.
-- Release publication remains separately approved.
+## Locked execution
 
-## ADR triggers
+1. Phase 0 evidence and ADRs.
+2. Preparatory, behavior-preserving `App`, `Mux`, then `fontglyph` extraction.
+3. Ownership, multi-window, trust/security, lifecycle, API and authority repairs.
+4. Formal thin-Mux/thin-App closure only after semantic dependencies.
+5. Two-team/two-round scoring loop until every row passes.
 
-Persistent image storage, config rewriting, live native doctor probing, default-on promotion, renderer/backend selection, remote domains, or a new release channel.
+## Accepted decisions
 
-## Required gates
+- ADR-0017: explicit process/mux owner capability and fail-closed wrong-owner behavior.
+- ADR-0018: process-owned shared config transaction and per-window geometry ownership.
+- ADR-0019: generated/schema-owned closed authorities.
+- ADR-0020: parser framing decisions project public output.
+- ADR-0021: compatibility facades and acyclic controller/font package extraction.
 
-Machine-checkable evidence, support-matrix consistency, source immutability, recovery fault injection, privacy/redaction tests, exact inherited ten-sample/3% performance checks, security/accessibility gates, platform matrices, package smoke, final drift review, and explicit approval before publication.
+## Preconditions and stop conditions
+
+Characterization precedes movement. `T`, `A`, `M`, `W`, and `G` remain distinct commits. Known-defect goldens carry finding IDs and expiry slices. Stop on behavior drift during a move, package cycles, ownership ambiguity, partial publication/recovery, sensitive leakage, unexplained performance/allocation regression, renderer-selection expansion, dirty-worktree contamination, or a new durable boundary without ADR review.
+
+The App/Mux preparatory slices may create only private delegation seams under existing entry points. They cannot transfer final ownership, expose bypass ports, copy mutable state, or close L1-01/L3-01. The font extraction may proceed only under ADR-0021's exact package DAG and lease ownership.
+
+## Required evidence
+
+Clean current-main baseline; all-tracked-production-file package graph; focused/full/race/tagged/recovery tests; Phase 15 performance captures; two-window geometry/lifecycle trace plus explicit absence of process-owned shared-config generation; accessibility/public-output goldens; CI and CodeQL. Repeat preflight before ownership, security-sensitive, and final controller stages.

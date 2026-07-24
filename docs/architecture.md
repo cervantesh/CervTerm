@@ -171,3 +171,27 @@ The current cross-subsystem delivery contract is [`docs/wezterm-parity-roadmap.m
 The process-owned mux is `Workspace -> Window -> Tab -> Pane`, with globally stable runtime identities and singular pane/session registry ownership. The OS-thread window controller projects mux windows into independent native hosts and owns context, renderer, atlas, callbacks, visibility, focus, and teardown. Cross-window moves transfer topology without respawning or closing panes; workspace switching only changes native visibility/focus and never suspends sessions.
 
 Layout persistence is opt-in and layout-only. A detached mux export is adapted with native bounds and per-window appearance into the strict versioned `layoutstate` DTO, which structurally excludes environment maps, dedicated credential fields, runtime IDs, PTY/process state, terminal cells, scrollback, and renderer selection. Atomic store publication preserves the last usable file. Startup loads before GLFW side effects, normalizes against current monitors/config, prepares every hidden native projection, publishes config/Teal, provisions every fresh local session, then commits mux/controller ownership and final visibility together. Any failure aborts candidates and uses the unchanged fresh one-window path.
+
+## Architecture maturity remediation boundaries
+
+The maturity program preserves the production topology and compatibility behavior while reducing responsibility concentration. Its locked execution starts with parity-only private delegation beneath `App`, then `Mux`, followed by the acyclic `fontglyph` package extraction. Early App/Mux work does not transfer ownership or close their findings; formal thin facades follow the behavioral and ownership repairs.
+
+The target responsibility flow is:
+
+```text
+Process owner
+  -> shared config/runtime transaction
+  -> mux owner capability
+       -> workspace/window/tab/pane topology and lifecycle
+Native window projection
+  -> window-owned bounds/DPI/metrics
+  -> App composition/native lifetime
+       -> narrow action, input, render, reload, script and native controllers
+fontglyph facade
+  -> discovery | cache | shape | raster | platform
+       -> internal face ownership contract + fontdesc
+```
+
+These are **target invariants, not claims about baseline `e9f9b2c`**: wrong-owner or stale-generation mutation fails without state change; shared configuration publishes to all windows or none; geometry remains window-specific; closed config/action vocabularies come from generated catalogs; and public output consumes bounded decisions from the single VT framing authority. Baseline defects include concrete/global owner reach, one mux-global bounds value, per-App configuration state, duplicated closed vocabularies, and parallel public framing. Their owning slices are recorded in the maturity implementation plan.
+
+ADRs 0017–0021 define these directions. [`architecture-scoring-protocol.md`](architecture-scoring-protocol.md) defines the two-team/two-round evidence gate; every scored dimension must independently reach at least 8.0, all accepted findings at every severity must close, and lower results create additional one-by-one slices.
