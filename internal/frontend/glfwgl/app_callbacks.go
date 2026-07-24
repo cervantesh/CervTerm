@@ -31,84 +31,16 @@ func (a *App) installCallbacks() {
 	})
 
 	a.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
-		event := buttonRouteEvent{button: button, action: action, mods: mods}
-		if a.routeModalButton(event) {
-			return
-		}
-		position := a.inputCursorPosition()
-		if a.routeTabBarButton(event, position) {
-			return
-		}
-		if a.routeReportedOrConfiguredButton(event, position) {
-			return
-		}
-		if a.routeActiveDividerButton(event, position) {
-			return
-		}
-		if a.routeBeginDividerButton(event, position) {
-			return
-		}
-		if a.routeScrollbarButton(event, position) {
-			return
-		}
-		a.routeSelectionButton(event, position)
+		a.ensureInputController().handleButton(button, action, mods)
 	})
 	a.window.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
-		position := cursorRouteEvent{x: x, y: y}
-		if a.routeModalCursor(position) {
-			return
-		}
-		if a.routeTabBarCursor(position) {
-			return
-		}
-		if a.routeCapturedCursor(position) {
-			return
-		}
-		if a.routeConfiguredDrag(position) {
-			return
-		}
-		if a.routeDividerDrag(position) {
-			return
-		}
-		if a.routeScrollbarCursor(position) {
-			return
-		}
-		reported := a.routeTerminalMouseMove(position)
-		if a.routeDividerCursor(position) {
-			return
-		}
-		if reported {
-			return
-		}
-		a.routeSelectionCursor(position)
+		a.ensureInputController().handleCursor(x, y)
 	})
 	a.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {
-		event := wheelRouteEvent{xoff: xoff, yoff: yoff}
-		if a.routeModalWheel(event) {
-			return
-		}
-		position := a.inputCursorPosition()
-		if a.routeTabBarWheel(position) {
-			return
-		}
-		if a.routeReportedOrConfiguredWheel(event, position) {
-			return
-		}
-		if a.routeZoomWheel(event) {
-			return
-		}
-		if a.routeScrollbarWheel(event, position) {
-			return
-		}
-		a.routeTerminalWheel(event)
+		a.ensureInputController().handleWheel(xoff, yoff)
 	})
 	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
-		a.recordInputFocus(focused)
-		if !focused {
-			a.cleanupBlurInput()
-		}
-		a.routeScriptFocus(focused)
-		a.routeTerminalFocus(focused)
+		a.ensureInputController().handleFocus(focused)
 	})
 }
 
