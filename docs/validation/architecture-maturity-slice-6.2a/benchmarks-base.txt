@@ -1,0 +1,61 @@
+Slice 6.2a benchmark base
+commit: c2a0137c50c099ce28014a7582eac3ee6a4340f1 (origin/main at capture)
+platform: windows/amd64; cpu: AMD Ryzen 9 7940HX with Radeon Graphics; go1.25.8
+command: go test ./internal/mux -run '^$' -bench '^(BenchmarkMuxSessionIngressRejectedStale|BenchmarkMuxSessionIngressASCII|BenchmarkMuxAllDisabledImageIdle)$' -benchmem -benchtime=500ms -count=7 -cpu=1
+note: the two ingress benchmarks were supplied by a temporary base-compatible test overlay; benchmark bodies match the candidate benchmark semantics and the overlay was not retained.
+
+[run order 1: base then candidate]
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/mux
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkMuxAllDisabledImageIdle         21694248  27.33 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         21640024  27.74 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         21285350  27.39 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         22204376  27.53 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         22002844  27.58 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         21911484  27.92 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         21839146  27.51 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12312187  49.98 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12057223  48.38 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12571736  49.03 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12539551  48.61 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12312818  48.77 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12261488  48.80 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12548966  48.14 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressASCII          62418  9261 ns/op  1087 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          62443  9624 ns/op  1087 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          56638  9276 ns/op  1097 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          60528  9159 ns/op  1090 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          61569  9096 ns/op  1088 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          61124  9648 ns/op  1089 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          57577  9306 ns/op  1095 B/op  3 allocs/op
+PASS
+
+[run order 2: candidate then base]
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/mux
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkMuxAllDisabledImageIdle         22757960  27.11 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         22416247  27.63 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         22218271  27.37 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         21598737  27.12 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         22187296  27.13 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         21489278  27.45 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         22442155  27.12 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12507999  48.59 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12673039  48.66 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12385562  47.73 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12339914  48.32 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12498436  48.24 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12182691  48.05 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  12176361  48.08 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressASCII          55430  9385 ns/op  1100 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          65472  9861 ns/op  1082 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          61438  9131 ns/op  1088 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          55918  10517 ns/op  1099 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          60884  9511 ns/op  1089 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          59364  9531 ns/op  1092 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          61660  9184 ns/op  1088 B/op  3 allocs/op
+PASS

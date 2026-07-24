@@ -48,6 +48,7 @@ type PaneView struct {
 
 type Mux struct {
 	sessions       *localSessionRegistry
+	sessionIngress sessionIngressController[sessionIngressRecordAdapter, muxSessionIngressOperationAdapter]
 	options        Options
 	model          *Model
 	imageBudget    *termimage.ProcessBudget
@@ -83,7 +84,7 @@ func New(factory SessionFactory, options Options) *Mux {
 	}
 	sessions := newLocalSessionRegistry(factory, options.IngressCapacity, options.Wake)
 	mux := &Mux{
-		sessions: sessions, options: options, model: NewModel(),
+		sessions: sessions, sessionIngress: newSessionIngressController[sessionIngressRecordAdapter, muxSessionIngressOperationAdapter](), options: options, model: NewModel(),
 		paneMetrics: make(map[PaneID]CellMetrics), paletteBase: core.DefaultPaletteBase(),
 	}
 	if options.ImageLimits != nil {
@@ -373,6 +374,58 @@ func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
 	return m.advancePane(p, data), nil
 }
 
+type muxSessionIngressOperationAdapter struct {
+	mux  *Mux
+	pane *pane
+}
+
+var _ sessionIngressApplyPort = muxSessionIngressOperationAdapter{}
+
+func (a muxSessionIngressOperationAdapter) applySessionIngressData(events []Event, data []byte) []Event {
+	return append(events, a.mux.advancePane(a.pane, data)...)
+}
+
+func (a muxSessionIngressOperationAdapter) applySessionIngressEnd(events []Event, err error) []Event {
+	if a.pane.state == PaneStateRunning {
+		public := a.pane.parser.EndOfInputPublic()
+		if len(public) > 0 {
+			events = append(events, Event{Kind: PaneOutput, Pane: a.pane.id, Data: public})
+		}
+		if a.pane.kittyAdapter != nil {
+			a.pane.kittyAdapter.Close()
+			a.pane.kittyAdapter = nil
+		}
+		if a.pane.sixelAdapter != nil {
+			a.pane.sixelAdapter.Close()
+			a.pane.sixelAdapter = nil
+		}
+		if a.pane.itermAdapter != nil {
+			a.pane.itermAdapter.Close()
+			a.pane.itermAdapter = nil
+		}
+		events = append(events, a.pane.kittyEvents...)
+		a.pane.kittyEvents = nil
+		events = append(events, a.mux.processKittyOutcomes(a.pane)...)
+		a.mux.processSixelOutcomes(a.pane)
+		a.mux.processITermOutcomes(a.pane)
+		a.pane.state = PaneStateExited
+		tab := a.mux.model.tabForPane(a.pane.id)
+		exit := Event{Kind: PaneExited, Pane: a.pane.id}
+		if tab != nil {
+			exit.Tab = tab.id
+			tab.revision++
+		}
+		if !errors.Is(err, io.EOF) {
+			exit.Err = err
+		}
+		events = append(events, exit)
+		if tab != nil {
+			events = append(events, Event{Kind: TabRevisionChanged, Tab: tab.id, Revision: tab.revision})
+		}
+	}
+	return events
+}
+
 func (m *Mux) Drain(limit int) []Event {
 	var events []Event
 	events = append(events, m.expireImages(m.options.Now())...)
@@ -389,50 +442,9 @@ func (m *Mux) Drain(limit int) []Event {
 			}
 			events = append(events, m.applyImageCompletion(completion)...)
 		case record := <-m.sessions.incoming:
-			p, ok := m.sessions.lookup(record.pane)
-			if !ok || p != record.owner || p.state == PaneStateClosed || p.state == PaneStateClosing {
-				continue
-			}
-			if len(record.data) > 0 {
-				events = append(events, m.advancePane(p, record.data)...)
-			}
-			if record.err != nil && p.state == PaneStateRunning {
-				public := p.parser.EndOfInputPublic()
-				if len(public) > 0 {
-					events = append(events, Event{Kind: PaneOutput, Pane: p.id, Data: public})
-				}
-				if p.kittyAdapter != nil {
-					p.kittyAdapter.Close()
-					p.kittyAdapter = nil
-				}
-				if p.sixelAdapter != nil {
-					p.sixelAdapter.Close()
-					p.sixelAdapter = nil
-				}
-				if p.itermAdapter != nil {
-					p.itermAdapter.Close()
-					p.itermAdapter = nil
-				}
-				events = append(events, p.kittyEvents...)
-				p.kittyEvents = nil
-				events = append(events, m.processKittyOutcomes(p)...)
-				m.processSixelOutcomes(p)
-				m.processITermOutcomes(p)
-				p.state = PaneStateExited
-				tab := m.model.tabForPane(p.id)
-				exit := Event{Kind: PaneExited, Pane: p.id}
-				if tab != nil {
-					exit.Tab = tab.id
-					tab.revision++
-				}
-				if !errors.Is(record.err, io.EOF) {
-					exit.Err = record.err
-				}
-				events = append(events, exit)
-				if tab != nil {
-					events = append(events, Event{Kind: TabRevisionChanged, Tab: tab.id, Revision: tab.revision})
-				}
-			}
+			accepted := m.sessions.adaptSessionIngressRecord(record)
+			operation := muxSessionIngressOperationAdapter{mux: m, pane: accepted.registered}
+			events = m.sessionIngress.route(events, accepted, operation, record.data, record.err)
 		default:
 			return m.ResolveEventAddresses(events)
 		}

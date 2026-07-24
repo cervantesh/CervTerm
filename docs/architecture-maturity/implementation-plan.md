@@ -440,6 +440,8 @@ These early `App`/`Mux` slices are preparatory parity-only extractions. They do 
 
 - **Files:** mux drain/ingress, session registry, parser/reply event tests.
 - **execution_predecessor:** 6.3c. **semantic_depends_on:** none for preparation; L3-02/L3-03/L3-04/L3-08/L3-09/L3-10 for closure. Preserve current ingress behavior, including tagged known defects. **Commits:** `T → A → M → W → G`; separate branch/PR.
+- **Status:** **complete (preparatory)**. Session-ingress behavior and `Mux` ownership remain unchanged. Evidence: `docs/validation/architecture-maturity-slice-6.2a.md`.
+- L3-01 remains **partial**; formal closure is explicitly deferred to Slice 6.2d after L3-02/L3-03/L3-04/L3-08/L3-09/L3-10, preparatory 6.2a-c and the 6.2d execution predecessor.
 
 ### Slice 6.2b — L3-01 protocol-scheduling coordinator
 
