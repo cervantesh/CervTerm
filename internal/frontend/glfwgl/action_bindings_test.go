@@ -138,7 +138,7 @@ func TestKeyPipelineKeepsCtrlCInterruptWithoutSelection(t *testing.T) {
 	}
 }
 
-func TestKeyPipelineConsumesSelectionCopyRepeats(t *testing.T) {
+func TestKeyPipelineRoutesSelectionCopyBeforeTerminalAndConsumesRepeats(t *testing.T) {
 	a, factory := newRecordingActionApp(t)
 	if _, err := factory.sessions[0].writer.Write([]byte("abc")); err != nil {
 		t.Fatal(err)
@@ -159,10 +159,20 @@ func TestKeyPipelineConsumesSelectionCopyRepeats(t *testing.T) {
 	if a.Selection() == "" {
 		t.Fatal("test selection is empty")
 	}
-	a.handleKeyEvent(glfw.KeyC, glfw.Repeat, glfw.ModControl)
-	if got := factory.sessions[0].text(); got != "" {
-		t.Fatalf("selection-copy repeat leaked to PTY: %q", got)
+	copied := ""
+	a.clipboardSetter = func(text string) { copied = text }
+	a.handleKeyEvent(glfw.KeyC, glfw.Press, glfw.ModControl)
+	if copied != "abc" {
+		t.Fatalf("selection copy = %q, want abc", copied)
 	}
+	assertNoRecordedPaneInput(t, factory)
+
+	copied = ""
+	a.handleKeyEvent(glfw.KeyC, glfw.Repeat, glfw.ModControl)
+	if copied != "abc" {
+		t.Fatalf("selection-copy repeat = %q, want abc", copied)
+	}
+	assertNoRecordedPaneInput(t, factory)
 }
 
 func TestPressOnlyStatsRepeatPreservesLegacyFallthrough(t *testing.T) {
@@ -217,6 +227,90 @@ func TestKeyPipelinePreservesReservedAndScriptPrecedence(t *testing.T) {
 	if !a.search.active || a.notice == "script-search" {
 		t.Fatalf("search activation did not remain reserved: active=%v notice=%q", a.search.active, a.notice)
 	}
+}
+
+func TestKeyPipelineRouteOrderAndShortCircuit(t *testing.T) {
+	path := t.TempDir() + "/cervterm.lua"
+	source := `return {
+		leader = { key = "a", mods = "ctrl", timeout_ms = 10000 },
+		keys = {
+			{ key = "p", table = "pane" },
+			{ key = "x", action = function(term) term:notify("root") end },
+			{ key = "equal", mods = "ctrl", action = function(term) term:notify("root-before-builtin") end },
+			{ key = "r", mods = "ctrl+shift", action = function(term) term:notify("script-reload") end },
+			{ key = "f", mods = "ctrl+shift", action = function(term) term:notify("script-search") end },
+		},
+		key_tables = {
+			{ name = "pane", one_shot = false, timeout_ms = 10000, keys = {
+				{ key = "x", action = function(term) term:notify("table") end },
+			} },
+		},
+	}`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, scriptRuntime, err := script.Load(path, config.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(scriptRuntime.Close)
+	a, factory := newRecordingActionApp(t)
+	a.cfg, a.scriptRT = cfg, scriptRuntime
+	a.search.redraw = func() {}
+	state := a.ensurePaneUI(a.focusedPane)
+
+	a.handleKeyEvent(glfw.KeyA, glfw.Press, glfw.ModControl)
+	a.handleKeyEvent(glfw.KeyP, glfw.Press, 0)
+	if a.keyTable.mode != keyTableNamed || a.keyTable.table != "pane" {
+		t.Fatalf("key table state = %#v", a.keyTable)
+	}
+
+	openTestModal(t, a)
+	a.notice = "modal-sentinel"
+	a.handleKeyEvent(glfw.KeyX, glfw.Press, 0)
+	if a.notice != "modal-sentinel" || a.keyTable.mode != keyTableNamed {
+		t.Fatalf("modal leaked to table: notice=%q table=%#v", a.notice, a.keyTable)
+	}
+	a.handleKeyEvent(glfw.KeyEscape, glfw.Press, 0)
+	if a.modal.Active() || a.keyTable.mode != keyTableNamed {
+		t.Fatalf("modal close disturbed table: modal=%v table=%#v", a.modal.Active(), a.keyTable)
+	}
+
+	a.notice = ""
+	a.handleKeyEvent(glfw.KeyF, glfw.Press, glfw.ModControl|glfw.ModShift)
+	if !a.search.active || a.notice == "script-search" || a.keyTable.mode != keyTableNamed {
+		t.Fatalf("search precedence: active=%v notice=%q table=%#v", a.search.active, a.notice, a.keyTable)
+	}
+	a.handleKeyEvent(glfw.KeyX, glfw.Press, 0)
+	if a.notice != "" || a.keyTable.mode != keyTableNamed {
+		t.Fatalf("active search leaked: notice=%q table=%#v", a.notice, a.keyTable)
+	}
+	a.handleKeyEvent(glfw.KeyEscape, glfw.Press, 0)
+
+	a.notice = ""
+	a.handleKeyEvent(glfw.KeyR, glfw.Press, glfw.ModControl|glfw.ModShift)
+	if !strings.Contains(a.notice, "no config source") || a.notice == "script-reload" || a.keyTable.mode != keyTableNamed {
+		t.Fatalf("reload precedence: notice=%q table=%#v", a.notice, a.keyTable)
+	}
+	a.handleKeyEvent(glfw.KeyX, glfw.Press, 0)
+	if a.notice != "table" || a.keyTable.mode != keyTableNamed {
+		t.Fatalf("table route: notice=%q table=%#v", a.notice, a.keyTable)
+	}
+	a.handleKeyEvent(glfw.KeyEscape, glfw.Press, 0)
+	a.handleKeyEvent(glfw.KeyX, glfw.Press, 0)
+	if a.notice != "root" || a.keyTable.mode != keyTableInactive {
+		t.Fatalf("root route: notice=%q table=%#v", a.notice, a.keyTable)
+	}
+
+	a.handleKeyEvent(glfw.KeyEqual, glfw.Press, glfw.ModControl)
+	if a.notice != "root-before-builtin" || state.font.pending {
+		t.Fatalf("root/builtin precedence: notice=%q font=%#v", a.notice, state.font)
+	}
+	a.handleKeyEvent(glfw.KeyI, glfw.Press, glfw.ModControl|glfw.ModShift)
+	if !a.showStats {
+		t.Fatal("builtin route did not execute after script misses")
+	}
+	assertNoRecordedPaneInput(t, factory)
 }
 
 func TestKeyPipelineExecutesTypedLuaActions(t *testing.T) {
@@ -289,6 +383,13 @@ func TestKeyPipelineClipboardRepeatsDoNotLeakToPTY(t *testing.T) {
 	a, factory := newRecordingActionApp(t)
 	a.handleKeyEvent(glfw.KeyV, glfw.Repeat, glfw.ModControl)
 	a.handleKeyEvent(glfw.KeyC, glfw.Repeat, glfw.ModControl|glfw.ModShift)
+	assertNoRecordedPaneInput(t, factory)
+}
+
+// expires Slice 2.2
+func TestKnownDefect_L4_05_UnboundCtrlVIsDropped(t *testing.T) {
+	a, factory := newRecordingActionApp(t)
+	a.handleKeyEvent(glfw.KeyV, glfw.Press, glfw.ModControl)
 	assertNoRecordedPaneInput(t, factory)
 }
 

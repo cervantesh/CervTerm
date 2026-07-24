@@ -187,52 +187,48 @@ func reloadChord(key glfw.Key, mods glfw.ModifierKey) bool {
 }
 
 func (a *App) handleKeyEvent(key glfw.Key, eventAction glfw.Action, mods glfw.ModifierKey) {
-	if eventAction == glfw.Press || eventAction == glfw.Repeat {
-		a.charSuppression.clearOnNonEchoInput()
-	}
-	if a.handleModalKey(key, eventAction, mods) {
-		return
-	}
-	if eventAction != glfw.Press && eventAction != glfw.Repeat {
-		return
-	}
-	repeat := eventAction == glfw.Repeat
-	// Active modal capture remains first. The inactive search activation chord
-	// is a reserved typed action and therefore still precedes user bindings.
+	a.ensureInputController().handleKey(key, eventAction, mods)
+}
+
+func (a *App) clearKeyCharacterSuppression() {
+	a.charSuppression.clearOnNonEchoInput()
+}
+
+func (a *App) routeModalKey(event keyRouteEvent) bool {
+	return a.handleModalKey(event.key, event.action, event.mods)
+}
+
+func (a *App) routeSearchKey(event keyRouteEvent, repeat bool) bool {
 	if a.search.active {
-		if a.search.handleKey(key, mods) {
-			return
-		}
-	} else if searchActivationChord(key, mods) {
-		if a.dispatchReservedAction(termaction.ToggleSearch{}, key, mods, repeat) {
-			return
-		}
+		return a.search.handleKey(event.key, event.mods)
 	}
-	if reloadChord(key, mods) {
-		if a.dispatchReservedAction(termaction.ReloadConfig{}, key, mods, repeat) {
-			return
-		}
+	return searchActivationChord(event.key, event.mods) && a.dispatchReservedAction(termaction.ToggleSearch{}, event.key, event.mods, repeat)
+}
+
+func (a *App) routeReloadKey(event keyRouteEvent, repeat bool) bool {
+	return reloadChord(event.key, event.mods) && a.dispatchReservedAction(termaction.ReloadConfig{}, event.key, event.mods, repeat)
+}
+
+func (a *App) routeScriptTableKey(event keyRouteEvent, repeat bool) bool {
+	return a.dispatchScriptTableKey(event.key, event.mods, repeat)
+}
+
+func (a *App) routeScriptKey(event keyRouteEvent, repeat bool) bool {
+	return a.dispatchScriptKey(event.key, event.mods, repeat)
+}
+
+func (a *App) routeBuiltinKey(event keyRouteEvent, repeat bool) bool {
+	return a.dispatchBuiltinAction(event.key, event.mods, repeat)
+}
+
+func (a *App) routeSelectionCopyKey(event keyRouteEvent, repeat bool) bool {
+	if a.Selection() == "" {
+		return false
 	}
-	if a.dispatchScriptTableKey(key, mods, repeat) {
-		return
-	}
-	if a.dispatchScriptKey(key, mods, repeat) {
-		return
-	}
-	if a.dispatchBuiltinAction(key, mods, repeat) {
-		return
-	}
-	event, hasEvent := inputEventFromGLFW(key, mods)
-	// Plain Ctrl+C copies only when a selection exists; otherwise it must still
-	// reach the PTY as an interrupt byte.
-	if key == glfw.KeyC && mods&glfw.ModControl != 0 && a.Selection() != "" {
-		if a.dispatchReservedAction(termaction.CopySelection{}, key, mods, repeat) {
-			return
-		}
-	}
-	if !hasEvent {
-		return
-	}
+	return a.dispatchReservedAction(termaction.CopySelection{}, event.key, event.mods, repeat)
+}
+
+func (a *App) routeTerminalKey(event input.Event) {
 	if encoded, ok := input.EncodeWithMode(event, a.inputMode()); ok {
 		a.writeInputBytes(encoded)
 	}

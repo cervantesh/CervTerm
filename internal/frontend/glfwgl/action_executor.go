@@ -15,47 +15,10 @@ import (
 )
 
 func (a *App) executeAction(envelope termaction.Envelope, context termaction.Context) error {
-	if err := envelope.Validate(); err != nil {
-		return actionExecutionError(envelope.Action, termaction.ErrorAction, err)
-	}
-	if err := context.Validate(); err != nil {
-		return actionExecutionError(envelope.Action, termaction.ErrorAction, err)
-	}
-	if multiple, ok := envelope.Action.(termaction.Multiple); ok {
-		for _, child := range multiple.Actions() {
-			executor := a
-			if a.controller != nil {
-				if active := a.controller.activeProjectionApp(); active != nil {
-					executor = active
-				}
-			}
-			context = executor.refreshFocusedActionContext(context)
-			if err := executor.executeAction(child, context); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
+	return a.ensureActionController().executeAction(envelope, context)
+}
 
-	descriptor, ok := termaction.DefaultRegistry().Lookup(envelope.Action.ID())
-	if !ok {
-		return actionExecutionError(envelope.Action, termaction.ErrorAction, fmt.Errorf("action is not registered"))
-	}
-	var pane termmux.PaneID
-	if descriptor.Target == termaction.TargetPane {
-		resolved, err := context.Resolve(envelope.Target)
-		if err != nil || resolved.Kind != termaction.RefPane {
-			if err == nil {
-				err = termaction.ErrTargetUnavailable
-			}
-			return actionExecutionError(envelope.Action, termaction.ErrorTarget, err)
-		}
-		pane = termmux.PaneID(resolved.ID)
-		if _, exists := a.mux.PaneView(pane); !exists {
-			return actionExecutionError(envelope.Action, termaction.ErrorTarget, termaction.ErrTargetUnavailable)
-		}
-	}
-
+func (a *App) executeActionCommand(envelope termaction.Envelope, context termaction.Context, pane termmux.PaneID) error {
 	switch command := envelope.Action.(type) {
 	case termaction.CopySelection:
 		text := (paneHost{app: a, pane: pane}).Selection()

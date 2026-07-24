@@ -1,0 +1,26 @@
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics        
+BenchmarkArchitectureSliceUnhandledKey-32     	62315972	        19.26 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	62953130	        19.30 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	60980876	        20.71 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	64239828	        21.65 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	52073162	        21.78 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	60015903	        22.44 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	49192423	        22.03 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	63047726	        22.67 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	55527534	        21.43 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceUnhandledKey-32     	59767503	        21.65 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	24250996	        48.99 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	24414360	        50.14 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	23855055	        49.38 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	26645527	        49.44 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	24803073	        48.93 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	23908764	        50.61 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	22865330	        51.77 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	24088790	        49.99 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	25741957	        49.38 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceNonPaneAction-32    	22327866	        50.94 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/frontend/glfwgl	26.260s

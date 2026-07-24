@@ -64,6 +64,8 @@ type App struct {
 	window                    *glfw.Window
 	windowID                  termmux.WindowID
 	controller                *windowController
+	actions                   *actionController
+	input                     *inputController
 	r                         gpu.Renderer
 	terminalImageCacheFactory terminalImageCacheFactory
 	terminalImageCache        *terminalImageCache
@@ -158,6 +160,48 @@ type App struct {
 	scrollbar           scrollbarState
 }
 
+var (
+	_ actionExecutionRoute    = (*App)(nil)
+	_ actionProjectionPort    = (*App)(nil)
+	_ actionPanePort          = (*App)(nil)
+	_ actionContextPort       = (*App)(nil)
+	_ actionCommandPort       = (*App)(nil)
+	_ inputModalPort          = (*App)(nil)
+	_ inputCursorPositionPort = (*App)(nil)
+	_ inputKeyLifecyclePort   = (*App)(nil)
+	_ inputKeyReservedPort    = (*App)(nil)
+	_ inputKeyBindingPort     = (*App)(nil)
+	_ inputKeyTerminalPort    = (*App)(nil)
+	_ inputButtonPriorityPort = (*App)(nil)
+	_ inputButtonContentPort  = (*App)(nil)
+	_ inputCursorPriorityPort = (*App)(nil)
+	_ inputCursorContentPort  = (*App)(nil)
+	_ inputWheelPort          = (*App)(nil)
+	_ inputFocusPort          = (*App)(nil)
+)
+
+func (a *App) initActionController() {
+	a.actions = newActionController(a, a, a, a)
+}
+
+func (a *App) ensureActionController() *actionController {
+	if a.actions == nil {
+		a.initActionController()
+	}
+	return a.actions
+}
+
+func (a *App) initInputController() {
+	a.input = newInputController(a, a, a, a, a, a, a, a, a, a, a, a)
+}
+
+func (a *App) ensureInputController() *inputController {
+	if a.input == nil {
+		a.initInputController()
+	}
+	return a.input
+}
+
 func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, watchPaths []string, watchHashes map[string][32]byte, sourcePath string, options script.CandidateOptions) error {
 	runtime.LockOSThread()
 	var initialProvenance []config.ProvenanceRecord
@@ -194,6 +238,8 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 		bellState:                 bellState{bellDelivered: make(map[termmux.PaneID]int)},
 		terminalImageCacheFactory: defaultTerminalImageCacheFactory,
 	}
+	app.initActionController()
+	app.initInputController()
 	app.initCompositionCoordinator()
 	app.linkLauncher = platformURLLauncher{}
 	app.configScope = app.runtimeScopes.NewScope()
