@@ -8,6 +8,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -94,6 +95,7 @@ var requiredDocs = []string{
 	"docs/validation/architecture-maturity-slice-6.2a.md",
 	"scripts/capture-parity-baseline.go",
 	"docs/validation/architecture-maturity-slice-6.2b.md",
+	"docs/validation/architecture-maturity-slice-6.2c.md",
 	"scripts/capture-phase15-benchmarks.go",
 	"scripts/capture-phase15-process.py",
 	"scripts/check-phase15-recovery.go",
@@ -121,6 +123,7 @@ func main() {
 	findings = append(findings, checkSlice63cGuard()...)
 	findings = append(findings, checkSlice62aGuard()...)
 	findings = append(findings, checkSlice62bGuard()...)
+	findings = append(findings, checkSlice62cGuard()...)
 	if len(findings) > 0 {
 		fmt.Fprintln(os.Stderr, "maturity gate failures:")
 		for _, f := range findings {
@@ -2547,6 +2550,1629 @@ func checkSlice62bSyntheticSurface(files map[string]*ast.File) []finding {
 		})
 	}
 	return findings
+}
+
+type slice62cControllerSpec struct {
+	path       string
+	controller string
+	budgetName string
+	budget     int
+	maxMethods int
+	ports      map[string][]string
+}
+
+var slice62cAllowedPaths = []string{
+	"docs/architecture-maturity/implementation-plan.md",
+	"docs/architecture.md",
+	"docs/validation/architecture-maturity-slice-6.2c.md",
+	"docs/validation/architecture-maturity-slice-6.2c/benchmarks-base.txt",
+	"docs/validation/architecture-maturity-slice-6.2c/benchmarks-candidate.txt",
+	"docs/validation/architecture-maturity-slice-6.2c/gates.txt",
+	"docs/validation/architecture-maturity-slice-6.2c/scope-and-commits.txt",
+	"internal/mux/fresh_session.go",
+	"internal/mux/mux.go",
+	"internal/mux/mux_restore.go",
+	"internal/mux/mux_restore_characterization_test.go",
+	"internal/mux/mux_restore_test.go",
+	"internal/mux/mux_restore_wiring_test.go",
+	"internal/mux/restore_coordinator.go",
+	"internal/mux/restore_coordinator_test.go",
+	"scripts/check-maturity-gates.go",
+}
+
+var slice62cGStagePaths = []string{
+	"docs/architecture-maturity/implementation-plan.md",
+	"docs/architecture.md",
+	"docs/validation/architecture-maturity-slice-6.2c.md",
+	"docs/validation/architecture-maturity-slice-6.2c/benchmarks-base.txt",
+	"docs/validation/architecture-maturity-slice-6.2c/benchmarks-candidate.txt",
+	"docs/validation/architecture-maturity-slice-6.2c/gates.txt",
+	"docs/validation/architecture-maturity-slice-6.2c/scope-and-commits.txt",
+	"internal/mux/mux_restore_wiring_test.go",
+	"scripts/check-maturity-gates.go",
+}
+
+var slice62cWStagePaths = []string{
+	"internal/mux/fresh_session.go",
+	"internal/mux/mux.go",
+	"internal/mux/mux_restore.go",
+	"internal/mux/mux_restore_characterization_test.go",
+	"internal/mux/mux_restore_test.go",
+	"internal/mux/mux_restore_wiring_test.go",
+	"internal/mux/restore_coordinator.go",
+	"internal/mux/restore_coordinator_test.go",
+}
+
+var slice62cController = slice62cControllerSpec{
+	path:       "internal/mux/restore_coordinator.go",
+	controller: "restoreCoordinator",
+	budgetName: "restoreCoordinatorPortBudget",
+	budget:     5,
+	maxMethods: 3,
+	ports: map[string][]string{
+		"restorePreparationPort": {
+			"freshSessionSnapshot() (FreshSessionSnapshot, error)",
+			"prepareRestore() (*RestoreCandidate, error)",
+		},
+		"restorePublicationPort": {
+			"restoreWindowIDs(*RestoreCandidate) ([]WindowID, error)",
+			"commitRestore(*RestoreCandidate) ([]Event, error)",
+			"abortRestore(*RestoreCandidate) error",
+		},
+	},
+}
+
+var slice62cExactMethodSignatures = map[string]string{
+	"freshSessionSnapshot": "func(port preparationPort) (FreshSessionSnapshot, error)",
+	"prepareRestore":       "func(port preparationPort) (*RestoreCandidate, error)",
+	"restoreWindowIDs":     "func(candidate *RestoreCandidate, port publicationPort) ([]WindowID, error)",
+	"commitRestore":        "func(candidate *RestoreCandidate, port publicationPort) ([]Event, error)",
+	"abortRestore":         "func(candidate *RestoreCandidate, port publicationPort) error",
+}
+
+var slice62cExactMethodBodies = map[string]string{
+	"freshSessionSnapshot": "{\n\treturn port.freshSessionSnapshot()\n}",
+	"prepareRestore":       "{\n\treturn port.prepareRestore()\n}",
+	"restoreWindowIDs":     "{\n\treturn port.restoreWindowIDs(candidate)\n}",
+	"commitRestore":        "{\n\treturn port.commitRestore(candidate)\n}",
+	"abortRestore":         "{\n\treturn port.abortRestore(candidate)\n}",
+}
+
+type slice62cFacadeSpec struct {
+	path      string
+	signature string
+	body      string
+}
+
+var slice62cExactFacades = map[string]slice62cFacadeSpec{
+	"FreshSessionSnapshot": {
+		path: "internal/mux/fresh_session.go", signature: "func() (FreshSessionSnapshot, error)",
+		body: "{\n\treturn m.restoreCoordinator.freshSessionSnapshot(muxRestorePreparationOperationAdapter{mux: m})\n}",
+	},
+	"PrepareRestore": {
+		path: "internal/mux/mux_restore.go", signature: "func(blueprint layoutrestore.Blueprint, geometries []RestoreWindowGeometry) (*RestoreCandidate, error)",
+		body: "{\n\treturn m.restoreCoordinator.prepareRestore(muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries})\n}",
+	},
+	"RestoreWindowIDs": {
+		path: "internal/mux/mux_restore.go", signature: "func(candidate *RestoreCandidate) ([]WindowID, error)",
+		body: "{\n\treturn m.restoreCoordinator.restoreWindowIDs(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
+	},
+	"CommitRestore": {
+		path: "internal/mux/mux_restore.go", signature: "func(candidate *RestoreCandidate) ([]Event, error)",
+		body: "{\n\treturn m.restoreCoordinator.commitRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
+	},
+	"AbortRestore": {
+		path: "internal/mux/mux_restore.go", signature: "func(candidate *RestoreCandidate) error",
+		body: "{\n\treturn m.restoreCoordinator.abortRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
+	},
+}
+
+var slice62cKnownDefectBodyHashes = map[string]string{
+	"TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread":  "5575edb0c3abb1a852d08c02bdc96ba626090a9bfdebf7ed5f4aaeff9111e830",
+	"TestKnownDefect_L3_07_FreshSessionUsesObservedTerminalCWD": "ed6009cb25a396219c5d9c313468feb6b4a8665c4cbdc3205059c13fa1c8fc35",
+}
+
+const slice62cRestoreCommitBodyFingerprint = "913e0679cd7012d1d1763bbce4dfb9600c4a6aac652c17fe4c8f9e4688c06d14"
+
+func checkSlice62cGuard() []finding {
+	var findings []finding
+	findings = append(findings, checkSlice62cPostGPolicySelfTest()...)
+	findings = append(findings, checkSlice62cFullHistoryPreGSelfTest()...)
+	findings = append(findings, checkSlice62cCombinedShallowPostGSelfTest()...)
+	findings = append(findings, checkSlice62cBypassSelfTest()...)
+	findings = append(findings, checkSlice62cRestoreOrderSelfTest()...)
+	findings = append(findings, checkSlice62cKnownDefectBodySelfTest()...)
+	findings = append(findings, checkSlice62cDocumentedSequence()...)
+	findings = append(findings, checkSlice62cController(slice62cController)...)
+	findings = append(findings, checkSlice62cProductionSurface()...)
+	findings = append(findings, checkSlice62cRestoreOrder()...)
+	findings = append(findings, checkSlice62cKnownDefects()...)
+	findings = append(findings, checkSlice62cCommitsAndPaths()...)
+	return findings
+}
+
+func checkSlice62cController(spec slice62cControllerSpec) []finding {
+	data, err := os.ReadFile(spec.path)
+	if err != nil {
+		return []finding{{path: spec.path, reason: err.Error()}}
+	}
+	var findings []finding
+	const expiry = "TODO(L3-01; expires Slice 6.2d): remove the preparatory facade adapter."
+	if count := strings.Count(string(data), expiry); count != 1 {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("must contain exactly one L3-01 Slice 6.2d facade-expiry TODO, found %d", count)})
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, spec.path, data, 0)
+	if err != nil {
+		return append(findings, finding{path: spec.path, reason: "cannot parse restore coordinator: " + err.Error()})
+	}
+	if len(file.Imports) != 0 {
+		findings = append(findings, finding{path: spec.path, reason: "generic restore coordinator must remain import-free"})
+	}
+	wantDeclarations := map[string]int{
+		spec.budgetName: 1, "restorePreparationPort": 1, "restorePublicationPort": 1,
+		spec.controller: 1, "newRestoreCoordinator": 1,
+		"method:freshSessionSnapshot": 1, "method:prepareRestore": 1, "method:restoreWindowIDs": 1,
+		"method:commitRestore": 1, "method:abortRestore": 1,
+	}
+	declarations := make(map[string]int)
+	methodInventory := make(map[string]int)
+	portCount := 0
+	for _, declaration := range file.Decls {
+		switch declaration := declaration.(type) {
+		case *ast.GenDecl:
+			for _, item := range declaration.Specs {
+				switch node := item.(type) {
+				case *ast.ValueSpec:
+					for index, name := range node.Names {
+						declarations[name.Name]++
+						if token.IsExported(name.Name) {
+							findings = append(findings, finding{path: spec.path, reason: "controller declaration must remain private: " + name.Name})
+						}
+						if name.Name == spec.budgetName && index < len(node.Values) {
+							literal, ok := node.Values[index].(*ast.BasicLit)
+							value, parseErr := strconv.Atoi(strings.TrimSpace(literalValue(literal, ok)))
+							if parseErr != nil || value != spec.budget {
+								findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s must equal %d", spec.budgetName, spec.budget)})
+							}
+						}
+					}
+				case *ast.TypeSpec:
+					declarations[node.Name.Name]++
+					if token.IsExported(node.Name.Name) {
+						findings = append(findings, finding{path: spec.path, reason: "controller type must remain private: " + node.Name.Name})
+					}
+					if node.Name.Name == spec.controller {
+						structure, ok := node.Type.(*ast.StructType)
+						if !ok || len(structure.Fields.List) != 0 {
+							findings = append(findings, finding{path: spec.path, reason: spec.controller + " must remain a private zero-field struct"})
+						}
+						got := renderedNamedFields(fset, node.TypeParams)
+						want := []string{"preparationPort:restorePreparationPort", "publicationPort:restorePublicationPort"}
+						if strings.Join(got, "|") != strings.Join(want, "|") {
+							findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s generic parameters=%v want exact %v", spec.controller, got, want)})
+						}
+					}
+					wantMethods, isPort := spec.ports[node.Name.Name]
+					if !isPort {
+						continue
+					}
+					port, ok := node.Type.(*ast.InterfaceType)
+					if !ok {
+						findings = append(findings, finding{path: spec.path, reason: node.Name.Name + " must remain a private interface"})
+						continue
+					}
+					gotMethods := make([]string, 0, len(port.Methods.List))
+					for _, method := range port.Methods.List {
+						gotMethods = append(gotMethods, renderSlice62aInterfaceMethod(fset, method))
+						function, ok := method.Type.(*ast.FuncType)
+						if !ok || len(method.Names) != 1 || token.IsExported(method.Names[0].Name) {
+							findings = append(findings, finding{path: spec.path, reason: node.Name.Name + " must contain only exact private methods"})
+							continue
+						}
+						for _, list := range []*ast.FieldList{function.Params, function.Results} {
+							for _, typeText := range renderedUnnamedFields(fset, list) {
+								findings = append(findings, forbiddenSlice62cType(spec.path, node.Name.Name, typeText)...)
+							}
+						}
+					}
+					if strings.Join(gotMethods, "|") != strings.Join(wantMethods, "|") {
+						findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s methods=%v want exact %v", node.Name.Name, gotMethods, wantMethods)})
+					}
+					if len(gotMethods) == 0 || len(gotMethods) > spec.maxMethods || len(gotMethods) > 5 {
+						findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s methods=%d must be nonzero, <=%d and <=5", node.Name.Name, len(gotMethods), spec.maxMethods)})
+					}
+					portCount += len(gotMethods)
+				}
+			}
+		case *ast.FuncDecl:
+			if token.IsExported(declaration.Name.Name) {
+				findings = append(findings, finding{path: spec.path, reason: "controller function must remain private: " + declaration.Name.Name})
+			}
+			if declaration.Recv == nil {
+				declarations[declaration.Name.Name]++
+				if declaration.Name.Name == "newRestoreCoordinator" {
+					want := "func[preparationPort restorePreparationPort, publicationPort restorePublicationPort]() restoreCoordinator[preparationPort, publicationPort]"
+					if got := renderSlice62aNode(fset, declaration.Type); compactSlice62bGoText(got) != compactSlice62bGoText(want) {
+						findings = append(findings, finding{path: spec.path, reason: "constructor signature changed: " + got})
+					}
+					wantBody := "{\n\treturn restoreCoordinator[preparationPort, publicationPort]{}\n}"
+					if got := renderSlice62aNode(fset, declaration.Body); got != wantBody {
+						findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("constructor body=%q want exact zero-value body", got)})
+					}
+				}
+				continue
+			}
+			key := "method:" + declaration.Name.Name
+			declarations[key]++
+			methodInventory[declaration.Name.Name]++
+			wantSignature, known := slice62cExactMethodSignatures[declaration.Name.Name]
+			if !known {
+				continue
+			}
+			gotReceiver := strings.Join(renderedUnnamedFields(fset, declaration.Recv), "|")
+			if gotReceiver != "restoreCoordinator[preparationPort, publicationPort]" || renderSlice62aNode(fset, declaration.Type) != wantSignature {
+				findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s receiver/signature changed", declaration.Name.Name)})
+			}
+			if got := renderSlice62aNode(fset, declaration.Body); got != slice62cExactMethodBodies[declaration.Name.Name] {
+				findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s body=%q want exact one-call delegation", declaration.Name.Name, got)})
+			}
+		}
+	}
+	if !mapsEqualStringInt(declarations, wantDeclarations) {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("controller declarations=%v want exact %v", declarations, wantDeclarations)})
+	}
+	if len(methodInventory) != 5 {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("controller method inventory=%v want exact five methods", methodInventory)})
+	}
+	for name := range slice62cExactMethodSignatures {
+		if methodInventory[name] != 1 {
+			findings = append(findings, finding{path: spec.path, reason: "controller method inventory missing/duplicates " + name})
+		}
+	}
+	if portCount != spec.budget {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("aggregate port methods=%d budget=%d", portCount, spec.budget)})
+	}
+	return findings
+}
+
+func forbiddenSlice62cType(path, owner, typeText string) []finding {
+	lower := strings.ToLower(typeText)
+	for _, forbidden := range []string{"*mux", "*model", "*localsessionregistry", "*pane", "map[", "func(", "chan ", "interface{}", "any"} {
+		if strings.Contains(lower, forbidden) {
+			return []finding{{path: path, reason: owner + " has forbidden retained-owner/state type " + typeText}}
+		}
+	}
+	return nil
+}
+
+func slice62cRetainedTypeNames(files map[string]*ast.File) map[string]bool {
+	return slice62bExpandRetainedTypeNames(files, map[string]bool{
+		"restoreCoordinator":                    true,
+		"muxRestorePreparationOperationAdapter": true,
+		"muxRestorePublicationOperationAdapter": true,
+	})
+}
+
+func slice62cCanonicalRetainedType(name string) bool {
+	return name == "restoreCoordinator" || name == "muxRestorePreparationOperationAdapter" || name == "muxRestorePublicationOperationAdapter"
+}
+
+func checkSlice62cProductionSurface() []finding {
+	const root = "internal/mux"
+	fset := token.NewFileSet()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return []finding{{path: root, reason: err.Error()}}
+	}
+	files := make(map[string]*ast.File)
+	var findings []finding
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		path := filepath.ToSlash(filepath.Join(root, entry.Name()))
+		file, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			findings = append(findings, finding{path: path, reason: parseErr.Error()})
+			continue
+		}
+		files[path] = file
+	}
+	retainedTypeNames := slice62cRetainedTypeNames(files)
+	controllerTypeNames := slice62bExpandRetainedTypeNames(files, map[string]bool{"restoreCoordinator": true})
+	controllerMethods := 0
+	muxControllerFields := 0
+	muxInitializers := 0
+	facadeDeclarations := make(map[string]int)
+	reservedCalls := make(map[string]int)
+	restoreFieldSelectors := 0
+	controllerComposites := 0
+	adapterComposites := make(map[string]int)
+	constructorCalls := 0
+	for path, file := range files {
+		findings = append(findings, slice62cFunctionRetentionFindings(path, file, retainedTypeNames)...)
+	}
+	for path, file := range files {
+		for _, declaration := range file.Decls {
+			switch declaration := declaration.(type) {
+			case *ast.GenDecl:
+				for _, item := range declaration.Specs {
+					typeSpec, ok := item.(*ast.TypeSpec)
+					if ok {
+						if token.IsExported(typeSpec.Name.Name) && strings.Contains(strings.ToLower(typeSpec.Name.Name), "restorecoordinator") {
+							findings = append(findings, finding{path: path, reason: "exported restore-coordinator type bypass " + typeSpec.Name.Name})
+						}
+						if !slice62cCanonicalRetainedType(typeSpec.Name.Name) && typeSpec.Name.Name != "Mux" && retainedTypeNames[typeSpec.Name.Name] {
+							findings = append(findings, finding{path: path, reason: "restore controller/adapter alias or named container is forbidden: " + typeSpec.Name.Name})
+						}
+						structure, isStruct := typeSpec.Type.(*ast.StructType)
+						if isStruct {
+							for _, field := range structure.Fields.List {
+								typeText := compactSlice62bGoText(renderSlice62aNode(fset, field.Type))
+								canonical := typeSpec.Name.Name == "Mux" && len(field.Names) == 1 && field.Names[0].Name == "restoreCoordinator" && typeText == "restoreCoordinator[muxRestorePreparationOperationAdapter,muxRestorePublicationOperationAdapter]"
+								if canonical {
+									muxControllerFields++
+									continue
+								}
+								if slice62bTypeExpressionRetains(field.Type, retainedTypeNames) {
+									fieldName := "<anonymous>"
+									if len(field.Names) != 0 {
+										fieldName = field.Names[0].Name
+									}
+									findings = append(findings, finding{path: path, reason: "restore controller/adapter retained recursively under forbidden struct field " + typeSpec.Name.Name + "." + fieldName})
+								}
+							}
+						}
+					}
+					valueSpec, ok := item.(*ast.ValueSpec)
+					if ok && valueSpec.Type != nil && slice62bTypeExpressionRetains(valueSpec.Type, retainedTypeNames) {
+						findings = append(findings, finding{path: path, reason: "retained restore controller/adapter variable is forbidden"})
+					}
+				}
+			case *ast.FuncDecl:
+				if token.IsExported(declaration.Name.Name) && strings.Contains(strings.ToLower(declaration.Name.Name), "restorecoordinator") {
+					findings = append(findings, finding{path: path, reason: "exported restore-coordinator function/method bypass " + declaration.Name.Name})
+				}
+				if token.IsExported(declaration.Name.Name) {
+					for _, list := range []*ast.FieldList{declaration.Recv, declaration.Type.Params, declaration.Type.Results} {
+						if list == nil {
+							continue
+						}
+						for _, field := range list.List {
+							if slice62bTypeExpressionRetains(field.Type, retainedTypeNames) {
+								findings = append(findings, finding{path: path, reason: "exported function/method exposes restore controller/adapter type " + declaration.Name.Name})
+							}
+						}
+					}
+				}
+				if declaration.Recv != nil && len(declaration.Recv.List) == 1 && slice62aControllerTypeExpression(declaration.Recv.List[0].Type, controllerTypeNames) {
+					controllerMethods++
+					if path != slice62cController.path || slice62cExactMethodSignatures[declaration.Name.Name] == "" {
+						findings = append(findings, finding{path: path, reason: "restoreCoordinator production method inventory permits only the exact five methods in restore_coordinator.go"})
+					}
+				}
+				if facade, expected := slice62cExactFacades[declaration.Name.Name]; expected {
+					facadeDeclarations[declaration.Name.Name]++
+					if path != facade.path || !receiverNamed(declaration.Recv, "Mux") || renderSlice62aNode(fset, declaration.Type) != facade.signature || renderSlice62aNode(fset, declaration.Body) != facade.body {
+						findings = append(findings, finding{path: path, reason: "public Mux restore facade " + declaration.Name.Name + " must retain exact signature and one-call body"})
+					}
+				}
+				if declaration.Name.Name == "New" && declaration.Body != nil {
+					ast.Inspect(declaration.Body, func(node ast.Node) bool {
+						keyValue, ok := node.(*ast.KeyValueExpr)
+						if !ok || !slice62aIdentifierNamed(keyValue.Key, "restoreCoordinator") {
+							return true
+						}
+						call, ok := keyValue.Value.(*ast.CallExpr)
+						if ok && len(call.Args) == 0 && compactSlice62bGoText(renderSlice62aNode(fset, call.Fun)) == "newRestoreCoordinator[muxRestorePreparationOperationAdapter,muxRestorePublicationOperationAdapter]" {
+							muxInitializers++
+						} else {
+							findings = append(findings, finding{path: path, reason: "Mux restoreCoordinator initializer must remain exact"})
+						}
+						return true
+					})
+				}
+			}
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			switch node := node.(type) {
+			case *ast.CompositeLit:
+				typeText := compactSlice62bGoText(renderSlice62aNode(fset, node.Type))
+				switch typeText {
+				case "restoreCoordinator[preparationPort,publicationPort]":
+					controllerComposites++
+				case "muxRestorePreparationOperationAdapter", "muxRestorePublicationOperationAdapter":
+					adapterComposites[typeText]++
+				default:
+					if slice62bTypeExpressionRetains(node.Type, retainedTypeNames) {
+						findings = append(findings, finding{path: path, reason: "restore controller/adapter hidden recursively in composite literal " + typeText})
+					}
+				}
+			case *ast.CallExpr:
+				if compactSlice62bGoText(renderSlice62aNode(fset, node.Fun)) == "newRestoreCoordinator[muxRestorePreparationOperationAdapter,muxRestorePublicationOperationAdapter]" {
+					constructorCalls++
+				}
+				if identifier, ok := node.Fun.(*ast.Ident); ok && (identifier.Name == "new" || identifier.Name == "make") {
+					for _, argument := range node.Args {
+						if slice62bTypeExpressionRetains(argument, retainedTypeNames) {
+							findings = append(findings, finding{path: path, reason: "restore controller/adapter hidden recursively behind " + identifier.Name})
+						}
+					}
+				}
+			case *ast.SelectorExpr:
+				if node.Sel.Name == "restoreCoordinator" {
+					restoreFieldSelectors++
+				}
+				if _, reserved := slice62cExactMethodSignatures[node.Sel.Name]; reserved {
+					reservedCalls[node.Sel.Name]++
+				}
+			}
+			return true
+		})
+	}
+	if controllerMethods != 5 {
+		findings = append(findings, finding{path: slice62cController.path, reason: fmt.Sprintf("production restoreCoordinator methods=%d want exactly five", controllerMethods)})
+	}
+	if muxControllerFields != 1 || muxInitializers != 1 {
+		findings = append(findings, finding{path: "internal/mux/mux.go", reason: fmt.Sprintf("Mux restoreCoordinator fields/initializers=%d/%d want 1/1", muxControllerFields, muxInitializers)})
+	}
+	if controllerComposites != 1 || constructorCalls != 1 {
+		findings = append(findings, finding{path: root, reason: fmt.Sprintf("restore controller composite/constructor calls=%d/%d want exact constructor body/New initializer only", controllerComposites, constructorCalls)})
+	}
+	if adapterComposites["muxRestorePreparationOperationAdapter"] != 2 || adapterComposites["muxRestorePublicationOperationAdapter"] != 3 {
+		findings = append(findings, finding{path: root, reason: fmt.Sprintf("restore operation-adapter composite literals=%v want exact preparation/publication 2/3 in guarded facades", adapterComposites)})
+	}
+	if restoreFieldSelectors != 5 {
+		findings = append(findings, finding{path: root, reason: fmt.Sprintf("production restoreCoordinator field selector uses=%d want exactly five facade-to-controller calls", restoreFieldSelectors)})
+	}
+	for name := range slice62cExactFacades {
+		if facadeDeclarations[name] != 1 {
+			findings = append(findings, finding{path: root, reason: fmt.Sprintf("public Mux restore facade %s declarations=%d want exactly one", name, facadeDeclarations[name])})
+		}
+	}
+	wantReserved := map[string]int{"freshSessionSnapshot": 2, "prepareRestore": 2, "restoreWindowIDs": 2, "commitRestore": 2, "abortRestore": 5}
+	for name, want := range wantReserved {
+		if reservedCalls[name] != want {
+			findings = append(findings, finding{path: root, reason: fmt.Sprintf("reserved restore selector calls %s=%d want=%d exact facade/controller/helper inventory", name, reservedCalls[name], want)})
+		}
+	}
+	return findings
+}
+
+func checkSlice62cRestoreOrder() []finding {
+	const path = "internal/mux/mux_restore.go"
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	var findings []finding
+	var commit, abort *ast.FuncDecl
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		receiver := strings.Join(renderedUnnamedFields(fset, function.Recv), "|")
+		if function.Name.Name == "commitRestore" && receiver == "muxRestorePublicationOperationAdapter" {
+			commit = function
+		}
+		if function.Name.Name == "abortRestore" && receiver == "*Mux" {
+			abort = function
+		}
+	}
+	if commit == nil {
+		findings = append(findings, finding{path: path, reason: "missing restore publication operation"})
+	} else {
+		findings = append(findings, slice62cRestoreCommitOrderFindings(fset, path, commit.Body)...)
+		wantHash := slice62cRestoreCommitBodyFingerprint
+		if immutable, immutableErr := gitText("show", "294b2f20ab3afd8c3fdbfd4d876e02a9fd86a7f1:"+path); immutableErr == nil {
+			immutableHash, hashErr := slice62cRestoreCommitHashFromSource(path, immutable)
+			if hashErr != nil {
+				findings = append(findings, finding{path: path, reason: "cannot parse immutable W restore publication body: " + hashErr.Error()})
+			} else {
+				wantHash = immutableHash
+				if slice62cRestoreCommitBodyFingerprint != immutableHash {
+					findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: fmt.Sprintf("embedded immutable W restore publication fingerprint=%q want %q", slice62cRestoreCommitBodyFingerprint, immutableHash)})
+				}
+			}
+		}
+		if gotHash := canonicalSlice62cNodeHash(fset, commit.Body); gotHash != wantHash {
+			findings = append(findings, finding{path: path, reason: fmt.Sprintf("live restore publication body hash=%s want immutable W %s", gotHash, wantHash)})
+		}
+	}
+	if abort == nil {
+		findings = append(findings, finding{path: path, reason: "missing reverse abort operation"})
+	} else {
+		var phases []string
+		var reverseLoop bool
+		ast.Inspect(abort.Body, func(node ast.Node) bool {
+			switch node := node.(type) {
+			case *ast.AssignStmt:
+				for _, left := range node.Lhs {
+					text := renderSlice62aNode(fset, left)
+					if text == "candidate.aborted" || text == "m.pending" {
+						phases = append(phases, "assign:"+text)
+					}
+				}
+			case *ast.ForStmt:
+				if renderSlice62aNode(fset, node.Init) == "i := len(candidate.panes) - 1" && renderSlice62aNode(fset, node.Cond) == "i >= 0" && renderSlice62aNode(fset, node.Post) == "i--" {
+					reverseLoop = true
+				}
+			case *ast.CallExpr:
+				if selector, ok := node.Fun.(*ast.SelectorExpr); ok {
+					text := renderSlice62aNode(fset, selector)
+					switch text {
+					case "m.sessions.abort", "detached.pane.close", "p.close":
+						phases = append(phases, "call:"+text)
+					}
+				}
+			}
+			return true
+		})
+		want := []string{"assign:candidate.aborted", "assign:m.pending", "call:m.sessions.abort", "call:detached.pane.close", "call:p.close"}
+		if !reverseLoop || strings.Join(phases, "|") != strings.Join(want, "|") {
+			findings = append(findings, finding{path: path, reason: fmt.Sprintf("restore abort reverse-order phases=%v reverseLoop=%v want exact %v", phases, reverseLoop, want)})
+		}
+	}
+	return findings
+}
+
+func checkSlice62cKnownDefects() []finding {
+	const (
+		root    = "internal/mux"
+		path    = "internal/mux/mux_restore_characterization_test.go"
+		tCommit = "bec3126e00acc76e3303d4bc65259f379e9750ab"
+	)
+	wantExpiry := map[string]string{
+		"TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread":  "expires Slice 3.1",
+		"TestKnownDefect_L3_07_FreshSessionUsesObservedTerminalCWD": "expires Slice 4.3",
+	}
+	current, inventory, findings := slice62cReadKnownDefectBodies(root, wantExpiry)
+	if !mapsEqualStringInt(inventory, map[string]int{
+		"TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread":  1,
+		"TestKnownDefect_L3_07_FreshSessionUsesObservedTerminalCWD": 1,
+	}) {
+		findings = append(findings, finding{path: path, reason: fmt.Sprintf("restore known-defect inventory=%v want exact L3-02/L3-07 tests", inventory)})
+	}
+	for name, body := range current {
+		if body.path != path {
+			findings = append(findings, finding{path: body.path, reason: name + " must remain in the immutable T characterization file"})
+		}
+		if !body.validTest {
+			findings = append(findings, finding{path: body.path, reason: name + " must remain a top-level func with exactly one *testing.T parameter and no results"})
+		}
+	}
+	immutableSource, immutableErr := gitText("show", tCommit+":"+path)
+	expected := slice62cKnownDefectBodyHashes
+	if immutableErr == nil {
+		immutable, parseFindings := slice62cKnownDefectBodiesFromSource(path, immutableSource, wantExpiry)
+		findings = append(findings, parseFindings...)
+		expected = make(map[string]string, len(immutable))
+		for name, body := range immutable {
+			expected[name] = body.hash
+			if embedded := slice62cKnownDefectBodyHashes[name]; embedded != body.hash {
+				findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: fmt.Sprintf("embedded immutable T fingerprint %s=%q want %q", name, embedded, body.hash)})
+			}
+		}
+	}
+	for name, wantHash := range expected {
+		body, ok := current[name]
+		if !ok {
+			continue
+		}
+		if body.hash != wantHash {
+			findings = append(findings, finding{path: body.path, reason: fmt.Sprintf("%s canonical behavior body hash=%s want immutable T %s", name, body.hash, wantHash)})
+		}
+	}
+	return findings
+}
+
+func checkSlice62cCommitsAndPaths() []finding {
+	const (
+		base        = "36450fed2b22f6ae4894a7e0051f98d0fd9192ee"
+		tCommit     = "bec3126e00acc76e3303d4bc65259f379e9750ab"
+		aCommit     = "d073df16d9ba0ec810d35c7b2ac9e17dfd196e6c"
+		mCommit     = "fe91ce085b985aff4cf5be5b5527b67a3c88d0fa"
+		wCommit     = "294b2f20ab3afd8c3fdbfd4d876e02a9fd86a7f1"
+		gSubject    = "refactor(mux): guard restore coordinator delegation"
+		sliceBranch = "arch/l3-01c-mux-restore-coordinator"
+	)
+	stages := []struct{ class, commit, parent, subject string }{
+		{"T", tCommit, base, "test(mux): characterize restore transaction parity"},
+		{"A", aCommit, tCommit, "refactor(mux): add restore coordinator seam"},
+		{"M", mCommit, aCommit, "refactor(mux): split restore operation adapters"},
+		{"W", wCommit, mCommit, "refactor(mux): wire restore coordinator"},
+	}
+	branch, _ := gitText("symbolic-ref", "--quiet", "--short", "HEAD")
+	head, _ := gitText("rev-parse", "HEAD")
+	worktree, _ := gitRawText("status", "--porcelain=v1", "--untracked-files=all")
+	if shallow, _ := gitText("rev-parse", "--is-shallow-repository"); shallow == "true" {
+		missing := false
+		for _, commit := range []string{base, tCommit, aCommit, mCommit, wCommit} {
+			if _, err := gitText("cat-file", "-e", commit+"^{commit}"); err != nil {
+				missing = true
+				break
+			}
+		}
+		if missing {
+			gCommit, _ := findMaturitySliceCommitBySubject(gSubject)
+			gParent := ""
+			if gCommit != "" {
+				raw, err := gitText("cat-file", "-p", gCommit)
+				if err == nil {
+					var parents []string
+					for _, line := range strings.Split(raw, "\n") {
+						if strings.HasPrefix(line, "parent ") {
+							parents = append(parents, strings.TrimSpace(strings.TrimPrefix(line, "parent ")))
+						}
+					}
+					if len(parents) == 1 {
+						gParent = parents[0]
+					}
+				}
+			}
+			return checkSlice62cShallowFallback(branch == sliceBranch, head, wCommit, gCommit, gParent, worktree)
+		}
+	}
+	var findings []finding
+	for _, stage := range stages {
+		identity, err := gitFields("show", "-s", "--format=%H%x00%P%x00%s", stage.commit)
+		parent, parentErr := gitText("rev-parse", stage.parent+"^{commit}")
+		if err != nil || len(identity) != 3 || parentErr != nil || identity[0] != stage.commit || identity[1] != parent || identity[2] != stage.subject {
+			findings = append(findings, finding{path: "git:" + stage.class, reason: "unexpected exact Slice 6.2c identity/parent/subject"})
+		}
+	}
+	gCommit, _ := findMaturitySliceCommit(gSubject, wCommit)
+	end := gCommit
+	includeWorktree := false
+	if gCommit == "" {
+		if head != wCommit {
+			findings = append(findings, finding{path: "git:G", reason: "before Slice 6.2c G, HEAD must be exact immutable W 294b2f2"})
+			return findings
+		}
+		end = wCommit
+		includeWorktree = true
+		if branch == sliceBranch {
+			findings = append(findings, checkSlice62cPreGWorktree(worktree)...)
+		}
+	} else {
+		identity, err := gitFields("show", "-s", "--format=%H%x00%P%x00%s", gCommit)
+		if err != nil || len(identity) != 3 || identity[1] != wCommit || identity[2] != gSubject {
+			findings = append(findings, finding{path: "git:G", reason: "G must have exact W parent and subject"})
+		}
+		findings = append(findings, checkSlice62cPostGActiveState(branch == sliceBranch, head, gCommit, worktree)...)
+	}
+	return append(findings, checkSlice62cExactPaths(base, end, includeWorktree)...)
+}
+
+func checkSlice62cExactPaths(base, end string, includeWorktree bool) []finding {
+	pathsText, err := gitText("diff", "--name-only", base+".."+end)
+	if err != nil {
+		return []finding{{path: "git:paths", reason: err.Error()}}
+	}
+	paths := nonEmptyLines(pathsText)
+	if includeWorktree {
+		for _, args := range [][]string{{"diff", "--name-only"}, {"diff", "--cached", "--name-only"}, {"ls-files", "--others", "--exclude-standard"}} {
+			text, _ := gitText(args...)
+			paths = append(paths, nonEmptyLines(text)...)
+		}
+	}
+	return slice62cExactPathSetFindings(paths)
+}
+
+func slice62cExactPathSetFindings(paths []string) []finding {
+	actual := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		actual[filepath.ToSlash(path)] = true
+	}
+	expected := make(map[string]bool, len(slice62cAllowedPaths))
+	var findings []finding
+	for _, path := range slice62cAllowedPaths {
+		expected[path] = true
+		if !actual[path] {
+			findings = append(findings, finding{path: path, reason: "missing from exact Slice 6.2c changed-path set"})
+		}
+	}
+	for path := range actual {
+		if !expected[path] {
+			findings = append(findings, finding{path: path, reason: "outside exact Slice 6.2c changed-path allowlist"})
+		}
+	}
+	return findings
+}
+
+func checkSlice62cPostGActiveState(active bool, head, gCommit, worktree string) []finding {
+	if !active {
+		return nil
+	}
+	var findings []finding
+	if head != gCommit {
+		findings = append(findings, finding{path: "git:G", reason: "after G exists on active Slice 6.2c branch, HEAD must equal G exactly"})
+	}
+	if strings.TrimSpace(worktree) != "" {
+		findings = append(findings, finding{path: "git:worktree", reason: "after G exists on active Slice 6.2c branch, nonignored worktree must be clean"})
+	}
+	return findings
+}
+
+func slice62cFullHistoryPreGPathFindings(committedPaths []string, worktree string) []finding {
+	worktreePaths, _ := slice62cPorcelainPaths(worktree)
+	combined := append([]string(nil), committedPaths...)
+	for path := range worktreePaths {
+		combined = append(combined, path)
+	}
+	findings := slice62cExactPathSetFindings(combined)
+	return append(findings, checkSlice62cPreGWorktree(worktree)...)
+}
+
+func checkSlice62cFullHistoryPreGSelfTest() []finding {
+	validWorktree := slice62cSyntheticPorcelain(slice62cGStagePaths)
+	if got := slice62cFullHistoryPreGPathFindings(slice62cWStagePaths, validWorktree); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c full-history pre-G self-test rejected exact G-stage worktree"}}
+	}
+	omittedOverlap := make([]string, 0, len(slice62cGStagePaths)-1)
+	for _, path := range slice62cGStagePaths {
+		if path != "internal/mux/mux_restore_wiring_test.go" {
+			omittedOverlap = append(omittedOverlap, path)
+		}
+	}
+	got := slice62cFullHistoryPreGPathFindings(slice62cWStagePaths, slice62cSyntheticPorcelain(omittedOverlap))
+	for _, item := range got {
+		if item.path == "internal/mux/mux_restore_wiring_test.go" {
+			return nil
+		}
+	}
+	return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c full-history pre-G self-test did not reject omitted G modification already present in W"}}
+}
+
+func checkSlice62cPostGPolicySelfTest() []finding {
+	if got := checkSlice62cPostGActiveState(true, "later", "g", ""); len(got) != 1 || got[0].path != "git:G" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c post-G self-test did not reject active-branch commit after G"}}
+	}
+	if got := checkSlice62cPostGActiveState(true, "g", "g", " M dirty.go"); len(got) != 1 || got[0].path != "git:worktree" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c post-G self-test did not reject dirty active branch"}}
+	}
+	if got := checkSlice62cPostGActiveState(false, "later", "g", " M unrelated.go"); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c post-G self-test rejected later main history"}}
+	}
+	return nil
+}
+
+func slice62cDocumentRequirements() []string {
+	return []string{
+		"| T | `bec3126` |", "| A | `d073df1` |", "| M | `fe91ce0` |", "| W | `294b2f2` |", "| G | pending |",
+		"refactor(mux): guard restore coordinator delegation", "exact sole parent to be W",
+		"L3-01 remains **partial**", "L3-02/L3-04/L3-07/L3-09/L3-10 remain open", "6.2d is deferred",
+	}
+}
+
+func slice62cDocumentFindings(text string) []finding {
+	const path = "docs/validation/architecture-maturity-slice-6.2c.md"
+	var findings []finding
+	for _, required := range slice62cDocumentRequirements() {
+		if !strings.Contains(text, required) {
+			findings = append(findings, finding{path: path, reason: "shallow checkout is missing documented commit/closure contract " + required})
+		}
+	}
+	for _, allowed := range slice62cAllowedPaths {
+		if !strings.Contains(text, "\n"+allowed+"\n") {
+			findings = append(findings, finding{path: path, reason: "shallow checkout allowlist is missing " + allowed})
+		}
+	}
+	return findings
+}
+
+func checkSlice62cDocumentedSequence() []finding {
+	const path = "docs/validation/architecture-maturity-slice-6.2c.md"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	return slice62cDocumentFindings(string(data))
+}
+
+func checkSlice62cShallowFallback(active bool, head, wCommit, gCommit, gParent, worktree string) []finding {
+	const path = "docs/validation/architecture-maturity-slice-6.2c.md"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	return slice62cShallowFallbackFindings(string(data), active, head, wCommit, gCommit, gParent, worktree)
+}
+
+func slice62cShallowFallbackFindings(document string, active bool, head, wCommit, gCommit, gParent, worktree string) []finding {
+	findings := slice62cDocumentFindings(document)
+	if gCommit != "" {
+		if gParent == "" {
+			if active {
+				findings = append(findings, finding{path: "git:G", reason: "history-limited active slice cannot prove identifiable G parentage"})
+			}
+		} else if gParent != wCommit {
+			findings = append(findings, finding{path: "git:G", reason: "history-limited G must expose exact immutable W as its sole parent"})
+		}
+		if active {
+			findings = append(findings, checkSlice62cPostGActiveState(true, head, gCommit, worktree)...)
+		}
+		return findings
+	}
+	if !active {
+		return findings
+	}
+	if head != wCommit {
+		findings = append(findings, finding{path: "git:G", reason: "history-limited active Slice 6.2c branch without identifiable G must remain at documented immutable W"})
+	}
+	findings = append(findings, checkSlice62cPreGWorktree(worktree)...)
+	return findings
+}
+
+func checkSlice62cCombinedShallowPostGSelfTest() []finding {
+	valid := "\n" + strings.Join(slice62cDocumentRequirements(), "\n") + "\n" + strings.Join(slice62cAllowedPaths, "\n") + "\n"
+	if got := slice62cDocumentFindings(valid); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c shallow-doc self-test rejected complete synthetic contract"}}
+	}
+	missingContract := strings.Replace(valid, slice62cDocumentRequirements()[0], "", 1)
+	if got := slice62cDocumentFindings(missingContract); len(got) != 1 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c shallow-doc self-test did not reject missing identity"}}
+	}
+	missingPath := strings.Replace(valid, "\n"+slice62cAllowedPaths[0]+"\n", "\n", 1)
+	if got := slice62cDocumentFindings(missingPath); len(got) != 1 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c shallow-doc self-test did not reject missing allowlist path"}}
+	}
+	postG := slice62cShallowFallbackFindings(valid, true, "later", "w", "g", "w", " M dirty.go")
+	if len(postG) != 2 || postG[0].path != "git:G" || postG[1].path != "git:worktree" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c combined shallow/post-G self-test did not enforce HEAD/clean policy"}}
+	}
+	if got := slice62cShallowFallbackFindings(valid, true, "g", "w", "g", "wrong-parent", ""); len(got) != 1 || got[0].path != "git:G" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c shallow post-G self-test did not reject wrong G parent"}}
+	}
+	if got := slice62cShallowFallbackFindings(valid, false, "later-main", "w", "", "", " M unrelated.go"); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c shallow fallback rejected later main without G metadata"}}
+	}
+	if got := slice62cShallowFallbackFindings(valid, false, "later-main", "w", "g", "", " M unrelated.go"); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c shallow fallback rejected later main with incomplete G metadata"}}
+	}
+	validPreGWorktree := slice62cSyntheticPorcelain(slice62cGStagePaths)
+	if got := slice62cShallowFallbackFindings(valid, true, "later", "w", "", "", validPreGWorktree); len(got) != 1 || got[0].path != "git:G" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c shallow pre-G self-test did not reject commit beyond W"}}
+	}
+	if got := slice62cShallowFallbackFindings(valid, true, "w", "w", "", "", validPreGWorktree); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c shallow pre-G self-test rejected exact G-stage worktree"}}
+	}
+	for _, fixture := range []struct {
+		name     string
+		worktree string
+		wantPath string
+	}{
+		{name: "dirty outside path", worktree: validPreGWorktree + "\n M outside.go", wantPath: "outside.go"},
+		{name: "staged outside path", worktree: validPreGWorktree + "\nM  staged-outside.go", wantPath: "staged-outside.go"},
+		{name: "untracked outside path", worktree: validPreGWorktree + "\n?? untracked-outside.go", wantPath: "untracked-outside.go"},
+		{name: "missing required G path", worktree: slice62cSyntheticPorcelain(slice62cGStagePaths[1:]), wantPath: slice62cGStagePaths[0]},
+	} {
+		got := checkSlice62cPreGWorktree(fixture.worktree)
+		found := false
+		for _, item := range got {
+			if item.path == fixture.wantPath {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c shallow pre-G self-test did not reject " + fixture.name}}
+		}
+	}
+	return nil
+}
+
+func checkSlice62cBypassSelfTest() []finding {
+	fixtures := []struct{ name, source string }{
+		{"alias bypass", `package mux
+			type restoreCoordinator[T, U any] struct{}
+			type Mux struct { restoreCoordinator restoreCoordinator[int, int] }
+			func (m *Mux) PrepareRestore() { alias := m.restoreCoordinator; alias.prepareRestore(nil) }`},
+		{"alternate field", `package mux
+			type restoreCoordinator[T, U any] struct{}
+			type holder struct { coordinator restoreCoordinator[int, int] }`},
+		{"direct adapter bypass", `package mux
+			type muxRestorePublicationOperationAdapter struct{}
+			func bypass(a muxRestorePublicationOperationAdapter) { a.commitRestore(nil) }`},
+		{"nested alias and field retention", `package mux
+			type restoreCoordinator[T, U any] struct{}
+			type muxRestorePreparationOperationAdapter struct{}
+			type coordinatorAlias = restoreCoordinator[int, int]
+			type pointerAlias *coordinatorAlias
+			type sliceAlias []pointerAlias
+			type arrayAlias [1]muxRestorePreparationOperationAdapter
+			type mapAlias map[string]struct { coordinators sliceAlias; adapters *arrayAlias }
+			type holder struct { nested mapAlias; anonymous struct { hidden []coordinatorAlias } }`},
+		{"inferred nested composite retention", `package mux
+			type muxRestorePublicationOperationAdapter struct{}
+			var hidden = map[string][]*muxRestorePublicationOperationAdapter{}`},
+		{"exported retained seam", `package mux
+			type restoreCoordinator[T, U any] struct{}
+			type ExportedRestoreCoordinator = restoreCoordinator[int, int]
+			func ExportRestoreCoordinator() ExportedRestoreCoordinator { return ExportedRestoreCoordinator{} }`},
+		{"function literal parameter retention", `package mux
+			type muxRestorePublicationOperationAdapter struct{}
+			var escape = func(a muxRestorePublicationOperationAdapter) { _ = a }`},
+		{"function literal result retention", `package mux
+			type restoreCoordinator[T, U any] struct{}
+			var escape = func() restoreCoordinator[int, int] { return restoreCoordinator[int, int]{} }`},
+		{"function literal inferred body retention", `package mux
+			type muxRestorePreparationOperationAdapter struct{}
+			func bypass() { escape := func() { hidden := []any{muxRestorePreparationOperationAdapter{}}; _ = hidden }; _ = escape }`},
+		{"escaping closure captures adapter", `package mux
+			type muxRestorePublicationOperationAdapter struct{}
+			func bypass(a muxRestorePublicationOperationAdapter) func() { return func() { _ = a } }`},
+		{"local inferred adapter container", `package mux
+			type muxRestorePreparationOperationAdapter struct{}
+			func bypass(a muxRestorePreparationOperationAdapter) { hidden := []any{a}; _ = hidden }`},
+		{"package-scope nested function literal composite retention", `package mux
+			type muxRestorePublicationOperationAdapter struct{}
+			var hidden = []any{func(adapter muxRestorePublicationOperationAdapter) { _ = adapter }}`},
+		{"local nested function literal composite retention", `package mux
+			type muxRestorePreparationOperationAdapter struct{}
+			func bypass() { hidden := []any{func(adapter muxRestorePreparationOperationAdapter) { _ = adapter }}; _ = hidden }`},
+	}
+	var findings []finding
+	for _, fixture := range fixtures {
+		file, err := parser.ParseFile(token.NewFileSet(), "internal/mux/fixture.go", fixture.source, 0)
+		if err != nil {
+			findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: "cannot parse Slice 6.2c bypass self-test " + fixture.name})
+			continue
+		}
+		got := checkSlice62cSyntheticSurface(map[string]*ast.File{"internal/mux/fixture.go": file})
+		if len(got) == 0 {
+			findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2c bypass self-test did not reject " + fixture.name})
+		}
+	}
+	return findings
+}
+
+func checkSlice62cSyntheticSurface(files map[string]*ast.File) []finding {
+	retainedTypeNames := slice62cRetainedTypeNames(files)
+	var findings []finding
+	for path, file := range files {
+		findings = append(findings, slice62cFunctionRetentionFindings(path, file, retainedTypeNames)...)
+		ast.Inspect(file, func(node ast.Node) bool {
+			switch node := node.(type) {
+			case *ast.StructType:
+				for _, field := range node.Fields.List {
+					if slice62bTypeExpressionRetains(field.Type, retainedTypeNames) {
+						findings = append(findings, finding{path: path, reason: "restore controller/adapter retained recursively under alternate field"})
+					}
+				}
+			case *ast.TypeSpec:
+				if !slice62cCanonicalRetainedType(node.Name.Name) && node.Name.Name != "Mux" && retainedTypeNames[node.Name.Name] {
+					findings = append(findings, finding{path: path, reason: "restore controller/adapter retained through alias or named container " + node.Name.Name})
+				}
+				if token.IsExported(node.Name.Name) && strings.Contains(strings.ToLower(node.Name.Name), "restorecoordinator") {
+					findings = append(findings, finding{path: path, reason: "exported restore coordinator seam"})
+				}
+			case *ast.CompositeLit:
+				if slice62bTypeExpressionRetains(node.Type, retainedTypeNames) {
+					findings = append(findings, finding{path: path, reason: "restore controller/adapter retained recursively in inferred composite"})
+				}
+			case *ast.SelectorExpr:
+				if node.Sel.Name == "restoreCoordinator" {
+					findings = append(findings, finding{path: path, reason: "restore controller field alias/bypass"})
+				}
+				if _, reserved := slice62cExactMethodSignatures[node.Sel.Name]; reserved {
+					findings = append(findings, finding{path: path, reason: "reserved restore controller/adapter method bypass " + node.Sel.Name})
+				}
+			case *ast.FuncDecl:
+				if token.IsExported(node.Name.Name) && strings.Contains(strings.ToLower(node.Name.Name), "restorecoordinator") {
+					findings = append(findings, finding{path: path, reason: "exported restore coordinator function"})
+				}
+			}
+			return true
+		})
+	}
+	return findings
+
+}
+
+type slice62cKnownDefectBody struct {
+	path      string
+	signature string
+	validTest bool
+	hash      string
+}
+
+func canonicalSlice62cNodeHash(fset *token.FileSet, node ast.Node) string {
+	var rendered bytes.Buffer
+	if err := format.Node(&rendered, fset, node); err != nil {
+		return "format-error:" + err.Error()
+	}
+	sum := sha256.Sum256(rendered.Bytes())
+	return fmt.Sprintf("%x", sum)
+}
+
+func slice62cValidKnownDefectTest(function *ast.FuncDecl) bool {
+	if function == nil || function.Recv != nil || function.Body == nil {
+		return false
+	}
+	if function.Type.TypeParams != nil && len(function.Type.TypeParams.List) != 0 {
+		return false
+	}
+	params := function.Type.Params
+	if params == nil || len(params.List) != 1 {
+		return false
+	}
+	parameter := params.List[0]
+	parameterCount := len(parameter.Names)
+	if parameterCount == 0 {
+		parameterCount = 1
+	}
+	if parameterCount != 1 {
+		return false
+	}
+	pointer, ok := parameter.Type.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := pointer.X.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "T" {
+		return false
+	}
+	qualifier, ok := selector.X.(*ast.Ident)
+	if !ok || qualifier.Name != "testing" {
+		return false
+	}
+	return function.Type.Results == nil || len(function.Type.Results.List) == 0
+}
+
+func slice62cKnownDefectBodiesFromSource(path, source string, wantExpiry map[string]string) (map[string]slice62cKnownDefectBody, []finding) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, source, parser.ParseComments)
+	if err != nil {
+		return nil, []finding{{path: path, reason: err.Error()}}
+	}
+	bodies := make(map[string]slice62cKnownDefectBody)
+	var findings []finding
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || (!strings.HasPrefix(function.Name.Name, "TestKnownDefect_L3_02_Restore") && !strings.HasPrefix(function.Name.Name, "TestKnownDefect_L3_07_FreshSession")) {
+			continue
+		}
+		expiry, exact := wantExpiry[function.Name.Name]
+		comment := ""
+		if function.Doc != nil {
+			comment = function.Doc.Text()
+		}
+		if !exact || !strings.Contains(comment, expiry) {
+			findings = append(findings, finding{path: path, reason: function.Name.Name + " must be one of the exact two restore known-defect tests with exact expiry"})
+		}
+		validTest := slice62cValidKnownDefectTest(function)
+		if !validTest {
+			findings = append(findings, finding{path: path, reason: function.Name.Name + " must be a top-level func with exactly one *testing.T parameter and no results"})
+		}
+		bodies[function.Name.Name] = slice62cKnownDefectBody{
+			path: path, signature: renderSlice62aNode(fset, function.Type), validTest: validTest, hash: canonicalSlice62cNodeHash(fset, function.Body),
+		}
+	}
+	if len(bodies) != 0 {
+		for _, group := range file.Comments {
+			for _, comment := range group.List {
+				text := strings.TrimSpace(comment.Text)
+				if strings.HasPrefix(text, "//go:build") || strings.HasPrefix(text, "// +build") {
+					findings = append(findings, finding{path: path, reason: "restore known-defect characterization file must remain buildable without exclusion tags"})
+				}
+			}
+		}
+	}
+	return bodies, findings
+}
+
+func slice62cReadKnownDefectBodies(root string, wantExpiry map[string]string) (map[string]slice62cKnownDefectBody, map[string]int, []finding) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, nil, []finding{{path: root, reason: err.Error()}}
+	}
+	bodies := make(map[string]slice62cKnownDefectBody)
+	inventory := make(map[string]int)
+	var findings []finding
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		path := filepath.ToSlash(filepath.Join(root, entry.Name()))
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			findings = append(findings, finding{path: path, reason: readErr.Error()})
+			continue
+		}
+		parsed, parseFindings := slice62cKnownDefectBodiesFromSource(path, string(data), wantExpiry)
+		findings = append(findings, parseFindings...)
+		for name, body := range parsed {
+			inventory[name]++
+			bodies[name] = body
+		}
+	}
+	return bodies, inventory, findings
+}
+
+func checkSlice62cKnownDefectBodySelfTest() []finding {
+	const baseline = `package mux
+		// TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread expires Slice 3.1.
+		func TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread(t *testing.T) { t.Fatal("characterization") }
+		// TestKnownDefect_L3_07_FreshSessionUsesObservedTerminalCWD expires Slice 4.3.
+		func TestKnownDefect_L3_07_FreshSessionUsesObservedTerminalCWD(t *testing.T) { if got := "observed"; got != "observed" { t.Fatal(got) } }`
+	wantExpiry := map[string]string{
+		"TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread":  "expires Slice 3.1",
+		"TestKnownDefect_L3_07_FreshSessionUsesObservedTerminalCWD": "expires Slice 4.3",
+	}
+	want, findings := slice62cKnownDefectBodiesFromSource("baseline.go", baseline, wantExpiry)
+	if len(findings) != 0 || len(want) != 2 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "known-defect body self-test could not establish baseline"}}
+	}
+	fixtures := []struct{ name, source string }{
+		{name: "t.Skip", source: strings.Replace(baseline, `t.Fatal("characterization")`, `t.Skip("disabled")`, 1)},
+		{name: "no-op", source: strings.Replace(baseline, `{ t.Fatal("characterization") }`, `{}`, 1)},
+		{name: "behavior mutation", source: strings.Replace(baseline, `got != "observed"`, `got == "observed"`, 1)},
+	}
+	disabled := "//go:build never\n\n" + baseline
+	if _, disabledFindings := slice62cKnownDefectBodiesFromSource("disabled.go", disabled, wantExpiry); len(disabledFindings) == 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "known-defect body self-test did not reject build-tag exclusion"}}
+	}
+	methodSource := strings.Replace(baseline, "package mux", "package mux\n\t\ttype knownDefectMethodFixture struct{}", 1)
+	methodSource = strings.Replace(methodSource,
+		"func TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread",
+		"func (knownDefectMethodFixture) TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread", 1)
+	methodBodies, methodFindings := slice62cKnownDefectBodiesFromSource("method.go", methodSource, wantExpiry)
+	methodBody, methodFound := methodBodies["TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread"]
+	if !methodFound || methodBody.hash != want["TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread"].hash {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "known-defect method self-test did not preserve the canonical behavior hash"}}
+	}
+	if len(methodFindings) == 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "known-defect body self-test did not reject a method with the preserved behavior hash"}}
+	}
+	signatureFixtures := []struct {
+		name   string
+		source string
+	}{
+		{name: "wrong parameter type", source: strings.Replace(baseline, "(t *testing.T)", "(t *testing.B)", 1)},
+		{name: "multiple parameters", source: strings.Replace(baseline, "(t *testing.T)", "(t *testing.T, extra int)", 1)},
+		{name: "function result", source: strings.Replace(baseline, "(t *testing.T)", "(t *testing.T) error", 1)},
+	}
+	for _, fixture := range signatureFixtures {
+		got, signatureFindings := slice62cKnownDefectBodiesFromSource("signature.go", fixture.source, wantExpiry)
+		body, ok := got["TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread"]
+		if !ok || body.hash != want["TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread"].hash {
+			return []finding{{path: "scripts/check-maturity-gates.go", reason: "known-defect signature self-test changed behavior hash: " + fixture.name}}
+		}
+		if len(signatureFindings) == 0 {
+			return []finding{{path: "scripts/check-maturity-gates.go", reason: "known-defect signature self-test did not reject " + fixture.name}}
+		}
+	}
+	for _, fixture := range fixtures {
+		got, parseFindings := slice62cKnownDefectBodiesFromSource("fixture.go", fixture.source, wantExpiry)
+		if len(parseFindings) != 0 {
+			return []finding{{path: "scripts/check-maturity-gates.go", reason: "known-defect mutation fixture did not parse: " + fixture.name}}
+		}
+		rejected := false
+		for name, wantBody := range want {
+			if gotBody, ok := got[name]; !ok || gotBody.hash != wantBody.hash {
+				rejected = true
+				break
+			}
+		}
+		if !rejected {
+			return []finding{{path: "scripts/check-maturity-gates.go", reason: "known-defect body self-test did not reject " + fixture.name}}
+		}
+	}
+	return nil
+}
+
+func slice62cRestoreCommitHashFromSource(path, source string) (string, error) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, source, 0)
+	if err != nil {
+		return "", err
+	}
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if ok && function.Name.Name == "commitRestore" && strings.Join(renderedUnnamedFields(fset, function.Recv), "|") == "muxRestorePublicationOperationAdapter" {
+			return canonicalSlice62cNodeHash(fset, function.Body), nil
+		}
+	}
+	return "", fmt.Errorf("missing muxRestorePublicationOperationAdapter.commitRestore")
+}
+
+func slice62cRestoreCommitOrderFindings(fset *token.FileSet, path string, body *ast.BlockStmt) []finding {
+	if body == nil {
+		return []finding{{path: path, reason: "restore publication operation has no live body"}}
+	}
+	eventLoop := `for _, p := range candidate.panes {
+	address := Event{Window: candidate.paneWindows[p.id], Tab: candidate.paneTabs[p.id], Pane: p.id}
+	address.Workspace, _ = m.WorkspaceForWindow(address.Window)
+	started, geometry := address, address
+	started.Kind = PaneStarted
+	geometry.Kind, geometry.Geometry = PaneGeometryChanged, p.geometry
+	events = append(events, started, geometry)
+}`
+	activationAppend := `events = append(events,
+	Event{Kind: WorkspaceActivated, Workspace: workspace.ID},
+	Event{Kind: WindowActivated, Workspace: workspace.ID, Window: window},
+	Event{Kind: TabActivated, Workspace: workspace.ID, Window: window, Tab: tab},
+	Event{Kind: PaneFocused, Workspace: workspace.ID, Window: window, Tab: tab, Pane: pane},
+)`
+	readerFailure := `if err != nil {
+	cleanupErr := m.abortRestore(candidate)
+	return nil, errors.Join(fmt.Errorf("prepare restore readers: %w", err), cleanupErr)
+}`
+	paletteLoop := `for _, p := range candidate.panes {
+	p.terminal.SetPaletteBase(m.paletteBase)
+}`
+	want := []string{
+		"launchReaders, err := m.sessions.prepareStarts(ids)",
+		readerFailure,
+		paletteLoop,
+		"m.model = candidate.model",
+		"m.paneMetrics = candidate.paneMetrics",
+		"m.bounds = candidate.bounds",
+		"m.bootstrapped = true",
+		"m.pending = nil",
+		"candidate.committed = true",
+		"events := make([]Event, 0, len(candidate.panes)*2+4)",
+		eventLoop,
+		"workspace := m.model.ActiveWorkspace()",
+		"window := m.model.activeWindow",
+		"tab := m.model.TabID()",
+		"pane := m.model.FocusedPane()",
+		activationAppend,
+		"launchReaders()",
+		"return events, nil",
+	}
+	actual := make([]string, 0, len(body.List))
+	for _, statement := range body.List {
+		actual = append(actual, renderSlice62aNode(fset, statement))
+	}
+	last := -1
+	var findings []finding
+	for _, required := range want {
+		index := -1
+		count := 0
+		for candidateIndex, statement := range actual {
+			if statement == required {
+				index = candidateIndex
+				count++
+			}
+		}
+		if count != 1 {
+			findings = append(findings, finding{path: path, reason: fmt.Sprintf("restore publication exact live top-level statement %q count=%d want=1", required, count)})
+			continue
+		}
+		if index <= last {
+			findings = append(findings, finding{path: path, reason: fmt.Sprintf("restore publication top-level statement %q is out of order", required)})
+		}
+		last = index
+	}
+	return findings
+}
+
+func checkSlice62cRestoreOrderSelfTest() []finding {
+	const path = "internal/mux/mux_restore.go"
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	var bodyText string
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if ok && function.Name.Name == "commitRestore" && strings.Join(renderedUnnamedFields(fset, function.Recv), "|") == "muxRestorePublicationOperationAdapter" {
+			bodyText = renderSlice62aNode(fset, function.Body)
+			break
+		}
+	}
+	if bodyText == "" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "restore-order self-test could not read live adapter body"}}
+	}
+	mutations := []struct{ name, old, replacement string }{
+		{name: "reader launch before activation", old: "events = append(events,\n\t\tEvent{Kind: WorkspaceActivated", replacement: "launchReaders()\n\tevents = append(events,\n\t\tEvent{Kind: WorkspaceActivated"},
+		{name: "dead-code reader launch", old: "launchReaders()\n\treturn events, nil", replacement: "if false {\n\t\tlaunchReaders()\n\t}\n\treturn events, nil"},
+		{name: "event helper substitution", old: "events = append(events, started, geometry)", replacement: "events = append(events, buildRestoreEvents(started, geometry)... )"},
+		{name: "geometry mutation", old: "PaneGeometryChanged, p.geometry", replacement: "PaneStarted, p.geometry"},
+	}
+	for _, mutation := range mutations {
+		mutated := strings.Replace(bodyText, mutation.old, mutation.replacement, 1)
+		if mutated == bodyText {
+			return []finding{{path: "scripts/check-maturity-gates.go", reason: "restore-order mutation fixture did not apply: " + mutation.name}}
+		}
+		fixtureSet := token.NewFileSet()
+		fixture, parseErr := parser.ParseFile(fixtureSet, "fixture.go", "package mux\nfunc fixture() "+mutated, 0)
+		if parseErr != nil {
+			return []finding{{path: "scripts/check-maturity-gates.go", reason: "restore-order mutation fixture did not parse: " + mutation.name + ": " + parseErr.Error()}}
+		}
+		function := fixture.Decls[0].(*ast.FuncDecl)
+		if got := slice62cRestoreCommitOrderFindings(fixtureSet, "fixture.go", function.Body); len(got) == 0 {
+			return []finding{{path: "scripts/check-maturity-gates.go", reason: "restore-order self-test did not reject " + mutation.name}}
+		}
+	}
+	return nil
+}
+
+func checkSlice62cPreGWorktree(worktree string) []finding {
+	actual, parseFindings := slice62cPorcelainPaths(worktree)
+	expected := make(map[string]bool, len(slice62cGStagePaths))
+	findings := append([]finding(nil), parseFindings...)
+	for _, path := range slice62cGStagePaths {
+		expected[path] = true
+		if !actual[path] {
+			findings = append(findings, finding{path: path, reason: "missing required dirty G-stage path in active pre-G worktree"})
+		}
+	}
+	for path := range actual {
+		if !expected[path] {
+			findings = append(findings, finding{path: path, reason: "active pre-G worktree path is outside exact G-stage allowlist"})
+		}
+	}
+	return findings
+}
+
+func slice62cPorcelainPaths(worktree string) (map[string]bool, []finding) {
+	paths := make(map[string]bool)
+	var findings []finding
+	for _, raw := range strings.Split(strings.ReplaceAll(worktree, "\r\n", "\n"), "\n") {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		if len(raw) < 4 || raw[2] != ' ' {
+			findings = append(findings, finding{path: "git:worktree", reason: "malformed porcelain v1 entry " + strconv.Quote(raw)})
+			continue
+		}
+		path := strings.TrimSpace(raw[3:])
+		if strings.Contains(path, " -> ") {
+			findings = append(findings, finding{path: path, reason: "renamed/copied paths are forbidden in exact pre-G G-stage worktree"})
+			continue
+		}
+		if strings.HasPrefix(path, `"`) {
+			unquoted, err := strconv.Unquote(path)
+			if err != nil {
+				findings = append(findings, finding{path: "git:worktree", reason: "malformed quoted porcelain path " + path})
+				continue
+			}
+			path = unquoted
+		}
+		path = filepath.ToSlash(path)
+		paths[path] = true
+	}
+	return paths, findings
+}
+
+func slice62cSyntheticPorcelain(paths []string) string {
+	lines := make([]string, 0, len(paths))
+	for index, path := range paths {
+		status := " M "
+		if index >= 2 {
+			status = "?? "
+		}
+		lines = append(lines, status+path)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func slice62cFunctionRetentionFindings(path string, file *ast.File, retainedTypeNames map[string]bool) []finding {
+	var findings []finding
+	for _, declaration := range file.Decls {
+		switch declaration := declaration.(type) {
+		case *ast.FuncDecl:
+			if declaration.Body == nil {
+				continue
+			}
+			seed := make(map[string]bool)
+			for _, fields := range []*ast.FieldList{declaration.Recv, declaration.Type.Params, declaration.Type.Results} {
+				slice62cSeedRetainedNames(fields, retainedTypeNames, seed)
+			}
+			findings = append(findings, slice62cInferRetainedLocals(path, declaration.Body, retainedTypeNames, seed)...)
+		case *ast.GenDecl:
+			for _, item := range declaration.Specs {
+				value, ok := item.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, expression := range value.Values {
+					if slice62cValueExpressionRetains(expression, retainedTypeNames, nil) {
+						findings = append(findings, finding{path: path, reason: "package-scope value recursively retains/captures restore controller or adapter"})
+					}
+				}
+			}
+		}
+	}
+	return findings
+}
+
+func slice62cSeedRetainedNames(fields *ast.FieldList, retainedTypeNames, values map[string]bool) {
+	if fields == nil {
+		return
+	}
+	for _, field := range fields.List {
+		if !slice62bTypeExpressionRetains(field.Type, retainedTypeNames) {
+			continue
+		}
+		for _, name := range field.Names {
+			values[name.Name] = true
+		}
+	}
+}
+
+func slice62cInferRetainedLocals(path string, body *ast.BlockStmt, retainedTypeNames, seed map[string]bool) []finding {
+	values := make(map[string]bool, len(seed))
+	for name := range seed {
+		values[name] = true
+	}
+	reported := make(map[string]bool)
+	var findings []finding
+	for changed := true; changed; {
+		changed = false
+		ast.Inspect(body, func(node ast.Node) bool {
+			switch node := node.(type) {
+			case *ast.AssignStmt:
+				for index, left := range node.Lhs {
+					identifier, ok := left.(*ast.Ident)
+					if !ok || identifier.Name == "_" || values[identifier.Name] || len(node.Rhs) == 0 {
+						continue
+					}
+					right := node.Rhs[0]
+					if len(node.Rhs) == len(node.Lhs) {
+						right = node.Rhs[index]
+					}
+					if slice62cValueExpressionRetains(right, retainedTypeNames, values) {
+						values[identifier.Name] = true
+						changed = true
+						key := fmt.Sprintf("assign:%d:%s", node.Pos(), identifier.Name)
+						if !reported[key] {
+							reported[key] = true
+							findings = append(findings, finding{path: path, reason: "local inferred restore controller/adapter retention in " + identifier.Name})
+						}
+					}
+				}
+			case *ast.DeclStmt:
+				generic, ok := node.Decl.(*ast.GenDecl)
+				if !ok {
+					break
+				}
+				for _, item := range generic.Specs {
+					value, ok := item.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					for index, name := range value.Names {
+						if values[name.Name] {
+							continue
+						}
+						retains := value.Type != nil && slice62bTypeExpressionRetains(value.Type, retainedTypeNames)
+						if !retains && len(value.Values) != 0 {
+							expression := value.Values[0]
+							if len(value.Values) == len(value.Names) {
+								expression = value.Values[index]
+							}
+							retains = slice62cValueExpressionRetains(expression, retainedTypeNames, values)
+						}
+						if retains {
+							values[name.Name] = true
+							changed = true
+							key := fmt.Sprintf("decl:%d:%s", node.Pos(), name.Name)
+							if !reported[key] {
+								reported[key] = true
+								findings = append(findings, finding{path: path, reason: "local restore controller/adapter container retention in " + name.Name})
+							}
+						}
+					}
+				}
+			}
+			return true
+		})
+	}
+	ast.Inspect(body, func(node ast.Node) bool {
+		literal, ok := node.(*ast.FuncLit)
+		if !ok {
+			return true
+		}
+		if slice62cFuncLitRetains(literal, retainedTypeNames, values) {
+			key := fmt.Sprintf("funclit:%d", literal.Pos())
+			if !reported[key] {
+				reported[key] = true
+				findings = append(findings, finding{path: path, reason: "function literal parameter/result/body retains or captures restore controller/adapter"})
+			}
+		}
+		return true
+	})
+	return findings
+}
+
+func slice62cFuncLitRetains(literal *ast.FuncLit, retainedTypeNames, outerValues map[string]bool) bool {
+	values := make(map[string]bool)
+	for name := range outerValues {
+		values[name] = true
+	}
+	slice62cSeedRetainedNames(literal.Type.Params, retainedTypeNames, values)
+	slice62cSeedRetainedNames(literal.Type.Results, retainedTypeNames, values)
+	if slice62bTypeExpressionRetains(literal.Type, retainedTypeNames) {
+		return true
+	}
+	found := false
+	ast.Inspect(literal.Body, func(node ast.Node) bool {
+		if found {
+			return false
+		}
+		switch node := node.(type) {
+		case *ast.Ident:
+			found = values[node.Name]
+		case *ast.CompositeLit:
+			found = slice62bTypeExpressionRetains(node.Type, retainedTypeNames)
+		case *ast.FuncType:
+			found = slice62bTypeExpressionRetains(node, retainedTypeNames)
+		case *ast.SelectorExpr:
+			found = node.Sel.Name == "restoreCoordinator"
+		}
+		return !found
+	})
+	return found
+}
+
+func slice62cValueExpressionRetains(expression ast.Expr, retainedTypeNames, values map[string]bool) bool {
+	if expression == nil {
+		return false
+	}
+	switch expression := expression.(type) {
+	case *ast.Ident:
+		return values[expression.Name]
+	case *ast.CompositeLit:
+		if slice62bTypeExpressionRetains(expression.Type, retainedTypeNames) {
+			return true
+		}
+		for _, element := range expression.Elts {
+			if slice62cValueExpressionRetains(element, retainedTypeNames, values) {
+				return true
+			}
+		}
+	case *ast.FuncLit:
+		return slice62cFuncLitRetains(expression, retainedTypeNames, values)
+	case *ast.KeyValueExpr:
+		return slice62cValueExpressionRetains(expression.Key, retainedTypeNames, values) || slice62cValueExpressionRetains(expression.Value, retainedTypeNames, values)
+	case *ast.ParenExpr:
+		return slice62cValueExpressionRetains(expression.X, retainedTypeNames, values)
+	case *ast.UnaryExpr:
+		return slice62cValueExpressionRetains(expression.X, retainedTypeNames, values)
+	case *ast.BinaryExpr:
+		return slice62cValueExpressionRetains(expression.X, retainedTypeNames, values) || slice62cValueExpressionRetains(expression.Y, retainedTypeNames, values)
+	case *ast.IndexExpr:
+		return slice62cValueExpressionRetains(expression.X, retainedTypeNames, values) || slice62cValueExpressionRetains(expression.Index, retainedTypeNames, values)
+	case *ast.IndexListExpr:
+		if slice62cValueExpressionRetains(expression.X, retainedTypeNames, values) {
+			return true
+		}
+		for _, index := range expression.Indices {
+			if slice62cValueExpressionRetains(index, retainedTypeNames, values) {
+				return true
+			}
+		}
+	case *ast.SliceExpr:
+		return slice62cValueExpressionRetains(expression.X, retainedTypeNames, values)
+	case *ast.TypeAssertExpr:
+		return slice62cValueExpressionRetains(expression.X, retainedTypeNames, values) || slice62bTypeExpressionRetains(expression.Type, retainedTypeNames)
+	case *ast.CallExpr:
+		for _, argument := range expression.Args {
+			if slice62cValueExpressionRetains(argument, retainedTypeNames, values) {
+				return true
+			}
+		}
+	case *ast.SelectorExpr:
+		return expression.Sel.Name == "restoreCoordinator"
+	}
+	return false
+}
+
+func gitRawText(args ...string) (string, error) {
+	command := exec.Command("git", args...)
+	output, err := command.Output()
+	if err != nil {
+		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+	}
+	return string(output), nil
 }
 
 func gitText(args ...string) (string, error) {

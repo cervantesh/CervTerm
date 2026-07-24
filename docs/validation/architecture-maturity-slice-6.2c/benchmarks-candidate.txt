@@ -1,0 +1,94 @@
+Slice 6.2c canonical same-host performance capture — candidate and retained attribution
+Date: 2026-07-24
+Canonical identity: immutable W 294b2f20ab3afd8c3fdbfd4d876e02a9fd86a7f1, with exact W production and test source and no overlay
+Attribution identity: exact W production source plus the uncommitted G test-only extension in internal/mux/mux_restore_wiring_test.go
+Host: windows/amd64; Windows 10.0.26200.8894; go1.25.8; AMD Ryzen 9 7940HX with Radeon Graphics
+Canonical configuration: exactly ten samples; -benchtime=2s -count=1 -cpu=1 -benchmem
+Canonical interleave: rounds 01..10, exact-W candidate immediately after base d073df1 for each binary/package group.
+Canonical warm-up: one unrecorded 1-second run per binary/identity before capture. The attribution rerun below is separately round-interleaved and is not represented as the canonical W binary.
+
+Commands:
+go test -c -o mux-candidate.test.exe ./internal/mux
+go test -c -o workscheduler-candidate.test.exe ./internal/workscheduler
+mux-candidate.test.exe -test.run='^$' -test.bench='^(BenchmarkMuxRestorePrepareAbort|BenchmarkMuxRestoreWindowIDs|BenchmarkMuxFreshSessionSnapshot|BenchmarkMuxRestoreFastPaths|BenchmarkPhase15ManyTabsWindowsSnapshot|BenchmarkMuxAllDisabledImageIdle|BenchmarkMuxSessionIngressASCII|BenchmarkMuxProtocolDispatchIdle|BenchmarkMuxProtocolCompletionDiscard|BenchmarkMuxProtocolDrainIdle)$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+workscheduler-candidate.test.exe -test.run='^$' -test.bench='^BenchmarkSchedulerSubmitComplete$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+
+Raw ns/op samples, rounds 01..10:
+BenchmarkMuxRestorePrepareAbort: 144189 150293 165833 148126 148829 162191 155678 146715 154448 155862
+BenchmarkMuxRestoreWindowIDs: 27.62 26.89 26.39 27.62 26.52 25.38 25.72 27.51 27.85 27.05
+BenchmarkMuxFreshSessionSnapshot: 2596 2616 2416 2502 2491 2532 2515 2609 2436 2602
+BenchmarkMuxRestoreFastPaths/invalid: 2.854 2.886 2.852 2.778 2.776 2.843 2.842 2.874 2.894 2.830
+BenchmarkMuxRestoreFastPaths/pending: 5.955 6.037 5.977 5.942 6.056 5.938 5.964 5.968 6.089 6.082
+BenchmarkPhase15ManyTabsWindowsSnapshot: 5341 5266 5101 5085 5239 5426 5378 5444 5164 5665
+BenchmarkMuxAllDisabledImageIdle: 30.99 30.62 30.91 31.07 31.00 30.75 30.92 31.06 31.45 30.63
+BenchmarkMuxSessionIngressASCII: 11314 11348 11195 11299 11174 10975 10906 11302 11606 11677
+BenchmarkMuxProtocolDispatchIdle: 12.01 11.89 11.31 11.92 11.52 11.58 11.72 11.82 11.68 11.84
+BenchmarkMuxProtocolCompletionDiscard: 21.92 20.40 20.13 19.61 20.83 20.80 20.68 20.34 20.49 20.31
+BenchmarkMuxProtocolDrainIdle: 123.0 121.0 118.9 122.5 120.6 119.2 121.1 119.5 127.5 119.0
+BenchmarkSchedulerSubmitComplete: 296.2 320.7 288.7 287.7 285.1 293.4 291.5 295.6 286.5 290.9
+
+Canonical medians and base deltas:
+BenchmarkMuxRestorePrepareAbort: 152370.5 ns/op; -4597.0 ns, -2.93%; 640560 B/op and 193 allocs/op unchanged
+BenchmarkMuxRestoreWindowIDs: 26.970 ns/op; +0.520 ns, +1.97%; 16 B/op and 1 alloc/op unchanged
+BenchmarkMuxFreshSessionSnapshot: 2523.5 ns/op; -52.0 ns, -2.02%; 2064 B/op and 36 allocs/op unchanged
+BenchmarkMuxRestoreFastPaths/invalid: 2.8475 ns/op; +2.1582 ns, +313.07%; 0 B/op and 0 allocs/op both
+BenchmarkMuxRestoreFastPaths/pending: 5.9725 ns/op; +3.7265 ns, +165.92%; 0 B/op and 0 allocs/op both
+BenchmarkPhase15ManyTabsWindowsSnapshot: 5303.5 ns/op; -148.5 ns, -2.72%; 7714 median/7715 maximum B/op and 152 allocs/op unchanged
+BenchmarkMuxAllDisabledImageIdle: 30.955 ns/op; +0.270 ns, +0.88%; 0 B/op and 0 allocs/op both
+BenchmarkMuxSessionIngressASCII: 11300.5 ns/op; -82.5 ns, -0.72%; 1016 median B/op versus 1015.5 base, lower 1017 versus 1020 maximum, and 3 allocs/op unchanged
+BenchmarkMuxProtocolDispatchIdle: 11.770 ns/op; -0.915 ns, -7.21%; 0 B/op and 0 allocs/op both
+BenchmarkMuxProtocolCompletionDiscard: 20.445 ns/op; +0.170 ns, +0.84%; 0 B/op and 0 allocs/op both
+BenchmarkMuxProtocolDrainIdle: 120.800 ns/op; -4.300 ns, -3.44%; 0 B/op and 0 allocs/op both
+BenchmarkSchedulerSubmitComplete: 291.200 ns/op; +1.350 ns, +0.47%; 0 B/op and 0 allocs/op both
+
+Allocation disposition: blocking gate passes. Allocation counts are unchanged for every path. Exact restore B/op is unchanged. The inherited ingress path has a non-material +0.5 median B/op sampling difference while its maximum falls by 3 B/op and its exact 3 allocs/op count is unchanged; this is reported rather than rounded away.
+
+RETAINED-SOURCE DIRECT-ADAPTER VS COORDINATOR ATTRIBUTION — TEN RAW INTERLEAVED ROUNDS
+
+Production/source identity checks and outputs:
+git diff --quiet 294b2f20ab3afd8c3fdbfd4d876e02a9fd86a7f1 -- 'internal/mux/*.go' ':(exclude)internal/mux/*_test.go'
+  exit 0: every internal/mux production .go file is byte-equivalent to immutable W.
+git diff --name-only 294b2f20ab3afd8c3fdbfd4d876e02a9fd86a7f1 -- internal/mux
+  internal/mux/mux_restore_wiring_test.go
+sha256sum internal/mux/mux_restore_wiring_test.go
+  d30753dea4d421472404dfb24d55e10a3ea860e0e26e157c7981ca48aac0fb58
+go test -c -o .tmp/mux-attribution-W294b2f2-G.test.exe ./internal/mux
+sha256sum .tmp/mux-attribution-W294b2f2-G.test.exe
+  3b415cc74058d6fa25f847072bdc54d2b5805cc3e1db76ba6feac179a1ffdd3f
+
+Exact capture command:
+for round in 01 02 03 04 05 06 07 08 09 10; do
+  printf 'ROUND %s\n' "$round"
+  ./.tmp/mux-attribution-W294b2f2-G.test.exe -test.run='^$' -test.bench='^BenchmarkMuxRestoreCoordinatorAttribution$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+done
+Method: each round executes the twelve retained subbenchmarks in declared pair order (direct adapter, then coordinator) before the next round. This is W production with a G test-only benchmark extension, not a benchmark-only production branch, duplicated production body, or the earlier canonical exact-W binary.
+Median rule: for each ten-value raw array, sort ascending and average values 5 and 6. Every median below is recomputable by that rule.
+
+Raw ns/op samples, rounds 01..10; B/op and allocs/op were identical in all ten samples for each named series:
+fresh-invalid/direct-adapter: 778.5 785.4 769.8 790.4 804.1 764.7 798.0 726.0 671.6 752.0; 440 B/op, 10 allocs/op
+fresh-invalid/coordinator: 939.0 882.6 888.5 917.0 985.1 922.8 941.9 947.6 901.1 901.9; 440 B/op, 10 allocs/op
+invalid-window-ids/direct-adapter: 1.740 1.676 1.678 1.705 1.763 1.692 1.706 1.653 1.739 1.718; 0 B/op, 0 allocs/op
+invalid-window-ids/coordinator: 3.865 3.734 3.819 4.004 3.772 3.934 3.895 3.762 3.868 3.824; 0 B/op, 0 allocs/op
+pending-prepare/direct-adapter: 5.583 5.501 5.659 5.567 5.653 5.671 5.633 5.607 5.634 5.571; 0 B/op, 0 allocs/op
+pending-prepare/coordinator: 6.487 6.532 6.455 6.648 6.687 6.653 6.579 6.759 6.520 6.616; 0 B/op, 0 allocs/op
+window-ids/direct-adapter: 27.09 25.24 25.25 28.20 25.86 26.32 27.26 26.14 26.46 27.37; 16 B/op, 1 alloc/op
+window-ids/coordinator: 28.37 25.49 27.11 28.51 27.19 28.21 26.03 26.83 27.17 27.87; 16 B/op, 1 alloc/op
+commit-invalid/direct-adapter: 2.596 2.653 2.752 2.600 2.658 2.703 2.559 2.695 2.728 2.653; 0 B/op, 0 allocs/op
+commit-invalid/coordinator: 3.614 3.643 3.551 3.692 3.731 3.617 3.604 3.708 3.566 3.667; 0 B/op, 0 allocs/op
+abort-invalid/direct-adapter: 2.526 2.478 2.525 2.622 2.573 2.536 2.609 2.457 2.525 2.599; 0 B/op, 0 allocs/op
+abort-invalid/coordinator: 2.663 2.687 2.800 2.705 2.637 2.677 2.547 2.631 2.664 2.603; 0 B/op, 0 allocs/op
+
+Recomputed medians (direct adapter -> coordinator; absolute delta):
+fresh-invalid: 774.150 -> 919.900 ns/op; +145.750 ns; 440 B/op and 10 allocs/op both
+invalid-window-ids: 1.7055 -> 3.8445 ns/op; +2.1390 ns; 0 B/op and 0 allocs/op both
+pending-prepare: 5.6200 -> 6.5975 ns/op; +0.9775 ns; 0 B/op and 0 allocs/op both
+window-ids: 26.390 -> 27.180 ns/op; +0.790 ns; 16 B/op and 1 alloc/op both
+commit-invalid: 2.6555 -> 3.6300 ns/op; +0.9745 ns; 0 B/op and 0 allocs/op both
+abort-invalid: 2.5310 -> 2.6635 ns/op; +0.1325 ns; 0 B/op and 0 allocs/op both
+
+Attribution mapping:
+- Canonical invalid-window-IDs rises +2.1582 ns overall. The retained direct-to-coordinator pair measures +2.1390 ns, within 0.0192 ns of the independently interleaved overall delta.
+- Canonical pending prepare rises +3.7265 ns overall. Base direct facade 2.2460 -> retained candidate direct adapter 5.6200 contributes +3.3740 ns; candidate direct adapter -> coordinator contributes +0.9775 ns. The staged +4.3515 ns is 0.6250 ns above the independently interleaved overall delta and is reported as measurement/composition noise, not hidden.
+- Canonical window IDs rises only +0.520 ns overall. Candidate direct adapter -> coordinator is +0.790 ns; the mismatch is retained as sub-nanosecond noise rather than used to replace the full-path result.
+- Fresh-invalid is allocation-heavy and noisier in this round-interleaved rerun; its +145.750 ns direct/coordinator delta is retained without using it to explain a canonical threshold. Commit-invalid and abort-invalid provide two additional zero-allocation pairs.
+- No unrelated regressing canonical median exceeds 3%; prepare-abort/fresh/Phase-15/protocol drain improve, and inherited all-disabled/completion/ingress/scheduler regressions remain below 1%.

@@ -34,8 +34,25 @@ type restoreBuild struct {
 	specs     []SpawnSpec
 }
 
+type muxRestorePreparationOperationAdapter struct {
+	mux        *Mux
+	blueprint  layoutrestore.Blueprint
+	geometries []RestoreWindowGeometry
+}
+
+type muxRestorePublicationOperationAdapter struct {
+	mux *Mux
+}
+
 // PrepareRestore validates and provisions a detached startup restore transaction.
 func (m *Mux) PrepareRestore(blueprint layoutrestore.Blueprint, geometries []RestoreWindowGeometry) (*RestoreCandidate, error) {
+	return m.restoreCoordinator.prepareRestore(muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries})
+}
+
+func (a muxRestorePreparationOperationAdapter) prepareRestore() (*RestoreCandidate, error) {
+	m := a.mux
+	blueprint := a.blueprint
+	geometries := a.geometries
 	if m.pending != nil {
 		return nil, ErrRestorePending
 	}
@@ -59,6 +76,11 @@ func (m *Mux) PrepareRestore(blueprint layoutrestore.Blueprint, geometries []Res
 
 // CommitRestore atomically publishes the exact pending restore transaction.
 func (m *Mux) CommitRestore(candidate *RestoreCandidate) ([]Event, error) {
+	return m.restoreCoordinator.commitRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})
+}
+
+func (a muxRestorePublicationOperationAdapter) commitRestore(candidate *RestoreCandidate) ([]Event, error) {
+	m := a.mux
 	if candidate == nil || candidate.owner != m || m.pending != candidate || candidate.aborted || candidate.committed {
 		return nil, ErrInvalidRestore
 	}
@@ -116,6 +138,11 @@ func (m *Mux) CommitRestore(candidate *RestoreCandidate) ([]Event, error) {
 
 // RestoreWindowIDs returns the candidate's ordered workspace/window traversal mapping.
 func (m *Mux) RestoreWindowIDs(candidate *RestoreCandidate) ([]WindowID, error) {
+	return m.restoreCoordinator.restoreWindowIDs(candidate, muxRestorePublicationOperationAdapter{mux: m})
+}
+
+func (a muxRestorePublicationOperationAdapter) restoreWindowIDs(candidate *RestoreCandidate) ([]WindowID, error) {
+	m := a.mux
 	if candidate == nil || candidate.owner != m || m.pending != candidate || candidate.aborted || candidate.committed {
 		return nil, ErrInvalidRestore
 	}
@@ -124,6 +151,11 @@ func (m *Mux) RestoreWindowIDs(candidate *RestoreCandidate) ([]WindowID, error) 
 
 // AbortRestore idempotently tears down an unpublished restore transaction.
 func (m *Mux) AbortRestore(candidate *RestoreCandidate) error {
+	return m.restoreCoordinator.abortRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})
+}
+
+func (a muxRestorePublicationOperationAdapter) abortRestore(candidate *RestoreCandidate) error {
+	m := a.mux
 	if candidate == nil || candidate.owner != m {
 		return ErrInvalidRestore
 	}

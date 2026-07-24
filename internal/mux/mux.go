@@ -53,6 +53,10 @@ type Mux struct {
 		muxProtocolSchedulingDispatchOperationAdapter,
 		muxProtocolSchedulingApplyOperationAdapter,
 	]
+	restoreCoordinator restoreCoordinator[
+		muxRestorePreparationOperationAdapter,
+		muxRestorePublicationOperationAdapter,
+	]
 	options        Options
 	model          *Model
 	imageBudget    *termimage.ProcessBudget
@@ -93,6 +97,10 @@ func New(factory SessionFactory, options Options) *Mux {
 		protocolScheduling: newProtocolSchedulingController[
 			muxProtocolSchedulingDispatchOperationAdapter,
 			muxProtocolSchedulingApplyOperationAdapter,
+		](),
+		restoreCoordinator: newRestoreCoordinator[
+			muxRestorePreparationOperationAdapter,
+			muxRestorePublicationOperationAdapter,
 		](),
 		options: options, model: NewModel(),
 		paneMetrics: make(map[PaneID]CellMetrics), paletteBase: core.DefaultPaletteBase(),

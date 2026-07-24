@@ -454,6 +454,8 @@ These early `App`/`Mux` slices are preparatory parity-only extractions. They do 
 
 - **Files:** mux restore/fresh-session transaction and frontend restore adapter tests.
 - **execution_predecessor:** 6.2b. Preserve restore publication semantics. **Commits:** `T → A → M → W → G`; separate branch/PR.
+- **Status:** **complete (preparatory)**. Restore/fresh-session publication behavior and `Mux` ownership remain unchanged. Evidence: `docs/validation/architecture-maturity-slice-6.2c.md`.
+- L3-01 remains **partial**; L3-02/L3-04/L3-07/L3-09/L3-10 remain open, and 6.2d is deferred.
 
 ### Slice 6.2d — L3-01 formal thin-Mux closure
 
