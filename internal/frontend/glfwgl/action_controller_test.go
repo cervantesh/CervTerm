@@ -202,6 +202,24 @@ func TestActionControllerNonPaneCommandSkipsPaneLookup(t *testing.T) {
 	}
 }
 
+func TestActionControllerNonPaneRouteDoesNotAllocate(t *testing.T) {
+	controller, _, _, _, commands := newFakeActionController()
+	commands.calls = make([]actionCommandCall, 0, 1)
+	envelope := termaction.Envelope{Action: termaction.ToggleStats{}, Target: termaction.TargetFocused}
+	context := validActionContext()
+	var routeErr error
+	allocs := testing.AllocsPerRun(1000, func() {
+		commands.calls = commands.calls[:0]
+		routeErr = controller.executeAction(envelope, context)
+	})
+	if routeErr != nil {
+		t.Fatal(routeErr)
+	}
+	if allocs != 0 {
+		t.Fatalf("allocations per non-pane action = %v, want 0", allocs)
+	}
+}
+
 func TestActionControllerMultipleRefreshesActiveProjectionPerChildAndStopsOnFirstError(t *testing.T) {
 	stop := errors.New("stop")
 	var log []string
