@@ -3,33 +3,57 @@
 package glfwgl
 
 import (
-	"errors"
-	"time"
-
 	"cervterm/internal/config"
 	termmux "cervterm/internal/mux"
-	termsel "cervterm/internal/selection"
 )
 
 // paneHost binds the existing script.Host surface to one immutable pane ID for
 // the duration of a callback. Background output can therefore never redirect
-// term:* operations to the currently focused sibling.
+// term:* operations to the currently focused sibling. The App is only the
+// compatibility adapter; the controller retains no owner or port.
 type paneHost struct {
-	app  *App
-	pane termmux.PaneID
+	app        *App
+	pane       termmux.PaneID
+	controller scriptHostController
 }
 
-func (h paneHost) RuntimeConfig() config.Config { return h.app.RuntimeConfig() }
+func newPaneHost(app *App, pane termmux.PaneID) paneHost {
+	return paneHost{
+		app:        app,
+		pane:       pane,
+		controller: newScriptHostController(pane),
+	}
+}
+
+func (h paneHost) scriptHostRoute() scriptHostController {
+	if h.controller.initialized {
+		return h.controller
+	}
+	return newScriptHostController(h.pane)
+}
+
+func (h paneHost) RuntimeConfig() config.Config {
+	return h.scriptHostRoute().runtimeConfig(h.app)
+}
 
 func (h paneHost) ApplyRuntimeConfig(next config.Config) error {
-	return h.app.ApplyRuntimeConfig(next)
+	return h.scriptHostRoute().applyRuntimeConfig(h.app, next)
 }
 
-func (h paneHost) RequestConfigReload() bool { return h.app.RequestConfigReload() }
+func (h paneHost) RequestConfigReload() bool {
+	return h.scriptHostRoute().requestConfigReload(h.app)
+}
+
+func (a *App) focusedScriptPane() termmux.PaneID {
+	if a.mux == nil {
+		return 0
+	}
+	id, _ := a.mux.FocusedPane()
+	return id
+}
 
 func (a *App) hostForFocused() paneHost {
-	id, _ := a.mux.FocusedPane()
-	return paneHost{app: a, pane: id}
+	return newPaneHost(a, a.focusedScriptPane())
 }
 
 // App remains a script.Host compatibility adapter for call sites that are
@@ -47,193 +71,97 @@ func (a *App) SetTitle(title string)            { a.hostForFocused().SetTitle(ti
 func (a *App) Line(row int) (string, bool)      { return a.hostForFocused().Line(row) }
 func (a *App) LineWrapped(row int) (bool, bool) { return a.hostForFocused().LineWrapped(row) }
 func (a *App) Search(query string) bool         { return a.hostForFocused().Search(query) }
-
-func (a *App) Notify(msg string) {
-	a.notice = msg
-	a.noticeUntil = time.Now().Add(4 * time.Second)
-	a.requestRedraw()
-}
-
-func (a *App) SetClipboard(text string) {
-	if a.clipboardSetter != nil {
-		a.clipboardSetter(text)
-		return
-	}
-	if a.window != nil {
-		a.window.SetClipboardString(text)
-	}
-}
-
-func (a *App) Clipboard() string {
-	if a.window == nil {
-		return ""
-	}
-	return a.window.GetClipboardString()
-}
-
+func (a *App) Notify(message string)            { a.hostForFocused().Notify(message) }
+func (a *App) SetClipboard(text string)         { a.hostForFocused().SetClipboard(text) }
+func (a *App) Clipboard() string                { return a.hostForFocused().Clipboard() }
 func (a *App) FontSize() float64 {
-	if id, ok := a.focusedFontPane(); ok {
-		return a.paneFontSize(id)
+	pane, ok := a.focusedFontPane()
+	if !ok {
+		pane = 0
 	}
-	return a.cfg.Font.Size
+	return newPaneHost(a, pane).FontSize()
 }
 
-func (a *App) SetFontSize(pts float64) {
-	pts = clampZoomFontSize(pts)
-	if id, ok := a.focusedFontPane(); ok {
-		state := a.ensurePaneUI(id)
-		if state.font.fontSize == pts && !state.font.pending {
+func (a *App) SetFontSize(points float64) {
+	points = clampZoomFontSize(points)
+	pane, ok := a.focusedFontPane()
+	if !ok {
+		pane = 0
+	} else {
+		state := a.ensurePaneUI(pane)
+		if state.font.fontSize == points && !state.font.pending {
 			return
 		}
-		a.setPaneFontSize(id, pts)
-		return
 	}
-	// Before mux bootstrap, scripting configures the base used by the initial
-	// pane and by reset; there is no pane-local state or PTY to update yet.
-	a.cfg.Font.Size = pts
-	a.zoom.base = pts
+	newPaneHost(a, pane).SetFontSize(points)
 }
 
-func (h paneHost) WriteInput(s string) {
-	if h.pane == 0 {
-		return
-	}
-	events, err := h.app.mux.Write(h.pane, []byte(s))
-	if errors.Is(err, termmux.ErrPaneNotRunning) {
-		if view, ok := h.app.mux.PaneView(h.pane); ok && view.State == termmux.PaneStateFailed {
-			events, err = h.app.mux.FeedFallback(h.pane, []byte(s))
-		}
-	}
-	if err != nil {
-		h.app.Notify("input: " + err.Error())
-	}
-	h.app.pendingMuxEvents = append(h.app.pendingMuxEvents, events...)
-	if len(events) > 0 {
-		h.app.requestRedraw()
-	}
+func (h paneHost) WriteInput(data string) { h.scriptHostRoute().writeInput(h.app, data) }
+
+func (h paneHost) Notify(message string) {
+	h.scriptHostRoute().notify(h.app, message)
 }
 
-func (h paneHost) Notify(message string)    { h.app.Notify(message) }
-func (h paneHost) SetClipboard(text string) { h.app.SetClipboard(text) }
-func (h paneHost) Clipboard() string        { return h.app.Clipboard() }
+func (h paneHost) SetClipboard(text string) {
+	h.scriptHostRoute().setClipboard(h.app, text)
+}
+
+func (h paneHost) Clipboard() string {
+	return h.scriptHostRoute().clipboard(h.app)
+}
+
 func (h paneHost) FontSize() float64 {
-	if h.pane != 0 {
-		return h.app.paneFontSize(h.pane)
-	}
-	return h.app.FontSize()
+	return h.scriptHostRoute().fontSize(h.app)
 }
 
 func (h paneHost) SetFontSize(points float64) {
-	if h.pane != 0 {
-		h.app.setPaneFontSize(h.pane, points)
-		return
-	}
-	h.app.SetFontSize(points)
+	h.scriptHostRoute().setFontSize(h.app, points)
 }
 
 func (h paneHost) Selection() string {
-	if h.pane == h.app.focusedPane {
-		h.app.saveActivePaneUI()
-	}
-	state := h.app.ensurePaneUI(h.pane)
-	if !state.selection.active {
-		return ""
-	}
-	view, ok := h.app.mux.PaneView(h.pane)
-	if !ok {
-		return ""
-	}
-	return termsel.TextWithWrapped(view.Snapshot.Cells, view.Snapshot.Wrapped, view.Snapshot.Cols, view.Snapshot.Rows, termsel.Range{Start: state.selection.start, End: state.selection.end})
+	return h.scriptHostRoute().selectionText(h.app)
 }
 
 func (h paneHost) Scroll(lines int) bool {
-	moved, _ := h.app.mux.ScrollViewport(h.pane, lines)
-	if moved {
-		h.app.recordPaneScroll(h.pane)
-		h.app.requestAccessibilityRedraw()
-	}
-	return moved
+	return h.scriptHostRoute().scroll(h.app, lines)
 }
 
 func (h paneHost) ScrollToBottom() {
-	view, ok := h.app.mux.PaneView(h.pane)
-	if !ok {
-		return
-	}
-	if moved, _ := h.app.mux.ScrollViewport(h.pane, -view.ScrollbackLines); moved {
-		h.app.recordPaneScroll(h.pane)
-		h.app.requestAccessibilityRedraw()
-	}
+	h.scriptHostRoute().scrollToBottom(h.app)
 }
 
 func (h paneHost) ScrollbackLen() int {
-	view, ok := h.app.mux.PaneView(h.pane)
-	if !ok {
-		return 0
-	}
-	return view.ScrollbackLines
+	return h.scriptHostRoute().scrollbackLen(h.app)
 }
 
 func (h paneHost) Size() (int, int) {
-	view, ok := h.app.mux.PaneView(h.pane)
-	if !ok {
-		return 0, 0
-	}
-	return view.Snapshot.Cols, view.Snapshot.Rows
+	return h.scriptHostRoute().size(h.app)
 }
 
 func (h paneHost) Cursor() (int, int) {
-	view, ok := h.app.mux.PaneView(h.pane)
-	if !ok {
-		return 0, 0
-	}
-	return view.Snapshot.CursorRow, view.Snapshot.CursorCol
+	return h.scriptHostRoute().cursor(h.app)
 }
 
 func (h paneHost) Title() string {
-	view, ok := h.app.mux.PaneView(h.pane)
-	if !ok {
-		return ""
-	}
-	return view.Snapshot.Title
+	return h.scriptHostRoute().title(h.app)
 }
 
 func (h paneHost) Cwd() string {
-	view, ok := h.app.mux.PaneView(h.pane)
-	if !ok {
-		return ""
-	}
-	return view.Snapshot.Cwd
+	return h.scriptHostRoute().cwd(h.app)
 }
 
 func (h paneHost) SetTitle(title string) {
-	changed, _ := h.app.mux.SetTitle(h.pane, title)
-	if changed {
-		h.app.pendingMuxEvents = append(h.app.pendingMuxEvents, termmux.Event{Kind: termmux.PaneTitleChanged, Pane: h.pane, Text: title}, termmux.Event{Kind: termmux.PaneDirty, Pane: h.pane})
-		h.app.requestRedraw()
-	}
+	h.scriptHostRoute().setTitle(h.app, title)
 }
 
-func (h paneHost) Line(row int) (string, bool) { return h.app.mux.Line(h.pane, row) }
+func (h paneHost) Line(row int) (string, bool) {
+	return h.scriptHostRoute().line(h.app, row)
+}
+
 func (h paneHost) LineWrapped(row int) (bool, bool) {
-	return h.app.mux.LineWrapped(h.pane, row)
+	return h.scriptHostRoute().lineWrapped(h.app, row)
 }
 
 func (h paneHost) Search(query string) bool {
-	if query == "" {
-		return false
-	}
-	row, col, ok, _ := h.app.mux.SearchUpward(h.pane, query, false, 0)
-	if !ok {
-		return false
-	}
-	state := h.app.ensurePaneUI(h.pane)
-	state.search.matchRow, state.search.matchCol = row, col
-	state.search.matchLen = len([]rune(query))
-	state.search.hasMatch = true
-	if h.pane == h.app.focusedPane {
-		h.app.loadPaneUI(h.pane)
-	}
-	h.app.requestRedraw()
-	return true
+	return h.scriptHostRoute().search(h.app, query)
 }

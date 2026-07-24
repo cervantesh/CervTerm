@@ -124,7 +124,7 @@ func (a *App) dispatchMouseBinding(binding script.MouseBinding, origin termmux.P
 	if binding.Callback != nil {
 		if a.scriptRT == nil {
 			a.Notify("script error: runtime is unavailable")
-		} else if err := a.scriptRT.DispatchRef(*binding.Callback, "mouse_bindings", paneHost{app: a, pane: origin}); err != nil {
+		} else if err := a.scriptRT.DispatchRef(*binding.Callback, "mouse_bindings", newPaneHost(a, origin)); err != nil {
 			a.Notify("script error: " + err.Error())
 		}
 		return

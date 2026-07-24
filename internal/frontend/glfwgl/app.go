@@ -68,6 +68,8 @@ type App struct {
 	input                     *inputController
 	renderFlow                *renderController
 	reloadFlow                *reloadController
+	scriptLifecycle           scriptLifecycleController
+	scriptLifecycleReady      bool
 	r                         gpu.Renderer
 	terminalImageCacheFactory terminalImageCacheFactory
 	terminalImageCache        *terminalImageCache
@@ -235,6 +237,18 @@ func (a *App) ensureReloadController() *reloadController {
 	return a.reloadFlow
 }
 
+func (a *App) initScriptLifecycleController() {
+	a.scriptLifecycle = newScriptLifecycleController()
+	a.scriptLifecycleReady = true
+}
+
+func (a *App) ensureScriptLifecycleController() *scriptLifecycleController {
+	if !a.scriptLifecycleReady {
+		a.initScriptLifecycleController()
+	}
+	return &a.scriptLifecycle
+}
+
 func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.CandidateBundle, activation *script.CandidateActivation, legacyTransition *config.LegacyTealTransition, watchPaths []string, watchHashes map[string][32]byte, sourcePath string, options script.CandidateOptions) error {
 	runtime.LockOSThread()
 	var initialProvenance []config.ProvenanceRecord
@@ -275,6 +289,7 @@ func runWithSource(cfg config.Config, rt *script.Runtime, bundle *script.Candida
 	app.initInputController()
 	app.initRenderController()
 	app.initReloadController()
+	app.initScriptLifecycleController()
 	app.initCompositionCoordinator()
 	app.linkLauncher = platformURLLauncher{}
 	app.configScope = app.runtimeScopes.NewScope()

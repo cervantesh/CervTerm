@@ -4,6 +4,7 @@ package glfwgl
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"cervterm/internal/config"
@@ -102,19 +103,35 @@ func TestProjectionIMECandidateClearFailureStillDetachesOwnership(t *testing.T) 
 	}
 }
 
-func TestInitialProjectionAdoptionFailureCleansIMEOwnership(t *testing.T) {
+func TestInitialProjectionNativeAcquisitionPrecedesAccessibilityAndAdoptionRollback(t *testing.T) {
 	backend := &fakeWndProcBackend{current: 9}
 	app, _, cleanup := withFakeProjectionIME(t, backend, &fakeIMMAPI{})
 	defer cleanup()
-	var window *glfw.Window
+	var log []string
+	components := projectionIMEComponents
+	projectionIMEComponents = func(app *App, hwnd uintptr, report func(error)) (*immDecoder, *windowsWndProcHost) {
+		log = append(log, "ime")
+		return components(app, hwnd, report)
+	}
+	oldAccessibilityFactory := projectionAccessibilityFactory
+	defer func() { projectionAccessibilityFactory = oldAccessibilityFactory }()
+	app.cfg.Accessibility.Enabled = true
+	projectionAccessibilityFactory = func(*App, *glfw.Window, *compositionBeforeUnbind) (projectionAccessibilityLifecycle, error) {
+		log = append(log, "accessibility")
+		return &fakeProjectionAccessibilityLifecycle{log: &log}, nil
+	}
+	window := new(glfw.Window)
 	app.controller = &windowController{windows: map[termmux.WindowID]*windowProjection{
 		termmux.WindowID(initialWindowID): {id: termmux.WindowID(initialWindowID), host: window, app: app, bundle: &nativeProjectionBundle{}},
 	}}
 	if err := app.adoptInitialProjection(window); !errors.Is(err, errWindowProjectionExists) {
 		t.Fatalf("adoption err=%v", err)
 	}
-	if backend.current != 9 || backend.registered != 0 || app.candidateGeometry.publish != nil || app.candidateGeometry.clear != nil {
-		t.Fatalf("adoption rollback leaked IME ownership: current=%d registered=%d candidate=%#v", backend.current, backend.registered, app.candidateGeometry)
+	if want := []string{"ime", "accessibility", "accessibility"}; !reflect.DeepEqual(log, want) {
+		t.Fatalf("native acquisition/rollback order=%v want=%v", log, want)
+	}
+	if backend.current != 9 || backend.registered != 0 || app.candidateGeometry.publish != nil || app.candidateGeometry.clear != nil || app.accessibilityRuntime != nil {
+		t.Fatalf("adoption rollback leaked native ownership: current=%d registered=%d candidate=%#v accessibility=%v", backend.current, backend.registered, app.candidateGeometry, app.accessibilityRuntime)
 	}
 }
 
