@@ -227,3 +227,9 @@ Slice 6.2b delegates only Kitty/Sixel/iTerm outcome dispatch and image expiry/co
 The unwired A seam initially combined the three dispatch calls. W refines it to independent private methods before wiring because selected parser callbacks and expiry already invoke Kitty, Sixel and iTerm independently, while advance and EOF callers retain the established Kitty→Sixel→iTerm order. This is a seam-shape refinement required by existing call sites, not a behavior or ownership change; retained independent-call and mixed-order tests guard it.
 
 This is completed preparatory ADR-0021 parity work, not L3-01 closure. L3-01 remains partial; L3-09 remains open to Slice 4.8 for typed outcomes and one clock. The facade TODO expires in Slice 6.2d, and 6.2d is deferred until all documented semantic dependencies, preparatory 6.2a-c and its execution predecessor are satisfied.
+
+### Preparatory Mux restore delegation
+
+Slice 6.2c delegates only fresh-session snapshot projection and restore preparation/publication/abort forwarding to a private import-free, zero-field generic coordinator beneath the five existing `Mux` facades. `Mux` remains authoritative for model, identity allocation, session registry, pane/PTY/parser/terminal/image ownership, pending-candidate state, publication, reader launch, reverse-order abort, topology and lifecycle. Two operation-scoped ports expose exactly five methods; no adapter, owner or mutable state is retained and no exported restore bypass is introduced.
+
+This is completed preparatory ADR-0021 parity work, not L3-01 closure. L3-01 remains partial; L3-02/L3-04/L3-07/L3-09/L3-10 remain open. The facade TODO expires in Slice 6.2d, and 6.2d is deferred until its documented dependencies and execution predecessor are satisfied.

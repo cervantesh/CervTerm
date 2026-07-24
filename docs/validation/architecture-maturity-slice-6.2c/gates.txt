@@ -1,0 +1,78 @@
+Slice 6.2c Windows validation
+Date: 2026-07-24
+platform: windows/amd64; Windows 10.0.26200.8894; Go 1.25.8; AMD Ryzen 9 7940HX with Radeon Graphics
+working state: immutable W 294b2f20ab3afd8c3fdbfd4d876e02a9fd86a7f1; G pending; guard/test/docs/evidence uncommitted; no commit produced
+
+[focused restore guards and parity]
+PASS: go test ./internal/mux -run 'RestoreCoordinator|MuxRestore|KnownDefect_L3_02_Restore|KnownDefect_L3_07' -count=1
+PASS: go test ./internal/mux -run '^TestMuxRestoreSpawnsBeforePublicationAndReadersObserveWholeCommit$|^TestMuxRestoreReaderPreparationFailureReverseAbortsPristineAndRetriesIDs$|^TestMuxRestoreAbortClosesInReverseAndJoinsEveryCloseError$' -count=10
+PASS: go test -race ./internal/mux -run 'Restore|FreshSession|KnownDefect_L3_02_Restore|KnownDefect_L3_07' -count=1
+PASS: go test -tags glfw -race ./internal/frontend/glfwgl -run 'Restore|FreshFallback' -count=1
+PASS: go test ./internal/layoutstate ./internal/layoutrestore -run 'Restore|Fault|Store|Unmarshal|Validate' -count=1
+PASS: go run ./scripts/check-maturity-gates.go
+  Exact T/A/M/W/G identities, exact parents/subjects, full-history and shallow active pre-G exact G-stage porcelain paths, full-history union allowlist, post-G clean/HEAD state and shallow wrong-parent rejection pass.
+  Exact private import-free zero-field two-generic coordinator, exact 2+3 method ports/budget 5, exact constructor/five one-call methods, recursive and nested-composite function-literal/closure/local-inference retention rejection, exact facade/controller inventories, immutable-W live publication body and top-level event/activation/reader order, reverse abort order, and immutable-T known-defect top-level `func(*testing.T)`/no-result shape plus behavior hashes pass.
+  Synthetic nested-retention, package/local `[]any{func(adapter)...}` retention, FuncLit parameter/result/body, escaping capture, inferred-container, direct-bypass, exported-seam, build-tag/t.Skip/no-op/behavior mutation, preserved-hash method/wrong-parameter/multiple-parameter/result, dirty/staged/untracked outside pre-G, missing required G path including a W-overlap omission in full history, missing-doc/path, active/dirty post-G, shallow wrong-parent and dead-code/helper/event-order fixtures reject as intended; later-main shallow state and production-scoped test exclusion remain allowed.
+PASS: gofmt -d internal/mux/mux_restore_wiring_test.go (no output)
+PASS: git diff --check (no output)
+
+[canonical performance]
+IDENTITIES: base A d073df16d9ba0ec810d35c7b2ac9e17dfd196e6c; canonical candidate immutable W 294b2f20ab3afd8c3fdbfd4d876e02a9fd86a7f1 with exact W production/test source. Attribution rerun: exact W production plus G test-only mux_restore_wiring_test.go extension.
+METHOD: canonical capture has exactly ten interleaved samples per identity/benchmark; rounds 01..10 base then candidate; -benchtime=2s -count=1 -cpu=1 -benchmem after one unrecorded 1-second warm-up per binary. Attribution is separately interleaved by round, direct-adapter then coordinator per pair.
+COVERAGE: restore prepare-abort, IDs, fresh snapshot, invalid/pending fast paths, Phase 15 many-tabs/windows snapshot, inherited all-disabled image, ingress ASCII, protocol dispatch/completion/Drain, work scheduler, and six direct-adapter/coordinator attribution pairs.
+RESULTS:
+  Prepare-abort: 156967.5 -> 152370.5 ns/op (-4597.0 ns, -2.93%); 640560 B/op, 193 allocs/op unchanged.
+  Window IDs: 26.450 -> 26.970 ns/op (+0.520 ns, +1.97%); 16 B/op, 1 alloc/op unchanged.
+  Fresh snapshot: 2575.5 -> 2523.5 ns/op (-52.0 ns, -2.02%); 2064 B/op, 36 allocs/op unchanged.
+  Invalid fast path: 0.68935 -> 2.8475 ns/op (+2.1582 ns, +313.07%); 0 B/op, 0 allocs/op both.
+  Pending fast path: 2.2460 -> 5.9725 ns/op (+3.7265 ns, +165.92%); 0 B/op, 0 allocs/op both.
+  Phase 15 snapshot: 5452.0 -> 5303.5 ns/op (-148.5 ns, -2.72%); 7714 median/7715 max B/op and 152 allocs/op unchanged.
+  All-disabled image: +0.270 ns (+0.88%); completion +0.170 ns (+0.84%); ingress -82.5 ns (-0.72%); scheduler +1.350 ns (+0.47%). Protocol dispatch and Drain improve.
+DISPOSITION: the two fast-path percentages above 3% are not threshold passes. Absolute structural costs are accepted and mapped; no unrelated regressing median exceeds 3%.
+ALLOCATION BLOCK: PASS. Allocation count is unchanged on every path; exact restore B/op is unchanged. Ingress median B/op is +0.5 with candidate maximum 1017 below base maximum 1020 and unchanged 3 allocs/op; the sampling difference is retained honestly.
+
+[retained-source attribution]
+PASS: ten explicit rounds of mux-attribution-W294b2f2-G.test.exe -test.run='^$' -test.bench='^BenchmarkMuxRestoreCoordinatorAttribution$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+  Binary production source is byte-exact W; only internal/mux/mux_restore_wiring_test.go differs for the G test extension.
+  Wiring source SHA-256 d30753dea4d421472404dfb24d55e10a3ea860e0e26e157c7981ca48aac0fb58; binary SHA-256 3b415cc74058d6fa25f847072bdc54d2b5805cc3e1db76ba6feac179a1ffdd3f.
+  All twelve subbenchmarks retained ten raw samples. Recomputed median pairs:
+  fresh-invalid 774.150 -> 919.900 ns (+145.750 ns; 440 B/10 allocs both)
+  invalid-window-IDs 1.7055 -> 3.8445 ns (+2.1390 ns; zero allocation)
+  pending-prepare 5.6200 -> 6.5975 ns (+0.9775 ns; zero allocation)
+  window-IDs 26.390 -> 27.180 ns (+0.790 ns; 16 B/1 alloc both)
+  commit-invalid 2.6555 -> 3.6300 ns (+0.9745 ns; zero allocation)
+  abort-invalid 2.5310 -> 2.6635 ns (+0.1325 ns; zero allocation)
+  Invalid full/direct-controller deltas agree within 0.0192 ns. Pending staging is base direct facade 2.2460 -> retained candidate direct adapter 5.6200 (+3.3740 ns) -> coordinator 6.5975 (+0.9775 ns); staged +4.3515 vs full +3.7265, 0.6250 ns measurement/composition difference retained.
+Raw canonical arrays plus all attribution arrays, exact commands, source/binary identities, median rule and allocation disposition: benchmarks-base.txt and benchmarks-candidate.txt.
+
+[full Windows CI-equivalent and extra race]
+PASS: go run ./scripts/check-maturity-gates.go
+PASS: go test ./... -count=1
+PASS: go vet -unsafeptr=false ./...
+PASS: go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -count=1
+PASS: go test ./internal/vt -run '^$' -fuzz=FuzzParserAdvanceDoesNotPanic -fuzztime=2s
+PASS: go run ./scripts/check-phase15-recovery.go -race
+PASS: go test -race ./... -count=1
+PASS: go run ./scripts/generate-windows-resource.go -arch amd64
+PASS: go run ./scripts/package-beta.go -version 0.1.0-ci -outdir dist
+PASS WITH ONE OPTIONAL WARNING: go run ./scripts/release-preflight.go -version 0.1.0-ci -outdir dist -windows-zip dist/cervterm-0.1.0-ci-windows.zip
+  39 pass, 0 required fail, 1 warning: optional vttest executable unavailable. MSYS2 bash is present; vttest was not required for the Windows CI job.
+PASS: go run ./scripts/smoke-installed-package.go -zip dist/cervterm-0.1.0-ci-windows.zip -expected-version 0.1.0-ci
+PASS: go run ./scripts/daily-driver-smoke.go -cervterm dist/cervterm-0.1.0-ci-windows/cervterm.exe -workdir dist/daily-driver-smoke
+  cmd, git-log, pager, alternate-screen, 40/100-column reflow and long-session captures passed.
+
+[additional fuzz smoke]
+PASS: FuzzControlStringFraming, FuzzPublicOutputProjectionDualOracle, FuzzPublicOutputProjectionSelectedEnvelope, FuzzSixelDCSTransportSelection and FuzzOSC1337SelectedTransport, each -fuzztime=2s.
+PASS: FuzzUnmarshalLayout -fuzztime=2s.
+
+[real GUI and scope]
+UNRUN: no real GLFW window/OpenGL/pixel/IME/accessibility interaction was attempted. Headless/tagged tests and PTY capture smoke are not promoted to real-GUI PASS.
+PASS: G has no frontend, layoutstate, model, registry or image production diff. Production code is unchanged from W; G changes guards, one retained benchmark test, docs and evidence only.
+NOT APPLICABLE: no release, changelog, deployment, publication, history rewrite or commit requested or produced.
+
+[independent review readiness]
+READY: exact immutable identities/scope, raw performance arrays, allocation disposition, retained attribution, known defects, full gate evidence, GUI UNRUN and the optional vttest warning are recorded. No independent review is claimed in this artifact; it is prepared for a separate reviewer.
+
+[blockers and deviations]
+Blockers: none.
+Deviation/warning: optional vttest executable was unavailable during release preflight (0 required failures). Real GUI remains intentionally UNRUN. The two restore fast-path percentages exceed 3%, but their absolute +2.1582 ns/+3.7265 ns costs are structurally attributed with zero allocations and are not represented as threshold passes.

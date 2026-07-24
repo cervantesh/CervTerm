@@ -1,0 +1,42 @@
+Slice 6.2c canonical same-host performance capture — base
+Date: 2026-07-24
+Identity: d073df16d9ba0ec810d35c7b2ac9e17dfd196e6c (additive A seam, before M/W)
+Host: windows/amd64; Windows 10.0.26200.8894; go1.25.8; AMD Ryzen 9 7940HX with Radeon Graphics
+Canonical configuration: exactly ten samples; -benchtime=2s -count=1 -cpu=1 -benchmem
+Interleave: rounds 01..10, base immediately before candidate for each binary/package group.
+Warm-up: one unrecorded 1-second run per binary/identity before canonical capture.
+Overlay: none. Production and benchmark source are exact d073df1.
+
+Commands:
+go test -c -o mux-base.test.exe ./internal/mux
+go test -c -o workscheduler-base.test.exe ./internal/workscheduler
+mux-base.test.exe -test.run='^$' -test.bench='^(BenchmarkMuxRestorePrepareAbort|BenchmarkMuxRestoreWindowIDs|BenchmarkMuxFreshSessionSnapshot|BenchmarkMuxRestoreFastPaths|BenchmarkPhase15ManyTabsWindowsSnapshot|BenchmarkMuxAllDisabledImageIdle|BenchmarkMuxSessionIngressASCII|BenchmarkMuxProtocolDispatchIdle|BenchmarkMuxProtocolCompletionDiscard|BenchmarkMuxProtocolDrainIdle)$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+workscheduler-base.test.exe -test.run='^$' -test.bench='^BenchmarkSchedulerSubmitComplete$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+
+Raw ns/op samples, rounds 01..10:
+BenchmarkMuxRestorePrepareAbort: 158026 153017 158791 171712 147359 155909 162041 151886 158383 148482
+BenchmarkMuxRestoreWindowIDs: 27.98 26.10 24.96 27.49 26.55 28.19 27.36 26.35 25.56 24.07
+BenchmarkMuxFreshSessionSnapshot: 2657 2612 2539 2621 2491 2633 2457 2509 2528 2716
+BenchmarkMuxRestoreFastPaths/invalid: 0.6892 0.7157 0.6718 0.6641 0.6895 0.7068 0.6762 0.6733 0.6924 0.7243
+BenchmarkMuxRestoreFastPaths/pending: 2.289 2.245 2.307 2.241 2.227 2.247 2.327 2.209 2.292 2.220
+BenchmarkPhase15ManyTabsWindowsSnapshot: 5439 5466 5079 5465 5189 5539 5507 5378 5499 5392
+BenchmarkMuxAllDisabledImageIdle: 30.69 30.66 30.53 30.79 30.64 30.85 30.68 31.18 31.02 30.51
+BenchmarkMuxSessionIngressASCII: 11162 11398 11204 11561 11514 11168 11366 11917 12057 11368
+BenchmarkMuxProtocolDispatchIdle: 12.71 12.90 12.65 12.73 12.71 12.66 12.12 12.77 12.05 12.60
+BenchmarkMuxProtocolCompletionDiscard: 20.41 20.11 20.33 20.22 22.25 20.15 20.18 20.52 20.03 20.75
+BenchmarkMuxProtocolDrainIdle: 125.5 125.3 124.8 125.5 124.5 124.9 124.9 127.0 126.2 124.0
+BenchmarkSchedulerSubmitComplete: 313.6 290.3 285.4 294.1 289.4 285.4 296.7 282.0 287.8 292.2
+
+Canonical ten-sample medians:
+BenchmarkMuxRestorePrepareAbort: 156967.5 ns/op; 640560 B/op; 193 allocs/op
+BenchmarkMuxRestoreWindowIDs: 26.450 ns/op; 16 B/op; 1 alloc/op
+BenchmarkMuxFreshSessionSnapshot: 2575.5 ns/op; 2064 B/op; 36 allocs/op
+BenchmarkMuxRestoreFastPaths/invalid: 0.68935 ns/op; 0 B/op; 0 allocs/op
+BenchmarkMuxRestoreFastPaths/pending: 2.2460 ns/op; 0 B/op; 0 allocs/op
+BenchmarkPhase15ManyTabsWindowsSnapshot: 5452.0 ns/op; 7714 median B/op (7715 maximum); 152 allocs/op
+BenchmarkMuxAllDisabledImageIdle: 30.685 ns/op; 0 B/op; 0 allocs/op
+BenchmarkMuxSessionIngressASCII: 11383.0 ns/op; 1015.5 median B/op (1020 maximum); 3 allocs/op
+BenchmarkMuxProtocolDispatchIdle: 12.685 ns/op; 0 B/op; 0 allocs/op
+BenchmarkMuxProtocolCompletionDiscard: 20.275 ns/op; 0 B/op; 0 allocs/op
+BenchmarkMuxProtocolDrainIdle: 125.100 ns/op; 0 B/op; 0 allocs/op
+BenchmarkSchedulerSubmitComplete: 289.850 ns/op; 0 B/op; 0 allocs/op
