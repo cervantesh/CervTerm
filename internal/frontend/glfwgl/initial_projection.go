@@ -3,8 +3,6 @@
 package glfwgl
 
 import (
-	"errors"
-
 	"cervterm/internal/ime"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -71,12 +69,5 @@ func (a *App) adoptInitialProjection(window *glfw.Window) error {
 	appendTerminalImageCacheResource(bundle, a)
 	bundle.resources = append(bundle.resources, projectionResourceFunc(a.closeNotificationEffectSink))
 	capabilities := &initialNativeCapabilityAdapter{app: a, window: window, bundle: bundle}
-	capabilities.activateInitialIME()
-	if accessibilityErr := capabilities.prepareInitialAccessibility(); accessibilityErr != nil {
-		return errors.Join(accessibilityErr, capabilities.rollbackInitialCapabilities())
-	}
-	if err := capabilities.adoptInitialCapabilities(); err != nil {
-		return errors.Join(err, capabilities.rollbackInitialCapabilities())
-	}
-	return nil
+	return newNativeCapabilityController().activateInitial(capabilities)
 }

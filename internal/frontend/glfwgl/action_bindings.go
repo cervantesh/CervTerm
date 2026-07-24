@@ -130,7 +130,7 @@ func (a *App) dispatchKeyActionAtOrigin(envelope termaction.Envelope, callback *
 		if callback != nil {
 			if a.scriptRT == nil {
 				a.Notify("script error: runtime is unavailable")
-			} else if err := a.scriptRT.DispatchRef(*callback, bindingCallbackLabel(*callback), paneHost{app: a, pane: termmux.PaneID(origin)}); err != nil {
+			} else if err := a.scriptRT.DispatchRef(*callback, bindingCallbackLabel(*callback), newPaneHost(a, termmux.PaneID(origin))); err != nil {
 				a.Notify("script error: " + err.Error())
 			}
 		} else {

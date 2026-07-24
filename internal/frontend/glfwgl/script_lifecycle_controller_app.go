@@ -10,13 +10,12 @@ import (
 )
 
 var (
-	_ scriptLifecycleRuntimePort       = (*App)(nil)
-	_ scriptLifecycleEventPort         = (*App)(nil)
-	_ scriptLifecycleDeferredEventPort = (*App)(nil)
-	_ scriptLifecycleFailurePort       = (*App)(nil)
-	_ scriptLifecyclePendingPort       = (*App)(nil)
-	_ scriptLifecycleTimerPort         = (*App)(nil)
-	_ scriptLifecycleProjectionPort    = (*App)(nil)
+	_ scriptLifecycleRuntimePort    = (*App)(nil)
+	_ scriptLifecycleEventPort      = (*App)(nil)
+	_ scriptLifecycleFailurePort    = (*App)(nil)
+	_ scriptLifecyclePendingPort    = (*App)(nil)
+	_ scriptLifecycleTimerPort      = (*App)(nil)
+	_ scriptLifecycleProjectionPort = (*App)(nil)
 )
 
 func (a *App) scriptLifecycleRuntimeAvailable() bool { return a.scriptRT != nil }
@@ -24,31 +23,31 @@ func (a *App) scriptLifecycleRuntimeAvailable() bool { return a.scriptRT != nil 
 func (a *App) scriptLifecycleWantsOutput() bool { return a.scriptRT.WantsOutput() }
 
 func (a *App) fireScriptOutput(pane termmux.PaneID, data string) error {
-	return a.scriptRT.FireOutput(paneHost{app: a, pane: pane}, data)
+	return a.scriptRT.FireOutput(newPaneHost(a, pane), data)
 }
 
 func (a *App) fireScriptTitle(pane termmux.PaneID, title string) error {
-	return a.scriptRT.FireTitle(paneHost{app: a, pane: pane}, title)
+	return a.scriptRT.FireTitle(newPaneHost(a, pane), title)
 }
 
 func (a *App) fireScriptCWD(pane termmux.PaneID, cwd string) error {
-	return a.scriptRT.FireCwd(paneHost{app: a, pane: pane}, cwd)
+	return a.scriptRT.FireCwd(newPaneHost(a, pane), cwd)
 }
 
 func (a *App) fireScriptBell(pane termmux.PaneID) error {
-	return a.scriptRT.FireBell(paneHost{app: a, pane: pane})
+	return a.scriptRT.FireBell(newPaneHost(a, pane))
 }
 
 func (a *App) fireScriptFocus(pane termmux.PaneID, focused bool) error {
-	return a.scriptRT.FireFocus(paneHost{app: a, pane: pane}, focused)
+	return a.scriptRT.FireFocus(newPaneHost(a, pane), focused)
 }
 
 func (a *App) fireScriptResize(pane termmux.PaneID, cols, rows int) error {
-	return a.scriptRT.FireResize(paneHost{app: a, pane: pane}, cols, rows)
+	return a.scriptRT.FireResize(newPaneHost(a, pane), cols, rows)
 }
 
 func (a *App) fireScriptScroll(pane termmux.PaneID, offset int) error {
-	return a.scriptRT.FireScroll(paneHost{app: a, pane: pane}, offset)
+	return a.scriptRT.FireScroll(newPaneHost(a, pane), offset)
 }
 
 func (a *App) reportScriptLifecycleError(err error) {
@@ -60,30 +59,26 @@ func (a *App) clearPendingScriptLifecycle() {
 	clear(a.pendingPaneScroll)
 }
 
-func (a *App) snapshotPendingScriptResizes() []scriptResizeEvent {
+func (a *App) dispatchPendingScriptResizes() {
 	if len(a.pendingPaneResize) == 0 {
-		return nil
+		return
 	}
 	pending := a.pendingPaneResize
 	a.pendingPaneResize = make(map[termmux.PaneID]termmux.PaneGeometry)
-	events := make([]scriptResizeEvent, 0, len(pending))
 	for pane, geometry := range pending {
-		events = append(events, scriptResizeEvent{pane: pane, cols: geometry.Cols, rows: geometry.Rows})
+		reportScriptLifecycleError(a, a.fireScriptResize(pane, geometry.Cols, geometry.Rows))
 	}
-	return events
 }
 
-func (a *App) snapshotPendingScriptScrolls() []scriptScrollEvent {
+func (a *App) dispatchPendingScriptScrolls() {
 	if len(a.pendingPaneScroll) == 0 {
-		return nil
+		return
 	}
 	pending := a.pendingPaneScroll
 	a.pendingPaneScroll = make(map[termmux.PaneID]int)
-	events := make([]scriptScrollEvent, 0, len(pending))
 	for pane, offset := range pending {
-		events = append(events, scriptScrollEvent{pane: pane, offset: offset})
+		reportScriptLifecycleError(a, a.fireScriptScroll(pane, offset))
 	}
-	return events
 }
 
 func (a *App) fireDueScriptTimers(now time.Time) {

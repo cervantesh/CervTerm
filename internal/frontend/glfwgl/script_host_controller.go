@@ -8,8 +8,8 @@ import (
 )
 
 // scriptHostControllerPortBudget pins the complete temporary paneHost surface.
-// Config values cross the seam only as detached method values; the controller
-// retains no config, App, mux, runtime, or native owner.
+// Ports are passed ephemerally by paneHost; the controller retains only its
+// stable pane target.
 const scriptHostControllerPortBudget = 21
 
 type scriptHostConfigPort interface {
@@ -54,123 +54,104 @@ type scriptHostMutationPort interface {
 	searchScriptHost(termmux.PaneID, string) bool
 }
 
-// scriptHostController binds the script host surface to one stable pane ID.
-// It owns only routing and detached-config boundaries; all mutable state and
-// effects remain behind concern-specific ports until the later move/wire work.
+// scriptHostController binds routing policy to one stable pane ID. Mutable
+// owners and effects cross only as operation-scoped narrow ports.
 // TODO(L1-01; expires Slice 6.3d): remove the preparatory facade adapters.
 type scriptHostController struct {
-	pane          termmux.PaneID
-	config        scriptHostConfigPort
-	input         scriptHostInputPort
-	notifications scriptHostNotificationPort
-	fonts         scriptHostFontPort
-	selection     scriptHostSelectionPort
-	view          scriptHostViewPort
-	mutations     scriptHostMutationPort
+	pane        termmux.PaneID
+	initialized bool
 }
 
-func newScriptHostController(
-	pane termmux.PaneID,
-	config scriptHostConfigPort,
-	input scriptHostInputPort,
-	notifications scriptHostNotificationPort,
-	fonts scriptHostFontPort,
-	selection scriptHostSelectionPort,
-	view scriptHostViewPort,
-	mutations scriptHostMutationPort,
-) *scriptHostController {
-	return &scriptHostController{
-		pane: pane, config: config, input: input, notifications: notifications,
-		fonts: fonts, selection: selection, view: view, mutations: mutations,
-	}
+func newScriptHostController(pane termmux.PaneID) scriptHostController {
+	return scriptHostController{pane: pane, initialized: true}
 }
 
-func (c *scriptHostController) RuntimeConfig() config.Config {
-	return c.config.scriptHostRuntimeConfig().Clone()
+func (c scriptHostController) runtimeConfig(port scriptHostConfigPort) config.Config {
+	return port.scriptHostRuntimeConfig().Clone()
 }
 
-func (c *scriptHostController) ApplyRuntimeConfig(next config.Config) error {
-	return c.config.applyScriptHostRuntimeConfig(next.Clone())
+func (c scriptHostController) applyRuntimeConfig(port scriptHostConfigPort, next config.Config) error {
+	return port.applyScriptHostRuntimeConfig(next.Clone())
 }
 
-func (c *scriptHostController) RequestConfigReload() bool {
-	return c.config.requestScriptHostConfigReload()
+func (c scriptHostController) requestConfigReload(port scriptHostConfigPort) bool {
+	return port.requestScriptHostConfigReload()
 }
 
-func (c *scriptHostController) WriteInput(data string) {
+func (c scriptHostController) writeInput(port scriptHostInputPort, data string) {
 	if c.pane == 0 {
 		return
 	}
-	c.input.writeScriptHostInput(c.pane, data)
+	port.writeScriptHostInput(c.pane, data)
 }
 
-func (c *scriptHostController) Notify(message string) {
-	c.notifications.notifyScriptHost(message)
+func (scriptHostController) notify(port scriptHostNotificationPort, message string) {
+	port.notifyScriptHost(message)
 }
 
-func (c *scriptHostController) SetClipboard(text string) {
-	c.notifications.setScriptHostClipboard(text)
+func (scriptHostController) setClipboard(port scriptHostNotificationPort, text string) {
+	port.setScriptHostClipboard(text)
 }
 
-func (c *scriptHostController) Clipboard() string {
-	return c.notifications.scriptHostClipboard()
+func (scriptHostController) clipboard(port scriptHostNotificationPort) string {
+	return port.scriptHostClipboard()
 }
 
-func (c *scriptHostController) FontSize() float64 {
-	return c.fonts.scriptHostFontSize(c.pane)
+func (c scriptHostController) fontSize(port scriptHostFontPort) float64 {
+	return port.scriptHostFontSize(c.pane)
 }
 
-func (c *scriptHostController) SetFontSize(points float64) {
-	c.fonts.setScriptHostFontSize(c.pane, points)
+func (c scriptHostController) setFontSize(port scriptHostFontPort, points float64) {
+	port.setScriptHostFontSize(c.pane, points)
 }
 
-func (c *scriptHostController) Selection() string {
-	return c.selection.scriptHostSelection(c.pane)
+func (c scriptHostController) selectionText(port scriptHostSelectionPort) string {
+	return port.scriptHostSelection(c.pane)
 }
 
-func (c *scriptHostController) Scroll(lines int) bool {
-	return c.selection.scrollScriptHost(c.pane, lines)
+func (c scriptHostController) scroll(port scriptHostSelectionPort, lines int) bool {
+	return port.scrollScriptHost(c.pane, lines)
 }
 
-func (c *scriptHostController) ScrollToBottom() {
-	c.selection.scrollScriptHostToBottom(c.pane)
+func (c scriptHostController) scrollToBottom(port scriptHostSelectionPort) {
+	port.scrollScriptHostToBottom(c.pane)
 }
 
-func (c *scriptHostController) ScrollbackLen() int {
-	return c.selection.scriptHostScrollbackLen(c.pane)
+func (c scriptHostController) scrollbackLen(port scriptHostSelectionPort) int {
+	return port.scriptHostScrollbackLen(c.pane)
 }
 
-func (c *scriptHostController) Size() (int, int) {
-	return c.view.scriptHostSize(c.pane)
+func (c scriptHostController) size(port scriptHostViewPort) (int, int) {
+	return port.scriptHostSize(c.pane)
 }
 
-func (c *scriptHostController) Cursor() (int, int) {
-	return c.view.scriptHostCursor(c.pane)
+func (c scriptHostController) cursor(port scriptHostViewPort) (int, int) {
+	return port.scriptHostCursor(c.pane)
 }
 
-func (c *scriptHostController) Title() string {
-	return c.view.scriptHostTitle(c.pane)
+func (c scriptHostController) title(port scriptHostViewPort) string {
+	return port.scriptHostTitle(c.pane)
 }
 
-func (c *scriptHostController) Cwd() string {
-	return c.view.scriptHostCWD(c.pane)
+func (c scriptHostController) cwd(port scriptHostViewPort) string {
+	return port.scriptHostCWD(c.pane)
 }
 
-func (c *scriptHostController) SetTitle(title string) {
-	c.mutations.setScriptHostTitle(c.pane, title)
+func (c scriptHostController) setTitle(port scriptHostMutationPort, title string) {
+	port.setScriptHostTitle(c.pane, title)
 }
 
-func (c *scriptHostController) Line(row int) (string, bool) {
-	return c.view.scriptHostLine(c.pane, row)
+func (c scriptHostController) line(port scriptHostViewPort, row int) (string, bool) {
+	return port.scriptHostLine(c.pane, row)
 }
 
-func (c *scriptHostController) LineWrapped(row int) (bool, bool) {
-	return c.mutations.scriptHostLineWrapped(c.pane, row)
+func (c scriptHostController) lineWrapped(port scriptHostMutationPort, row int) (bool, bool) {
+	return port.scriptHostLineWrapped(c.pane, row)
 }
 
-func (c *scriptHostController) Search(query string) bool {
+func (c scriptHostController) search(port scriptHostMutationPort, query string) bool {
 	if query == "" {
 		return false
 	}
-	return c.mutations.searchScriptHost(c.pane, query)
+	return port.searchScriptHost(c.pane, query)
 }

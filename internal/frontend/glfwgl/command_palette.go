@@ -158,7 +158,7 @@ func (a *App) acceptCommandPalette(entry modal.Entry, pane termmux.PaneID) error
 		if a.scriptRT == nil || activation.generation != a.scriptGeneration {
 			return fmt.Errorf("command callback is unavailable after reload")
 		}
-		return a.scriptRT.DispatchRef(*activation.callback, entry.Label, paneHost{app: a, pane: pane})
+		return a.scriptRT.DispatchRef(*activation.callback, entry.Label, newPaneHost(a, pane))
 	}
 	ctx := a.actionContext(termaction.SourceKeyboard)
 	ctx.Origin = termaction.Ref{Kind: termaction.RefPane, ID: uint64(pane)}

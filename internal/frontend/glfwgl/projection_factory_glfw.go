@@ -127,19 +127,16 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 	title = "CervTerm"
 	bundle.handle = child.applyMuxEvents
 	capabilities := &childNativeCapabilityAdapter{app: child, window: window, bundle: bundle}
+	if activationErr := newNativeCapabilityController().prepareChild(capabilities); activationErr != nil {
+		return fail(activationErr)
+	}
 	bundle.bind = func(id termmux.WindowID) error {
-		if err := capabilities.bindChildCapabilities(id); err != nil {
-			return err
-		}
-		capabilities.markChildCapabilitiesReady()
-		return nil
+		capabilities := &childNativeCapabilityAdapter{app: child, window: window, bundle: bundle}
+		return newNativeCapabilityController().bindChild(capabilities, id)
 	}
 	bundle.unbind = func() error {
 		child.windowID = 0
 		return nil
-	}
-	if activationErr := capabilities.activateChildCapabilities(); activationErr != nil {
-		return fail(activationErr)
 	}
 	return bundle, spec, content, metrics, title, nil
 }
@@ -163,6 +160,7 @@ func newProjectionApp(owner *App) *App {
 	child.initInputController()
 	child.initRenderController()
 	child.initReloadController()
+	child.initScriptLifecycleController()
 	child.initActionBindings()
 	if spec, ok := parseStatsHotkey(cfg.Render.StatsHotkey); ok {
 		child.statsSpec, child.statsSpecOK = spec, true

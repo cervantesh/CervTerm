@@ -423,7 +423,7 @@ func (a *App) applyRuntimeTransaction(transaction *config.RuntimePatchTransactio
 	return nil
 }
 
-func (a *App) RuntimeConfig() config.Config { return a.scriptHostRuntimeConfig() }
+func (a *App) RuntimeConfig() config.Config { return newPaneHost(a, 0).RuntimeConfig() }
 
 func (a *App) DesiredConfig() config.Config {
 	a.ensureConfigState()
@@ -464,7 +464,9 @@ func (a *App) ClearRuntimeConfigOverrides(paths ...string) error {
 }
 
 func (a *App) ApplyRuntimeConfig(next config.Config) error {
-	return a.applyScriptHostRuntimeConfig(next)
+	return newPaneHost(a, 0).ApplyRuntimeConfig(next)
 }
 
-func (a *App) RequestConfigReload() bool { return a.requestScriptHostConfigReload() }
+func (a *App) RequestConfigReload() bool {
+	return newPaneHost(a, 0).RequestConfigReload()
+}

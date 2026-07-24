@@ -13,7 +13,7 @@ import (
 	"cervterm/internal/script"
 )
 
-var _ script.Host = (*scriptHostController)(nil)
+var _ script.Host = paneHost{}
 
 type scriptRuntimeConfigHostContract interface {
 	RuntimeConfig() config.Config
@@ -21,7 +21,7 @@ type scriptRuntimeConfigHostContract interface {
 	RequestConfigReload() bool
 }
 
-var _ scriptRuntimeConfigHostContract = (*scriptHostController)(nil)
+var _ scriptRuntimeConfigHostContract = paneHost{}
 
 type fakeScriptHostPorts struct {
 	log       []string
@@ -151,41 +151,41 @@ func (f *fakeScriptHostPorts) searchScriptHost(pane termmux.PaneID, query string
 	return true
 }
 
-func newFakeScriptHostController(pane termmux.PaneID, ports *fakeScriptHostPorts) *scriptHostController {
-	return newScriptHostController(pane, ports, ports, ports, ports, ports, ports, ports)
+func newFakeScriptHostController(pane termmux.PaneID) scriptHostController {
+	return newScriptHostController(pane)
 }
 
 func TestScriptHostControllerRepresentsCompletePaneHostSurface(t *testing.T) {
 	ports := &fakeScriptHostPorts{config: config.Defaults(), clipboard: "clip"}
-	controller := newFakeScriptHostController(7, ports)
+	controller := newFakeScriptHostController(7)
 
-	if controller.RuntimeConfig().Font.Size != ports.config.Font.Size || controller.ApplyRuntimeConfig(config.Defaults()) != nil || !controller.RequestConfigReload() {
+	if controller.runtimeConfig(ports).Font.Size != ports.config.Font.Size || controller.applyRuntimeConfig(ports, config.Defaults()) != nil || !controller.requestConfigReload(ports) {
 		t.Fatal("config surface did not delegate")
 	}
-	controller.WriteInput("input")
-	controller.Notify("notice")
-	controller.SetClipboard("next")
-	if controller.Clipboard() != "next" || controller.FontSize() != 12.5 {
+	controller.writeInput(ports, "input")
+	controller.notify(ports, "notice")
+	controller.setClipboard(ports, "next")
+	if controller.clipboard(ports) != "next" || controller.fontSize(ports) != 12.5 {
 		t.Fatal("notification/font read surface did not delegate")
 	}
-	controller.SetFontSize(13)
-	if controller.Selection() != "selection" || !controller.Scroll(4) {
+	controller.setFontSize(ports, 13)
+	if controller.selectionText(ports) != "selection" || !controller.scroll(ports, 4) {
 		t.Fatal("selection surface did not delegate")
 	}
-	controller.ScrollToBottom()
-	if controller.ScrollbackLen() != 17 {
+	controller.scrollToBottom(ports)
+	if controller.scrollbackLen(ports) != 17 {
 		t.Fatal("scrollback surface did not delegate")
 	}
-	cols, rows := controller.Size()
-	cursorRow, cursorCol := controller.Cursor()
-	if cols != 80 || rows != 24 || cursorRow != 3 || cursorCol != 4 || controller.Title() != "title" || controller.Cwd() != "/cwd" {
+	cols, rows := controller.size(ports)
+	cursorRow, cursorCol := controller.cursor(ports)
+	if cols != 80 || rows != 24 || cursorRow != 3 || cursorCol != 4 || controller.title(ports) != "title" || controller.cwd(ports) != "/cwd" {
 		t.Fatal("view surface did not delegate")
 	}
-	controller.SetTitle("renamed")
-	if line, ok := controller.Line(9); line != "line" || !ok {
+	controller.setTitle(ports, "renamed")
+	if line, ok := controller.line(ports, 9); line != "line" || !ok {
 		t.Fatal("line surface did not delegate")
 	}
-	if wrapped, ok := controller.LineWrapped(10); !wrapped || !ok || !controller.Search("needle") {
+	if wrapped, ok := controller.lineWrapped(ports, 10); !wrapped || !ok || !controller.search(ports, "needle") {
 		t.Fatal("mutation surface did not delegate")
 	}
 	if ports.pane != 7 || ports.points != 13 || !ports.reloaded {
@@ -205,9 +205,9 @@ func TestScriptHostControllerConfigCrossesDetachedInBothDirections(t *testing.T)
 	ports := &fakeScriptHostPorts{config: config.Defaults()}
 	ports.config.Shell.Args = []string{"source"}
 	ports.config.Shell.Env = map[string]string{"SOURCE": "1"}
-	controller := newFakeScriptHostController(1, ports)
+	controller := newFakeScriptHostController(1)
 
-	snapshot := controller.RuntimeConfig()
+	snapshot := controller.runtimeConfig(ports)
 	snapshot.Shell.Args[0] = "changed"
 	snapshot.Shell.Env["SOURCE"] = "2"
 	if ports.config.Shell.Args[0] != "source" || ports.config.Shell.Env["SOURCE"] != "1" {
@@ -217,7 +217,7 @@ func TestScriptHostControllerConfigCrossesDetachedInBothDirections(t *testing.T)
 	next := config.Defaults()
 	next.Shell.Args = []string{"apply"}
 	next.Shell.Env = map[string]string{"APPLY": "1"}
-	if err := controller.ApplyRuntimeConfig(next); err != nil {
+	if err := controller.applyRuntimeConfig(ports, next); err != nil {
 		t.Fatal(err)
 	}
 	next.Shell.Args[0] = "changed"
@@ -229,11 +229,11 @@ func TestScriptHostControllerConfigCrossesDetachedInBothDirections(t *testing.T)
 
 func TestScriptHostControllerNoOpRoutesDoNotAllocate(t *testing.T) {
 	ports := &fakeScriptHostPorts{log: make([]string, 0, 1)}
-	controller := newFakeScriptHostController(0, ports)
+	controller := newFakeScriptHostController(0)
 	allocs := testing.AllocsPerRun(1000, func() {
 		ports.log = ports.log[:0]
-		controller.WriteInput("ignored")
-		if controller.Search("") {
+		controller.writeInput(ports, "ignored")
+		if controller.search(ports, "") {
 			panic("empty search matched")
 		}
 	})
@@ -278,27 +278,12 @@ func assertControllerPortStructure(t *testing.T, controller reflect.Type, fields
 		}
 		assertScriptNativeControllerType(t, controller.Name()+"."+field.Name, field.Type)
 	}
-	for _, port := range ports {
-		seen := 0
-		for _, field := range fields {
-			if field.typ == port {
-				seen++
-			}
-		}
-		if seen != 1 {
-			t.Errorf("%s is listed in %s fields %d times", port.Name(), controller.Name(), seen)
-		}
-	}
 }
 
 func assertScriptNativeControllerType(t *testing.T, name string, typ reflect.Type) {
 	t.Helper()
 	if typ == reflect.TypeOf(config.Config{}) || typ == reflect.TypeOf(time.Time{}) {
 		return // Explicit detached value types; config detachment has mutation tests.
-	}
-	if typ == reflect.TypeOf([]scriptResizeEvent(nil)) || typ == reflect.TypeOf([]scriptScrollEvent(nil)) {
-		assertScriptNativeControllerType(t, name, typ.Elem())
-		return // Explicit detached scalar snapshots; lifecycle tests verify drain ordering.
 	}
 	typeName := strings.ToLower(typ.String())
 	packagePath := strings.ToLower(typ.PkgPath())
@@ -333,6 +318,55 @@ func assertScriptNativeControllerType(t *testing.T, name string, typ reflect.Typ
 	}
 }
 
+func TestPaneHostConstructionAndWarmedStableReadsDoNotAllocate(t *testing.T) {
+	app := &App{cfg: config.Defaults()}
+	stable := newPaneHost(app, 7)
+	if stable.pane != 7 || stable.controller.pane != 7 || !stable.controller.initialized {
+		t.Fatalf("stable route pane=%d controller=%+v", stable.pane, stable.controller)
+	}
+	host := newPaneHost(app, 0)
+	if host.pane != 0 || host.controller.pane != 0 || !host.controller.initialized {
+		t.Fatalf("zero route pane=%d controller=%+v", host.pane, host.controller)
+	}
+	if host.Clipboard() != "" || host.FontSize() != app.cfg.Font.Size {
+		t.Fatal("unexpected warmed host read")
+	}
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		stable := newPaneHost(app, 7)
+		candidate := paneHost{app: app}
+		route := candidate.scriptHostRoute()
+		if stable.controller.pane != 7 || !stable.controller.initialized || route.pane != 0 || !route.initialized || candidate.Clipboard() != "" || candidate.FontSize() != app.cfg.Font.Size {
+			panic("unexpected warmed host route")
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("newPaneHost, compatibility route, and warmed reads allocations=%v, want 0", allocs)
+	}
+}
+
+func TestPaneHostZeroPaneLiteralPreservesFocusedFontCompatibility(t *testing.T) {
+	app := newMuxTestApp(t, 80, 24)
+	app.cfg.Font.Size = 14
+	focused, ok := app.focusedFontPane()
+	if !ok {
+		t.Fatal("focused pane unavailable")
+	}
+	app.ensurePaneUI(focused).font.fontSize = 18
+
+	host := paneHost{app: app}
+	if got := host.FontSize(); got != 18 {
+		t.Fatalf("zero-pane literal FontSize=%v, want focused size 18", got)
+	}
+	host.SetFontSize(18)
+	if app.cfg.Font.Size != 14 {
+		t.Fatalf("zero-pane literal changed base font size to %v", app.cfg.Font.Size)
+	}
+	if got := app.ensurePaneUI(focused).font.fontSize; got != 18 {
+		t.Fatalf("zero-pane literal changed focused font size to %v", got)
+	}
+}
+
 func TestScriptHostControllerPortsAndFieldsAreExhaustiveNarrowAndDetached(t *testing.T) {
 	paneType := reflect.TypeOf(termmux.PaneID(0))
 	ports := []reflect.Type{
@@ -346,13 +380,7 @@ func TestScriptHostControllerPortsAndFieldsAreExhaustiveNarrowAndDetached(t *tes
 	}
 	fields := []controllerFieldExpectation{
 		{name: "pane", typ: paneType},
-		{name: "config", typ: ports[0]},
-		{name: "input", typ: ports[1]},
-		{name: "notifications", typ: ports[2]},
-		{name: "fonts", typ: ports[3]},
-		{name: "selection", typ: ports[4]},
-		{name: "view", typ: ports[5]},
-		{name: "mutations", typ: ports[6]},
+		{name: "initialized", typ: reflect.TypeOf(false)},
 	}
 	assertControllerPortStructure(t, reflect.TypeOf(scriptHostController{}), fields, ports, scriptHostControllerPortBudget)
 }

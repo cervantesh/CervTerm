@@ -11,6 +11,16 @@ import (
 	termmux "cervterm/internal/mux"
 )
 
+type scriptResizeEvent struct {
+	pane       termmux.PaneID
+	cols, rows int
+}
+
+type scriptScrollEvent struct {
+	pane   termmux.PaneID
+	offset int
+}
+
 type fakeScriptLifecyclePorts struct {
 	log     []string
 	runtime bool
@@ -20,10 +30,14 @@ type fakeScriptLifecyclePorts struct {
 	resizes []scriptResizeEvent
 	scrolls []scriptScrollEvent
 	now     time.Time
+	onStep  func(string)
 }
 
 func (f *fakeScriptLifecyclePorts) step(name string) error {
 	f.log = append(f.log, name)
+	if f.onStep != nil {
+		f.onStep(name)
+	}
 	if f.fail == name {
 		return f.err
 	}
@@ -81,18 +95,22 @@ func (f *fakeScriptLifecyclePorts) clearPendingScriptLifecycle() {
 	f.scrolls = f.scrolls[:0]
 }
 
-func (f *fakeScriptLifecyclePorts) snapshotPendingScriptResizes() []scriptResizeEvent {
-	f.log = append(f.log, "snapshot-resize")
+func (f *fakeScriptLifecyclePorts) dispatchPendingScriptResizes() {
+	f.log = append(f.log, "dispatch-resize")
 	events := f.resizes
 	f.resizes = nil
-	return events
+	for range events {
+		reportScriptLifecycleError(f, f.step("resize"))
+	}
 }
 
-func (f *fakeScriptLifecyclePorts) snapshotPendingScriptScrolls() []scriptScrollEvent {
-	f.log = append(f.log, "snapshot-scroll")
+func (f *fakeScriptLifecyclePorts) dispatchPendingScriptScrolls() {
+	f.log = append(f.log, "dispatch-scroll")
 	events := f.scrolls
 	f.scrolls = nil
-	return events
+	for range events {
+		reportScriptLifecycleError(f, f.step("scroll"))
+	}
 }
 
 func (f *fakeScriptLifecyclePorts) fireDueScriptTimers(now time.Time) {
@@ -108,8 +126,9 @@ func (f *fakeScriptLifecyclePorts) syncScriptOverlays() {
 	f.log = append(f.log, "overlay")
 }
 
-func newFakeScriptLifecycleController(ports *fakeScriptLifecyclePorts) *scriptLifecycleController {
-	return newScriptLifecycleController(ports, ports, ports, ports, ports, ports, ports)
+func newFakeScriptLifecycleController() *scriptLifecycleController {
+	controller := newScriptLifecycleController()
+	return &controller
 }
 
 func assertScriptLifecycleTrace(t *testing.T, got, want []string) {
@@ -121,12 +140,12 @@ func assertScriptLifecycleTrace(t *testing.T, got, want []string) {
 
 func TestScriptLifecycleControllerPinsPaneAndFocusEventRoutes(t *testing.T) {
 	ports := &fakeScriptLifecyclePorts{runtime: true, wants: true}
-	controller := newFakeScriptLifecycleController(ports)
-	controller.output(1, "data")
-	controller.title(1, "title")
-	controller.cwd(1, "/cwd")
-	controller.bell(1)
-	controller.focus(1, true)
+	controller := newFakeScriptLifecycleController()
+	controller.output(ports, ports, ports, 1, "data")
+	controller.title(ports, ports, ports, 1, "title")
+	controller.cwd(ports, ports, ports, 1, "/cwd")
+	controller.bell(ports, ports, ports, 1)
+	controller.focus(ports, ports, ports, 1, true)
 	assertScriptLifecycleTrace(t, ports.log, []string{
 		"runtime", "wants-output", "output",
 		"runtime", "title", "runtime", "cwd", "runtime", "bell", "runtime", "focus",
@@ -151,7 +170,7 @@ func TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure(t *te
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ports := &fakeScriptLifecyclePorts{runtime: test.up, wants: test.want, fail: test.fail, err: injected}
-			newFakeScriptLifecycleController(ports).output(2, test.data)
+			newFakeScriptLifecycleController().output(ports, ports, ports, 2, test.data)
 			assertScriptLifecycleTrace(t, ports.log, test.log)
 		})
 	}
@@ -162,7 +181,7 @@ func TestScriptLifecycleControllerNoRuntimeClearsPendingWithoutDispatch(t *testi
 		resizes: []scriptResizeEvent{{pane: 1, cols: 80, rows: 24}},
 		scrolls: []scriptScrollEvent{{pane: 1, offset: 4}},
 	}
-	newFakeScriptLifecycleController(ports).dispatchPending()
+	newFakeScriptLifecycleController().dispatchPending(ports, ports)
 	assertScriptLifecycleTrace(t, ports.log, []string{"runtime", "clear"})
 	if len(ports.resizes) != 0 || len(ports.scrolls) != 0 {
 		t.Fatalf("pending survived clear: resize=%v scroll=%v", ports.resizes, ports.scrolls)
@@ -176,21 +195,51 @@ func TestScriptLifecycleControllerDrainsResizeBeforeScrollAndReportsWithoutStopp
 		resizes: []scriptResizeEvent{{pane: 1, cols: 80, rows: 24}, {pane: 2, cols: 40, rows: 12}},
 		scrolls: []scriptScrollEvent{{pane: 1, offset: 7}},
 	}
-	newFakeScriptLifecycleController(ports).dispatchPending()
+	newFakeScriptLifecycleController().dispatchPending(ports, ports)
 	assertScriptLifecycleTrace(t, ports.log, []string{
-		"runtime", "snapshot-resize", "resize", "report", "resize", "report", "snapshot-scroll", "scroll",
+		"runtime", "dispatch-resize", "resize", "report", "resize", "report", "dispatch-scroll", "scroll",
 	})
 	if len(ports.resizes) != 0 || len(ports.scrolls) != 0 {
 		t.Fatal("drained pending records survived")
 	}
 }
 
+func TestScriptLifecycleControllerPreservesArrivalsDuringDispatch(t *testing.T) {
+	ports := &fakeScriptLifecyclePorts{
+		runtime: true,
+		resizes: []scriptResizeEvent{{pane: 1, cols: 80, rows: 24}},
+		scrolls: []scriptScrollEvent{{pane: 1, offset: 4}},
+	}
+	ports.onStep = func(name string) {
+		if name != "resize" {
+			return
+		}
+		ports.onStep = nil
+		ports.resizes = append(ports.resizes, scriptResizeEvent{pane: 2, cols: 40, rows: 12})
+		ports.scrolls = append(ports.scrolls, scriptScrollEvent{pane: 2, offset: 8})
+	}
+	controller := newFakeScriptLifecycleController()
+	controller.dispatchPending(ports, ports)
+	assertScriptLifecycleTrace(t, ports.log, []string{
+		"runtime", "dispatch-resize", "resize", "dispatch-scroll", "scroll", "scroll",
+	})
+	if len(ports.resizes) != 1 || len(ports.scrolls) != 0 {
+		t.Fatalf("arrivals after first dispatch: resizes=%v scrolls=%v", ports.resizes, ports.scrolls)
+	}
+	ports.log = nil
+	controller.dispatchPending(ports, ports)
+	assertScriptLifecycleTrace(t, ports.log, []string{"runtime", "dispatch-resize", "resize", "dispatch-scroll"})
+	if len(ports.resizes) != 0 || len(ports.scrolls) != 0 {
+		t.Fatalf("arrivals survived second dispatch: resizes=%v scrolls=%v", ports.resizes, ports.scrolls)
+	}
+}
+
 func TestScriptLifecycleControllerPinsTimersThenStatusBeforeOverlayRoutes(t *testing.T) {
 	now := time.Unix(5, 0)
 	ports := &fakeScriptLifecyclePorts{runtime: true}
-	controller := newFakeScriptLifecycleController(ports)
-	controller.fireDueTimers(now)
-	controller.syncProjections()
+	controller := newFakeScriptLifecycleController()
+	controller.fireDueTimers(ports, ports, now)
+	controller.syncProjections(ports, ports)
 	assertScriptLifecycleTrace(t, ports.log, []string{"runtime", "timers", "runtime", "status", "overlay"})
 	if !ports.now.Equal(now) {
 		t.Fatalf("timer time = %v, want %v", ports.now, now)
@@ -199,42 +248,111 @@ func TestScriptLifecycleControllerPinsTimersThenStatusBeforeOverlayRoutes(t *tes
 
 func TestScriptLifecycleControllerNoRuntimeNoOpRoutesDoNotAllocate(t *testing.T) {
 	ports := &fakeScriptLifecyclePorts{log: make([]string, 0, 8), resizes: make([]scriptResizeEvent, 0, 1), scrolls: make([]scriptScrollEvent, 0, 1)}
-	controller := newFakeScriptLifecycleController(ports)
+	controller := newFakeScriptLifecycleController()
 	now := time.Unix(1, 0)
+	payload := []byte("ignored")
 	allocs := testing.AllocsPerRun(1000, func() {
 		ports.log = ports.log[:0]
 		ports.resizes = ports.resizes[:0]
 		ports.scrolls = ports.scrolls[:0]
-		controller.output(1, "")
-		controller.title(1, "ignored")
-		controller.dispatchPending()
-		controller.fireDueTimers(now)
-		controller.syncProjections()
+		controller.output(ports, ports, ports, 1, "")
+		controller.outputBytes(ports, ports, ports, 1, payload)
+		controller.title(ports, ports, ports, 1, "ignored")
+		controller.dispatchPending(ports, ports)
+		controller.fireDueTimers(ports, ports, now)
+		controller.syncProjections(ports, ports)
 	})
 	if allocs != 0 {
 		t.Fatalf("allocations per no-runtime routes = %v, want 0", allocs)
 	}
-	assertScriptLifecycleTrace(t, ports.log, []string{"runtime", "runtime", "clear", "runtime", "runtime"})
+	assertScriptLifecycleTrace(t, ports.log, []string{"runtime", "runtime", "runtime", "clear", "runtime", "runtime"})
+}
+
+func TestAppScriptLifecycleControllersAreProjectionLocalEagerLazyAndIdempotent(t *testing.T) {
+	owner, _ := newRecordingActionApp(t)
+	owner.initScriptLifecycleController()
+	root := owner.ensureScriptLifecycleController()
+	if !owner.scriptLifecycleReady || owner.ensureScriptLifecycleController() != root {
+		t.Fatal("root script lifecycle controller was not eager and idempotent")
+	}
+	child := newProjectionApp(owner)
+	childController := child.ensureScriptLifecycleController()
+	if !child.scriptLifecycleReady || childController == root {
+		t.Fatal("child did not receive a distinct eager script lifecycle controller")
+	}
+
+	zero := &App{}
+	if zero.scriptLifecycleReady {
+		t.Fatal("zero App unexpectedly initialized its script lifecycle controller")
+	}
+	lazy := zero.ensureScriptLifecycleController()
+	if !zero.scriptLifecycleReady || zero.ensureScriptLifecycleController() != lazy {
+		t.Fatal("zero App script lifecycle controller was not lazy and idempotent")
+	}
+}
+
+func TestScriptLifecycleControllerEphemeralPortsPreserveOrderAndFaultReporting(t *testing.T) {
+	injected := errors.New("title")
+	ports := &fakeScriptLifecyclePorts{
+		runtime: true, wants: true, fail: "title", err: injected,
+		resizes: []scriptResizeEvent{{pane: 1, cols: 80, rows: 24}},
+		scrolls: []scriptScrollEvent{{pane: 1, offset: 4}},
+	}
+	controller := newFakeScriptLifecycleController()
+
+	controller.output(ports, ports, ports, 1, "output")
+	controller.title(ports, ports, ports, 1, "title")
+	controller.cwd(ports, ports, ports, 1, "/cwd")
+	controller.bell(ports, ports, ports, 1)
+	controller.focus(ports, ports, ports, 1, true)
+	controller.dispatchPending(ports, ports)
+	now := time.Unix(9, 0)
+	controller.fireDueTimers(ports, ports, now)
+	controller.syncProjections(ports, ports)
+
+	assertScriptLifecycleTrace(t, ports.log, []string{
+		"runtime", "wants-output", "output",
+		"runtime", "title", "report",
+		"runtime", "cwd",
+		"runtime", "bell",
+		"runtime", "focus",
+		"runtime", "dispatch-resize", "resize", "dispatch-scroll", "scroll",
+		"runtime", "timers",
+		"runtime", "status", "overlay",
+	})
+	if !ports.now.Equal(now) {
+		t.Fatalf("timer time = %v, want %v", ports.now, now)
+	}
+}
+
+func TestAppScriptLifecycleWarmedNoRuntimeRoutesDoNotAllocate(t *testing.T) {
+	app := &App{}
+	controller := app.ensureScriptLifecycleController()
+	now := time.Unix(1, 0)
+	allocs := testing.AllocsPerRun(1000, func() {
+		app.fireLifecycleEvents()
+		app.fireDueTimers(now)
+		app.ensureScriptLifecycleController().syncProjections(app, app)
+	})
+	if &app.scriptLifecycle != controller || allocs != 0 {
+		t.Fatalf("controller=%p want=%p allocations=%v", &app.scriptLifecycle, controller, allocs)
+	}
 }
 
 func TestScriptLifecycleControllerPortsAndFieldsAreExhaustiveNarrowAndDetached(t *testing.T) {
 	ports := []reflect.Type{
 		reflect.TypeOf((*scriptLifecycleRuntimePort)(nil)).Elem(),
 		reflect.TypeOf((*scriptLifecycleEventPort)(nil)).Elem(),
-		reflect.TypeOf((*scriptLifecycleDeferredEventPort)(nil)).Elem(),
 		reflect.TypeOf((*scriptLifecycleFailurePort)(nil)).Elem(),
 		reflect.TypeOf((*scriptLifecyclePendingPort)(nil)).Elem(),
 		reflect.TypeOf((*scriptLifecycleTimerPort)(nil)).Elem(),
 		reflect.TypeOf((*scriptLifecycleProjectionPort)(nil)).Elem(),
 	}
-	fields := []controllerFieldExpectation{
-		{name: "runtime", typ: ports[0]},
-		{name: "events", typ: ports[1]},
-		{name: "deferred", typ: ports[2]},
-		{name: "failures", typ: ports[3]},
-		{name: "pending", typ: ports[4]},
-		{name: "timers", typ: ports[5]},
-		{name: "projections", typ: ports[6]},
+	fields := []controllerFieldExpectation{}
+	appType := reflect.TypeOf(App{})
+	controllerField, ok := appType.FieldByName("scriptLifecycle")
+	if !ok || controllerField.Type != reflect.TypeOf(scriptLifecycleController{}) {
+		t.Fatalf("App.scriptLifecycle = %v, want retained controller value", controllerField.Type)
 	}
 	assertControllerPortStructure(t, reflect.TypeOf(scriptLifecycleController{}), fields, ports, scriptLifecycleControllerPortBudget)
 }
