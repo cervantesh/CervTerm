@@ -64,7 +64,7 @@ func restoreSnapshot() layoutrestore.Snapshot {
 	}
 }
 
-func blueprintFromSnapshot(t *testing.T, snapshot layoutrestore.Snapshot) layoutrestore.Blueprint {
+func blueprintFromSnapshot(t testing.TB, snapshot layoutrestore.Snapshot) layoutrestore.Blueprint {
 	t.Helper()
 	doc := layoutstate.Document{Version: layoutstate.Version1, ActiveWorkspace: snapshot.ActiveWorkspace, Workspaces: make([]layoutstate.Workspace, len(snapshot.Workspaces))}
 	for wi, ws := range snapshot.Workspaces {
