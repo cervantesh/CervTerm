@@ -225,6 +225,90 @@ func TestMuxSessionIngressPreservesCallbackEnqueue(t *testing.T) {
 	}
 }
 
+func TestMuxSessionIngressCallbackArrivalIsRevalidatedAndRejectedWhenStale(t *testing.T) {
+	factory := &fakeFactory{}
+	var m *Mux
+	var pane *pane
+	var callbackCalls int
+	m = New(factory, Options{
+		IngressCapacity: 8,
+		SetClipboard: func(id PaneID, _ string) {
+			callbackCalls++
+			m.sessions.incoming <- ingressRecord{pane: id, owner: pane, data: []byte("B")}
+			pane.state = PaneStateClosing
+		},
+	})
+	if _, _, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = m.Shutdown() })
+	pane = lookupPaneForTest(t, m.sessions, 1)
+	defer func() { pane.state = PaneStateRunning }()
+	first := []byte("A\x1b]52;c;Qg==\x07")
+	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: first}
+
+	events := m.Drain(2)
+	wantKinds := []EventKind{PaneOutput, PaneDirty}
+	if got := sessionIngressKinds(events); !reflect.DeepEqual(got, wantKinds) {
+		t.Fatalf("event order=%v want=%v events=%#v", got, wantKinds, events)
+	}
+	if callbackCalls != 1 || len(m.sessions.incoming) != 0 {
+		t.Fatalf("callback calls=%d queued records=%d want 1/0", callbackCalls, len(m.sessions.incoming))
+	}
+	if !bytes.Equal(events[0].Data, first) {
+		t.Fatalf("first output=%q want=%q", events[0].Data, first)
+	}
+	view, ok := m.PaneView(pane.id)
+	if !ok || len(view.Snapshot.Cells) == 0 || view.Snapshot.Cells[0].Rune != 'A' {
+		t.Fatalf("callback stale rejection view=%#v ok=%t", view, ok)
+	}
+	for _, cell := range view.Snapshot.Cells {
+		if cell.Rune == 'B' {
+			t.Fatalf("stale callback ingress reached terminal: %#v", view.Snapshot.Cells)
+		}
+	}
+}
+
+func drainMuxSessionIngressInlineForAllocationParity(m *Mux, record ingressRecord) []Event {
+	var events []Event
+	accepted := m.sessions.adaptSessionIngressRecord(record)
+	if !accepted.acceptSessionIngress() {
+		return m.ResolveEventAddresses(events)
+	}
+	operation := muxSessionIngressOperationAdapter{mux: m, pane: accepted.registered}
+	if len(record.data) > 0 {
+		events = operation.applySessionIngressData(events, record.data)
+	}
+	if record.err != nil {
+		events = operation.applySessionIngressEnd(events, record.err)
+	}
+	return m.ResolveEventAddresses(events)
+}
+
+func TestMuxSessionIngressControllerWiringPreservesAllocationParity(t *testing.T) {
+	active, _, _ := newTestMux(t)
+	baseline, _, _ := newTestMux(t)
+	activePane := lookupPaneForTest(t, active.sessions, 1)
+	baselinePane := lookupPaneForTest(t, baseline.sessions, 1)
+	data := []byte("x")
+	activeRecord := ingressRecord{pane: activePane.id, owner: activePane, data: data}
+	baselineRecord := ingressRecord{pane: baselinePane.id, owner: baselinePane, data: data}
+
+	active.sessions.incoming <- activeRecord
+	benchmarkMuxSessionIngressEvents = active.Drain(1)
+	benchmarkMuxSessionIngressEvents = drainMuxSessionIngressInlineForAllocationParity(baseline, baselineRecord)
+	baselineAllocs := testing.AllocsPerRun(1000, func() {
+		benchmarkMuxSessionIngressEvents = drainMuxSessionIngressInlineForAllocationParity(baseline, baselineRecord)
+	})
+	activeAllocs := testing.AllocsPerRun(1000, func() {
+		active.sessions.incoming <- activeRecord
+		benchmarkMuxSessionIngressEvents = active.Drain(1)
+	})
+	if activeAllocs != baselineAllocs {
+		t.Fatalf("Drain controller allocations=%v inline baseline=%v delta=%v", activeAllocs, baselineAllocs, activeAllocs-baselineAllocs)
+	}
+}
+
 // TestKnownDefect_L3_02_SessionIngressAcceptsDifferentOwnerThread expires Slice 3.1.
 func TestKnownDefect_L3_02_SessionIngressAcceptsDifferentOwnerThread(t *testing.T) {
 	runtime.LockOSThread()
