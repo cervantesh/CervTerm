@@ -10,6 +10,14 @@ import (
 )
 
 func (m *Mux) processITermOutcomes(p *pane) {
+	m.protocolScheduling.dispatchITerm(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})
+}
+
+func (a muxProtocolSchedulingDispatchOperationAdapter) dispatchITerm() {
+	dispatchITermOperation(a.mux, a.pane)
+}
+
+func dispatchITermOperation(m *Mux, p *pane) {
 	outcomes := p.itermOutcomes
 	p.itermOutcomes = nil
 	for _, outcome := range outcomes {

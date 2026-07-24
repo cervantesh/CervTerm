@@ -10,6 +10,14 @@ import (
 )
 
 func (m *Mux) processSixelOutcomes(p *pane) {
+	m.protocolScheduling.dispatchSixel(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})
+}
+
+func (a muxProtocolSchedulingDispatchOperationAdapter) dispatchSixel() {
+	dispatchSixelOperation(a.mux, a.pane)
+}
+
+func dispatchSixelOperation(m *Mux, p *pane) {
 	outcomes := p.sixelOutcomes
 	p.sixelOutcomes = nil
 	for _, outcome := range outcomes {

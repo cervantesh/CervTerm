@@ -1,0 +1,61 @@
+Slice 6.2b canonical same-host performance capture — candidate and retained attribution
+Date: 2026-07-24
+Identity: immutable W 4ba1b3eb83577f02d555e8d23f059e89bd2de9b5 plus current uncommitted G guard/test/docs source
+Host: windows/amd64; go1.25.8; AMD Ryzen 9 7940HX with Radeon Graphics
+Canonical configuration: ten samples; -benchtime=2s -count=1 -cpu=1 -benchmem
+Interleave: for rounds 01..10, candidate ran immediately after base fb30dff.
+Warm-up: one unrecorded 1-second run per binary/identity before the canonical sequence.
+
+Source commands:
+go test -c -o mux-candidate.test.exe ./internal/mux
+go test -c -o workscheduler-candidate.test.exe ./internal/workscheduler
+mux-candidate.test.exe -test.run='^$' -test.bench='^(BenchmarkMuxProtocolDispatchIdle|BenchmarkMuxProtocolCompletionDiscard|BenchmarkMuxProtocolDrainIdle|BenchmarkMuxAllDisabledImageIdle|BenchmarkMuxSessionIngressASCII)$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+workscheduler-candidate.test.exe -test.run='^$' -test.bench='^BenchmarkSchedulerSubmitComplete$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+
+Raw ns/op samples in round order 01..10:
+BenchmarkMuxProtocolDispatchIdle: 13.170 12.470 12.630 12.670 12.820 12.750 12.450 12.080 12.870 13.340
+BenchmarkMuxProtocolCompletionDiscard: 21.290 19.910 20.670 20.370 20.580 20.620 20.140 20.550 20.720 20.770
+BenchmarkMuxProtocolDrainIdle: 122.500 121.500 120.200 122.700 123.000 121.600 124.400 123.200 125.500 125.200
+BenchmarkMuxAllDisabledImageIdle: 31.240 31.360 30.580 31.420 30.730 30.920 31.890 31.020 31.770 32.290
+BenchmarkMuxSessionIngressASCII: 10640 11292 10925 11519 11424 11208 11137 11235 11443 11955
+BenchmarkSchedulerSubmitComplete: 290.500 282.100 290.500 282.000 282.200 290.600 299.400 288.300 302.600 299.800
+
+Raw allocation samples in round order 01..10:
+BenchmarkMuxProtocolDispatchIdle: every sample 0 B/op, 0 allocs/op
+BenchmarkMuxProtocolCompletionDiscard: every sample 0 B/op, 0 allocs/op
+BenchmarkMuxProtocolDrainIdle: every sample 0 B/op, 0 allocs/op
+BenchmarkMuxAllDisabledImageIdle: every sample 0 B/op, 0 allocs/op
+BenchmarkMuxSessionIngressASCII B/op: 1018 1016 1014 1019 1016 1014 1011 1014 1020 1020
+BenchmarkMuxSessionIngressASCII allocs/op: every sample 3
+BenchmarkSchedulerSubmitComplete: every sample 0 B/op, 0 allocs/op
+
+Canonical ten-sample medians and base deltas:
+BenchmarkMuxProtocolDispatchIdle: 12.710 ns/op; +3.337 ns, +35.60%; 0 B/op; 0 allocs/op
+BenchmarkMuxProtocolCompletionDiscard: 20.600 ns/op; +8.400 ns, +68.85%; 0 B/op; 0 allocs/op
+BenchmarkMuxProtocolDrainIdle: 122.850 ns/op; +8.250 ns, +7.20%; 0 B/op; 0 allocs/op
+BenchmarkMuxAllDisabledImageIdle: 31.300 ns/op; +2.880 ns, +10.13%; 0 B/op; 0 allocs/op
+BenchmarkMuxSessionIngressASCII: 11263.5 ns/op; -4.0 ns, -0.04%; 1016 B/op; 3 allocs/op
+BenchmarkSchedulerSubmitComplete: 290.500 ns/op; -12.050 ns, -3.98%; 0 B/op; 0 allocs/op
+
+RETAINED-SOURCE ATTRIBUTION — BenchmarkMuxProtocolControllerAttribution
+Configuration: candidate retained source; -benchtime=2s -count=10 -cpu=1 -benchmem. No benchmark-specific production branch and no duplicated production body.
+Command: mux-candidate.test.exe -test.run='^$' -test.bench='^BenchmarkMuxProtocolControllerAttribution$' -test.benchmem -test.benchtime=2s -test.count=10 -test.cpu=1
+
+Raw ns/op samples and medians:
+dispatch-idle/direct-adapters: 9.361 10.500 10.300 10.950 10.230 10.540 11.260 10.510 10.850 10.880; median 10.525
+dispatch-idle/controller: 13.490 14.110 13.690 13.360 13.670 13.480 13.670 13.560 13.520 13.860; median 13.615; direct-to-controller +3.090 ns
+all-disabled-expiry/direct-adapter: 4.683 4.615 4.922 4.775 4.823 4.643 4.664 4.694 4.764 4.798; median 4.729
+all-disabled-expiry/controller: 5.758 6.010 5.851 5.698 5.736 5.657 5.768 5.855 5.804 5.858; median 5.786; direct-to-controller +1.057 ns
+expiry/direct-adapter: 65.790 65.110 64.650 67.370 66.100 66.620 65.200 66.650 66.490 64.220; median 65.945
+expiry/controller: 66.250 67.610 67.930 70.120 67.770 68.440 67.240 67.390 68.700 68.650; median 67.850; direct-to-controller +1.905 ns
+completion/direct-adapter: 16.070 15.200 16.130 15.890 16.330 15.770 15.740 15.990 16.090 15.600; median 15.940
+completion/controller: 21.690 21.980 23.620 22.490 21.690 21.670 22.180 22.060 21.500 21.900; median 21.940; direct-to-controller +6.000 ns
+Every attribution sample: 0 B/op, 0 allocs/op.
+
+Attribution mapping:
+- True dispatch overall: base direct shims 9.373 ns; candidate direct adapters 10.525 ns (+1.152 ns mechanical extraction/layout); candidate controller shims 13.615 ns (+3.090 ns controller). Staged attribution is +4.242 ns versus the independently interleaved overall +3.337 ns; difference -0.905 ns.
+- Completion discard: base direct body 12.200 ns; candidate direct adapter 15.940 ns (+3.740 ns mechanical extraction/layout); candidate controller 21.940 ns (+6.000 ns controller). Staged attribution is +9.740 ns versus independently interleaved overall +8.400 ns; difference -1.340 ns. The accepted structural cost is reported in absolute nanoseconds and is never described as a <=3% pass.
+- Drain idle: the canonical benchmark is honestly the full Drain/expiry path, not dispatch. Drain production scaffolding is unchanged between identities; the hot-path source change is expiry extraction/delegation. Isolated candidate expiry direct adapter 65.945 ns -> controller 67.850 ns (+1.905 ns). `go test ./internal/mux -run '^$' -gcflags='-m=2'` confirms that Drain is not inlineable, while its shim/controller calls inline to a generic-dictionary indirect adapter call. The full-context +8.250 ns therefore remains mapped to the measured expiry delegation plus this retained compiler-visible structural path; it is not attributed to dispatch.
+- All-disabled idle: the canonical benchmark includes Drain plus NextImageDeadline. The retained matched nil-path expiry pair is direct adapter 4.729 ns -> controller 5.786 ns (+1.057 ns). The same compiler diagnostic applies to the otherwise unchanged nil-path Drain scaffolding. The full-context +2.880 ns remains reported and mapped to expiry delegation/structural code generation; it is not attributed to dispatch.
+- Ingress is flat (-0.04%). Work scheduler improved by 3.98%; neither path is changed by the slice and no regression is claimed.
+- Allocation block passes: no allocs/op or median B/op increased.
