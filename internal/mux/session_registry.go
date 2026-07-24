@@ -37,6 +37,24 @@ type detachResult struct {
 	owned bool
 }
 
+type sessionIngressRecordAdapter struct {
+	record     ingressRecord
+	registered *pane
+	found      bool
+}
+
+var _ sessionIngressOwnerPort = sessionIngressRecordAdapter{}
+
+func (r *localSessionRegistry) adaptSessionIngressRecord(record ingressRecord) sessionIngressRecordAdapter {
+	registered, found := r.lookup(record.pane)
+	return sessionIngressRecordAdapter{record: record, registered: registered, found: found}
+}
+
+func (a sessionIngressRecordAdapter) acceptSessionIngress() bool {
+	return a.found && a.registered == a.record.owner &&
+		a.registered.state != PaneStateClosed && a.registered.state != PaneStateClosing
+}
+
 func newLocalSessionRegistry(factory SessionFactory, capacity int, wake func()) *localSessionRegistry {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &localSessionRegistry{

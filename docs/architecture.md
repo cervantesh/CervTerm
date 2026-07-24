@@ -213,3 +213,9 @@ This remains preparatory ADR-0021 parity work, not L1-01 closure. Pane render co
 Slice 6.3c delegates only pane-bound script host routing, script callback/deferred-event/projection ordering, and native IME/accessibility activation ordering to private per-projection controllers. `App` remains authoritative for the script runtime, configuration, mux/pane state, pending event maps, timers, status and overlays, and for the native window, projection bundle, WndProc, IME/accessibility objects, resource adoption and rollback. Controllers retain no lifecycle resource or mutable owner and contain zero dynamic `App` backreferences: the script-host controller stores only a pane ID plus an initialized scalar, while lifecycle and native controllers are zero-field values.
 
 This is completed preparatory ADR-0021 parity work, not L1-01 closure. The narrow ports and facade adapters expire in Slice 6.3d; formal closure remains deferred until L1-02 through L1-06 and the 6.3d execution predecessor have merged.
+
+### Preparatory Mux session-ingress delegation
+
+Slice 6.2a delegates only accepted-record validation and data-before-end phase ordering to a private zero-field generic controller beneath `Mux.Drain`. `Mux` remains authoritative for ingress scheduling, the local session registry, panes, parser and terminal mutation, protocol/image outcomes, event addressing, topology and lifecycle. Its operation-scoped adapters retain no state in the controller and expose three private methods across two bounded ports; no exported ingress bypass is added.
+
+This is completed preparatory ADR-0021 parity work, not L3-01 closure. L3-01 remains partial, the facade TODO expires in Slice 6.2d, and formal thin-`Mux` closure stays deferred until L3-02/L3-03/L3-04/L3-08/L3-09/L3-10, preparatory 6.2a-c and the 6.2d execution predecessor are satisfied.

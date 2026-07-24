@@ -1,0 +1,145 @@
+Slice 6.2a benchmark candidate
+commit: aa1bfd4a830cd7fc88e7f6e25288ed4eb3879ae2
+platform: windows/amd64; cpu: AMD Ryzen 9 7940HX with Radeon Graphics; go1.25.8
+command: go test ./internal/mux -run '^$' -bench '^(BenchmarkMuxSessionIngressRejectedStale|BenchmarkMuxSessionIngressASCII|BenchmarkMuxAllDisabledImageIdle)$' -benchmem -benchtime=500ms -count=7 -cpu=1
+
+[run order 1: base then candidate]
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/mux
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkMuxAllDisabledImageIdle         21647598  27.46 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         22087162  27.70 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         22230373  27.40 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         22464505  27.34 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         21574429  27.31 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         22308148  27.41 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         21510309  27.71 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10401136  58.80 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10208890  58.78 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10466893  58.39 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10204983  58.63 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10193748  58.73 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10050638  59.26 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10052574  59.17 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressASCII          65470  9034 ns/op  1082 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          63702  9240 ns/op  1085 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          63858  9247 ns/op  1084 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          65612  9380 ns/op  1082 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          60094  9693 ns/op  1091 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          66865  9170 ns/op  1080 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          61168  9279 ns/op  1089 B/op  3 allocs/op
+PASS
+
+[run order 2: candidate then base]
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/mux
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkMuxAllDisabledImageIdle         20979901  27.38 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         17423221  28.73 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         18510577  28.79 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         18228160  28.58 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         18160245  28.90 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         17991057  28.56 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle         20727319  29.52 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10426132  63.08 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  9949076  59.00 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10382814  58.43 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10587014  58.02 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10451413  58.32 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  9946684  57.98 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale  10098187  58.36 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressASCII          55726  9515 ns/op  1099 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          60082  9197 ns/op  1091 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          61266  9360 ns/op  1089 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          65076  9290 ns/op  1082 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          61276  9326 ns/op  1089 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          62038  9286 ns/op  1087 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII          63676  9500 ns/op  1085 B/op  3 allocs/op
+PASS
+
+[adversarial-repair candidate rerun; final retained source, seven samples]
+command: go test ./internal/mux -run '^$' -bench '^(BenchmarkMuxSessionIngressStaleAcceptancePaths|BenchmarkMuxSessionIngressRejectedStale|BenchmarkMuxSessionIngressASCII|BenchmarkMuxAllDisabledImageIdle)$' -benchmem -benchtime=500ms -count=7 -cpu=1
+note: BenchmarkMuxSessionIngressStaleAcceptancePaths is retained in internal/mux/mux_session_ingress_test.go and preserves the production Drain prelude while comparing stale inline acceptance, operation-adapter acceptance, and active generic routing.
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/mux
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkMuxAllDisabledImageIdle                                      21832948  28.16 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle                                      22428145  27.62 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle                                      21497978  27.78 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle                                      21349576  27.74 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle                                      21171339  27.80 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle                                      20075751  27.57 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxAllDisabledImageIdle                                      21762469  28.10 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12684318  49.39 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12185190  48.35 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12176658  49.26 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12372076  48.82 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12092190  49.12 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12623764  49.24 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          11863170  48.64 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     11016086  54.08 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     11215497  54.36 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     11024182  53.54 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     11326630  54.17 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     11290334  54.34 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     11088072  53.88 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     11128938  54.23 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route   9582552  59.46 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10356433  61.11 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route   9901758  59.40 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10094025  60.77 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10017646  59.60 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10111938  59.95 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10193679  59.99 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale                               10010995  59.85 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale                               10079594  59.40 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale                               10367474  59.14 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale                               10251643  58.56 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale                                9977632  59.51 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale                               10041016  58.94 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressRejectedStale                               10102148  58.84 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressASCII                                          63690  9346 ns/op  1085 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII                                          61288  9422 ns/op  1089 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII                                          62834  9328 ns/op  1086 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII                                          58422  9278 ns/op  1094 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII                                          62076  9516 ns/op  1087 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII                                          62504  9493 ns/op  1087 B/op  3 allocs/op
+BenchmarkMuxSessionIngressASCII                                          63908  9503 ns/op  1084 B/op  3 allocs/op
+PASS
+
+[full rerun medians]
+all-disabled idle: 27.78 ns/op, 0 B/op, 0 allocs/op
+stale inline acceptance: 49.12 ns/op, 0 B/op, 0 allocs/op
+operation-adapter acceptance: 54.17 ns/op, 0 B/op, 0 allocs/op
+active generic controller route: 59.95 ns/op, 0 B/op, 0 allocs/op
+rejected stale production Drain: 59.14 ns/op, 0 B/op, 0 allocs/op
+ASCII ingress: 9422 ns/op, 1087 B/op, 3 allocs/op
+
+[focused retained-source confirmation; final source, seven samples]
+command: go test ./internal/mux -run '^$' -bench '^BenchmarkMuxSessionIngressStaleAcceptancePaths$' -benchmem -benchtime=500ms -count=7 -cpu=1
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12347736  48.87 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12433995  48.63 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12279355  48.58 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12448158  48.81 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12455755  48.73 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12235458  50.01 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/stale-inline-acceptance          12142946  48.87 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     10918023  56.13 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     10892376  55.06 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     10834099  55.45 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     10870312  55.87 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     10772959  55.35 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     11068680  54.69 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/operation-adapter-acceptance     10960444  54.60 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10310127  58.71 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10254446  58.08 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10346896  59.20 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10279657  58.61 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10245393  58.37 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10247703  58.44 ns/op  0 B/op  0 allocs/op
+BenchmarkMuxSessionIngressStaleAcceptancePaths/active-generic-controller-route  10100380  59.09 ns/op  0 B/op  0 allocs/op
+PASS
+focused medians: inline 48.81 ns/op -> operation adapter 55.35 ns/op -> generic route 58.61 ns/op; all 0 B/op, 0 allocs/op
