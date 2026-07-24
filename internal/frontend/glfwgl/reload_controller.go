@@ -35,7 +35,9 @@ type reloadFailurePort interface {
 
 // reloadController owns only reload request and dispatch ordering. Pending state,
 // prepared generations, runtime/config state, GPU resources, and worker results
-// remain behind App-owned ports until later movement and wiring commits.
+// remain behind App-owned ports.
+// TODO(L1-06; expires Slice 6.1c): replace fixed ordering with typed reload states.
+// TODO(L1-01; expires Slice 6.3d): remove the preparatory facade adapter.
 type reloadController struct {
 	source  reloadSourcePort
 	watch   reloadWatchPort

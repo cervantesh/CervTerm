@@ -1,0 +1,66 @@
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics        
+BenchmarkArchitectureSliceAdmissionDirectRejected-32          	1000000000	         1.134 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectRejected-32          	1000000000	         1.149 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectRejected-32          	1000000000	         1.282 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectRejected-32          	910150682	         1.323 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectRejected-32          	1000000000	         1.226 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectRejected-32          	983362328	         1.311 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectRejected-32          	1000000000	         1.275 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectRejected-32          	959841817	         1.307 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectRejected-32          	997405083	         1.359 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectRejected-32          	871223698	         1.312 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerRejected-32      	272791254	         4.405 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerRejected-32      	290919387	         4.349 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerRejected-32      	273473731	         4.310 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerRejected-32      	278677738	         4.424 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerRejected-32      	271451757	         4.400 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerRejected-32      	270871128	         4.354 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerRejected-32      	274432683	         4.457 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerRejected-32      	284991424	         4.263 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerRejected-32      	271834789	         4.404 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerRejected-32      	279771864	         4.445 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectAdmitted-32          	371736732	         3.334 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectAdmitted-32          	374481576	         3.382 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectAdmitted-32          	322277253	         3.317 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectAdmitted-32          	354648810	         3.397 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectAdmitted-32          	382728238	         3.328 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectAdmitted-32          	349707614	         3.309 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectAdmitted-32          	364758825	         3.366 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectAdmitted-32          	355129924	         3.366 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectAdmitted-32          	349126862	         3.339 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectAdmitted-32          	342264633	         3.348 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerAdmitted-32      	121705593	        10.24 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerAdmitted-32      	100000000	        10.29 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerAdmitted-32      	100000000	        10.12 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerAdmitted-32      	100000000	        10.24 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerAdmitted-32      	100000000	        10.19 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerAdmitted-32      	100000000	        10.21 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerAdmitted-32      	100000000	        10.26 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerAdmitted-32      	100000000	        10.11 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerAdmitted-32      	100000000	        10.10 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerAdmitted-32      	100000000	        10.16 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectContinuous-32        	370214742	         3.254 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectContinuous-32        	351366228	         3.467 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectContinuous-32        	346513153	         3.280 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectContinuous-32        	352617182	         3.328 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectContinuous-32        	353186952	         3.335 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectContinuous-32        	378680298	         3.206 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectContinuous-32        	388151544	         3.237 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectContinuous-32        	366345768	         3.323 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectContinuous-32        	365595066	         3.369 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionDirectContinuous-32        	353304768	         3.261 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerContinuous-32    	121502966	         9.913 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerContinuous-32    	121981354	         9.777 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerContinuous-32    	121678690	         9.851 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerContinuous-32    	100000000	        10.01 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerContinuous-32    	121764278	        10.02 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerContinuous-32    	121813831	         9.990 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerContinuous-32    	100000000	        10.09 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerContinuous-32    	100000000	        10.11 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerContinuous-32    	100000000	        10.04 ns/op	       0 B/op	       0 allocs/op
+BenchmarkArchitectureSliceAdmissionControllerContinuous-32    	121023642	         9.983 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/frontend/glfwgl	90.506s

@@ -4,7 +4,6 @@ package glfwgl
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 )
@@ -200,11 +199,41 @@ func TestRenderControllerPortsStayNarrowAndFieldsStayDetached(t *testing.T) {
 
 func assertDetachedControllerType(t *testing.T, name string, typ reflect.Type) {
 	t.Helper()
-	typeName := typ.String()
-	lower := strings.ToLower(typeName)
-	for _, forbidden := range []string{"*glfwgl.app", "*mux.mux", "*glfw.window", "gpu.renderer", "script.runtime", "runtime.", "map[", "func("} {
-		if strings.Contains(lower, forbidden) {
-			t.Errorf("%s has forbidden type %s", name, typeName)
+	if typ.Name() != "" && (typ.Name() == "App" || typ.Name() == "Mux" || typ.Name() == "Window" || containsFold(typ.Name(), "prepared")) {
+		t.Errorf("%s has forbidden named type %s", name, typ)
+	}
+	switch typ.PkgPath() {
+	case "cervterm/internal/config", "cervterm/internal/frontend/gpu", "cervterm/internal/script", "runtime", "github.com/go-gl/glfw/v3.3/glfw":
+		t.Errorf("%s has forbidden package type %s", name, typ)
+	}
+	switch typ.Kind() {
+	case reflect.Map, reflect.Func, reflect.Chan, reflect.UnsafePointer:
+		t.Errorf("%s has forbidden structural type %s", name, typ)
+	case reflect.Interface:
+		if typ.NumMethod() == 0 {
+			t.Errorf("%s uses empty interface %s", name, typ)
+		}
+	case reflect.Pointer, reflect.Slice, reflect.Array:
+		assertDetachedControllerType(t, name, typ.Elem())
+	}
+}
+
+func containsFold(value, fragment string) bool {
+	for index := 0; index+len(fragment) <= len(value); index++ {
+		matched := true
+		for offset := range fragment {
+			left, right := value[index+offset], fragment[offset]
+			if left >= 'A' && left <= 'Z' {
+				left += 'a' - 'A'
+			}
+			if left != right {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return true
 		}
 	}
+	return false
 }
