@@ -93,6 +93,7 @@ var requiredDocs = []string{
 	"docs/validation/architecture-maturity-slice-6.3c.md",
 	"docs/validation/architecture-maturity-slice-6.2a.md",
 	"scripts/capture-parity-baseline.go",
+	"docs/validation/architecture-maturity-slice-6.2b.md",
 	"scripts/capture-phase15-benchmarks.go",
 	"scripts/capture-phase15-process.py",
 	"scripts/check-phase15-recovery.go",
@@ -119,6 +120,7 @@ func main() {
 	findings = append(findings, checkPhase15SupportMatrix()...)
 	findings = append(findings, checkSlice63cGuard()...)
 	findings = append(findings, checkSlice62aGuard()...)
+	findings = append(findings, checkSlice62bGuard()...)
 	if len(findings) > 0 {
 		fmt.Fprintln(os.Stderr, "maturity gate failures:")
 		for _, f := range findings {
@@ -1574,6 +1576,977 @@ func checkSlice62aCombinedShallowPostGSelfTest() []finding {
 		return []finding{{path: "scripts/check-maturity-gates.go", reason: "combined shallow/pre-G self-test did not reject an unidentified active-branch commit beyond W"}}
 	}
 	return nil
+}
+
+type slice62bControllerSpec struct {
+	path       string
+	controller string
+	budgetName string
+	budget     int
+	maxMethods int
+	ports      map[string][]string
+}
+
+var slice62bAllowedPaths = []string{
+	"docs/architecture-maturity/implementation-plan.md",
+	"docs/architecture.md",
+	"docs/validation/architecture-maturity-slice-6.2b.md",
+	"docs/validation/architecture-maturity-slice-6.2b/benchmarks-base.txt",
+	"docs/validation/architecture-maturity-slice-6.2b/benchmarks-candidate.txt",
+	"docs/validation/architecture-maturity-slice-6.2b/gates.txt",
+	"docs/validation/architecture-maturity-slice-6.2b/scope-and-commits.txt",
+	"internal/mux/mux.go",
+	"internal/mux/mux_iterm.go",
+	"internal/mux/mux_kitty.go",
+	"internal/mux/mux_protocol_scheduling_test.go",
+	"internal/mux/mux_sixel.go",
+	"internal/mux/protocol_scheduling_controller.go",
+	"internal/mux/protocol_scheduling_controller_test.go",
+	"scripts/check-maturity-gates.go",
+}
+
+var slice62bController = slice62bControllerSpec{
+	path:       "internal/mux/protocol_scheduling_controller.go",
+	controller: "protocolSchedulingController",
+	budgetName: "protocolSchedulingControllerPortBudget",
+	budget:     5,
+	maxMethods: 3,
+	ports: map[string][]string{
+		"protocolSchedulingDispatchPort": {
+			"dispatchKitty([]Event) []Event",
+			"dispatchSixel()",
+			"dispatchITerm()",
+		},
+		"protocolSchedulingApplyPort": {
+			"applyExpiry([]Event) []Event",
+			"applyCompletion([]Event) []Event",
+		},
+	},
+}
+
+var slice62bExactMethodSignatures = map[string]string{
+	"dispatchKitty":   "func(events []Event, port dispatchPort) []Event",
+	"dispatchSixel":   "func(port dispatchPort)",
+	"dispatchITerm":   "func(port dispatchPort)",
+	"applyExpiry":     "func(events []Event, port applyPort) []Event",
+	"applyCompletion": "func(events []Event, port applyPort) []Event",
+}
+
+var slice62bExactMethodBodies = map[string]string{
+	"dispatchKitty":   "{\n\treturn port.dispatchKitty(events)\n}",
+	"dispatchSixel":   "{\n\tport.dispatchSixel()\n}",
+	"dispatchITerm":   "{\n\tport.dispatchITerm()\n}",
+	"applyExpiry":     "{\n\treturn port.applyExpiry(events)\n}",
+	"applyCompletion": "{\n\treturn port.applyCompletion(events)\n}",
+}
+
+type slice62bShimSpec struct {
+	path string
+	body string
+}
+
+var slice62bExactShims = map[string]slice62bShimSpec{
+	"processKittyOutcomes": {
+		path: "internal/mux/mux_kitty.go",
+		body: "{\n\treturn m.protocolScheduling.dispatchKitty(nil, muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
+	},
+	"processSixelOutcomes": {
+		path: "internal/mux/mux_sixel.go",
+		body: "{\n\tm.protocolScheduling.dispatchSixel(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
+	},
+	"processITermOutcomes": {
+		path: "internal/mux/mux_iterm.go",
+		body: "{\n\tm.protocolScheduling.dispatchITerm(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
+	},
+	"expireImages": {
+		path: "internal/mux/mux_kitty.go",
+		body: "{\n\treturn m.protocolScheduling.applyExpiry(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now})\n}",
+	},
+	"applyImageCompletion": {
+		path: "internal/mux/mux_kitty.go",
+		body: "{\n\treturn m.protocolScheduling.applyCompletion(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: completion})\n}",
+	},
+}
+
+func checkSlice62bGuard() []finding {
+	var findings []finding
+	findings = append(findings, checkSlice62bPostGPolicySelfTest()...)
+	findings = append(findings, checkSlice62bCombinedShallowPostGSelfTest()...)
+	findings = append(findings, checkSlice62bBypassSelfTest()...)
+	findings = append(findings, checkSlice62bDocumentedSequence()...)
+	findings = append(findings, checkSlice62bController(slice62bController)...)
+	findings = append(findings, checkSlice62bProductionSurface()...)
+	findings = append(findings, checkSlice62bCallerOrder()...)
+	findings = append(findings, checkSlice62bKnownDefects()...)
+	findings = append(findings, checkSlice62bCommitsAndPaths()...)
+	return findings
+}
+
+func checkSlice62bController(spec slice62bControllerSpec) []finding {
+	data, err := os.ReadFile(spec.path)
+	if err != nil {
+		return []finding{{path: spec.path, reason: err.Error()}}
+	}
+	var findings []finding
+	const expiry = "TODO(L3-01; expires Slice 6.2d): remove the preparatory facade adapter."
+	if count := strings.Count(string(data), expiry); count != 1 {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("must contain exactly one L3-01 Slice 6.2d facade-expiry TODO, found %d", count)})
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, spec.path, data, 0)
+	if err != nil {
+		return append(findings, finding{path: spec.path, reason: "cannot parse protocol-scheduling controller: " + err.Error()})
+	}
+	if len(file.Imports) != 0 {
+		findings = append(findings, finding{path: spec.path, reason: "generic protocol-scheduling controller must remain import-free"})
+	}
+	wantDeclarations := map[string]int{
+		spec.budgetName: 1, "protocolSchedulingDispatchPort": 1, "protocolSchedulingApplyPort": 1,
+		spec.controller: 1, "newProtocolSchedulingController": 1,
+		"method:dispatchKitty": 1, "method:dispatchSixel": 1, "method:dispatchITerm": 1,
+		"method:applyExpiry": 1, "method:applyCompletion": 1,
+	}
+	declarations := make(map[string]int)
+	methodInventory := make(map[string]int)
+	portCount := 0
+	for _, declaration := range file.Decls {
+		switch declaration := declaration.(type) {
+		case *ast.GenDecl:
+			for _, item := range declaration.Specs {
+				switch node := item.(type) {
+				case *ast.ValueSpec:
+					for index, name := range node.Names {
+						declarations[name.Name]++
+						if token.IsExported(name.Name) {
+							findings = append(findings, finding{path: spec.path, reason: "controller declaration must remain private: " + name.Name})
+						}
+						if name.Name == spec.budgetName && index < len(node.Values) {
+							literal, ok := node.Values[index].(*ast.BasicLit)
+							value, parseErr := strconv.Atoi(strings.TrimSpace(literalValue(literal, ok)))
+							if parseErr != nil || value != spec.budget {
+								findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s must equal %d", spec.budgetName, spec.budget)})
+							}
+						}
+					}
+				case *ast.TypeSpec:
+					declarations[node.Name.Name]++
+					if token.IsExported(node.Name.Name) {
+						findings = append(findings, finding{path: spec.path, reason: "controller type must remain private: " + node.Name.Name})
+					}
+					if node.Name.Name == spec.controller {
+						structure, ok := node.Type.(*ast.StructType)
+						if !ok || len(structure.Fields.List) != 0 {
+							findings = append(findings, finding{path: spec.path, reason: spec.controller + " must remain a private zero-field struct"})
+						}
+						got := renderedNamedFields(fset, node.TypeParams)
+						want := []string{"dispatchPort:protocolSchedulingDispatchPort", "applyPort:protocolSchedulingApplyPort"}
+						if strings.Join(got, "|") != strings.Join(want, "|") {
+							findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s generic parameters=%v want exact %v", spec.controller, got, want)})
+						}
+					}
+					wantMethods, isPort := spec.ports[node.Name.Name]
+					if !isPort {
+						continue
+					}
+					port, ok := node.Type.(*ast.InterfaceType)
+					if !ok {
+						findings = append(findings, finding{path: spec.path, reason: node.Name.Name + " must remain a private interface"})
+						continue
+					}
+					gotMethods := make([]string, 0, len(port.Methods.List))
+					for _, method := range port.Methods.List {
+						gotMethods = append(gotMethods, renderSlice62aInterfaceMethod(fset, method))
+						function, ok := method.Type.(*ast.FuncType)
+						if !ok || len(method.Names) != 1 || token.IsExported(method.Names[0].Name) {
+							findings = append(findings, finding{path: spec.path, reason: node.Name.Name + " must contain only exact private methods"})
+							continue
+						}
+						for _, list := range []*ast.FieldList{function.Params, function.Results} {
+							for _, typeText := range renderedUnnamedFields(fset, list) {
+								findings = append(findings, forbiddenSlice62bType(spec.path, node.Name.Name, typeText)...)
+							}
+						}
+					}
+					if strings.Join(gotMethods, "|") != strings.Join(wantMethods, "|") {
+						findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s methods=%v want exact %v", node.Name.Name, gotMethods, wantMethods)})
+					}
+					if len(gotMethods) == 0 || len(gotMethods) > spec.maxMethods || len(gotMethods) > 5 {
+						findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s methods=%d must be nonzero, <=%d and <=5", node.Name.Name, len(gotMethods), spec.maxMethods)})
+					}
+					portCount += len(gotMethods)
+				}
+			}
+		case *ast.FuncDecl:
+			if token.IsExported(declaration.Name.Name) {
+				findings = append(findings, finding{path: spec.path, reason: "controller function must remain private: " + declaration.Name.Name})
+			}
+			if declaration.Recv == nil {
+				declarations[declaration.Name.Name]++
+				if declaration.Name.Name == "newProtocolSchedulingController" {
+					want := "func[dispatchPort protocolSchedulingDispatchPort, applyPort protocolSchedulingApplyPort]() protocolSchedulingController[dispatchPort, applyPort]"
+					if got := renderSlice62aNode(fset, declaration.Type); compactSlice62bGoText(got) != compactSlice62bGoText(want) {
+						findings = append(findings, finding{path: spec.path, reason: "constructor signature changed: " + got})
+					}
+					wantBody := "{\n\treturn protocolSchedulingController[dispatchPort, applyPort]{}\n}"
+					if got := renderSlice62aNode(fset, declaration.Body); got != wantBody {
+						findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("constructor body=%q want exact zero-value body", got)})
+					}
+				}
+				continue
+			}
+			key := "method:" + declaration.Name.Name
+			declarations[key]++
+			methodInventory[declaration.Name.Name]++
+			wantSignature, known := slice62bExactMethodSignatures[declaration.Name.Name]
+			if !known {
+				continue
+			}
+			gotReceiver := strings.Join(renderedUnnamedFields(fset, declaration.Recv), "|")
+			if gotReceiver != "protocolSchedulingController[dispatchPort, applyPort]" || renderSlice62aNode(fset, declaration.Type) != wantSignature {
+				findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s receiver/signature changed", declaration.Name.Name)})
+			}
+			if got := renderSlice62aNode(fset, declaration.Body); got != slice62bExactMethodBodies[declaration.Name.Name] {
+				findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s body=%q want exact one-call delegation", declaration.Name.Name, got)})
+			}
+		}
+	}
+	if !mapsEqualStringInt(declarations, wantDeclarations) {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("controller declarations=%v want exact %v", declarations, wantDeclarations)})
+	}
+	if len(methodInventory) != 5 {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("controller method inventory=%v want exact five methods", methodInventory)})
+	}
+	for name := range slice62bExactMethodSignatures {
+		if methodInventory[name] != 1 {
+			findings = append(findings, finding{path: spec.path, reason: "controller method inventory missing/duplicates " + name})
+		}
+	}
+	if portCount != spec.budget {
+		findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("aggregate port methods=%d budget=%d", portCount, spec.budget)})
+	}
+	return findings
+}
+
+func compactSlice62bGoText(text string) string {
+	return strings.ReplaceAll(strings.Join(strings.Fields(text), ""), ",]", "]")
+}
+
+func forbiddenSlice62bType(path, owner, typeText string) []finding {
+	lower := strings.ToLower(typeText)
+	for _, forbidden := range []string{"*mux", "*pane", "*imagedecodescheduler", "replyslot", "map[", "func(", "chan ", "interface{}", "any"} {
+		if strings.Contains(lower, forbidden) {
+			return []finding{{path: path, reason: owner + " has forbidden retained-owner/state type " + typeText}}
+		}
+	}
+	return nil
+}
+
+func slice62bExpandRetainedTypeNames(files map[string]*ast.File, names map[string]bool) map[string]bool {
+	for {
+		changed := false
+		for _, file := range files {
+			for _, declaration := range file.Decls {
+				generic, ok := declaration.(*ast.GenDecl)
+				if !ok {
+					continue
+				}
+				for _, item := range generic.Specs {
+					typeSpec, ok := item.(*ast.TypeSpec)
+					if !ok || names[typeSpec.Name.Name] || typeSpec.Name.Name == "Mux" {
+						continue
+					}
+					if slice62bTypeExpressionRetains(typeSpec.Type, names) {
+						names[typeSpec.Name.Name] = true
+						changed = true
+					}
+				}
+			}
+		}
+		if !changed {
+			return names
+		}
+	}
+}
+
+func slice62bControllerTypeNames(files map[string]*ast.File) map[string]bool {
+	return slice62bExpandRetainedTypeNames(files, map[string]bool{"protocolSchedulingController": true})
+}
+
+func slice62bRetainedTypeNames(files map[string]*ast.File) map[string]bool {
+	return slice62bExpandRetainedTypeNames(files, map[string]bool{
+		"protocolSchedulingController":                  true,
+		"muxProtocolSchedulingDispatchOperationAdapter": true,
+		"muxProtocolSchedulingApplyOperationAdapter":    true,
+	})
+}
+
+func slice62bTypeExpressionRetains(expression ast.Expr, names map[string]bool) bool {
+	switch expression := expression.(type) {
+	case nil:
+		return false
+	case *ast.Ident:
+		return names[expression.Name]
+	case *ast.IndexExpr:
+		return slice62bTypeExpressionRetains(expression.X, names) || slice62bTypeExpressionRetains(expression.Index, names)
+	case *ast.IndexListExpr:
+		if slice62bTypeExpressionRetains(expression.X, names) {
+			return true
+		}
+		for _, index := range expression.Indices {
+			if slice62bTypeExpressionRetains(index, names) {
+				return true
+			}
+		}
+	case *ast.ParenExpr:
+		return slice62bTypeExpressionRetains(expression.X, names)
+	case *ast.StarExpr:
+		return slice62bTypeExpressionRetains(expression.X, names)
+	case *ast.ArrayType:
+		return slice62bTypeExpressionRetains(expression.Elt, names)
+	case *ast.MapType:
+		return slice62bTypeExpressionRetains(expression.Key, names) || slice62bTypeExpressionRetains(expression.Value, names)
+	case *ast.ChanType:
+		return slice62bTypeExpressionRetains(expression.Value, names)
+	case *ast.Ellipsis:
+		return slice62bTypeExpressionRetains(expression.Elt, names)
+	case *ast.StructType:
+		return slice62bFieldListRetains(expression.Fields, names)
+	case *ast.InterfaceType:
+		return slice62bFieldListRetains(expression.Methods, names)
+	case *ast.FuncType:
+		return slice62bFieldListRetains(expression.Params, names) || slice62bFieldListRetains(expression.Results, names)
+	}
+	return false
+}
+
+func slice62bFieldListRetains(fields *ast.FieldList, names map[string]bool) bool {
+	if fields == nil {
+		return false
+	}
+	for _, field := range fields.List {
+		if slice62bTypeExpressionRetains(field.Type, names) {
+			return true
+		}
+	}
+	return false
+}
+
+func slice62bCanonicalRetainedType(name string) bool {
+	return name == "protocolSchedulingController" ||
+		name == "muxProtocolSchedulingDispatchOperationAdapter" ||
+		name == "muxProtocolSchedulingApplyOperationAdapter"
+}
+
+func slice62bRetainedType(expression ast.Expr, names map[string]bool) bool {
+	return slice62bTypeExpressionRetains(expression, names)
+}
+
+func checkSlice62bProductionSurface() []finding {
+	const root = "internal/mux"
+	fset := token.NewFileSet()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return []finding{{path: root, reason: err.Error()}}
+	}
+	files := make(map[string]*ast.File)
+	var findings []finding
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		path := filepath.ToSlash(filepath.Join(root, entry.Name()))
+		file, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			findings = append(findings, finding{path: path, reason: parseErr.Error()})
+			continue
+		}
+		files[path] = file
+	}
+	controllerTypeNames := slice62bControllerTypeNames(files)
+	retainedTypeNames := slice62bRetainedTypeNames(files)
+	controllerMethods := 0
+	muxControllerFields := 0
+	muxInitializers := 0
+	shimDeclarations := make(map[string]int)
+	reservedCalls := make(map[string]int)
+	protocolFieldSelectors := 0
+	controllerComposites := 0
+	adapterComposites := make(map[string]int)
+	constructorCalls := 0
+	for path, file := range files {
+		for _, declaration := range file.Decls {
+			switch declaration := declaration.(type) {
+			case *ast.GenDecl:
+				for _, item := range declaration.Specs {
+					typeSpec, ok := item.(*ast.TypeSpec)
+					if ok {
+						if token.IsExported(typeSpec.Name.Name) && strings.Contains(strings.ToLower(typeSpec.Name.Name), "protocolscheduling") {
+							findings = append(findings, finding{path: path, reason: "exported protocol-scheduling type bypass " + typeSpec.Name.Name})
+						}
+						if !slice62bCanonicalRetainedType(typeSpec.Name.Name) && retainedTypeNames[typeSpec.Name.Name] {
+							findings = append(findings, finding{path: path, reason: "protocol-scheduling controller alias is forbidden: " + typeSpec.Name.Name})
+						}
+						structure, isStruct := typeSpec.Type.(*ast.StructType)
+						if isStruct {
+							for _, field := range structure.Fields.List {
+								typeText := renderSlice62aNode(fset, field.Type)
+								canonical := typeSpec.Name.Name == "Mux" && len(field.Names) == 1 && field.Names[0].Name == "protocolScheduling" && compactSlice62bGoText(typeText) == "protocolSchedulingController[muxProtocolSchedulingDispatchOperationAdapter,muxProtocolSchedulingApplyOperationAdapter]"
+								if canonical {
+									muxControllerFields++
+									continue
+								}
+								if slice62bRetainedType(field.Type, retainedTypeNames) {
+									fieldName := "<anonymous>"
+									if len(field.Names) != 0 {
+										fieldName = field.Names[0].Name
+									}
+									findings = append(findings, finding{path: path, reason: "controller/adapter retained recursively under forbidden struct field " + typeSpec.Name.Name + "." + fieldName})
+								}
+							}
+						}
+					}
+					valueSpec, ok := item.(*ast.ValueSpec)
+					if ok && valueSpec.Type != nil && slice62bRetainedType(valueSpec.Type, retainedTypeNames) {
+						findings = append(findings, finding{path: path, reason: "retained protocol-scheduling controller/adapter variable is forbidden"})
+					}
+				}
+			case *ast.FuncDecl:
+				if token.IsExported(declaration.Name.Name) && strings.Contains(strings.ToLower(declaration.Name.Name), "protocolscheduling") {
+					findings = append(findings, finding{path: path, reason: "exported protocol-scheduling function/method bypass " + declaration.Name.Name})
+				}
+				if token.IsExported(declaration.Name.Name) {
+					for _, list := range []*ast.FieldList{declaration.Recv, declaration.Type.Params, declaration.Type.Results} {
+						if list == nil {
+							continue
+						}
+						for _, field := range list.List {
+							if slice62bRetainedType(field.Type, retainedTypeNames) {
+								findings = append(findings, finding{path: path, reason: "exported function/method exposes protocol-scheduling controller/adapter type " + declaration.Name.Name})
+							}
+						}
+					}
+				}
+				if declaration.Recv != nil && len(declaration.Recv.List) == 1 && slice62aControllerTypeExpression(declaration.Recv.List[0].Type, controllerTypeNames) {
+					controllerMethods++
+					if path != slice62bController.path || slice62bExactMethodSignatures[declaration.Name.Name] == "" {
+						findings = append(findings, finding{path: path, reason: "protocolSchedulingController production method inventory permits only the exact five methods in protocol_scheduling_controller.go"})
+					}
+				}
+				if shim, expected := slice62bExactShims[declaration.Name.Name]; expected {
+					shimDeclarations[declaration.Name.Name]++
+					if path != shim.path || !receiverNamed(declaration.Recv, "Mux") || renderSlice62aNode(fset, declaration.Body) != shim.body {
+						findings = append(findings, finding{path: path, reason: "private Mux shim " + declaration.Name.Name + " must remain the exact one-call facade"})
+					}
+				}
+				if declaration.Name.Name == "New" && declaration.Body != nil {
+					ast.Inspect(declaration.Body, func(node ast.Node) bool {
+						keyValue, ok := node.(*ast.KeyValueExpr)
+						if !ok || !slice62aIdentifierNamed(keyValue.Key, "protocolScheduling") {
+							return true
+						}
+						call, ok := keyValue.Value.(*ast.CallExpr)
+						if ok && len(call.Args) == 0 && compactSlice62bGoText(renderSlice62aNode(fset, call.Fun)) == "newProtocolSchedulingController[muxProtocolSchedulingDispatchOperationAdapter,muxProtocolSchedulingApplyOperationAdapter]" {
+							muxInitializers++
+						} else {
+							findings = append(findings, finding{path: path, reason: "Mux protocolScheduling initializer must remain exact"})
+						}
+						return true
+					})
+				}
+			}
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			switch node := node.(type) {
+			case *ast.CompositeLit:
+				typeText := compactSlice62bGoText(renderSlice62aNode(fset, node.Type))
+				switch typeText {
+				case "protocolSchedulingController[dispatchPort,applyPort]":
+					controllerComposites++
+				case "muxProtocolSchedulingDispatchOperationAdapter", "muxProtocolSchedulingApplyOperationAdapter":
+					adapterComposites[typeText]++
+				default:
+					if slice62bRetainedType(node.Type, retainedTypeNames) {
+						findings = append(findings, finding{path: path, reason: "controller/adapter hidden recursively in composite literal " + typeText})
+					}
+				}
+			case *ast.CallExpr:
+				if compactSlice62bGoText(renderSlice62aNode(fset, node.Fun)) == "newProtocolSchedulingController[muxProtocolSchedulingDispatchOperationAdapter,muxProtocolSchedulingApplyOperationAdapter]" {
+					constructorCalls++
+				}
+				if identifier, ok := node.Fun.(*ast.Ident); ok && (identifier.Name == "new" || identifier.Name == "make") {
+					for _, argument := range node.Args {
+						if slice62bRetainedType(argument, retainedTypeNames) {
+							findings = append(findings, finding{path: path, reason: "controller/adapter hidden recursively behind " + identifier.Name})
+						}
+					}
+				}
+			case *ast.SelectorExpr:
+				if node.Sel.Name == "protocolScheduling" {
+					protocolFieldSelectors++
+				}
+				if _, reserved := slice62bExactMethodSignatures[node.Sel.Name]; reserved {
+					reservedCalls[node.Sel.Name]++
+				}
+			}
+			return true
+		})
+	}
+	if controllerMethods != 5 {
+		findings = append(findings, finding{path: slice62bController.path, reason: fmt.Sprintf("production protocolSchedulingController methods=%d want exactly five", controllerMethods)})
+	}
+	if muxControllerFields != 1 || muxInitializers != 1 {
+		findings = append(findings, finding{path: "internal/mux/mux.go", reason: fmt.Sprintf("Mux protocolScheduling fields/initializers=%d/%d want 1/1", muxControllerFields, muxInitializers)})
+	}
+	if controllerComposites != 1 || constructorCalls != 1 {
+		findings = append(findings, finding{path: "internal/mux", reason: fmt.Sprintf("controller composite/constructor calls=%d/%d want exact constructor body/New initializer only", controllerComposites, constructorCalls)})
+	}
+	if adapterComposites["muxProtocolSchedulingDispatchOperationAdapter"] != 3 || adapterComposites["muxProtocolSchedulingApplyOperationAdapter"] != 2 {
+		findings = append(findings, finding{path: "internal/mux", reason: fmt.Sprintf("operation-adapter composite literals=%v want exact dispatch/apply 3/2 in guarded shims", adapterComposites)})
+	}
+	if protocolFieldSelectors != 5 {
+		findings = append(findings, finding{path: "internal/mux", reason: fmt.Sprintf("production protocolScheduling field selector uses=%d want exact five shims; aliases/bypasses are forbidden", protocolFieldSelectors)})
+	}
+	for name := range slice62bExactShims {
+		if shimDeclarations[name] != 1 {
+			findings = append(findings, finding{path: "internal/mux", reason: fmt.Sprintf("private Mux shim %s declarations=%d want exactly one", name, shimDeclarations[name])})
+		}
+	}
+	for name := range slice62bExactMethodSignatures {
+		if reservedCalls[name] != 2 {
+			findings = append(findings, finding{path: "internal/mux", reason: fmt.Sprintf("reserved protocol selector calls %s=%d want controller-port plus exact Mux shim only", name, reservedCalls[name])})
+		}
+	}
+	return findings
+}
+
+func checkSlice62bCallerOrder() []finding {
+	specs := []struct {
+		path     string
+		function string
+		want     []string
+	}{
+		{
+			path:     "internal/mux/mux_advance.go",
+			function: "advancePane",
+			want: []string{
+				"m.processKittyOutcomes(p)",
+				"m.processSixelOutcomes(p)",
+				"m.processITermOutcomes(p)",
+			},
+		},
+		{
+			path:     "internal/mux/mux.go",
+			function: "applySessionIngressEnd",
+			want: []string{
+				"a.mux.processKittyOutcomes(a.pane)",
+				"a.mux.processSixelOutcomes(a.pane)",
+				"a.mux.processITermOutcomes(a.pane)",
+			},
+		},
+	}
+	var findings []finding
+	for _, spec := range specs {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, spec.path, nil, 0)
+		if err != nil {
+			findings = append(findings, finding{path: spec.path, reason: err.Error()})
+			continue
+		}
+		var got []string
+		declarations := 0
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Name.Name != spec.function {
+				continue
+			}
+			declarations++
+			ast.Inspect(function.Body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				selector, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				switch selector.Sel.Name {
+				case "processKittyOutcomes", "processSixelOutcomes", "processITermOutcomes":
+					got = append(got, renderSlice62aNode(fset, call))
+				}
+				return true
+			})
+		}
+		if declarations != 1 || strings.Join(got, "|") != strings.Join(spec.want, "|") {
+			findings = append(findings, finding{path: spec.path, reason: fmt.Sprintf("%s protocol caller order=%v declarations=%d want exact Kitty->Sixel->iTerm %v", spec.function, got, declarations, spec.want)})
+		}
+	}
+	return findings
+}
+
+func checkSlice62bKnownDefects() []finding {
+	const root = "internal/mux"
+	want := map[string]string{
+		"TestKnownDefect_L3_09_ErasedSchedulerResultRequiresRuntimeRouting": "expires Slice 4.8",
+		"TestKnownDefect_L3_09_MuxClockDoesNotReachTermimageStore":          "expires Slice 4.8",
+	}
+	seen := make(map[string]int)
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return []finding{{path: root, reason: err.Error()}}
+	}
+	var findings []finding
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		path := filepath.ToSlash(filepath.Join(root, entry.Name()))
+		fset := token.NewFileSet()
+		file, parseErr := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if parseErr != nil {
+			findings = append(findings, finding{path: path, reason: parseErr.Error()})
+			continue
+		}
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || !strings.HasPrefix(function.Name.Name, "TestKnownDefect_L3_09_") {
+				continue
+			}
+			seen[function.Name.Name]++
+			expiry, exact := want[function.Name.Name]
+			comment := ""
+			if function.Doc != nil {
+				comment = function.Doc.Text()
+			}
+			if !exact || !strings.Contains(comment, expiry) {
+				findings = append(findings, finding{path: path, reason: function.Name.Name + " must be one of the exact two known L3-09 tests expiring Slice 4.8"})
+			}
+		}
+	}
+	if !mapsEqualStringInt(seen, map[string]int{
+		"TestKnownDefect_L3_09_ErasedSchedulerResultRequiresRuntimeRouting": 1,
+		"TestKnownDefect_L3_09_MuxClockDoesNotReachTermimageStore":          1,
+	}) {
+		findings = append(findings, finding{path: "internal/mux/mux_protocol_scheduling_test.go", reason: fmt.Sprintf("known L3-09 inventory=%v want exactly two Slice 4.8 tests", seen)})
+	}
+	return findings
+}
+
+func checkSlice62bCommitsAndPaths() []finding {
+	const (
+		base        = "801285e56fe85c503f0de3a0f459df8c7356286a"
+		tCommit     = "ac708cab6c2f468cc04c2e762a97c2cf19375ca3"
+		aCommit     = "fb30dff9de599c2043c06f96b6466377fa3482fa"
+		mCommit     = "64d407e23e0a857d0638b6460e69a15a32ee03ef"
+		wCommit     = "4ba1b3eb83577f02d555e8d23f059e89bd2de9b5"
+		gSubject    = "refactor(mux): guard protocol scheduling controller delegation"
+		sliceBranch = "arch/l3-01b-mux-protocol-scheduling"
+	)
+	stages := []struct{ class, commit, parent, subject string }{
+		{"T", tCommit, base, "test(mux): characterize protocol scheduling parity"},
+		{"A", aCommit, tCommit, "refactor(mux): add protocol scheduling controller seam"},
+		{"M", mCommit, aCommit, "refactor(mux): split protocol scheduling adapters"},
+		{"W", wCommit, mCommit, "refactor(mux): wire protocol scheduling controller"},
+	}
+	branch, _ := gitText("symbolic-ref", "--quiet", "--short", "HEAD")
+	head, _ := gitText("rev-parse", "HEAD")
+	worktree, _ := gitText("status", "--porcelain=v1", "--untracked-files=all")
+	if shallow, _ := gitText("rev-parse", "--is-shallow-repository"); shallow == "true" {
+		missing := false
+		for _, commit := range []string{base, tCommit, aCommit, mCommit, wCommit} {
+			if _, err := gitText("cat-file", "-e", commit+"^{commit}"); err != nil {
+				missing = true
+				break
+			}
+		}
+		if missing {
+			gCommit, _ := findMaturitySliceCommitBySubject(gSubject)
+			gParent := ""
+			if gCommit != "" {
+				raw, err := gitText("cat-file", "-p", gCommit)
+				if err == nil {
+					var parents []string
+					for _, line := range strings.Split(raw, "\n") {
+						if strings.HasPrefix(line, "parent ") {
+							parents = append(parents, strings.TrimSpace(strings.TrimPrefix(line, "parent ")))
+						}
+					}
+					if len(parents) == 1 {
+						gParent = parents[0]
+					}
+				}
+			}
+			return checkSlice62bShallowFallback(branch == sliceBranch, head, wCommit, gCommit, gParent, worktree)
+		}
+	}
+	var findings []finding
+	for _, stage := range stages {
+		identity, err := gitFields("show", "-s", "--format=%H%x00%P%x00%s", stage.commit)
+		parent, parentErr := gitText("rev-parse", stage.parent+"^{commit}")
+		if err != nil || len(identity) != 3 || parentErr != nil || identity[0] != stage.commit || identity[1] != parent || identity[2] != stage.subject {
+			findings = append(findings, finding{path: "git:" + stage.class, reason: "unexpected exact Slice 6.2b identity/parent/subject"})
+		}
+	}
+	gCommit, _ := findMaturitySliceCommit(gSubject, wCommit)
+	end := gCommit
+	includeWorktree := false
+	if gCommit == "" {
+		if head != wCommit {
+			findings = append(findings, finding{path: "git:G", reason: "before Slice 6.2b G, HEAD must be exact immutable W 4ba1b3e"})
+			return findings
+		}
+		end = wCommit
+		includeWorktree = true
+	} else {
+		identity, err := gitFields("show", "-s", "--format=%H%x00%P%x00%s", gCommit)
+		if err != nil || len(identity) != 3 || identity[1] != wCommit || identity[2] != gSubject {
+			findings = append(findings, finding{path: "git:G", reason: "G must have exact W parent and subject"})
+		}
+		findings = append(findings, checkSlice62bPostGActiveState(branch == sliceBranch, head, gCommit, worktree)...)
+	}
+	return append(findings, checkSlice62bExactPaths(base, end, includeWorktree)...)
+}
+
+func checkSlice62bExactPaths(base, end string, includeWorktree bool) []finding {
+	pathsText, err := gitText("diff", "--name-only", base+".."+end)
+	if err != nil {
+		return []finding{{path: "git:paths", reason: err.Error()}}
+	}
+	paths := nonEmptyLines(pathsText)
+	if includeWorktree {
+		for _, args := range [][]string{{"diff", "--name-only"}, {"diff", "--cached", "--name-only"}, {"ls-files", "--others", "--exclude-standard"}} {
+			text, _ := gitText(args...)
+			paths = append(paths, nonEmptyLines(text)...)
+		}
+	}
+	actual := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		actual[filepath.ToSlash(path)] = true
+	}
+	expected := make(map[string]bool, len(slice62bAllowedPaths))
+	var findings []finding
+	for _, path := range slice62bAllowedPaths {
+		expected[path] = true
+		if !actual[path] {
+			findings = append(findings, finding{path: path, reason: "missing from exact Slice 6.2b changed-path set"})
+		}
+	}
+	for path := range actual {
+		if !expected[path] {
+			findings = append(findings, finding{path: path, reason: "outside exact Slice 6.2b changed-path allowlist"})
+		}
+	}
+	return findings
+}
+
+func checkSlice62bPostGActiveState(active bool, head, gCommit, worktree string) []finding {
+	if !active {
+		return nil
+	}
+	var findings []finding
+	if head != gCommit {
+		findings = append(findings, finding{path: "git:G", reason: "after G exists on active Slice 6.2b branch, HEAD must equal G exactly"})
+	}
+	if strings.TrimSpace(worktree) != "" {
+		findings = append(findings, finding{path: "git:worktree", reason: "after G exists on active Slice 6.2b branch, nonignored worktree must be clean"})
+	}
+	return findings
+}
+
+func checkSlice62bPostGPolicySelfTest() []finding {
+	if got := checkSlice62bPostGActiveState(true, "later", "g", ""); len(got) != 1 || got[0].path != "git:G" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b post-G self-test did not reject active-branch commit after G"}}
+	}
+	if got := checkSlice62bPostGActiveState(true, "g", "g", " M dirty.go"); len(got) != 1 || got[0].path != "git:worktree" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b post-G self-test did not reject dirty active branch"}}
+	}
+	if got := checkSlice62bPostGActiveState(false, "later", "g", " M unrelated.go"); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b post-G self-test rejected later main history"}}
+	}
+	return nil
+}
+
+func slice62bDocumentRequirements() []string {
+	return []string{
+		"| T | `ac708ca` |", "| A | `fb30dff` |", "| M | `64d407e` |", "| W | `4ba1b3e` |", "| G | pending |",
+		"refactor(mux): guard protocol scheduling controller delegation",
+		"A introduced one combined `dispatch` controller method", "exact sole parent to be W",
+		"L3-01 remains **partial**", "L3-09 remains open to Slice 4.8", "6.2d is deferred",
+	}
+}
+
+func slice62bDocumentFindings(text string) []finding {
+	const path = "docs/validation/architecture-maturity-slice-6.2b.md"
+	var findings []finding
+	for _, required := range slice62bDocumentRequirements() {
+		if !strings.Contains(text, required) {
+			findings = append(findings, finding{path: path, reason: "shallow checkout is missing documented commit/closure contract " + required})
+		}
+	}
+	for _, allowed := range slice62bAllowedPaths {
+		if !strings.Contains(text, "\n"+allowed+"\n") {
+			findings = append(findings, finding{path: path, reason: "shallow checkout allowlist is missing " + allowed})
+		}
+	}
+	return findings
+}
+
+func checkSlice62bDocumentedSequence() []finding {
+	const path = "docs/validation/architecture-maturity-slice-6.2b.md"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	return slice62bDocumentFindings(string(data))
+}
+
+func checkSlice62bShallowFallback(active bool, head, wCommit, gCommit, gParent, worktree string) []finding {
+	const path = "docs/validation/architecture-maturity-slice-6.2b.md"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	return slice62bShallowFallbackFindings(string(data), active, head, wCommit, gCommit, gParent, worktree)
+}
+
+func slice62bShallowFallbackFindings(document string, active bool, head, wCommit, gCommit, gParent, worktree string) []finding {
+	findings := slice62bDocumentFindings(document)
+	if gCommit != "" {
+		if gParent == "" {
+			if active {
+				findings = append(findings, finding{path: "git:G", reason: "history-limited active slice cannot prove identifiable G parentage"})
+			}
+		} else if gParent != wCommit {
+			findings = append(findings, finding{path: "git:G", reason: "history-limited G must expose exact immutable W as its sole parent"})
+		}
+		if active {
+			findings = append(findings, checkSlice62bPostGActiveState(true, head, gCommit, worktree)...)
+		}
+		return findings
+	}
+	if !active {
+		return findings
+	}
+	if head != wCommit {
+		findings = append(findings, finding{path: "git:G", reason: "history-limited active Slice 6.2b branch without identifiable G must remain at documented immutable W"})
+	}
+	return findings
+}
+
+func checkSlice62bCombinedShallowPostGSelfTest() []finding {
+	valid := "\n" + strings.Join(slice62bDocumentRequirements(), "\n") + "\n" + strings.Join(slice62bAllowedPaths, "\n") + "\n"
+	if got := slice62bDocumentFindings(valid); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b shallow-doc self-test rejected complete synthetic contract"}}
+	}
+	missingContract := strings.Replace(valid, slice62bDocumentRequirements()[0], "", 1)
+	if got := slice62bDocumentFindings(missingContract); len(got) != 1 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b shallow-doc self-test did not reject missing identity"}}
+	}
+	missingPath := strings.Replace(valid, "\n"+slice62bAllowedPaths[0]+"\n", "\n", 1)
+	if got := slice62bDocumentFindings(missingPath); len(got) != 1 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b shallow-doc self-test did not reject missing allowlist path"}}
+	}
+	postG := slice62bShallowFallbackFindings(valid, true, "later", "w", "g", "w", " M dirty.go")
+	if len(postG) != 2 || postG[0].path != "git:G" || postG[1].path != "git:worktree" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b combined shallow/post-G self-test did not enforce HEAD/clean policy"}}
+	}
+	if got := slice62bShallowFallbackFindings(valid, true, "g", "w", "g", "wrong-parent", ""); len(got) != 1 || got[0].path != "git:G" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b shallow post-G self-test did not reject wrong G parent"}}
+	}
+	if got := slice62bShallowFallbackFindings(valid, false, "later-main", "w", "", "", " M unrelated.go"); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b shallow fallback rejected later main when G metadata was unavailable"}}
+	}
+	if got := slice62bShallowFallbackFindings(valid, false, "later-main", "w", "g", "", " M unrelated.go"); len(got) != 0 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b shallow fallback rejected later main when identifiable G parent metadata was unavailable"}}
+	}
+	if got := slice62bShallowFallbackFindings(valid, true, "later", "w", "", "", ""); len(got) != 1 || got[0].path != "git:G" {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b shallow pre-G self-test did not reject commit beyond W"}}
+	}
+	return nil
+}
+
+func checkSlice62bBypassSelfTest() []finding {
+	fixtures := []struct {
+		name   string
+		source string
+	}{
+		{"alias bypass", `package mux
+			type protocolSchedulingController[T, U any] struct{}
+			type Mux struct { protocolScheduling protocolSchedulingController[int, int] }
+			func (m *Mux) processKittyOutcomes() { alias := m.protocolScheduling; alias.dispatchKitty(nil, nil) }`},
+		{"alternate field", `package mux
+			type protocolSchedulingController[T, U any] struct{}
+			type holder struct { controller protocolSchedulingController[int, int] }`},
+		{"direct adapter bypass", `package mux
+			type muxProtocolSchedulingApplyOperationAdapter struct{}
+			func bypass(a muxProtocolSchedulingApplyOperationAdapter) { a.applyExpiry(nil) }`},
+		{"nested alias and field retention", `package mux
+			type protocolSchedulingController[T, U any] struct{}
+			type muxProtocolSchedulingDispatchOperationAdapter struct{}
+			type controllerAlias = protocolSchedulingController[int, int]
+			type pointerAlias *controllerAlias
+			type sliceAlias []pointerAlias
+			type arrayAlias [1]muxProtocolSchedulingDispatchOperationAdapter
+			type mapAlias map[string]struct { controllers sliceAlias; adapters *arrayAlias }
+			type holder struct { nested mapAlias; anonymous struct { hidden []controllerAlias } }`},
+		{"inferred nested composite retention", `package mux
+			type muxProtocolSchedulingApplyOperationAdapter struct{}
+			var hidden = map[string][]*muxProtocolSchedulingApplyOperationAdapter{}`},
+	}
+	var findings []finding
+	for _, fixture := range fixtures {
+		file, err := parser.ParseFile(token.NewFileSet(), "internal/mux/fixture.go", fixture.source, 0)
+		if err != nil {
+			findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: "cannot parse Slice 6.2b bypass self-test " + fixture.name})
+			continue
+		}
+		got := checkSlice62bSyntheticSurface(map[string]*ast.File{"internal/mux/fixture.go": file})
+		if len(got) == 0 {
+			findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: "Slice 6.2b bypass self-test did not reject " + fixture.name})
+		}
+	}
+	return findings
+}
+
+func checkSlice62bSyntheticSurface(files map[string]*ast.File) []finding {
+	retainedTypeNames := slice62bRetainedTypeNames(files)
+	var findings []finding
+	for path, file := range files {
+		ast.Inspect(file, func(node ast.Node) bool {
+			switch node := node.(type) {
+			case *ast.StructType:
+				for _, field := range node.Fields.List {
+					if slice62bRetainedType(field.Type, retainedTypeNames) {
+						findings = append(findings, finding{path: path, reason: "controller/adapter retained recursively under alternate field"})
+					}
+				}
+			case *ast.TypeSpec:
+				if !slice62bCanonicalRetainedType(node.Name.Name) && retainedTypeNames[node.Name.Name] {
+					findings = append(findings, finding{path: path, reason: "controller/adapter retained through alias or named container " + node.Name.Name})
+				}
+			case *ast.CompositeLit:
+				if slice62bRetainedType(node.Type, retainedTypeNames) {
+					findings = append(findings, finding{path: path, reason: "controller/adapter retained recursively in inferred composite"})
+				}
+			case *ast.CallExpr:
+				if identifier, ok := node.Fun.(*ast.Ident); ok && (identifier.Name == "new" || identifier.Name == "make") {
+					for _, argument := range node.Args {
+						if slice62bRetainedType(argument, retainedTypeNames) {
+							findings = append(findings, finding{path: path, reason: "controller/adapter retained recursively behind " + identifier.Name})
+						}
+					}
+				}
+			case *ast.SelectorExpr:
+				if node.Sel.Name == "protocolScheduling" {
+					findings = append(findings, finding{path: path, reason: "controller field alias/bypass"})
+				}
+				if _, reserved := slice62bExactMethodSignatures[node.Sel.Name]; reserved {
+					findings = append(findings, finding{path: path, reason: "reserved controller/adapter method bypass " + node.Sel.Name})
+				}
+			}
+			return true
+		})
+	}
+	return findings
 }
 
 func gitText(args ...string) (string, error) {

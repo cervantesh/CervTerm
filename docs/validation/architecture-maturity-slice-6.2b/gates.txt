@@ -1,0 +1,55 @@
+Slice 6.2b Windows validation — repaired adversarial review
+Date: 2026-07-24
+platform: windows/amd64; Windows 10.0.26200.8894; Go 1.25.8; AMD Ryzen 9 7940HX with Radeon Graphics
+working state: immutable W 4ba1b3eb83577f02d555e8d23f059e89bd2de9b5; G pending; guard/tests/docs/evidence uncommitted; no commit produced
+
+[focused guards and tests]
+PASS: go test ./internal/mux -run 'ProtocolScheduling|KnownDefect_L3_09' -count=1
+  Includes true dispatch/drain allocation guards, direct/controller attribution source, independent protocol calls, exact source/wiring, and exactly two L3-09 Slice 4.8 characterizations.
+PASS: go test ./internal/mux -run '^TestMuxProtocolSchedulingEOFDispatchOrder$' -count=10
+  Focused mixed-protocol EOF order remained Kitty -> Sixel -> iTerm in ten runs.
+PASS: go run ./scripts/check-maturity-gates.go
+  Exact T/A/M/W/G and path policy, exact zero-value constructor, exact shims/caller order, recursive controller/adapter retention rejection, shallow wrong-parent rejection, and later-main allowance all passed.
+PASS: git diff --check
+  No whitespace errors; only working-tree CRLF advisories where applicable.
+
+[canonical performance]
+IDENTITIES: base fb30dff9de599c2043c06f96b6466377fa3482fa; candidate W 4ba1b3eb83577f02d555e8d23f059e89bd2de9b5 plus current G source.
+METHOD: exactly ten interleaved samples per identity/benchmark, rounds 01..10 alternating base then candidate, -benchtime=2s -count=1 -cpu=1 -benchmem, after one unrecorded 1-second warm-up per binary.
+BASE OVERLAY: only rename the old Drain-bodied BenchmarkMuxProtocolDispatchIdle to BenchmarkMuxProtocolDrainIdle and add the retained true BenchmarkMuxProtocolDispatchIdle body that calls the three current process shims on empty queues. No production source overlaid.
+MUX COMMAND: compiled identity test binary -test.run='^$' -test.bench='^(BenchmarkMuxProtocolDispatchIdle|BenchmarkMuxProtocolCompletionDiscard|BenchmarkMuxProtocolDrainIdle|BenchmarkMuxAllDisabledImageIdle|BenchmarkMuxSessionIngressASCII)$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+WORKSCHEDULER COMMAND: compiled identity test binary -test.run='^$' -test.bench='^BenchmarkSchedulerSubmitComplete$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+  True dispatch idle: 9.373 -> 12.710 ns/op; +3.337 ns, +35.60%; 0 B/op, 0 allocs/op both.
+  Completion discard: 12.200 -> 20.600 ns/op; +8.400 ns, +68.85%; 0 B/op, 0 allocs/op both.
+  Drain/expiry idle: 114.600 -> 122.850 ns/op; +8.250 ns, +7.20%; 0 B/op, 0 allocs/op both.
+  All-disabled Drain + deadline idle: 28.420 -> 31.300 ns/op; +2.880 ns, +10.13%; 0 B/op, 0 allocs/op both.
+  Ingress ASCII: 11267.5 -> 11263.5 ns/op; -4.0 ns, -0.04%; 1016 B/op and 3 allocs/op both.
+  Work scheduler: 302.550 -> 290.500 ns/op; -12.050 ns, -3.98%; 0 B/op, 0 allocs/op both.
+DISPOSITION: the four protocol percentages exceed 3% and are not threshold passes; they require retained structural attribution. Ingress is flat, scheduler improves, and allocation block passes.
+
+[retained-source attribution]
+COMMAND: candidate compiled test binary -test.run='^$' -test.bench='^BenchmarkMuxProtocolControllerAttribution$' -test.benchmem -test.benchtime=2s -test.count=10 -test.cpu=1
+  Dispatch direct adapters 10.525 -> controller shims 13.615 ns (+3.090 ns controller); base direct shims -> candidate direct adapters +1.152 ns; staged +4.242 ns vs overall +3.337 ns (difference -0.905 ns).
+  Completion direct adapter 15.940 -> controller 21.940 ns (+6.000 ns controller); base direct body -> candidate direct adapter +3.740 ns; staged +9.740 ns vs overall +8.400 ns (difference -1.340 ns). Accepted structural overall cost is explicitly +8.400 ns.
+  Enabled expiry direct adapter 65.945 -> controller 67.850 ns (+1.905 ns). Full Drain/expiry delta remains explicitly +8.250 ns and is not attributed to dispatch.
+  All-disabled nil expiry direct adapter 4.729 -> controller 5.786 ns (+1.057 ns). Full all-disabled delta remains explicitly +2.880 ns and is not attributed to dispatch.
+  Compiler evidence: go test ./internal/mux -run '^$' -gcflags='-m=2' confirms Drain is not inlineable while the shim/controller path inlines to a generic-dictionary indirect adapter call; full-context Drain/all-disabled composition is therefore retained structural expiry cost, not dispatch.
+  Every attribution sample: 0 B/op, 0 allocs/op.
+Raw ten-sample arrays and reproducible methodology: benchmarks-base.txt and benchmarks-candidate.txt.
+
+[requested full validation]
+PASS: go run ./scripts/check-maturity-gates.go
+  maturity gates ok; only the three documented known large-file exceptions were reported.
+PASS: go test ./...
+  all packages passed; internal/mux 1.113s, remaining packages passed/cached.
+PASS: go test -race ./...
+  all packages passed under race; internal/mux 3.294s, fontdesc 43.527s, all remaining packages passed.
+PASS: go vet -unsafeptr=false ./...
+  no output; exit 0.
+
+[real GUI and release]
+UNRUN: no real window/OpenGL/pixel/IME/accessibility/native interaction was attempted; this preparatory slice does not change those surfaces.
+NOT APPLICABLE: no release, changelog, deployment, history rewrite, or commit requested or produced.
+
+[unresolved blockers]
+None. All >3% protocol regressions are confined to and mapped against retained direct-adapter/controller structural attribution; no allocation regression or unrelated >3% regression remains. The full Drain and all-disabled deltas remain explicitly reported and are not relabeled as dispatch.

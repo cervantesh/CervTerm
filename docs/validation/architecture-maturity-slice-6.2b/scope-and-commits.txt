@@ -1,0 +1,53 @@
+Slice 6.2b scope and commit evidence
+capture state: immutable W 4ba1b3eb83577f02d555e8d23f059e89bd2de9b5; G pending; guard/docs/evidence uncommitted
+branch: arch/l3-01b-mux-protocol-scheduling
+shallow repository: false
+execution predecessor/base: 801285e56fe85c503f0de3a0f459df8c7356286a (merge of Slice 6.2a)
+T: ac708cab6c2f468cc04c2e762a97c2cf19375ca3; parent 801285e56fe85c503f0de3a0f459df8c7356286a; test(mux): characterize protocol scheduling parity
+A: fb30dff9de599c2043c06f96b6466377fa3482fa; parent ac708cab6c2f468cc04c2e762a97c2cf19375ca3; refactor(mux): add protocol scheduling controller seam
+M: 64d407e23e0a857d0638b6460e69a15a32ee03ef; parent fb30dff9de599c2043c06f96b6466377fa3482fa; refactor(mux): split protocol scheduling adapters
+W: 4ba1b3eb83577f02d555e8d23f059e89bd2de9b5; parent 64d407e23e0a857d0638b6460e69a15a32ee03ef; refactor(mux): wire protocol scheduling controller
+G: pending; required subject: refactor(mux): guard protocol scheduling controller delegation; required parent: exact W
+
+[range policy]
+T/A/M/W identities, subjects and direct parents are immutable. Before G, HEAD == W and changed paths are 801285e..W plus tracked/staged/nonignored worktree paths. On the active branch after G, HEAD == G and the nonignored worktree is clean. Merge/main validates immutable 801285e..G only. A history-limited shallow fallback validates the documented sequence and exact allowlist; when G is identifiable it reads available commit metadata and requires G's exact sole parent to be documented W, otherwise the active slice must fail safely unless it remains exactly at W. Later-main shallow state remains allowed. Combined shallow/wrong-parent/post-G/later-main synthetic policy self-tests run on every maturity invocation.
+
+[controller contract]
+protocolSchedulingController: private, import-free generic zero-field value
+controller retained Mux/pane/scheduler/store/mutable state: 0
+protocolSchedulingDispatchPort: exact private interface; exact dispatchKitty/dispatchSixel/dispatchITerm methods and signatures
+protocolSchedulingApplyPort: exact private interface; exact applyExpiry/applyCompletion methods and signatures
+controller generic parameters: exact dispatchPort/applyPort names and constraints
+controller method inventory: exact five methods, exact receivers/signatures, exact one-call bodies; constructor exact zero-value body
+aggregate port budget: exact 5; largest port: 3; hard maximum: 5
+TODO: exactly one Slice 6.2b TODO(L3-01; expires Slice 6.2d)
+known defects: exactly two named KnownDefect_L3_09 tests; both expire Slice 4.8
+Mux controller field/initializer: exact one each
+production controller shim calls: exact five, one in each named private Mux shim
+matching controller-to-port calls: exact five; all other reserved selector calls rejected
+aliases/recursive pointer, slice, array, map, named/anonymous struct and field retention/exported seams: rejected
+synthetic alias, nested alias/field container, direct-adapter, shallow wrong-parent, active post-
+caller order guard: exact Kitty -> Sixel -> iTerm in mux_advance.go advancePane and mux.go EOF applySessionIngressEnd
+focused EOF mixed-protocol ordering test: PASSG and later-main self-tests: PASS
+
+[exact changed-path allowlist]
+docs/architecture-maturity/implementation-plan.md
+docs/architecture.md
+docs/validation/architecture-maturity-slice-6.2b.md
+docs/validation/architecture-maturity-slice-6.2b/benchmarks-base.txt
+docs/validation/architecture-maturity-slice-6.2b/benchmarks-candidate.txt
+docs/validation/architecture-maturity-slice-6.2b/gates.txt
+docs/validation/architecture-maturity-slice-6.2b/scope-and-commits.txt
+internal/mux/mux.go
+internal/mux/mux_iterm.go
+internal/mux/mux_kitty.go
+internal/mux/mux_protocol_scheduling_test.go
+internal/mux/mux_sixel.go
+internal/mux/protocol_scheduling_controller.go
+internal/mux/protocol_scheduling_controller_test.go
+scripts/check-maturity-gates.go
+
+Observed union of immutable 801285e..W plus tracked/staged/nonignored worktree paths: exactly the allowlist above.
+
+[release/changelog]
+unchanged; no release, changelog, deployment or commit produced

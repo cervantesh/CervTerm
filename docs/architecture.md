@@ -219,3 +219,11 @@ This is completed preparatory ADR-0021 parity work, not L1-01 closure. The narro
 Slice 6.2a delegates only accepted-record validation and data-before-end phase ordering to a private zero-field generic controller beneath `Mux.Drain`. `Mux` remains authoritative for ingress scheduling, the local session registry, panes, parser and terminal mutation, protocol/image outcomes, event addressing, topology and lifecycle. Its operation-scoped adapters retain no state in the controller and expose three private methods across two bounded ports; no exported ingress bypass is added.
 
 This is completed preparatory ADR-0021 parity work, not L3-01 closure. L3-01 remains partial, the facade TODO expires in Slice 6.2d, and formal thin-`Mux` closure stays deferred until L3-02/L3-03/L3-04/L3-08/L3-09/L3-10, preparatory 6.2a-c and the 6.2d execution predecessor are satisfied.
+
+### Preparatory Mux protocol-scheduling delegation
+
+Slice 6.2b delegates only Kitty/Sixel/iTerm outcome dispatch and image expiry/completion application to a private import-free, zero-field generic controller beneath the existing private `Mux` shims. `Mux` remains authoritative for the scheduler, protocol queues and pending maps, pane/store ownership, clocks, erased result routing, replies, diagnostics, events, topology and lifecycle. Two operation-scoped ports expose exactly five methods; no adapter, owner or mutable state is retained and no exported scheduling bypass is introduced.
+
+The unwired A seam initially combined the three dispatch calls. W refines it to independent private methods before wiring because selected parser callbacks and expiry already invoke Kitty, Sixel and iTerm independently, while advance and EOF callers retain the established Kitty→Sixel→iTerm order. This is a seam-shape refinement required by existing call sites, not a behavior or ownership change; retained independent-call and mixed-order tests guard it.
+
+This is completed preparatory ADR-0021 parity work, not L3-01 closure. L3-01 remains partial; L3-09 remains open to Slice 4.8 for typed outcomes and one clock. The facade TODO expires in Slice 6.2d, and 6.2d is deferred until all documented semantic dependencies, preparatory 6.2a-c and its execution predecessor are satisfied.
