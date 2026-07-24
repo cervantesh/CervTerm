@@ -8,10 +8,22 @@ import (
 	"time"
 )
 
+type muxProtocolSchedulingDispatchOperationAdapter struct {
+	mux  *Mux
+	pane *pane
+}
+
 func (m *Mux) processKittyOutcomes(p *pane) []Event {
+	return (muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p}).dispatchKitty(nil)
+}
+
+func (a muxProtocolSchedulingDispatchOperationAdapter) dispatchKitty(events []Event) []Event {
+	return dispatchKittyOperation(events, a.mux, a.pane)
+}
+
+func dispatchKittyOperation(events []Event, m *Mux, p *pane) []Event {
 	outcomes := p.kittyOutcomes
 	p.kittyOutcomes = nil
-	var events []Event
 	for _, outcome := range outcomes {
 		if outcome.Failure != kitty.ReplyNone {
 			p.queueReply(outcome.Reply.Encode(outcome.Failure))
@@ -94,7 +106,25 @@ func (m *Mux) submitKittyDecode(p *pane, outcome kitty.Outcome) {
 	m.kittyPending[owner.token] = owner
 }
 
+type muxProtocolSchedulingApplyOperationAdapter struct {
+	mux        *Mux
+	now        time.Time
+	completion *imageDecodeCompletion
+}
+
 func (m *Mux) applyImageCompletion(completion imageDecodeCompletion) []Event {
+	return (&muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: &completion}).applyCompletion(nil)
+}
+
+func (a *muxProtocolSchedulingApplyOperationAdapter) applyCompletion(events []Event) []Event {
+	completed := applyImageCompletionOperation(a.mux, *a.completion)
+	if len(events) == 0 {
+		return completed
+	}
+	return append(events, completed...)
+}
+
+func applyImageCompletionOperation(m *Mux, completion imageDecodeCompletion) []Event {
 	defer m.imageScheduler.finish(completion.Key)
 	switch completion.Owner.protocol {
 	case imageDecodeKitty:
@@ -250,8 +280,16 @@ func (m *Mux) NextImageDeadline() (time.Time, bool) {
 }
 
 func (m *Mux) expireImages(now time.Time) []Event {
+	return (&muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now}).applyExpiry(nil)
+}
+
+func (a *muxProtocolSchedulingApplyOperationAdapter) applyExpiry(events []Event) []Event {
+	return applyImageExpiryOperation(events, a.mux, a.now)
+}
+
+func applyImageExpiryOperation(events []Event, m *Mux, now time.Time) []Event {
 	if m == nil || m.imageScheduler == nil {
-		return nil
+		return events
 	}
 	m.sessions.mu.Lock()
 	panes := make([]*pane, 0, len(m.sessions.panes))
@@ -259,7 +297,6 @@ func (m *Mux) expireImages(now time.Time) []Event {
 		panes = append(panes, p)
 	}
 	m.sessions.mu.Unlock()
-	var events []Event
 	for _, p := range panes {
 		if p.kittyAdapter != nil {
 			outcome := p.kittyAdapter.Expire(now)
