@@ -1,0 +1,54 @@
+## maturity gates
+maturity gates ok
+known large-file exception: internal/fontglyph/color_colr_render.go (known COLRv1 render split target)
+known large-file exception: internal/fontglyph/backend.go (known font fallback/raster orchestration split target)
+## go test
+ok  	cervterm/cmd/cervterm	1.785s
+ok  	cervterm/internal/accessibility	2.859s
+ok  	cervterm/internal/action	0.471s
+ok  	cervterm/internal/applog	0.408s
+ok  	cervterm/internal/background	0.566s
+ok  	cervterm/internal/bellpolicy	0.384s
+ok  	cervterm/internal/buildinfo	0.383s
+ok  	cervterm/internal/config	4.757s
+ok  	cervterm/internal/core	0.542s
+ok  	cervterm/internal/fontdesc	2.173s
+ok  	cervterm/internal/fontglyph	3.214s
+ok  	cervterm/internal/frontend/glfwgl	0.511s
+ok  	cervterm/internal/frontend/gpu	0.391s
+ok  	cervterm/internal/ime	0.402s
+ok  	cervterm/internal/input	0.371s
+ok  	cervterm/internal/itermimage	0.709s
+ok  	cervterm/internal/kitty	0.571s
+ok  	cervterm/internal/layoutrestore	0.463s
+ok  	cervterm/internal/layoutstate	0.792s
+ok  	cervterm/internal/linkpolicy	0.412s
+ok  	cervterm/internal/metrics	0.407s
+ok  	cervterm/internal/modal	0.410s
+ok  	cervterm/internal/mux	1.131s
+ok  	cervterm/internal/notificationpolicy	0.376s
+ok  	cervterm/internal/pty	0.392s
+ok  	cervterm/internal/quickselect	0.445s
+ok  	cervterm/internal/render	0.452s
+ok  	cervterm/internal/script	4.599s
+ok  	cervterm/internal/selection	0.417s
+ok  	cervterm/internal/sixel	0.506s
+ok  	cervterm/internal/termimage	0.583s
+ok  	cervterm/internal/theme	0.396s
+ok  	cervterm/internal/unicodecluster	0.383s
+ok  	cervterm/internal/unicodeprops	0.404s
+ok  	cervterm/internal/vt	0.696s
+ok  	cervterm/internal/windowbounds	0.424s
+ok  	cervterm/internal/workscheduler	0.433s
+## vet
+## glfw
+ok  	cervterm/internal/frontend/glfwgl	5.079s
+ok  	cervterm/cmd/cervterm	1.111s
+## recovery race
+==> logging recovery: go test -race ./internal/applog -run ^(TestSetupAppendsToLogFile|TestSetupFailureIsClassifiedWithoutPrivatePath|TestFormatPanicReportRedactsValuesContextsAndSourcePaths|TestSafePanicContextAndClass)$ -count=1
+ok  	cervterm/internal/applog	1.377s
+==> layout storage recovery: go test -race ./internal/layoutstate -run ^(TestStoreInvalidDocumentsAreTypedAndRedacted|TestStoreReplacementFailurePreservesOldFileAndCleansTemp|TestStorePrecommitFaultsPreserveOldFileAndCleanTemp)$ -count=1
+ok  	cervterm/internal/layoutstate	1.574s
+==> config, restore, and transient image recovery: go test -tags glfw -race ./internal/frontend/glfwgl -run ^(TestReloadFailurePreservesConfigAndRuntime|TestRuntimeScopeSurvivesReloadRejectsInvalidCandidateAndClears|TestBackgroundGPUPreparationFailureRollsBackWholeReload|TestLoadConfiguredRestorePlanIsOptInAndUsesConfiguredStore|TestRestoreLoadPolicyTurnsInvalidStateIntoFreshValueFreeFallback|TestResetFailedRestoreFrontendClearsAbandonedAppearance|TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux|TestTerminalImageActivationCommitFailureClosesCacheThenMux|TestTerminalImageActivationRestorePreparationAndBindFailuresCloseEveryCache|TestTerminalImageCacheRetriesSameGenerationOnFixedScheduleAndThenStops|TestTerminalImageCacheClosesWithCurrentContextBeforeRendererAcrossProjectionLifecycles|TestTerminalImageCacheCloseIsIdempotentAndDeterministic)$ -count=1
+ok  	cervterm/internal/frontend/glfwgl	2.428s
+Phase 15 recovery and redaction gates passed
