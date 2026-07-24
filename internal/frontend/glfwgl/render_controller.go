@@ -31,6 +31,8 @@ type renderFramePort interface {
 
 // renderController captures the existing per-projection presentation order
 // without owning damage, redraw demand, frame accounting, or native resources.
+// TODO(L1-06; expires Slice 6.1a): replace App scratch swapping with pane render contexts.
+// TODO(L1-01; expires Slice 6.3d): remove the preparatory facade adapter.
 type renderController struct {
 	ticks        renderTickPort
 	clock        renderClockPort

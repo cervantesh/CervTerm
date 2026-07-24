@@ -1,0 +1,26 @@
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics        
+BenchmarkPhase13DisabledDraw-32     	   26995	     42846 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32     	   27594	     44465 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32     	   26413	     44256 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32     	   27014	     44599 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32     	   27247	     45247 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32     	   27585	     44613 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32     	   26574	     44568 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32     	   27324	     44381 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32     	   25719	     45715 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledDraw-32     	   26252	     44691 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32    	164885308	         7.224 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32    	161729600	         7.206 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32    	166292508	         7.286 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32    	163968294	         7.319 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32    	160855989	         7.280 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32    	165258980	         7.459 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32    	160469361	         7.489 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32    	165384453	         7.280 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32    	163536487	         7.355 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPhase13DisabledFrame-32    	168039643	         7.385 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/frontend/glfwgl	36.738s
