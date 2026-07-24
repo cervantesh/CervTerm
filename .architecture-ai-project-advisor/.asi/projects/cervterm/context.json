@@ -1,41 +1,38 @@
 {
   "project_name": "CervTerm",
-  "stage": "plan",
+  "stage": "architecture-remediation",
   "updated_at": "2026-07-23",
-  "phase": "15",
-  "objective": "Complete integration, performance, migration, recovery, qualification, and release hardening without widening experimental support claims.",
+  "objective": "Close all accepted maturity findings and independently score every architecture dimension at least 8.0.",
   "baseline": {
-    "target_worktree": "C:/dev/golang-terminal-emulator-parity-phase-15",
-    "target_branch": "feat/parity-phase-15-hardening",
-    "expected_commit": "1a42be817273affa873f37bb99e8dd1d7c615bf7",
-    "release": "v0.9.0-beta.1"
+    "commit": "e9f9b2c0666f1392c8a1b74ca6b6cb0be261b000",
+    "release": "v0.10.0-beta.1",
+    "source": "origin/main"
   },
-  "in_scope": [
-    "machine-checkable evidence states",
-    "side-effect-free platform capability diagnostics",
-    "read-only real-user configuration migration evidence",
-    "config, layout and transient image-cache recovery proof",
-    "reproducible Phase 0 and candidate performance comparison",
-    "Windows, Linux and macOS qualification matrices",
-    "security, accessibility, package and release readiness gates"
+  "execution_order": [
+    "App preparatory extraction",
+    "Mux preparatory extraction",
+    "fontglyph package extraction",
+    "ownership and multi-window repair",
+    "security, trust and lifecycle repair",
+    "medium correctness repair",
+    "authority and temporal-controller repair",
+    "small cleanup",
+    "independent score closure loop"
   ],
   "excluded": [
-    "renderer selection",
+    "renderer/backend selection",
     "remote domains or daemon sessions",
-    "automatic configuration rewriting",
+    "automatic config rewriting",
     "persistent image caches",
-    "live native activation probes from doctor",
     "default-on experimental features",
-    "support promotion from SKIP or UNRUN evidence",
-    "release publication without explicit approval"
+    "unapproved external side effects"
   ],
   "authority": [
-    "ADR 0002",
-    "ADR 0007",
-    "ADR 0008",
-    "ADR 0014",
-    "ADR 0016",
-    "Phase 15 preflight and guardrails",
-    "independently verified Phase 15 design and plan"
+    "ADR 0017",
+    "ADR 0018",
+    "ADR 0019",
+    "ADR 0020",
+    "ADR 0021",
+    "docs/architecture-scoring-protocol.md"
   ]
 }

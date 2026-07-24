@@ -44,3 +44,15 @@ CervTerm must scale Unicode/emoji rendering beyond per-symbol fixes. The accepte
 
 ## Notes
 The current code may keep temporary handwritten ranges while the generated property package is built. After the generated package lands, those ranges become technical debt and should be removed or explicitly documented as font-specific compatibility shims.
+
+## Architecture maturity remediation fitness functions
+
+| ID | Function | Type | Target | How to Check | Failure Signal | Owner |
+|---|---|---|---|---|---|---|
+| AF-009 | Package graph remains acyclic and respects documented layering | static | all production Go packages | `go run ./scripts/check-maturity-gates.go` plus import graph capture | cycle or forbidden frontend/native import below projection | architecture |
+| AF-010 | App/Mux preparatory extraction preserves behavior and does not bypass facades | trace/static | `internal/frontend/glfwgl`, `internal/mux` | characterization traces, changed-path allowlist, consumer ports ≤5 methods and AST rejection of `any`, callback bags, concrete/facade returns, mixed concerns and stored `*App`/`*Mux` | behavior drift, copied mutable state or facade-equivalent private service locator | frontend/mux |
+| AF-011 | Font package DAG and lease ownership match ADR-0021 | static/race/perf | `internal/fontglyph/...` | exact edge allowlist: facade→discovery/cache/shape/raster/platform/face; discovery→fontdesc; cache→face; shape/raster/platform→face/fontdesc/unicodecluster/unicodeprops; face→fontdesc; plus lease-close and performance tests | any other subpackage edge, facade back-import, cycle, leaked/double-closed native face | font backend |
+| AF-012 | Process/config/window ownership publishes old-or-new | fault/race/integration | executable, config, mux, native windows | wrong-owner/stale-generation/fault matrix with two windows | partial sibling activation, silent wrong-owner mutation, global geometry | runtime |
+| AF-013 | Closed vocabularies have one generated authority | generated/static | config/action/schema/Teal | deterministic regeneration and switch/catalog parity | duplicated string authority or stale generated output | config/action |
+| AF-014 | Public output consumes parser framing decisions | fuzz/dual oracle | VT parser/public projection | named fuzz targets and fragmentation corpus | second grammar, selected payload leak, byte-accounting drift | VT |
+| AF-015 | Every maturity dimension independently remains ≥8.0 | independent audit | all production Go | scoring protocol v1, two blind teams and cross-examination | either team's final score below 8.0 or any accepted finding open | architecture |
