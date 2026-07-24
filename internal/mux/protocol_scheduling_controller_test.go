@@ -385,6 +385,7 @@ func TestProtocolSchedulingControllerSourceIsExactPrivateAndWired(t *testing.T) 
 
 	declarations := make(map[string]int)
 	methods := make(map[string]*ast.FuncDecl)
+	var constructor *ast.FuncDecl
 	for _, declaration := range file.Decls {
 		switch declaration := declaration.(type) {
 		case *ast.GenDecl:
@@ -412,6 +413,9 @@ func TestProtocolSchedulingControllerSourceIsExactPrivateAndWired(t *testing.T) 
 			assertProtocolSchedulingPrivateName(t, declaration.Name)
 			if declaration.Recv == nil {
 				declarations[declaration.Name.Name]++
+				if declaration.Name.Name == "newProtocolSchedulingController" {
+					constructor = declaration
+				}
 			} else {
 				declarations["method:"+declaration.Name.Name]++
 				methods[declaration.Name.Name] = declaration
@@ -435,6 +439,12 @@ func TestProtocolSchedulingControllerSourceIsExactPrivateAndWired(t *testing.T) 
 	}
 	if !reflect.DeepEqual(declarations, wantDeclarations) {
 		t.Fatalf("controller declarations=%v want=%v", declarations, wantDeclarations)
+	}
+	if constructor == nil {
+		t.Fatal("missing newProtocolSchedulingController constructor")
+	}
+	if got, want := renderProtocolSchedulingNode(fileSet, constructor.Body), "{\n\treturn protocolSchedulingController[dispatchPort, applyPort]{}\n}"; got != want {
+		t.Fatalf("constructor body=%q want exact zero-value body %q", got, want)
 	}
 
 	assertProtocolSchedulingControllerMethod(t, fileSet, methods["dispatchKitty"], "func(events []Event, port dispatchPort) []Event", []string{"dispatchKitty"})

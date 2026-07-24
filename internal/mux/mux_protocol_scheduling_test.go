@@ -2,6 +2,7 @@ package mux
 
 import (
 	"bytes"
+	"io"
 	"reflect"
 	"testing"
 	"time"
@@ -65,6 +66,35 @@ func TestMuxProtocolSchedulingDispatchOrderAroundReplyAndEvents(t *testing.T) {
 	}
 	if got, want := sessionIngressKinds(events), []EventKind{PaneDirty, PaneOutput, PaneDirty}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("event order=%v want=%v events=%#v", got, want, events)
+	}
+}
+
+func TestMuxProtocolSchedulingEOFDispatchOrder(t *testing.T) {
+	var session *fakeSession
+	var trace []string
+	m, createdSession, p := newMuxProtocolSchedulingTestMux(t, Options{ImageDiagnostic: func(diagnostic ImageDiagnostic) {
+		entry := string(diagnostic.Protocol)
+		if session != nil && len(session.written()) != 0 {
+			entry += "-after-kitty"
+		}
+		trace = append(trace, entry)
+	}})
+	session = createdSession
+
+	p.kittyOutcomes = append(p.kittyOutcomes, kitty.Outcome{Failure: kitty.ReplyFailed})
+	p.sixelOutcomes = append(p.sixelOutcomes, sixel.Outcome{Failure: sixel.FailureFailed})
+	p.itermOutcomes = append(p.itermOutcomes, itermimage.Outcome{Failure: itermimage.FailureFailed})
+	m.sessions.incoming <- ingressRecord{pane: p.id, owner: p, err: io.EOF}
+
+	events := m.Drain(1)
+	if got, want := session.written(), (kitty.ReplyPlan{}).Encode(kitty.ReplyFailed); !bytes.Equal(got, want) {
+		t.Fatalf("Kitty EOF reply=%q want=%q", got, want)
+	}
+	if want := []string{"sixel-after-kitty", "iterm-after-kitty"}; !reflect.DeepEqual(trace, want) {
+		t.Fatalf("EOF protocol trace=%v want=%v", trace, want)
+	}
+	if got, want := sessionIngressKinds(events), []EventKind{PaneExited, TabRevisionChanged}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("EOF event order=%v want=%v events=%#v", got, want, events)
 	}
 }
 
@@ -252,10 +282,29 @@ func BenchmarkMuxProtocolControllerAttribution(b *testing.B) {
 	m, _, p := newMuxProtocolSchedulingTestMux(b, Options{})
 	result := &muxProtocolBenchmarkResult{}
 	completion := imageDecodeCompletion{Key: p.id, Owner: imageDecodeOwner{protocol: imageDecodeProtocol(255)}, Result: result}
+	disabled := New(&fakeFactory{}, Options{})
+	b.Cleanup(func() { _ = disabled.Shutdown() })
 	benchmarks := []struct {
 		name string
 		run  func()
 	}{
+		{name: "dispatch-idle/direct-adapters", run: func() {
+			port := muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p}
+			benchmarkMuxProtocolEvents = port.dispatchKitty(nil)
+			port.dispatchSixel()
+			port.dispatchITerm()
+		}},
+		{name: "dispatch-idle/controller", run: func() {
+			benchmarkMuxProtocolEvents = m.processKittyOutcomes(p)
+			m.processSixelOutcomes(p)
+			m.processITermOutcomes(p)
+		}},
+		{name: "all-disabled-expiry/direct-adapter", run: func() {
+			benchmarkMuxProtocolEvents = (muxProtocolSchedulingApplyOperationAdapter{mux: disabled}).applyExpiry(nil)
+		}},
+		{name: "all-disabled-expiry/controller", run: func() {
+			benchmarkMuxProtocolEvents = disabled.expireImages(time.Time{})
+		}},
 		{name: "expiry/direct-adapter", run: func() {
 			benchmarkMuxProtocolEvents = (muxProtocolSchedulingApplyOperationAdapter{mux: m}).applyExpiry(nil)
 		}},
@@ -326,18 +375,39 @@ type muxProtocolBenchmarkResult struct{ closes uint64 }
 
 func (r *muxProtocolBenchmarkResult) Close() { r.closes++ }
 
-func BenchmarkMuxProtocolDispatchIdle(b *testing.B) {
+func BenchmarkMuxProtocolDrainIdle(b *testing.B) {
 	m, _, _ := newMuxProtocolSchedulingTestMux(b, Options{})
 	allocs := testing.AllocsPerRun(1000, func() {
 		benchmarkMuxProtocolEvents = m.Drain(1)
 	})
 	if allocs != 0 {
-		b.Fatalf("idle protocol dispatch allocations=%v want=0", allocs)
+		b.Fatalf("idle protocol drain allocations=%v want=0", allocs)
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		benchmarkMuxProtocolEvents = m.Drain(1)
+	}
+	b.StopTimer()
+	if benchmarkMuxProtocolEvents != nil {
+		b.Fatalf("idle protocol drain events=%#v", benchmarkMuxProtocolEvents)
+	}
+}
+
+func BenchmarkMuxProtocolDispatchIdle(b *testing.B) {
+	m, _, p := newMuxProtocolSchedulingTestMux(b, Options{})
+	run := func() {
+		benchmarkMuxProtocolEvents = m.processKittyOutcomes(p)
+		m.processSixelOutcomes(p)
+		m.processITermOutcomes(p)
+	}
+	if allocs := testing.AllocsPerRun(1000, run); allocs != 0 {
+		b.Fatalf("idle protocol dispatch allocations=%v want=0", allocs)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		run()
 	}
 	b.StopTimer()
 	if benchmarkMuxProtocolEvents != nil {

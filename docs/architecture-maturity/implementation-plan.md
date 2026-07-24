@@ -447,6 +447,8 @@ These early `App`/`Mux` slices are preparatory parity-only extractions. They do 
 
 - **Files:** shared image scheduler and mux protocol dispatch, with existing stores/adapters unchanged.
 - **execution_predecessor:** 6.2a. Extract current scheduling behavior unchanged; L3-09 repairs type erasure/clock ownership later. **Commits:** `T → A → M → W → G`; separate branch/PR.
+- **Status:** **complete (preparatory)**. Protocol scheduling behavior and `Mux` ownership remain unchanged. Evidence: `docs/validation/architecture-maturity-slice-6.2b.md`.
+- L3-01 remains **partial**; L3-09 remains open to Slice 4.8, and formal closure in 6.2d is deferred until the documented dependencies and execution predecessor are satisfied.
 
 ### Slice 6.2c — L3-01 restore coordinator
 

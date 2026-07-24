@@ -1,0 +1,43 @@
+Slice 6.2b canonical same-host performance capture — base
+Date: 2026-07-24
+Identity: fb30dff9de599c2043c06f96b6466377fa3482fa
+Host: windows/amd64; go1.25.8; AMD Ryzen 9 7940HX with Radeon Graphics
+Canonical configuration: ten samples; -benchtime=2s -count=1 -cpu=1 -benchmem
+Interleave: for rounds 01..10, base fb30dff ran immediately before candidate W/current.
+Warm-up: one unrecorded 1-second run per binary/identity before the canonical sequence.
+
+Reproducible base overlay (the only base source change):
+1. Rename the existing fb30dff BenchmarkMuxProtocolDispatchIdle, whose body calls m.Drain(1), to BenchmarkMuxProtocolDrainIdle and change only its assertion labels from dispatch to drain.
+2. Add BenchmarkMuxProtocolDispatchIdle with the retained candidate body: create newMuxProtocolSchedulingTestMux, then in the timed/allocation-guarded closure call m.processKittyOutcomes(p), m.processSixelOutcomes(p), and m.processITermOutcomes(p) on empty queues.
+No production file is overlaid. BenchmarkMuxProtocolCompletionDiscard, BenchmarkMuxAllDisabledImageIdle, BenchmarkMuxSessionIngressASCII, and BenchmarkSchedulerSubmitComplete are exact fb30dff source.
+
+Source commands:
+go test -c -o mux-base.test.exe ./internal/mux
+go test -c -o workscheduler-base.test.exe ./internal/workscheduler
+mux-base.test.exe -test.run='^$' -test.bench='^(BenchmarkMuxProtocolDispatchIdle|BenchmarkMuxProtocolCompletionDiscard|BenchmarkMuxProtocolDrainIdle|BenchmarkMuxAllDisabledImageIdle|BenchmarkMuxSessionIngressASCII)$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+workscheduler-base.test.exe -test.run='^$' -test.bench='^BenchmarkSchedulerSubmitComplete$' -test.benchmem -test.benchtime=2s -test.count=1 -test.cpu=1
+
+Raw ns/op samples in round order 01..10:
+BenchmarkMuxProtocolDispatchIdle: 9.437 8.946 9.279 8.978 9.270 9.602 10.770 9.684 9.784 9.309
+BenchmarkMuxProtocolCompletionDiscard: 12.310 12.160 11.700 11.940 14.020 11.800 14.180 12.240 12.100 12.750
+BenchmarkMuxProtocolDrainIdle: 113.400 114.400 114.600 114.600 113.600 114.500 122.900 115.700 116.400 118.900
+BenchmarkMuxAllDisabledImageIdle: 28.800 27.900 28.550 28.330 27.840 28.510 27.910 28.180 28.890 29.030
+BenchmarkMuxSessionIngressASCII: 11204 11249 10512 11303 12477 11286 12460 11141 11244 12031
+BenchmarkSchedulerSubmitComplete: 302.000 299.900 295.000 299.100 303.900 294.500 313.500 303.100 307.900 311.800
+
+Raw allocation samples in round order 01..10:
+BenchmarkMuxProtocolDispatchIdle: every sample 0 B/op, 0 allocs/op
+BenchmarkMuxProtocolCompletionDiscard: every sample 0 B/op, 0 allocs/op
+BenchmarkMuxProtocolDrainIdle: every sample 0 B/op, 0 allocs/op
+BenchmarkMuxAllDisabledImageIdle: every sample 0 B/op, 0 allocs/op
+BenchmarkMuxSessionIngressASCII B/op: 1016 1017 1014 1015 1016 1016 1017 1015 1014 1017
+BenchmarkMuxSessionIngressASCII allocs/op: every sample 3
+BenchmarkSchedulerSubmitComplete: every sample 0 B/op, 0 allocs/op
+
+Canonical ten-sample medians:
+BenchmarkMuxProtocolDispatchIdle: 9.373 ns/op; 0 B/op; 0 allocs/op
+BenchmarkMuxProtocolCompletionDiscard: 12.200 ns/op; 0 B/op; 0 allocs/op
+BenchmarkMuxProtocolDrainIdle: 114.600 ns/op; 0 B/op; 0 allocs/op
+BenchmarkMuxAllDisabledImageIdle: 28.420 ns/op; 0 B/op; 0 allocs/op
+BenchmarkMuxSessionIngressASCII: 11267.5 ns/op; 1016 B/op; 3 allocs/op
+BenchmarkSchedulerSubmitComplete: 302.550 ns/op; 0 B/op; 0 allocs/op
