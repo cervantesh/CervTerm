@@ -143,6 +143,7 @@ func TestPaneHostRemainsBoundToEventOrigin(t *testing.T) {
 	}
 	a := &App{mux: m, focusedPane: first, paneUI: make(map[termmux.PaneID]*paneUIState), pendingPaneScroll: make(map[termmux.PaneID]int), cellW: 8, cellH: 16}
 	a.handleMuxEvents(events)
+	host := paneHost{app: a, pane: first}
 	second, events, err := m.Split(first, termmux.SplitColumns, termmux.SpawnSpec{})
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +153,6 @@ func TestPaneHostRemainsBoundToEventOrigin(t *testing.T) {
 		t.Fatalf("focus=%d want=%d", a.focusedPane, second)
 	}
 
-	host := paneHost{app: a, pane: first}
 	host.WriteInput("origin-only")
 	if got := factory.sessions[0].text(); got != "origin-only" {
 		t.Fatalf("origin session write=%q", got)
