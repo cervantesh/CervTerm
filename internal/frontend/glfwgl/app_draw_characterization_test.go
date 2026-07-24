@@ -34,6 +34,9 @@ func TestDrawFinishesCandidateGeometryFrameOnPanic(t *testing.T) {
 		if cleared != 1 || app.candidateGeometry.wasVisible {
 			t.Fatalf("panic cleanup: cleared=%d state=%#v", cleared, app.candidateGeometry)
 		}
+		if app.renderFlow == nil {
+			t.Fatal("draw did not route through the App render controller")
+		}
 	}()
 	app.draw()
 }
