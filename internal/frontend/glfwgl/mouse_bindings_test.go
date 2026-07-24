@@ -3,9 +3,12 @@
 package glfwgl
 
 import (
+	"os"
 	"testing"
 	"time"
 
+	"cervterm/internal/config"
+	termmux "cervterm/internal/mux"
 	"cervterm/internal/script"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
@@ -67,12 +70,48 @@ func TestClickCountIsBoundedAndResets(t *testing.T) {
 	}
 }
 
-func TestCapturedDragKeepsPressOwnership(t *testing.T) {
-	a := &App{mouseBindingCapture: mouseBindingCapture{active: true, button: script.MouseLeft, mods: script.ModShift, clickCount: 2, origin: 7}}
-	if !a.handleConfiguredMouseDrag(20, 30) {
+func TestCapturedDragAndReleaseKeepPressOwnership(t *testing.T) {
+	path := t.TempDir() + "/cervterm.lua"
+	source := `return { mouse_bindings = {
+		{ event = "drag", button = "left", mods = "shift", click_count = 2, action = function(term) term:write("D") end },
+		{ event = "release", button = "left", mods = "shift", click_count = 2, action = function(term) term:write("R") end },
+	} }`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, runtime, err := script.Load(path, config.Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runtime.Close)
+
+	a, factory := newRecordingActionApp(t)
+	origin := a.focusedPane
+	second, events, err := a.mux.Split(origin, termmux.SplitColumns, termmux.SpawnSpec{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.handleMuxEvents(events)
+	a.setFocusedPane(second)
+	a.cfg, a.scriptRT = cfg, runtime
+	a.mouseBindingCapture = mouseBindingCapture{active: true, button: script.MouseLeft, mods: script.ModShift, clickCount: 2, origin: origin}
+
+	if !a.handleConfiguredMouseDrag(2000, 3000) {
 		t.Fatal("captured drag was not consumed")
 	}
-	if !a.mouseBindingCapture.active || a.mouseBindingCapture.mods != script.ModShift || a.mouseBindingCapture.origin != 7 {
-		t.Fatalf("capture=%#v", a.mouseBindingCapture)
+	if !a.mouseBindingCapture.active || a.mouseBindingCapture.mods != script.ModShift || a.mouseBindingCapture.origin != origin {
+		t.Fatalf("capture after drag=%#v", a.mouseBindingCapture)
+	}
+	if !a.handleConfiguredMouseButton(glfw.MouseButtonLeft, glfw.Release, glfw.ModControl, 4000, 5000) {
+		t.Fatal("captured release was not consumed")
+	}
+	if a.mouseBindingCapture.active {
+		t.Fatalf("capture survived release: %#v", a.mouseBindingCapture)
+	}
+	if got := factory.sessions[0].text(); got != "DR" {
+		t.Fatalf("press-origin input = %q, want DR", got)
+	}
+	if got := factory.sessions[1].text(); got != "" {
+		t.Fatalf("current-focus input = %q, want empty", got)
 	}
 }

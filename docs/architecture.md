@@ -195,3 +195,9 @@ fontglyph facade
 These are **target invariants, not claims about baseline `e9f9b2c`**: wrong-owner or stale-generation mutation fails without state change; shared configuration publishes to all windows or none; geometry remains window-specific; closed config/action vocabularies come from generated catalogs; and public output consumes bounded decisions from the single VT framing authority. Baseline defects include concrete/global owner reach, one mux-global bounds value, per-App configuration state, duplicated closed vocabularies, and parallel public framing. Their owning slices are recorded in the maturity implementation plan.
 
 ADRs 0017–0021 define these directions. [`architecture-scoring-protocol.md`](architecture-scoring-protocol.md) defines the two-team/two-round evidence gate; every scored dimension must independently reach at least 8.0, all accepted findings at every severity must close, and lower results create additional one-by-one slices.
+
+### Preparatory App action/input delegation
+
+Slice 6.3a delegates action validation/targeting/sequencing and keyboard/pointer/focus route precedence to private per-projection controllers. GLFW callback registration and every mutable binding, modal, search, mouse, pane, mux, config and script value remain owned by `App`; concrete action effects remain behind a temporary typed command port. Controllers carry only narrow concern-specific ports, no native window/mux/App pointer field, and add zero allocations on the pinned non-pane action and unhandled-key routes.
+
+This is preparatory parity work under ADR-0021, not formal closure of L1-01. The typed command compatibility port expires in Slice 6.3d; fixed input ordering expires in Slice 6.1b after its ownership and behavior dependencies merge.

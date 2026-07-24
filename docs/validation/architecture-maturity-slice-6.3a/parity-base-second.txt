@@ -1,0 +1,67 @@
+# CervTerm parity baseline
+
+captured_utc: 2026-07-24T03:37:56Z
+host: windows/amd64
+go: go1.25.8
+commit: 31911cad6ac656a8af4e2d07b8f1f7868e44fdc9
+dirty: false
+
+## VT parser and reuse benchmarks
+
+$ go test ./internal/vt -run ^$ -bench Benchmark(ParserThroughput|CoreReuseVsNew)$ -benchmem -count 10
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/vt
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics        
+BenchmarkParserThroughput-32    	  413786	      2838 ns/op	   7.75 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	  408771	      2822 ns/op	   7.80 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	  416922	      3243 ns/op	   6.78 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	  333973	      3338 ns/op	   6.59 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	  405519	      3251 ns/op	   6.77 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	  367008	      3196 ns/op	   6.88 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	  316342	      3263 ns/op	   6.74 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	  373993	      3370 ns/op	   6.53 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	  390621	      3428 ns/op	   6.42 MB/s	       0 B/op	       0 allocs/op
+BenchmarkParserThroughput-32    	  353562	      3488 ns/op	   6.31 MB/s	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	  321888	      3396 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	  327648	      3130 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	  338194	      3121 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	  375628	      3307 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	  380384	      3411 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	  404994	      3244 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	  367335	      3276 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	  402907	      3326 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	  313365	      3313 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/reuse-32         	  352080	      3217 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   22813	     52180 ns/op	  158128 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   22400	     53017 ns/op	  158128 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   22832	     53043 ns/op	  158128 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   21439	     56334 ns/op	  158128 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   22309	     52213 ns/op	  158128 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   22306	     55350 ns/op	  158128 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   21478	     55862 ns/op	  158128 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   21940	     54532 ns/op	  158128 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   21937	     53845 ns/op	  158128 B/op	       4 allocs/op
+BenchmarkCoreReuseVsNew/new-terminal-32  	   21790	     56177 ns/op	  158128 B/op	       4 allocs/op
+PASS
+ok  	cervterm/internal/vt	45.578s
+
+## render snapshot benchmark
+
+$ go test ./internal/render -run ^$ -bench BenchmarkCaptureReuse$ -benchmem -count 10
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics        
+BenchmarkCaptureReuse-32    	  140628	      8551 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  138958	      8517 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  145471	      9482 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  123849	      9658 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  131736	      9286 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  128295	      9625 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  122157	      9688 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  113241	      9402 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  136118	      9823 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCaptureReuse-32    	  128156	      9260 ns/op	       2 B/op	       0 allocs/op
+PASS
+ok  	cervterm/internal/render	13.511s

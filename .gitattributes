@@ -13,3 +13,5 @@ internal/vt/testdata/*.golden text eol=lf
 docs/architecture-scoring-protocol.md text eol=lf
 docs/architecture-maturity/*.md text eol=lf
 docs/validation/architecture-maturity-phase0/*.txt text eol=lf
+docs/validation/architecture-maturity-slice-*/*.txt text eol=lf
+docs/validation/architecture-maturity-slice-*.md text eol=lf
