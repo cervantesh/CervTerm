@@ -17,6 +17,12 @@ type fakeSessionIngressPorts struct {
 	trace    []string
 }
 
+type fakeSessionIngressController = sessionIngressController[*fakeSessionIngressPorts, *fakeSessionIngressPorts]
+
+func newFakeSessionIngressController() fakeSessionIngressController {
+	return newSessionIngressController[*fakeSessionIngressPorts, *fakeSessionIngressPorts]()
+}
+
 func (p *fakeSessionIngressPorts) acceptSessionIngress() bool {
 	p.trace = append(p.trace, "accept")
 	return p.accepted
@@ -34,7 +40,7 @@ func (p *fakeSessionIngressPorts) applySessionIngressEnd(events []Event, err err
 
 func TestSessionIngressControllerRoutesAcceptedPhasesInOrder(t *testing.T) {
 	endErr := errors.New("ended")
-	controller := newSessionIngressController()
+	controller := newFakeSessionIngressController()
 	tests := []struct {
 		name      string
 		accepted  bool
@@ -85,8 +91,31 @@ func TestSessionIngressControllerRoutesAcceptedPhasesInOrder(t *testing.T) {
 	}
 }
 
+func TestSessionIngressControllerEagerAndZeroValuesMatch(t *testing.T) {
+	endErr := errors.New("ended")
+	controllers := []struct {
+		name       string
+		controller fakeSessionIngressController
+	}{
+		{name: "eager", controller: newFakeSessionIngressController()},
+		{name: "zero", controller: fakeSessionIngressController{}},
+	}
+	for _, test := range controllers {
+		t.Run(test.name, func(t *testing.T) {
+			ports := &fakeSessionIngressPorts{accepted: true, trace: make([]string, 0, 3)}
+			got := test.controller.route(make([]Event, 0, 2), ports, ports, []byte("data"), endErr)
+			if !reflect.DeepEqual(ports.trace, []string{"accept", "data", "end"}) {
+				t.Fatalf("trace=%v", ports.trace)
+			}
+			if gotKinds := []EventKind{got[0].Kind, got[1].Kind}; !reflect.DeepEqual(gotKinds, []EventKind{PaneOutput, PaneExited}) {
+				t.Fatalf("event order=%v events=%#v", gotKinds, got)
+			}
+		})
+	}
+}
+
 func TestSessionIngressControllerAcceptedRouteDoesNotAllocate(t *testing.T) {
-	controller := newSessionIngressController()
+	controller := newFakeSessionIngressController()
 	ports := &fakeSessionIngressPorts{accepted: true, trace: make([]string, 0, 3)}
 	caller := make([]Event, 1, 3)
 	data := []byte("data")
@@ -106,7 +135,7 @@ func TestSessionIngressControllerAcceptedRouteDoesNotAllocate(t *testing.T) {
 }
 
 func TestSessionIngressControllerRejectedRouteDoesNotAllocate(t *testing.T) {
-	controller := newSessionIngressController()
+	controller := newFakeSessionIngressController()
 	ports := &fakeSessionIngressPorts{trace: make([]string, 0, 1)}
 	caller := make([]Event, 1, 3)
 	data := []byte("ignored")
@@ -126,7 +155,7 @@ func TestSessionIngressControllerRejectedRouteDoesNotAllocate(t *testing.T) {
 }
 
 func TestSessionIngressControllerPortsAndFieldsAreExact(t *testing.T) {
-	controller := reflect.TypeOf(sessionIngressController{})
+	controller := reflect.TypeOf(fakeSessionIngressController{})
 	if controller.NumField() != 0 || controller.Size() != 0 {
 		t.Fatalf("controller fields=%d size=%d want zero-field zero-size", controller.NumField(), controller.Size())
 	}
@@ -200,7 +229,7 @@ func assertSessionIngressBoundaryType(t *testing.T, name string, typ reflect.Typ
 	}
 }
 
-func TestSessionIngressControllerSourceIsPrivateBoundedAndUnwired(t *testing.T) {
+func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("locate test source")
@@ -252,7 +281,6 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndUnwired(t *testing.T) 
 			assertSessionIngressFieldList(t, declaration.Type.Results)
 		}
 	}
-
 	wantDeclarations := map[string]int{
 		"sessionIngressControllerPortBudget": 1,
 		"sessionIngressOwnerPort":            1,
@@ -269,20 +297,118 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndUnwired(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	var drainFound bool
-	ast.Inspect(muxFile, func(node ast.Node) bool {
-		if identifier, ok := node.(*ast.Ident); ok {
-			if identifier.Name == "sessionIngressController" || identifier.Name == "newSessionIngressController" {
-				t.Errorf("Mux.Drain is no longer authoritative: mux.go references %s", identifier.Name)
+	isIdentifier := func(expression ast.Expr, name string) bool {
+		identifier, ok := expression.(*ast.Ident)
+		return ok && identifier.Name == name
+	}
+	isSelector := func(expression ast.Expr, owner, field string) bool {
+		selector, ok := expression.(*ast.SelectorExpr)
+		return ok && isIdentifier(selector.X, owner) && selector.Sel.Name == field
+	}
+	isInstantiation := func(expression ast.Expr, name string, arguments ...string) bool {
+		instantiation, ok := expression.(*ast.IndexListExpr)
+		if !ok || !isIdentifier(instantiation.X, name) || len(instantiation.Indices) != len(arguments) {
+			return false
+		}
+		for index, argument := range arguments {
+			if !isIdentifier(instantiation.Indices[index], argument) {
+				return false
 			}
 		}
-		if function, ok := node.(*ast.FuncDecl); ok && function.Name.Name == "Drain" {
-			drainFound = true
-		}
 		return true
-	})
-	if !drainFound {
-		t.Fatal("authoritative Mux.Drain method not found")
+	}
+
+	var controllerFields, constructorInitializers int
+	var drainFound, operationValueFound bool
+	var routeCalls, directPhaseCalls, recordAdapterCalls int
+	for _, declaration := range muxFile.Decls {
+		switch declaration := declaration.(type) {
+		case *ast.GenDecl:
+			for _, spec := range declaration.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok || typeSpec.Name.Name != "Mux" {
+					continue
+				}
+				structure, ok := typeSpec.Type.(*ast.StructType)
+				if !ok {
+					t.Fatal("Mux is not a struct")
+				}
+				for _, field := range structure.Fields.List {
+					for _, name := range field.Names {
+						if name.Name != "sessionIngress" {
+							continue
+						}
+						controllerFields++
+						if !isInstantiation(field.Type, "sessionIngressController", "sessionIngressRecordAdapter", "muxSessionIngressOperationAdapter") {
+							t.Errorf("Mux.sessionIngress type=%T want value controller over operation-scoped adapters", field.Type)
+						}
+					}
+				}
+			}
+		case *ast.FuncDecl:
+			switch declaration.Name.Name {
+			case "New":
+				ast.Inspect(declaration.Body, func(node ast.Node) bool {
+					keyValue, ok := node.(*ast.KeyValueExpr)
+					if !ok || !isIdentifier(keyValue.Key, "sessionIngress") {
+						return true
+					}
+					call, ok := keyValue.Value.(*ast.CallExpr)
+					if !ok || !isInstantiation(call.Fun, "newSessionIngressController", "sessionIngressRecordAdapter", "muxSessionIngressOperationAdapter") || len(call.Args) != 0 {
+						t.Errorf("New sessionIngress initializer=%T want typed newSessionIngressController()", keyValue.Value)
+						return true
+					}
+					constructorInitializers++
+					return true
+				})
+			case "Drain":
+				drainFound = true
+				ast.Inspect(declaration.Body, func(node ast.Node) bool {
+					switch node := node.(type) {
+					case *ast.AssignStmt:
+						for index, left := range node.Lhs {
+							if !isIdentifier(left, "operation") || index >= len(node.Rhs) {
+								continue
+							}
+							literal, ok := node.Rhs[index].(*ast.CompositeLit)
+							if !ok || !isIdentifier(literal.Type, "muxSessionIngressOperationAdapter") {
+								t.Errorf("Drain operation adapter=%T want local value", node.Rhs[index])
+								continue
+							}
+							operationValueFound = true
+						}
+					case *ast.CallExpr:
+						selector, ok := node.Fun.(*ast.SelectorExpr)
+						if !ok {
+							return true
+						}
+						switch selector.Sel.Name {
+						case "adaptSessionIngressRecord":
+							recordAdapterCalls++
+						case "acceptSessionIngress", "applySessionIngressData", "applySessionIngressEnd":
+							directPhaseCalls++
+						case "route":
+							routeCalls++
+							controller, ok := selector.X.(*ast.SelectorExpr)
+							if !ok || !isIdentifier(controller.X, "m") || controller.Sel.Name != "sessionIngress" {
+								t.Errorf("Drain route receiver=%T want m.sessionIngress", selector.X)
+							}
+							if len(node.Args) != 5 || !isIdentifier(node.Args[0], "events") || !isIdentifier(node.Args[1], "accepted") ||
+								!isIdentifier(node.Args[2], "operation") || !isSelector(node.Args[3], "record", "data") || !isSelector(node.Args[4], "record", "err") {
+								t.Errorf("Drain route arguments do not preserve events/accepted/operation/data/end wiring")
+							}
+						}
+					}
+					return true
+				})
+			}
+		}
+	}
+	if controllerFields != 1 || constructorInitializers != 1 {
+		t.Fatalf("Mux controller fields=%d New initializers=%d want 1/1", controllerFields, constructorInitializers)
+	}
+	if !drainFound || !operationValueFound || recordAdapterCalls != 1 || routeCalls != 1 || directPhaseCalls != 0 {
+		t.Fatalf("Drain wiring: found=%t operationValue=%t registryAdapters=%d routeCalls=%d directPhaseCalls=%d", drainFound, operationValueFound, recordAdapterCalls, routeCalls, directPhaseCalls)
 	}
 }
 

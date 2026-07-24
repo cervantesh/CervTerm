@@ -48,6 +48,7 @@ type PaneView struct {
 
 type Mux struct {
 	sessions       *localSessionRegistry
+	sessionIngress sessionIngressController[sessionIngressRecordAdapter, muxSessionIngressOperationAdapter]
 	options        Options
 	model          *Model
 	imageBudget    *termimage.ProcessBudget
@@ -83,7 +84,7 @@ func New(factory SessionFactory, options Options) *Mux {
 	}
 	sessions := newLocalSessionRegistry(factory, options.IngressCapacity, options.Wake)
 	mux := &Mux{
-		sessions: sessions, options: options, model: NewModel(),
+		sessions: sessions, sessionIngress: newSessionIngressController[sessionIngressRecordAdapter, muxSessionIngressOperationAdapter](), options: options, model: NewModel(),
 		paneMetrics: make(map[PaneID]CellMetrics), paletteBase: core.DefaultPaletteBase(),
 	}
 	if options.ImageLimits != nil {
@@ -442,16 +443,8 @@ func (m *Mux) Drain(limit int) []Event {
 			events = append(events, m.applyImageCompletion(completion)...)
 		case record := <-m.sessions.incoming:
 			accepted := m.sessions.adaptSessionIngressRecord(record)
-			if !accepted.acceptSessionIngress() {
-				continue
-			}
 			operation := muxSessionIngressOperationAdapter{mux: m, pane: accepted.registered}
-			if len(record.data) > 0 {
-				events = operation.applySessionIngressData(events, record.data)
-			}
-			if record.err != nil {
-				events = operation.applySessionIngressEnd(events, record.err)
-			}
+			events = m.sessionIngress.route(events, accepted, operation, record.data, record.err)
 		default:
 			return m.ResolveEventAddresses(events)
 		}
