@@ -523,8 +523,3 @@ func fontFaces(path string) []Face {
 	faces, _, _, _ := fontFacesBounded(path, fontdesc.MaxFacesPerFile)
 	return faces
 }
-
-// FacesInFile returns the bounded parsed discovery records for one font file.
-func FacesInFile(path string) []Face {
-	return fontFaces(path)
-}

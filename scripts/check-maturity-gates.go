@@ -96,6 +96,7 @@ var requiredDocs = []string{
 	"scripts/capture-parity-baseline.go",
 	"docs/validation/architecture-maturity-slice-6.2b.md",
 	"docs/validation/architecture-maturity-slice-6.2c.md",
+	"docs/validation/architecture-maturity-slice-5.5a.md",
 	"scripts/capture-phase15-benchmarks.go",
 	"scripts/capture-phase15-process.py",
 	"scripts/check-phase15-recovery.go",
@@ -108,6 +109,7 @@ var requiredDocs = []string{
 var largeGoAllowlist = map[string]string{
 	filepath.ToSlash("internal/fontglyph/backend.go"):           "known font fallback/raster orchestration split target",
 	filepath.ToSlash("internal/fontglyph/color_colr_render.go"): "known COLRv1 render split target",
+	filepath.ToSlash("internal/fontglyph/discovery/index.go"):   "bounded discovery implementation extracted in Slice 5.5a; split target remains 5.5b/5.5c-neutral",
 	filepath.ToSlash("internal/mux/mux.go"):                     "L3-01 preparatory facade; formal split target Slice 6.2d",
 }
 
@@ -124,6 +126,7 @@ func main() {
 	findings = append(findings, checkSlice62aGuard()...)
 	findings = append(findings, checkSlice62bGuard()...)
 	findings = append(findings, checkSlice62cGuard()...)
+	findings = append(findings, checkSlice55aGuard()...)
 	if len(findings) > 0 {
 		fmt.Fprintln(os.Stderr, "maturity gate failures:")
 		for _, f := range findings {
@@ -708,17 +711,25 @@ func findMaturitySliceCommit(subject, parent string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve expected parent %s", parent)
 	}
-	log, err := gitText("log", "--format=%H%x00%P%x00%s", "HEAD")
+	log, err := gitText("log", "--format=%H%x00%P%x00%s", "HEAD", "--all")
 	if err != nil {
 		return "", err
 	}
+	return uniqueMaturitySliceCommit(log, subject, parentFull)
+}
+
+func uniqueMaturitySliceCommit(log, subject, parent string) (string, error) {
+	var matches []string
 	for _, line := range strings.Split(log, "\n") {
 		parts := strings.Split(line, "\x00")
-		if len(parts) == 3 && parts[1] == parentFull && parts[2] == subject {
-			return parts[0], nil
+		if len(parts) == 3 && parts[1] == parent && parts[2] == subject {
+			matches = append(matches, parts[0])
 		}
 	}
-	return "", fmt.Errorf("missing commit with exact subject %q and parent %s", subject, parentFull)
+	if len(matches) != 1 {
+		return "", fmt.Errorf("commit cardinality with exact subject %q and parent %s is %d, want 1", subject, parent, len(matches))
+	}
+	return matches[0], nil
 }
 
 func checkSlice63cPostGActiveState(active bool, head, gCommit, worktree string) []finding {
@@ -4164,6 +4175,551 @@ func slice62cValueExpressionRetains(expression ast.Expr, retainedTypeNames, valu
 		return expression.Sel.Name == "restoreCoordinator"
 	}
 	return false
+}
+
+type slice55aStage struct {
+	class, commit, parent, subject string
+	paths                          []string
+}
+
+var slice55aStages = []slice55aStage{
+	{class: "T", commit: "6efd6cd8e6df21a57886257552c31fd76be7c533", parent: "320deef1ecb16db212cfee692128591359bebc70", subject: "test(fontglyph): characterize discovery and cache extraction", paths: []string{
+		"internal/fontglyph/discovery_cache_characterization_test.go",
+	}},
+	{class: "A", commit: "faa01bce3337e61205f924063c913922a0feb15a", parent: "6efd6cd8e6df21a57886257552c31fd76be7c533", subject: "refactor(fontglyph): add discovery cache and face seams", paths: []string{
+		"internal/fontglyph/cache/contracts.go",
+		"internal/fontglyph/cache/contracts_test.go",
+		"internal/fontglyph/discovery/contracts.go",
+		"internal/fontglyph/discovery/contracts_test.go",
+		"internal/fontglyph/internal/face/owner.go",
+		"internal/fontglyph/internal/face/owner_test.go",
+	}},
+	{class: "M", commit: "cf15fb9b043c27979d8336cb383b97b7c429748b", parent: "faa01bce3337e61205f924063c913922a0feb15a", subject: "refactor(fontglyph): copy discovery and cache implementations", paths: []string{
+		"internal/fontglyph/cache/benchmark_test.go",
+		"internal/fontglyph/cache/cache.go",
+		"internal/fontglyph/cache/cache_test.go",
+		"internal/fontglyph/cache/contracts.go",
+		"internal/fontglyph/discovery/benchmark_test.go",
+		"internal/fontglyph/discovery/index.go",
+		"internal/fontglyph/discovery/index_test.go",
+	}},
+	{class: "W", commit: "295ef3f847c2be13f20fee250aeb06d39b67ccc7", parent: "cf15fb9b043c27979d8336cb383b97b7c429748b", subject: "refactor(fontglyph): wire discovery and parsed-face cache", paths: []string{
+		"internal/fontglyph/backend.go",
+		"internal/fontglyph/cache/cache.go",
+		"internal/fontglyph/cache/cache_test.go",
+		"internal/fontglyph/cache_facade.go",
+		"internal/fontglyph/descriptor_backend_test.go",
+		"internal/fontglyph/discovery/index.go",
+		"internal/fontglyph/discovery/index_test.go",
+		"internal/fontglyph/discovery_cache_characterization_test.go",
+		"internal/fontglyph/face_resolver.go",
+		"internal/fontglyph/face_resolver_test.go",
+		"internal/fontglyph/fallback_resolver_test.go",
+		"internal/fontglyph/font_cache.go",
+		"internal/fontglyph/font_cache_test.go",
+		"internal/fontglyph/font_install.go",
+		"internal/fontglyph/fontindex.go",
+		"internal/fontglyph/fontindex_test.go",
+	}},
+}
+
+var slice55aGStagePaths = []string{
+	"docs/architecture-maturity/implementation-plan.md",
+	"docs/architecture.md",
+	"docs/validation/architecture-maturity-slice-5.5a.md",
+	"docs/validation/architecture-maturity-slice-5.5a/benchmark-binaries.txt",
+	"docs/validation/architecture-maturity-slice-5.5a/benchmark-summary.txt",
+	"docs/validation/architecture-maturity-slice-5.5a/benchmarks-base.txt",
+	"docs/validation/architecture-maturity-slice-5.5a/benchmarks-candidate.txt",
+	"docs/validation/architecture-maturity-slice-5.5a/benchmarks-interleaved.txt",
+	"docs/validation/architecture-maturity-slice-5.5a/gates.txt",
+	"docs/validation/architecture-maturity-slice-5.5a/platform-gates.txt",
+	"docs/validation/architecture-maturity-slice-5.5a/scope-and-commits.txt",
+	"docs/validation/architecture-maturity-slice-5.5a/source-manifest-base.txt",
+	"docs/validation/architecture-maturity-slice-5.5a/source-manifest-candidate.txt",
+	"internal/fontglyph/discovery/index.go",
+	"internal/fontglyph/discovery_cache_characterization_test.go",
+	"internal/fontglyph/face_resolver.go",
+	"internal/fontglyph/font_cache.go",
+	"internal/fontglyph/font_cache_test.go",
+	"internal/fontglyph/font_install.go",
+	"internal/fontglyph/fontindex.go",
+	"internal/fontglyph/fontindex_test.go",
+	"scripts/check-maturity-gates.go",
+	"scripts/check-slice55a-evidence.go",
+}
+
+func checkSlice55aGuard() []finding {
+	var findings []finding
+	findings = append(findings, checkSlice55aPackageDAG()...)
+	findings = append(findings, checkSlice55aOwnershipFacadeAndRemoval()...)
+	findings = append(findings, checkSlice55aGuardSelfTests()...)
+	findings = append(findings, checkSlice55aDedicatedGuard()...)
+	findings = append(findings, checkSlice55aEvidence()...)
+	findings = append(findings, checkSlice55aCommitsAndPaths()...)
+	return findings
+}
+
+func checkSlice55aDedicatedGuard() []finding {
+	command := exec.Command("go", "run", "./scripts/check-slice55a-evidence.go")
+	output, err := command.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	text := strings.TrimSpace(string(output))
+	if len(text) > 4_000 {
+		text = text[:4_000] + "..."
+	}
+	return []finding{{path: "scripts/check-slice55a-evidence.go", reason: text}}
+}
+
+func checkSlice55aPackageDAG() []finding {
+	allowed := map[string]map[string]bool{
+		"internal/fontglyph/discovery": {"cervterm/internal/fontdesc": true},
+		"internal/fontglyph/cache":     {"cervterm/internal/fontglyph/internal/face": true},
+		"internal/fontglyph/shape": {
+			"cervterm/internal/fontglyph/internal/face": true, "cervterm/internal/fontdesc": true,
+			"cervterm/internal/unicodecluster": true, "cervterm/internal/unicodeprops": true,
+		},
+		"internal/fontglyph/raster": {
+			"cervterm/internal/fontglyph/internal/face": true, "cervterm/internal/fontdesc": true,
+			"cervterm/internal/unicodecluster": true, "cervterm/internal/unicodeprops": true,
+		},
+		"internal/fontglyph/platform": {
+			"cervterm/internal/fontglyph/internal/face": true, "cervterm/internal/fontdesc": true,
+			"cervterm/internal/unicodecluster": true, "cervterm/internal/unicodeprops": true,
+		},
+		"internal/fontglyph/internal/face": {"cervterm/internal/fontdesc": true},
+	}
+	required := map[string]bool{
+		"internal/fontglyph/discovery":     true,
+		"internal/fontglyph/cache":         true,
+		"internal/fontglyph/internal/face": true,
+	}
+	var findings []finding
+	for dir, edges := range allowed {
+		entries, err := os.ReadDir(dir)
+		if os.IsNotExist(err) && !required[dir] {
+			continue
+		}
+		if err != nil {
+			findings = append(findings, finding{path: dir, reason: err.Error()})
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+				continue
+			}
+			path := filepath.ToSlash(filepath.Join(dir, entry.Name()))
+			file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+			if parseErr != nil {
+				findings = append(findings, finding{path: path, reason: "cannot parse imports: " + parseErr.Error()})
+				continue
+			}
+			for _, imported := range file.Imports {
+				value, unquoteErr := strconv.Unquote(imported.Path.Value)
+				if unquoteErr != nil || !strings.HasPrefix(value, "cervterm/internal/") {
+					continue
+				}
+				if !edges[value] {
+					findings = append(findings, finding{path: path, reason: "ADR-0021 forbids local import " + value})
+				}
+			}
+		}
+	}
+	command := exec.Command("go", "list", "-deps", "-test", "./internal/fontglyph/...")
+	if output, err := command.CombinedOutput(); err != nil {
+		findings = append(findings, finding{path: "internal/fontglyph/...", reason: "package cycle/dependency check failed: " + strings.TrimSpace(string(output))})
+	}
+	return findings
+}
+
+type slice55aExactDecl struct {
+	path, kind, name, source string
+}
+
+func checkSlice55aOwnershipFacadeAndRemoval() []finding {
+	exact := []slice55aExactDecl{
+		{path: "internal/fontglyph/fontindex.go", kind: "type", name: "FontIndexDiagnostics", source: `type FontIndexDiagnostics struct { Roots int; CandidateFiles int; SelectedFiles int; FilesTruncated int; FacesExamined int; FacesIndexed int; FacesTruncated int; FilesSkipped int; DuplicateFiles int; SymlinkDirectoriesSkipped int; SymlinkFilesSkipped int }`},
+		{path: "internal/fontglyph/fontindex.go", kind: "type", name: "FontResolution", source: `type FontResolution struct { Configured string; Found bool; Regular string; Bold string; Italic string; BoldItalic string; FaceIndex int; RegularFaceIndex int; BoldFaceIndex int; ItalicFaceIndex int; BoldItalicFaceIndex int }`},
+		{path: "internal/fontglyph/cache/contracts.go", kind: "type", name: "Lease", source: `type Lease[T any] struct { once sync.Once; manager *Manager[T]; entry *entry[T] }`},
+		{path: "internal/fontglyph/cache/contracts.go", kind: "func", name: "Close", source: `func (l *Lease[T]) Close() { if l == nil { return }; l.once.Do(func() { manager := l.manager; manager.mu.Lock(); if l.entry.pins > 0 { l.entry.pins-- }; manager.mu.Unlock() }) }`},
+		{path: "internal/fontglyph/internal/face/owner.go", kind: "type", name: "Owner", source: `type Owner[T any] struct { value T; closeOnce sync.Once; close func(T) }`},
+		{path: "internal/fontglyph/internal/face/owner.go", kind: "func", name: "Close", source: `func (o *Owner[T]) Close() { if o == nil { return }; o.closeOnce.Do(func() { if o.close != nil { o.close(o.value) } }) }`},
+	}
+	var findings []finding
+	for _, item := range exact {
+		findings = append(findings, slice55aCheckExactDecl(item)...)
+	}
+	findings = append(findings, slice55aCheckExactInventory("internal/fontglyph/font_cache.go", map[string]bool{
+		"type:parsedFontData": true, "value:errFontCacheCapacity": true, "value:errFontFileGrew": true, "func:parseFontData": true,
+	})...)
+	budget, err := os.ReadFile("internal/fontdesc/budget.go")
+	if err != nil {
+		findings = append(findings, finding{path: "internal/fontdesc/budget.go", reason: err.Error()})
+	} else {
+		for _, pin := range []string{"MaxDiscoveryFiles               = 20_000", "MaxDiscoveryFaces               = 65_536", "MaxFacesPerFile                 = 256", "MaxParsedFaces                  = 128", "MaxParsedBytes            int64 = 256 * 1024 * 1024"} {
+			if strings.Count(string(budget), pin) != 1 {
+				findings = append(findings, finding{path: "internal/fontdesc/budget.go", reason: "Slice 5.5a budget pin changed: " + pin})
+			}
+		}
+	}
+	findings = append(findings, slice55aCheckRootAntiRetention()...)
+	return findings
+}
+
+func slice55aCheckExactDecl(item slice55aExactDecl) []finding {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, item.path, nil, 0)
+	if err != nil {
+		return []finding{{path: item.path, reason: err.Error()}}
+	}
+	wantFile, err := parser.ParseFile(token.NewFileSet(), "expected.go", "package p\n"+item.source, 0)
+	if err != nil || len(wantFile.Decls) != 1 {
+		return []finding{{path: "scripts/check-maturity-gates.go", reason: "invalid exact declaration fixture " + item.path + ":" + item.name}}
+	}
+	want := compactSlice62bGoText(renderSlice62aNode(token.NewFileSet(), wantFile.Decls[0]))
+	count := 0
+	for _, declaration := range file.Decls {
+		match := false
+		switch declaration := declaration.(type) {
+		case *ast.FuncDecl:
+			match = item.kind == "func" && declaration.Name.Name == item.name
+		case *ast.GenDecl:
+			for _, spec := range declaration.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if ok && item.kind == "type" && typeSpec.Name.Name == item.name {
+					match = true
+				}
+			}
+		}
+		if !match {
+			continue
+		}
+		count++
+		got := compactSlice62bGoText(renderSlice62aNode(fset, declaration))
+		if got != want {
+			return []finding{{path: item.path, reason: "exact Slice 5.5a declaration/body changed: " + item.name}}
+		}
+	}
+	if count != 1 {
+		return []finding{{path: item.path, reason: fmt.Sprintf("exact Slice 5.5a declaration %s count=%d want 1", item.name, count)}}
+	}
+	return nil
+}
+
+func slice55aCheckExactInventory(path string, expected map[string]bool) []finding {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		return []finding{{path: path, reason: err.Error()}}
+	}
+	actual := make(map[string]bool)
+	for _, declaration := range file.Decls {
+		switch declaration := declaration.(type) {
+		case *ast.FuncDecl:
+			actual["func:"+declaration.Name.Name] = true
+		case *ast.GenDecl:
+			for _, spec := range declaration.Specs {
+				switch spec := spec.(type) {
+				case *ast.TypeSpec:
+					actual["type:"+spec.Name.Name] = true
+				case *ast.ValueSpec:
+					for _, name := range spec.Names {
+						actual["value:"+name.Name] = true
+					}
+				}
+			}
+		}
+	}
+	if len(actual) != len(expected) {
+		return []finding{{path: path, reason: fmt.Sprintf("top-level inventory=%v want exact %v", actual, expected)}}
+	}
+	for key := range expected {
+		if !actual[key] {
+			return []finding{{path: path, reason: "missing exact top-level declaration " + key}}
+		}
+	}
+	return nil
+}
+
+func slice55aCheckRootAntiRetention() []finding {
+	files := make(map[string]*ast.File)
+	var findings []finding
+	entries, err := os.ReadDir("internal/fontglyph")
+	if err != nil {
+		return []finding{{path: "internal/fontglyph", reason: err.Error()}}
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+		path := filepath.ToSlash(filepath.Join("internal/fontglyph", entry.Name()))
+		file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if parseErr != nil {
+			findings = append(findings, finding{path: path, reason: parseErr.Error()})
+			continue
+		}
+		files[path] = file
+	}
+	for path, file := range files {
+		findings = append(findings, slice55aAntiRetentionFindings(path, file)...)
+	}
+	return findings
+}
+
+func slice55aAntiRetentionFindings(path string, file *ast.File) []finding {
+	forbiddenTypes := map[string]bool{
+		"fontCacheState": true, "fontSourceBlob": true, "fontCacheEntry": true, "fontCacheManager": true, "fontCacheStats": true, "parsedFontHandle": true,
+		"legacyFaceInfo": true, "legacylegacyFontIndexDiagnostics": true, "legacyFontIndex": true, "legacyFontResolution": true,
+		"selectedPath": true, "maxPathHeap": true, "topKPathSelector": true,
+	}
+	forbiddenTypes = slice62bExpandRetainedTypeNames(map[string]*ast.File{path: file}, forbiddenTypes)
+	forbiddenFunctions := map[string]bool{
+		"newFontCacheManager": true, "legacyCanonicalFontCacheSource": true, "legacyFontCacheKey": true, "checkedAddInt64": true, "readFontFileBounded": true,
+		"legacyBuildlegacyFontIndex": true, "canonicalDiscoveryRoots": true, "discoveryPathKey": true, "compareDiscoveryPaths": true, "pathWithinRoots": true,
+		"addDiscoveryCandidate": true, "newTopKPathSelector": true, "selectTopKPaths": true, "fontFaces": true, "fontFacesBounded": true, "readFaceMetadata": true,
+		"readFontRange": true, "legacySystemFontDirs": true, "legacyLoadSystemlegacyFontIndex": true, "legacyResolveSystemFont": true, "fontName": true, "isFontFile": true, "classifySubfamily": true,
+	}
+	forbiddenTests := map[string]bool{
+		"TestFontNameExtraction": true, "TestNormalizeFamily": true, "TestFontIndexLookup": true, "TestSelectTopKPathsIndependentOfTraversalOrder": true,
+		"TestBuildFontIndexCanonicalizesAndDeduplicatesRoots": true, "TestBuildFontIndexSymlinkPolicy": true, "TestTTCMultiFaceIndexing": true,
+		"TestGoMonoFaceMetadataFromOS2": true, "TestOS2NumericMetadataAndDefaults": true, "TestOS2ReservedObliqueBitIgnoredBeforeVersion4": true,
+		"TestTTCFacesHaveIndependentOS2Metadata": true, "TestCorruptOS2BoundsSkipOnlyFace": true, "TestFontParseCacheConcurrentMissSingleLoad": true,
+		"TestFontParseCacheFailureWakesWaitersAndRetries": true, "TestFontParseCachePinLRUAndBackendCloseIdempotent": true, "TestFontParseCachePinnedCapacityRefusal": true,
+		"TestFontParseCacheOversizedAndOverflow": true, "TestFontParseOccursOutsideCacheLock": true, "TestFontParseCacheWaiterKeepsPublishedEntryPinned": true,
+		"TestFontParseCacheUnknownSizeAdmissionIsPessimistic": true, "TestFontParseCacheSharesSourceBlobAcrossIndices": true,
+		"TestFontParseCacheConcurrentDifferentIndicesShareLoad": true, "TestFontParseCacheSharedLoadFailureWakesIndicesAndRetries": true, "TestReadFontFileBoundedRejectsGrowthAndOversize": true,
+	}
+	var findings []finding
+	for _, declaration := range file.Decls {
+		switch declaration := declaration.(type) {
+		case *ast.FuncDecl:
+			if forbiddenFunctions[declaration.Name.Name] || forbiddenTests[declaration.Name.Name] {
+				findings = append(findings, finding{path: path, reason: "obsolete root discovery/cache declaration retained: " + declaration.Name.Name})
+			}
+		case *ast.GenDecl:
+			for _, spec := range declaration.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if ok && forbiddenTypes[typeSpec.Name.Name] {
+					findings = append(findings, finding{path: path, reason: "obsolete root authority retained recursively through " + typeSpec.Name.Name})
+				}
+			}
+		}
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		literal, ok := node.(*ast.CompositeLit)
+		if ok && slice62bTypeExpressionRetains(literal.Type, forbiddenTypes) {
+			findings = append(findings, finding{path: path, reason: "obsolete root authority retained through inferred composite literal"})
+		}
+		return true
+	})
+	for _, item := range slice62cFunctionRetentionFindings(path, file, forbiddenTypes) {
+		item.reason = "obsolete root authority retained through inferred value/function literal/composite"
+		findings = append(findings, item)
+	}
+	return findings
+}
+
+func checkSlice55aGuardSelfTests() []finding {
+	fixtures := []struct{ name, source string }{
+		{name: "transitive alias", source: `package fontglyph; type hidden = fontCacheManager`},
+		{name: "generic container", source: `package fontglyph; type box[T any] struct{ value T }; type hidden = box[fontCacheManager]`},
+		{name: "inferred alias", source: `package fontglyph; func f(x fontCacheManager) { y := x; _ = y }`},
+		{name: "function literal", source: `package fontglyph; var f = func(x fontCacheManager) fontCacheManager { return x }`},
+		{name: "inferred composite", source: `package fontglyph; func f() { _ = struct{ value fontCacheManager }{} }`},
+	}
+	var findings []finding
+	for _, fixture := range fixtures {
+		file, err := parser.ParseFile(token.NewFileSet(), "internal/fontglyph/fixture.go", fixture.source, 0)
+		if err != nil {
+			findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: "cannot parse Slice 5.5a anti-retention fixture " + fixture.name})
+			continue
+		}
+		if got := slice55aAntiRetentionFindings("internal/fontglyph/fixture.go", file); len(got) == 0 {
+			findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: "Slice 5.5a anti-retention self-test accepted " + fixture.name})
+		}
+	}
+	mutated := slice55aExactDecl{path: "internal/fontglyph/fontindex.go", kind: "func", name: "BuildFontIndex", source: `func BuildFontIndex(dirs []string) *FontIndex { return nil }`}
+	if len(slice55aCheckExactDecl(mutated)) == 0 {
+		findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: "Slice 5.5a facade-body self-test accepted mutation"})
+	}
+	duplicateSiblings := "g-one\x00w-parent\x00guard subject\ng-two\x00w-parent\x00guard subject"
+	if _, err := uniqueMaturitySliceCommit(duplicateSiblings, "guard subject", "w-parent"); err == nil {
+		findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: "Slice 5.5a full-history lookup accepted duplicate G siblings"})
+	}
+	return findings
+}
+
+func checkSlice55aEvidence() []finding {
+	required := map[string][]string{
+		"docs/validation/architecture-maturity-slice-5.5a.md":                         {"T -> A -> M -> W -> G", "Status: closed", "128 faces", "256 MiB", "20,000 files", "65,536 faces", "10 interleaved samples", "headless proxy", "No GUI claim", "Package map"},
+		"docs/validation/architecture-maturity-slice-5.5a/scope-and-commits.txt":      {"320deef1ecb16db212cfee692128591359bebc70", "295ef3f847c2be13f20fee250aeb06d39b67ccc7", "G status: closed", "refactor(fontglyph): guard discovery and cache extraction"},
+		"docs/validation/architecture-maturity-slice-5.5a/benchmarks-interleaved.txt": {"sample=10 side=base", "sample=10 side=candidate", "BenchmarkL402DiscoveryTopK", "BenchmarkL402BuildIndexGoMono", "BenchmarkL402CacheHitLease", "BenchmarkPhase15TerminalStartupMemory", "BenchmarkPhase13TextOnlySnapshot", "BenchmarkPhase13DisabledDraw"},
+		"docs/validation/architecture-maturity-slice-5.5a/benchmark-binaries.txt":     {"schema=2", "base_production_commit=320deef1ecb16db212cfee692128591359bebc70", "base_manifest_sha256=", "candidate_manifest_sha256=", "compile side=candidate name=discovery package=./internal/fontglyph/discovery", "run side=candidate name=fontglyph package=./internal/fontglyph", "GOMAXPROCS=1+go+test+-c+-trimpath"},
+		"docs/validation/architecture-maturity-slice-5.5a/benchmark-summary.txt":      {"threshold_percent=3.000000", "result=PASS"},
+		"docs/validation/architecture-maturity-slice-5.5a/platform-gates.txt":         {"linux_mode=execution", "platform name=linux_cache mode=execution", "platform name=linux_discovery mode=execution", "platform name=darwin_amd64 mode=compile-only", "platform name=darwin_arm64 mode=compile-only", "platform name=windows_amd64 mode=compile-only", "platform name=windows_arm64 mode=compile-only"},
+		"docs/validation/architecture-maturity-slice-5.5a/gates.txt":                  {"go test ./...", "go vet ./...", "go run ./scripts/check-maturity-gates.go", "go run ./scripts/check-slice55a-evidence.go", "-tags glfw", "-race"},
+	}
+	var findings []finding
+	for path, pins := range required {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		} // required docs and changed-path checks report absence.
+		for _, pin := range pins {
+			if !strings.Contains(string(data), pin) {
+				findings = append(findings, finding{path: path, reason: "missing evidence pin: " + pin})
+			}
+		}
+	}
+	return findings
+}
+
+func checkSlice55aCommitsAndPaths() []finding {
+	const base = "320deef1ecb16db212cfee692128591359bebc70"
+	const wCommit = "295ef3f847c2be13f20fee250aeb06d39b67ccc7"
+	const gSubject = "refactor(fontglyph): guard discovery and cache extraction"
+	var findings []finding
+	shallowText, _ := gitText("rev-parse", "--is-shallow-repository")
+	shallow := shallowText == "true"
+	for _, stage := range slice55aStages {
+		if !slice55aCommitExists(stage.commit) {
+			if !shallow {
+				findings = append(findings, finding{path: "git:" + stage.class, reason: "pinned commit is unavailable in non-shallow history"})
+			}
+			continue
+		}
+		identity, err := gitFields("show", "-s", "--format=%H%x00%P%x00%s", stage.commit)
+		if err != nil || len(identity) != 3 || identity[0] != stage.commit || identity[1] != stage.parent || identity[2] != stage.subject {
+			findings = append(findings, finding{path: "git:" + stage.class, reason: "unexpected exact Slice 5.5a identity/parent/subject"})
+		}
+		changed, err := gitText("diff-tree", "--no-commit-id", "--name-only", "-r", stage.commit)
+		if err == nil {
+			findings = append(findings, slice55aComparePathSet("git:"+stage.class, nonEmptyLines(changed), stage.paths)...)
+		}
+	}
+	head, _ := gitText("rev-parse", "HEAD")
+	branch, _ := gitText("branch", "--show-current")
+	active := branch == "arch/l4-02a-font-discovery-cache"
+	worktree, _ := gitRawText("status", "--porcelain=v1", "--untracked-files=all")
+	gCommit, gLookupErr := findMaturitySliceCommit(gSubject, wCommit)
+	if gLookupErr != nil && strings.Contains(gLookupErr.Error(), "cardinality") && !strings.Contains(gLookupErr.Error(), " is 0,") {
+		findings = append(findings, finding{path: "git:G", reason: gLookupErr.Error()})
+	}
+	if gCommit == "" && shallow {
+		subject, _ := gitText("show", "-s", "--format=%s", head)
+		parent, _ := slice55aCommitParent(head)
+		if subject == gSubject && parent == wCommit {
+			gCommit = head
+		}
+	}
+	includeWorktree := false
+	if gCommit == "" {
+		if active && head == wCommit {
+			includeWorktree = true
+		} else if active && !shallow {
+			findings = append(findings, finding{path: "git:G", reason: "before G, HEAD must equal immutable W"})
+		}
+	} else {
+		subject, subjectErr := gitText("show", "-s", "--format=%s", gCommit)
+		parent, parentErr := slice55aCommitParent(gCommit)
+		if subjectErr != nil || parentErr != nil || parent != wCommit || subject != gSubject {
+			findings = append(findings, finding{path: "git:G", reason: "G must have exact W parent and subject"})
+		}
+		if active && head != gCommit {
+			findings = append(findings, finding{path: "git:G", reason: "after G, active branch HEAD must equal G"})
+		}
+		if active && strings.TrimSpace(worktree) != "" {
+			findings = append(findings, finding{path: "git:worktree", reason: "after final G, active worktree must be clean"})
+		}
+		if slice55aCommitExists(base) {
+			changed, err := gitText("diff", "--name-only", base+".."+gCommit)
+			if err == nil {
+				findings = append(findings, slice55aComparePathSet("git:overall", nonEmptyLines(changed), slice55aOverallPaths())...)
+			}
+		}
+		if !shallow || slice55aCommitExists(wCommit) {
+			changed, err := gitText("diff-tree", "--no-commit-id", "--name-only", "-r", gCommit)
+			if err == nil {
+				findings = append(findings, slice55aComparePathSet("git:G", nonEmptyLines(changed), slice55aGStagePaths)...)
+			}
+		}
+	}
+	if includeWorktree {
+		var dirty []string
+		for _, args := range [][]string{{"diff", "--name-only"}, {"diff", "--cached", "--name-only"}, {"ls-files", "--others", "--exclude-standard"}} {
+			text, _ := gitText(args...)
+			dirty = append(dirty, nonEmptyLines(text)...)
+		}
+		findings = append(findings, slice55aComparePathSet("git:G-dirty", dirty, slice55aGStagePaths)...)
+		if slice55aCommitExists(base) {
+			changed, _ := gitText("diff", "--name-only", base+".."+wCommit)
+			findings = append(findings, slice55aComparePathSet("git:overall-dirty", append(nonEmptyLines(changed), dirty...), slice55aOverallPaths())...)
+		}
+	}
+	return findings
+}
+
+func slice55aCommitParent(commit string) (string, error) {
+	raw, err := gitText("cat-file", "-p", commit)
+	if err != nil {
+		return "", err
+	}
+	var parents []string
+	for _, line := range strings.Split(raw, "\n") {
+		if strings.HasPrefix(line, "parent ") {
+			parents = append(parents, strings.TrimSpace(strings.TrimPrefix(line, "parent ")))
+		}
+	}
+	if len(parents) != 1 {
+		return "", fmt.Errorf("commit %s has %d parents, want exactly one", commit, len(parents))
+	}
+	return parents[0], nil
+}
+
+func slice55aCommitExists(commit string) bool {
+	command := exec.Command("git", "cat-file", "-e", commit+"^{commit}")
+	return command.Run() == nil
+}
+
+func slice55aOverallPaths() []string {
+	set := make(map[string]bool)
+	for _, stage := range slice55aStages {
+		for _, path := range stage.paths {
+			set[path] = true
+		}
+	}
+	for _, path := range slice55aGStagePaths {
+		set[path] = true
+	}
+	var paths []string
+	for path := range set {
+		paths = append(paths, path)
+	}
+	return paths
+}
+
+func slice55aComparePathSet(label string, actualPaths, expectedPaths []string) []finding {
+	actual, expected := make(map[string]bool), make(map[string]bool)
+	for _, path := range actualPaths {
+		actual[filepath.ToSlash(strings.TrimSpace(path))] = true
+	}
+	for _, path := range expectedPaths {
+		expected[filepath.ToSlash(path)] = true
+	}
+	var findings []finding
+	for path := range expected {
+		if !actual[path] {
+			findings = append(findings, finding{path: path, reason: "missing from exact " + label + " path set"})
+		}
+	}
+	for path := range actual {
+		if path != "" && !expected[path] {
+			findings = append(findings, finding{path: path, reason: "outside exact " + label + " path allowlist"})
+		}
+	}
+	return findings
 }
 
 func gitRawText(args ...string) (string, error) {

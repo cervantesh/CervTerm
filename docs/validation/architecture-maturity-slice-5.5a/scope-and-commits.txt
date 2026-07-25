@@ -1,0 +1,88 @@
+Stage 3 Slice 5.5a final chain and path contract
+execution_predecessor=320deef1ecb16db212cfee692128591359bebc70
+semantic_depends_on=ADR-0021,Phase 4 font contracts
+active_branch=arch/l4-02a-font-discovery-cache
+
+Final immutable chain:
+T 6efd6cd8e6df21a57886257552c31fd76be7c533 parent 320deef1ecb16db212cfee692128591359bebc70 subject test(fontglyph): characterize discovery and cache extraction
+A faa01bce3337e61205f924063c913922a0feb15a parent 6efd6cd8e6df21a57886257552c31fd76be7c533 subject refactor(fontglyph): add discovery cache and face seams
+M cf15fb9b043c27979d8336cb383b97b7c429748b parent faa01bce3337e61205f924063c913922a0feb15a subject refactor(fontglyph): copy discovery and cache implementations
+W 295ef3f847c2be13f20fee250aeb06d39b67ccc7 parent cf15fb9b043c27979d8336cb383b97b7c429748b subject refactor(fontglyph): wire discovery and parsed-face cache
+G parent 295ef3f847c2be13f20fee250aeb06d39b67ccc7 subject refactor(fontglyph): guard discovery and cache extraction
+
+G status: closed
+Final chain contract: T -> A -> M -> W -> G.
+G is identified in-repository by its exact sole parent and subject because a commit cannot embed its own final hash. The final externally reported SHA is authoritative.
+
+Stage ownership:
+T old-root characterization and reproducible base harness only:
+ internal/fontglyph/discovery_cache_characterization_test.go
+
+A additive unused seams/contracts and contract tests:
+ internal/fontglyph/cache/contracts.go
+ internal/fontglyph/cache/contracts_test.go
+ internal/fontglyph/discovery/contracts.go
+ internal/fontglyph/discovery/contracts_test.go
+ internal/fontglyph/internal/face/owner.go
+ internal/fontglyph/internal/face/owner_test.go
+
+M mechanical copies only:
+ internal/fontglyph/cache/benchmark_test.go
+ internal/fontglyph/cache/cache.go
+ internal/fontglyph/cache/cache_test.go
+ internal/fontglyph/cache/contracts.go
+ internal/fontglyph/discovery/benchmark_test.go
+ internal/fontglyph/discovery/index.go
+ internal/fontglyph/discovery/index_test.go
+
+W production facade/wiring, adversarial corrections, and regression tests:
+ internal/fontglyph/backend.go
+ internal/fontglyph/cache/cache.go
+ internal/fontglyph/cache/cache_test.go
+ internal/fontglyph/cache_facade.go
+ internal/fontglyph/descriptor_backend_test.go
+ internal/fontglyph/discovery/index.go
+ internal/fontglyph/discovery/index_test.go
+ internal/fontglyph/discovery_cache_characterization_test.go
+ internal/fontglyph/face_resolver.go
+ internal/fontglyph/face_resolver_test.go
+ internal/fontglyph/fallback_resolver_test.go
+ internal/fontglyph/font_cache.go
+ internal/fontglyph/font_cache_test.go
+ internal/fontglyph/font_install.go
+ internal/fontglyph/fontindex.go
+ internal/fontglyph/fontindex_test.go
+
+G obsolete root implementation/test cleanup, ADR/import/retention/evidence guards, docs, and raw evidence:
+ docs/architecture-maturity/implementation-plan.md
+ docs/architecture.md
+ docs/validation/architecture-maturity-slice-5.5a.md
+ docs/validation/architecture-maturity-slice-5.5a/benchmark-binaries.txt
+ docs/validation/architecture-maturity-slice-5.5a/benchmark-summary.txt
+ docs/validation/architecture-maturity-slice-5.5a/benchmarks-base.txt
+ docs/validation/architecture-maturity-slice-5.5a/benchmarks-candidate.txt
+ docs/validation/architecture-maturity-slice-5.5a/benchmarks-interleaved.txt
+ docs/validation/architecture-maturity-slice-5.5a/gates.txt
+ docs/validation/architecture-maturity-slice-5.5a/platform-gates.txt
+ docs/validation/architecture-maturity-slice-5.5a/scope-and-commits.txt
+ docs/validation/architecture-maturity-slice-5.5a/source-manifest-base.txt
+ docs/validation/architecture-maturity-slice-5.5a/source-manifest-candidate.txt
+ internal/fontglyph/discovery/index.go
+ internal/fontglyph/discovery_cache_characterization_test.go
+ internal/fontglyph/face_resolver.go
+ internal/fontglyph/font_cache.go
+ internal/fontglyph/font_cache_test.go
+ internal/fontglyph/font_install.go
+ internal/fontglyph/fontindex.go
+ internal/fontglyph/fontindex_test.go
+ scripts/check-maturity-gates.go
+ scripts/check-slice55a-evidence.go
+
+Pre-G mode requires active HEAD exactly W and dirty paths exactly the G list.
+Post-G mode requires active HEAD exactly the unique G and a clean worktree.
+Merged-descendant mode searches full history across all refs and requires exactly one G with the exact parent/subject, rejecting duplicate siblings.
+Detached/depth-1 shallow mode keeps present-tree declaration, package-DAG, pinned immutable-W manifest, evidence, and policy checks mandatory while unavailable ancestors do not fail by themselves.
+
+Benchmark base production: 320deef1ecb16db212cfee692128591359bebc70
+Benchmark base harness overlay: 6efd6cd8e6df21a57886257552c31fd76be7c533:internal/fontglyph/discovery_cache_characterization_test.go
+Benchmark candidate: immutable W production and benchmark source `295ef3f847c2be13f20fee250aeb06d39b67ccc7`, bound by the pinned source manifest and compiled-binary SHA-256 values.
