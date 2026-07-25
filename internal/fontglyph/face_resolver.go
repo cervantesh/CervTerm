@@ -3,14 +3,10 @@ package fontglyph
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"cervterm/internal/fontdesc"
-	"cervterm/internal/fontglyph/discovery"
-
-	"golang.org/x/image/font/sfnt"
 )
 
 // faceCandidate is a ranked concrete face. path and index provide the stable
@@ -231,49 +227,4 @@ func resolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, tar
 
 func normalizeFamily(value string) string {
 	return strings.Join(strings.Fields(strings.ToLower(value)), " ")
-}
-
-func classifySubfamily(value string) (bold, italic bool) {
-	normalized := normalizeFamily(value)
-	return strings.Contains(normalized, "bold"), strings.Contains(normalized, "italic") || strings.Contains(normalized, "oblique")
-}
-
-func isFontFile(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".ttf", ".otf", ".ttc":
-		return true
-	default:
-		return false
-	}
-}
-
-func fontName(font *sfnt.Font, preferred, fallback sfnt.NameID) string {
-	var buffer sfnt.Buffer
-	if name, err := font.Name(&buffer, preferred); err == nil && strings.TrimSpace(name) != "" {
-		return strings.TrimSpace(name)
-	}
-	if name, err := font.Name(&buffer, fallback); err == nil {
-		return strings.TrimSpace(name)
-	}
-	return ""
-}
-
-func selectTopKPaths(paths []string, limit int) []string {
-	selector := newTopKPathSelector(limit)
-	for _, path := range paths {
-		selector.add(path)
-	}
-	return selector.sorted()
-}
-
-func fontFaces(path string) []faceInfo {
-	discovered := discovery.FacesInFile(path)
-	faces := make([]faceInfo, len(discovered))
-	for i := range discovered {
-		faces[i] = faceInfo{
-			path: discovered[i].Path(), index: discovered[i].Index(), family: discovered[i].Family(),
-			subfamily: discovered[i].Subfamily(), metadata: discovered[i].Metadata(),
-		}
-	}
-	return faces
 }

@@ -2,8 +2,6 @@ package fontglyph
 
 import (
 	"fmt"
-	"io"
-	"math"
 	"os"
 
 	"golang.org/x/image/font"
@@ -84,26 +82,4 @@ func loadCachedFileFaceIndex(path string, index int, spec Spec) (loadedFace, fon
 	}
 	lf.faceIndex, lf.cacheHandle = index, handle
 	return lf, metrics, nil
-}
-
-func readFontFileBounded(reader io.Reader, reserved, maxBytes int64) ([]byte, error) {
-	if reserved < 0 || maxBytes < 0 || reserved > maxBytes {
-		return nil, errFontCacheCapacity
-	}
-	limit := reserved
-	if limit < math.MaxInt64 {
-		limit++
-	}
-	data, err := io.ReadAll(io.LimitReader(reader, limit))
-	if err != nil {
-		return nil, err
-	}
-	actual := int64(len(data))
-	if actual > maxBytes {
-		return nil, fmt.Errorf("%w: font is larger than %d bytes", errFontCacheCapacity, maxBytes)
-	}
-	if actual > reserved {
-		return nil, fmt.Errorf("%w: stat=%d read=%d", errFontFileGrew, reserved, actual)
-	}
-	return data, nil
 }

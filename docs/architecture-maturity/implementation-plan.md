@@ -391,6 +391,8 @@ Every slice is effort L and must begin with a separate passing `T` commit.
 
 - **Files:** `fontindex.go`, `font_cache.go`, face loading/cache tests and new compatibility package/facade.
 - **Commits:** `T → A → M → W → G`; separate branch/PR.
+- **execution_predecessor:** Slice 6.2c / PR #220 / merge `320deef`. **semantic_depends_on:** ADR-0021 and Phase 4 font contracts; 5.5b and 5.5c remain open.
+- **Status:** **complete**. Discovery/index, parsed-face cache and private face ownership are extracted behind the unchanged root facade. Evidence: `docs/validation/architecture-maturity-slice-5.5a.md`.
 
 ### Slice 5.5b — L4-02 font resolution and shaping extraction
 
