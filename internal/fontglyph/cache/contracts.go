@@ -60,14 +60,15 @@ type entry[T any] struct {
 // Manager bounds parsed faces and retained source bytes. It has no global
 // singleton; the fontglyph facade owns the production instance.
 type Manager[T any] struct {
-	mu       sync.Mutex
-	entries  map[string]*entry[T]
-	sources  map[string]*sourceBlob
-	maxFaces int
-	maxBytes int64
-	bytes    int64
-	clock    uint64
-	parse    Parser[T]
+	mu        sync.Mutex
+	entries   map[string]*entry[T]
+	sources   map[string]*sourceBlob
+	maxFaces  int
+	maxBytes  int64
+	bytes     int64
+	clock     uint64
+	parse     Parser[T]
+	afterWait func() // test-only scheduling seam; nil in production
 }
 
 // Lease owns exactly one cache pin. Close is safe to call repeatedly.
