@@ -116,8 +116,8 @@ func TestBackendCoversClusterChecksCombiningAndShaping(t *testing.T) {
 
 func newFallbackTestBackend(t *testing.T, descriptors, fallback []fontdesc.Descriptor, rules []fontdesc.Rule, faces []faceInfo, covers func(*OpenTypeBackend, string) bool, loads *int) *fallbackBackend {
 	t.Helper()
-	manager := newFontCacheManager(fontdesc.MaxParsedFaces, fontdesc.MaxParsedBytes)
-	restore := resetFontCacheForTest(manager)
+	manager := newParsedFaceCache(fontdesc.MaxParsedFaces, fontdesc.MaxParsedBytes)
+	restore := resetParsedFaceCacheForTest(manager)
 	t.Cleanup(restore)
 	environment, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{Descriptors: descriptors, Fallback: fallback, Rules: rules, DPI: 96})
 	if err != nil {
@@ -221,19 +221,19 @@ func TestFallbackBackendReleasesLosingCandidatePins(t *testing.T) {
 	backend := newFallbackTestBackend(t, []fontdesc.Descriptor{{Family: "Primary"}}, []fontdesc.Descriptor{{Family: "Loser"}, {Family: "Winner"}}, nil, faces, func(candidate *OpenTypeBackend, _ string) bool {
 		return filepath.Base(candidate.faces[0].sourcePath) == "winner.ttf"
 	}, &loads)
-	manager := currentFontCache()
-	if before := manager.stats().Pinned; before != 4 {
+	manager := currentParsedFaceCache()
+	if before := manager.Stats().Pinned; before != 4 {
 		t.Fatalf("primary pins = %d, want 4", before)
 	}
 	selected, ok := backend.resolveContent(fontdesc.RequestedFaceStyleNormal, "漢")
 	if !ok || filepath.Base(selected.plan.selected.path) != "winner.ttf" || loads != 2 {
 		t.Fatalf("fallback failover = %#v ok=%v loads=%d", selected.plan, ok, loads)
 	}
-	if after := manager.stats().Pinned; after != 5 {
+	if after := manager.Stats().Pinned; after != 5 {
 		t.Fatalf("pins after losing/winning candidates = %d, want 5", after)
 	}
 	backend.Close()
-	if final := manager.stats().Pinned; final != 0 {
+	if final := manager.Stats().Pinned; final != 0 {
 		t.Fatalf("pins after close = %d, want 0", final)
 	}
 }

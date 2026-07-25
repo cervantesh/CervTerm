@@ -107,9 +107,13 @@ func (m *Manager[T]) Acquire(source string, index int, knownSize int64, load fun
 	}
 	blob := m.sources[canonical]
 	sourceLoader := blob == nil
+	var evicted []*face.Owner[T]
 	if sourceLoader {
-		if !m.makeRoomLocked(1, reservation) {
+		var room bool
+		evicted, room = m.makeRoomLocked(1, reservation)
+		if !room {
 			m.mu.Unlock()
+			closeEvictedOwners(evicted)
 			return nil, nil, ErrCapacity
 		}
 		blob = &sourceBlob{state: loading, wait: make(chan struct{}), reserved: reservation, refs: 1}
@@ -117,9 +121,12 @@ func (m *Manager[T]) Acquire(source string, index int, knownSize int64, load fun
 		m.bytes += reservation
 	} else {
 		blob.refs++ // Pending face keeps ready data alive while admission evicts.
-		if !m.makeRoomLocked(1, 0) {
+		var room bool
+		evicted, room = m.makeRoomLocked(1, 0)
+		if !room {
 			blob.refs--
 			m.mu.Unlock()
+			closeEvictedOwners(evicted)
 			return nil, nil, ErrCapacity
 		}
 	}
@@ -134,21 +141,27 @@ func (m *Manager[T]) Acquire(source string, index int, knownSize int64, load fun
 		}
 		if err != nil {
 			m.failSource(canonical, blob, err)
+			closeEvictedOwners(evicted)
 			return nil, nil, err
 		}
-		if err = m.publishSource(blob, data); err != nil {
-			m.failSource(canonical, blob, err)
-			return nil, nil, err
+		moreEvicted, publishErr := m.publishSource(blob, data)
+		evicted = append(evicted, moreEvicted...)
+		if publishErr != nil {
+			m.failSource(canonical, blob, publishErr)
+			closeEvictedOwners(evicted)
+			return nil, nil, publishErr
 		}
 	} else if waitForSource {
 		<-blob.wait
 		if blob.err != nil {
+			closeEvictedOwners(evicted)
 			return nil, nil, blob.err
 		}
 	}
 	owner, err := m.parse(blob.data, index) // Deliberately outside m.mu.
 	if err != nil {
 		m.failFace(key, entry, err)
+		closeEvictedOwners(evicted)
 		return nil, nil, err
 	}
 	m.mu.Lock()
@@ -159,22 +172,29 @@ func (m *Manager[T]) Acquire(source string, index int, knownSize int64, load fun
 	m.touchLocked(entry)
 	close(entry.wait)
 	m.mu.Unlock()
+	closeEvictedOwners(evicted)
 	return owner, &Lease[T]{manager: m, entry: entry}, nil
 }
-func (m *Manager[T]) publishSource(blob *sourceBlob, data []byte) error {
+func (m *Manager[T]) publishSource(blob *sourceBlob, data []byte) ([]*face.Owner[T], error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	actual := int64(len(data))
 	delta := actual - blob.reserved
-	if delta > 0 && !m.makeRoomLocked(0, delta) {
-		return ErrCapacity
+	var evicted []*face.Owner[T]
+	if delta > 0 {
+		var room bool
+		evicted, room = m.makeRoomLocked(0, delta)
+		if !room {
+			m.mu.Unlock()
+			return evicted, ErrCapacity
+		}
 	}
 	m.bytes += delta
 	blob.reserved = 0
 	blob.data = data
 	blob.state = ready
 	close(blob.wait)
-	return nil
+	m.mu.Unlock()
+	return evicted, nil
 }
 func (m *Manager[T]) failSource(source string, blob *sourceBlob, err error) {
 	m.mu.Lock()
@@ -231,19 +251,31 @@ func (m *Manager[T]) releaseSourceLocked(blob *sourceBlob) {
 	m.bytes -= m.sourceCharge(blob)
 	blob.data = nil
 }
-func (m *Manager[T]) removeFaceLocked(key string, entry *entry[T]) {
+func (m *Manager[T]) detachFaceLocked(key string, entry *entry[T]) *face.Owner[T] {
 	delete(m.entries, key)
 	m.releaseSourceLocked(entry.source)
-	entry.owner.Close()
+	owner := entry.owner
+	entry.owner = nil
+	entry.source = nil
+	entry.state = missing
+	return owner
 }
-func (m *Manager[T]) makeRoomLocked(extraFaces int, extraBytes int64) bool {
-	if extraFaces < 0 || extraBytes < 0 || extraFaces > m.maxFaces || extraBytes > m.maxBytes {
-		return false
+
+func closeEvictedOwners[T any](owners []*face.Owner[T]) {
+	for _, owner := range owners {
+		owner.Close()
 	}
+}
+
+func (m *Manager[T]) makeRoomLocked(extraFaces int, extraBytes int64) ([]*face.Owner[T], bool) {
+	if extraFaces < 0 || extraBytes < 0 || extraFaces > m.maxFaces || extraBytes > m.maxBytes {
+		return nil, false
+	}
+	var evicted []*face.Owner[T]
 	for {
 		bytesAfter, ok := checkedAddInt64(m.bytes, extraBytes)
 		if ok && len(m.entries)+extraFaces <= m.maxFaces && bytesAfter <= m.maxBytes {
-			return true
+			return evicted, true
 		}
 		var oldestKey string
 		var oldest *entry[T]
@@ -256,9 +288,11 @@ func (m *Manager[T]) makeRoomLocked(extraFaces int, extraBytes int64) bool {
 			}
 		}
 		if oldest == nil {
-			return false
+			return evicted, false
 		}
-		m.removeFaceLocked(oldestKey, oldest)
+		if owner := m.detachFaceLocked(oldestKey, oldest); owner != nil {
+			evicted = append(evicted, owner)
+		}
 	}
 }
 

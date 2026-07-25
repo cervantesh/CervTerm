@@ -2,10 +2,12 @@ package discovery
 
 import (
 	"encoding/binary"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sync"
 	"testing"
 
 	"cervterm/internal/fontdesc"
@@ -324,4 +326,56 @@ func testTableRecord(t *testing.T, data []byte, tag string) int {
 	}
 	t.Fatalf("table %q not found", tag)
 	return 0
+}
+
+func TestIndexLookupAndFacesReturnDetachedValues(t *testing.T) {
+	index := NewIndex([]Face{NewFace("regular.ttf", 3, "Example Mono", "Regular", fontdesc.FaceMetadata{Family: "Example Mono", Subfamily: "Regular", Weight: 400, Stretch: 100, Style: fontdesc.StyleNormal})})
+
+	regular, _, _, _ := index.Lookup("Example Mono")
+	if regular == nil {
+		t.Fatal("missing regular face")
+	}
+	regular.path = "mutated.ttf"
+	regular.metadata.Weight = 900
+
+	faces := index.Faces("Example Mono")
+	faces[0].path = "slice-mutated.ttf"
+	faces[0].metadata.Weight = 100
+	faces = append(faces, NewFace("extra.ttf", 4, "Example Mono", "Bold", fontdesc.FaceMetadata{}))
+
+	fresh, _, _, _ := index.Lookup("Example Mono")
+	if fresh == nil || fresh.path != "regular.ttf" || fresh.metadata.Weight != 400 {
+		t.Fatalf("external mutation changed immutable lookup: %#v", fresh)
+	}
+	freshFaces := index.Faces("Example Mono")
+	if len(freshFaces) != 1 || freshFaces[0].path != "regular.ttf" || freshFaces[0].metadata.Weight != 400 {
+		t.Fatalf("external mutation changed immutable faces: %#v", freshFaces)
+	}
+}
+
+func TestIndexDetachedResultsConcurrentMutationIsolation(t *testing.T) {
+	index := NewIndex([]Face{
+		NewFace("regular.ttf", 0, "Example Mono", "Regular", fontdesc.FaceMetadata{Family: "Example Mono", Subfamily: "Regular", Weight: 400}),
+		NewFace("bold.ttf", 1, "Example Mono", "Bold", fontdesc.FaceMetadata{Family: "Example Mono", Subfamily: "Bold", Weight: 700}),
+	})
+	const workers = 8
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for worker := 0; worker < workers; worker++ {
+		go func(worker int) {
+			defer wg.Done()
+			for iteration := 0; iteration < 1000; iteration++ {
+				regular, bold, _, _ := index.Lookup("Example Mono")
+				regular.path = fmt.Sprintf("mutated-%d-%d", worker, iteration)
+				bold.metadata.Weight = worker + iteration
+				faces := index.Faces("Example Mono")
+				faces[0].family = "mutated"
+			}
+		}(worker)
+	}
+	wg.Wait()
+	regular, bold, _, _ := index.Lookup("Example Mono")
+	if regular.path != "regular.ttf" || bold.path != "bold.ttf" || regular.metadata.Weight != 400 || bold.metadata.Weight != 700 {
+		t.Fatalf("concurrent detached mutation changed index: regular=%#v bold=%#v", regular, bold)
+	}
 }

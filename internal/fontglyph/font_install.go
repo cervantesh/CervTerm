@@ -19,12 +19,12 @@ func faceFromParsed(pf *parsedFontData, spec Spec) (loadedFace, font.Metrics, er
 	return lf, face.Metrics(), nil
 }
 
-func cachedParsedFont(key string, index int, load func() ([]byte, error)) (*parsedFontData, *parsedFontHandle, error) {
-	return currentFontCache().acquire(key, index, 0, load)
+func cachedParsedFont(key string, index int, load func() ([]byte, error)) (*parsedFontData, *parsedFaceLease, error) {
+	return acquireParsedFace(currentParsedFaceCache(), key, index, 0, load)
 }
 
-func cachedParsedFontKnownSize(key string, index int, knownSize int64, load func() ([]byte, error)) (*parsedFontData, *parsedFontHandle, error) {
-	return currentFontCache().acquire(key, index, knownSize, load)
+func cachedParsedFontKnownSize(key string, index int, knownSize int64, load func() ([]byte, error)) (*parsedFontData, *parsedFaceLease, error) {
+	return acquireParsedFace(currentParsedFaceCache(), key, index, knownSize, load)
 }
 
 func loadCachedFaceIndex(key string, index int, spec Spec, load func() ([]byte, error)) (loadedFace, font.Metrics, error) {
@@ -34,7 +34,7 @@ func loadCachedFaceIndex(key string, index int, spec Spec, load func() ([]byte, 
 	}
 	lf, metrics, err := faceFromParsed(pf, spec)
 	if err != nil {
-		handle.release()
+		handle.Close()
 		return loadedFace{}, font.Metrics{}, err
 	}
 	lf.faceIndex, lf.cacheHandle = index, handle
@@ -48,7 +48,7 @@ func loadCachedFaceIndexKnownSize(key string, index int, knownSize int64, spec S
 	}
 	lf, metrics, err := faceFromParsed(pf, spec)
 	if err != nil {
-		handle.release()
+		handle.Close()
 		return loadedFace{}, font.Metrics{}, err
 	}
 	lf.faceIndex, lf.cacheHandle = index, handle
@@ -65,20 +65,21 @@ func loadCachedFileFaceIndex(path string, index int, spec Spec) (loadedFace, fon
 	if err != nil {
 		return loadedFace{}, font.Metrics{}, err
 	}
-	manager := currentFontCache()
+	manager := currentParsedFaceCache()
 	knownSize := info.Size()
-	if knownSize < 0 || knownSize > manager.maxBytes {
-		return loadedFace{}, font.Metrics{}, fmt.Errorf("%w: font stat size is %d (limit %d)", errFontCacheCapacity, knownSize, manager.maxBytes)
+	maxBytes := manager.MaxBytes()
+	if knownSize < 0 || knownSize > maxBytes {
+		return loadedFace{}, font.Metrics{}, fmt.Errorf("%w: font stat size is %d (limit %d)", errFontCacheCapacity, knownSize, maxBytes)
 	}
-	pf, handle, err := manager.acquire(path, index, knownSize, func() ([]byte, error) {
-		return readFontFileBounded(file, knownSize, manager.maxBytes)
+	pf, handle, err := acquireParsedFace(manager, path, index, knownSize, func() ([]byte, error) {
+		return readParsedFontFileBounded(file, knownSize, maxBytes)
 	})
 	if err != nil {
 		return loadedFace{}, font.Metrics{}, err
 	}
 	lf, metrics, err := faceFromParsed(pf, spec)
 	if err != nil {
-		handle.release()
+		handle.Close()
 		return loadedFace{}, font.Metrics{}, err
 	}
 	lf.faceIndex, lf.cacheHandle = index, handle

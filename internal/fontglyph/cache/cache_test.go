@@ -123,6 +123,198 @@ func TestFontParseCacheLRUEvictionClosesFaceOwner(t *testing.T) {
 	}
 }
 
+func TestFontParseCacheEvictionCloserCanReenterManager(t *testing.T) {
+	var manager *Manager[testParsed]
+	var callbackCalls atomic.Int32
+	var callbackStats Stats
+	var callbackAcquireErr error
+	manager = New(1, 1, func(data []byte, _ int) (*face.Owner[testParsed], error) {
+		var closeOwner func(testParsed)
+		if len(data) == 1 && data[0] == 'a' {
+			closeOwner = func(testParsed) {
+				callbackCalls.Add(1)
+				callbackStats = manager.Stats()
+				_, lease, err := manager.Acquire("test:b", 0, 1, func() ([]byte, error) { return []byte{'b'}, nil })
+				if lease != nil {
+					lease.Close()
+				}
+				callbackAcquireErr = err
+			}
+		}
+		return face.NewOwner(testParsed{}, closeOwner), nil
+	})
+	_, first, err := manager.Acquire("test:a", 0, 1, func() ([]byte, error) { return []byte{'a'}, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Close()
+
+	type result struct {
+		lease *Lease[testParsed]
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		_, lease, acquireErr := manager.Acquire("test:b", 0, 1, func() ([]byte, error) { return []byte{'b'}, nil })
+		done <- result{lease: lease, err: acquireErr}
+	}()
+	select {
+	case got := <-done:
+		if got.err != nil {
+			t.Fatalf("outer acquire: %v", got.err)
+		}
+		defer got.lease.Close()
+	case <-time.After(2 * time.Second):
+		t.Fatal("reentrant eviction closer deadlocked cache manager")
+	}
+	if callbackCalls.Load() != 1 {
+		t.Fatalf("closer calls = %d, want 1", callbackCalls.Load())
+	}
+	if callbackAcquireErr != nil {
+		t.Fatalf("reentrant same-key acquire error = %v", callbackAcquireErr)
+	}
+	if callbackStats.Entries != 1 || callbackStats.Ready != 1 || callbackStats.Pinned != 1 || callbackStats.Bytes != 1 {
+		t.Fatalf("callback observed non-atomic replacement accounting: %+v", callbackStats)
+	}
+}
+
+func TestFontParseCacheSlowEvictionCloserDoesNotHoldManagerLock(t *testing.T) {
+	started := make(chan struct{})
+	releaseCloser := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseCloser) }) }
+	defer release()
+
+	manager := New(1, 1, func(data []byte, _ int) (*face.Owner[testParsed], error) {
+		var closeOwner func(testParsed)
+		if len(data) == 1 && data[0] == 'a' {
+			closeOwner = func(testParsed) {
+				close(started)
+				<-releaseCloser
+			}
+		}
+		return face.NewOwner(testParsed{}, closeOwner), nil
+	})
+	_, first, err := manager.Acquire("test:slow-a", 0, 1, func() ([]byte, error) { return []byte{'a'}, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Close()
+
+	type result struct {
+		lease *Lease[testParsed]
+		err   error
+	}
+	acquired := make(chan result, 1)
+	go func() {
+		_, lease, acquireErr := manager.Acquire("test:slow-b", 0, 1, func() ([]byte, error) { return []byte{'b'}, nil })
+		acquired <- result{lease: lease, err: acquireErr}
+	}()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("slow eviction closer did not start")
+	}
+
+	statsDone := make(chan Stats, 1)
+	go func() { statsDone <- manager.Stats() }()
+	select {
+	case stats := <-statsDone:
+		if stats.Entries != 1 || stats.Ready != 1 || stats.Pinned != 1 || stats.Bytes != 1 {
+			t.Fatalf("stats during slow close = %+v", stats)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("slow eviction closer held cache manager lock")
+	}
+	probeDone := make(chan error, 1)
+	go func() {
+		_, _, probeErr := manager.Acquire("test:slow-probe", 0, 1, func() ([]byte, error) { return []byte{'p'}, nil })
+		probeDone <- probeErr
+	}()
+	select {
+	case probeErr := <-probeDone:
+		if !errors.Is(probeErr, ErrCapacity) {
+			t.Fatalf("probe error = %v, want capacity", probeErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("slow eviction closer blocked concurrent Acquire")
+	}
+
+	release()
+	select {
+	case got := <-acquired:
+		if got.err != nil {
+			t.Fatalf("replacement acquire: %v", got.err)
+		}
+		got.lease.Close()
+	case <-time.After(2 * time.Second):
+		t.Fatal("replacement acquire did not finish after closer release")
+	}
+}
+
+func TestFontParseCacheMultipleEvictionsPreserveExactBudgets(t *testing.T) {
+	var closes atomic.Int32
+	manager := New(4, 6, func([]byte, int) (*face.Owner[testParsed], error) {
+		return face.NewOwner(testParsed{}, func(testParsed) { closes.Add(1) }), nil
+	})
+	for _, source := range []string{"test:multi-a", "test:multi-b", "test:multi-c"} {
+		_, lease, err := manager.Acquire(source, 0, 2, func() ([]byte, error) { return []byte{1, 2}, nil })
+		if err != nil {
+			t.Fatalf("acquire %s: %v", source, err)
+		}
+		lease.Close()
+	}
+	_, replacement, err := manager.Acquire("test:multi-replacement", 0, 5, func() ([]byte, error) { return []byte{1, 2, 3, 4, 5}, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer replacement.Close()
+	if closes.Load() != 3 {
+		t.Fatalf("owner closes = %d, want 3", closes.Load())
+	}
+	if got := manager.Stats(); got.Entries != 1 || got.Ready != 1 || got.Pinned != 1 || got.Bytes != 5 {
+		t.Fatalf("post-eviction stats = %+v", got)
+	}
+	manager.mu.Lock()
+	sources := len(manager.sources)
+	manager.mu.Unlock()
+	if sources != 1 {
+		t.Fatalf("retained sources = %d, want 1", sources)
+	}
+}
+
+func TestFontParseCacheEqualLastUsedEvictsLexicalKey(t *testing.T) {
+	manager := newTestManager(2, 3)
+	_, zLease, err := manager.Acquire("test:z", 0, 1, func() ([]byte, error) { return []byte{'z'}, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, aLease, err := manager.Acquire("test:a", 0, 1, func() ([]byte, error) { return []byte{'a'}, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	zLease.Close()
+	aLease.Close()
+	manager.mu.Lock()
+	manager.entries[Key("test:z", 0)].lastUsed = 7
+	manager.entries[Key("test:a", 0)].lastUsed = 7
+	manager.mu.Unlock()
+
+	_, replacement, err := manager.Acquire("test:m", 0, 1, func() ([]byte, error) { return []byte{'m'}, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement.Close()
+	manager.mu.Lock()
+	_, hasA := manager.entries[Key("test:a", 0)]
+	_, hasM := manager.entries[Key("test:m", 0)]
+	_, hasZ := manager.entries[Key("test:z", 0)]
+	manager.mu.Unlock()
+	if hasA || !hasM || !hasZ {
+		t.Fatalf("equal-age lexical eviction hasA=%t hasM=%t hasZ=%t", hasA, hasM, hasZ)
+	}
+}
+
 func TestFontParseCachePinnedCapacityRefusal(t *testing.T) {
 	manager := newTestManager(1, 10)
 	manager.parse = func([]byte, int) (*face.Owner[testParsed], error) { return face.NewOwner(testParsed{}, nil), nil }
