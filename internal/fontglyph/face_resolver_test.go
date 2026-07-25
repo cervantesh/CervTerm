@@ -40,7 +40,7 @@ func TestResolveFaceCandidatesCollectionSelectorsAreExact(t *testing.T) {
 		t.Fatalf("collection_face candidates = %+v", byFace)
 	}
 
-	_, err := resolveFaceCandidates(&FontIndex{families: map[string][]faceInfo{"example mono": faces}}, fontdesc.Descriptor{Family: "example mono", CollectionIndex: fontdesc.SomeCollectionIndex(2)}, target, fontdesc.SourceTierPrimary, 0)
+	_, err := resolveFaceCandidates(newFontIndex(faces), fontdesc.Descriptor{Family: "example mono", CollectionIndex: fontdesc.SomeCollectionIndex(2)}, target, fontdesc.SourceTierPrimary, 0)
 	if err == nil || !strings.Contains(err.Error(), "no face at collection_index 2") {
 		t.Fatalf("missing selector error = %v", err)
 	}
@@ -117,10 +117,10 @@ func TestResolvePrimaryFacePlanFourStyleMatrix(t *testing.T) {
 
 func TestResolvePrimaryFacePlanAuthoredPrecedenceAndMissingContinuation(t *testing.T) {
 	descriptors := []fontdesc.Descriptor{{Family: "Missing Mono"}, {Family: "Earlier Mono"}, {Family: "Later Mono"}}
-	index := &FontIndex{families: map[string][]faceInfo{
-		"earlier mono": {resolverNamedTestFace("Earlier Mono", "test:earlier", 0, "Regular", 400, fontdesc.StyleNormal, 100)},
-		"later mono":   {resolverNamedTestFace("Later Mono", "test:later-exact", 0, "Italic", 400, fontdesc.StyleItalic, 100)},
-	}}
+	index := newFontIndex([]faceInfo{
+		resolverNamedTestFace("Earlier Mono", "test:earlier", 0, "Regular", 400, fontdesc.StyleNormal, 100),
+		resolverNamedTestFace("Later Mono", "test:later-exact", 0, "Italic", 400, fontdesc.StyleItalic, 100),
+	})
 	plans, err := resolvePrimaryFacePlan(index, resolverTestEnvironment(t, descriptors), descriptors, fontdesc.RequestedFaceStyleItalic)
 	if err != nil {
 		t.Fatal(err)
@@ -173,13 +173,13 @@ func TestResolvePrimaryFacePlanFixedDescriptorIgnoresRequestedSynthesis(t *testi
 func TestResolvePrimaryFacePlanRejectsInvalidInputsAndAggregatesFailures(t *testing.T) {
 	descriptors := []fontdesc.Descriptor{{Family: "Missing One"}, {Family: "Missing Two", CollectionIndex: fontdesc.SomeCollectionIndex(2)}}
 	environment := resolverTestEnvironment(t, descriptors)
-	if _, err := resolvePrimaryFacePlan(&FontIndex{families: map[string][]faceInfo{}}, fontdesc.FontEnvironmentKey{}, descriptors, fontdesc.RequestedFaceStyleNormal); err == nil || !strings.Contains(err.Error(), "zero font environment key") {
+	if _, err := resolvePrimaryFacePlan(newFontIndex(nil), fontdesc.FontEnvironmentKey{}, descriptors, fontdesc.RequestedFaceStyleNormal); err == nil || !strings.Contains(err.Error(), "zero font environment key") {
 		t.Fatalf("zero environment error = %v", err)
 	}
-	if _, err := resolvePrimaryFacePlan(&FontIndex{families: map[string][]faceInfo{}}, environment, descriptors, fontdesc.RequestedFaceStyle(99)); err == nil || !strings.Contains(err.Error(), "invalid requested face style 99") {
+	if _, err := resolvePrimaryFacePlan(newFontIndex(nil), environment, descriptors, fontdesc.RequestedFaceStyle(99)); err == nil || !strings.Contains(err.Error(), "invalid requested face style 99") {
 		t.Fatalf("invalid request error = %v", err)
 	}
-	_, err := resolvePrimaryFacePlan(&FontIndex{families: map[string][]faceInfo{}}, environment, descriptors, fontdesc.RequestedFaceStyleNormal)
+	_, err := resolvePrimaryFacePlan(newFontIndex(nil), environment, descriptors, fontdesc.RequestedFaceStyleNormal)
 	if err == nil {
 		t.Fatal("missing descriptors unexpectedly resolved")
 	}
@@ -246,11 +246,7 @@ func resolverTestEnvironment(t *testing.T, descriptors []fontdesc.Descriptor) fo
 }
 
 func resolverTestIndex(faces []faceInfo) *FontIndex {
-	families := make(map[string][]faceInfo)
-	for _, face := range faces {
-		families[normalizeFamily(face.metadata.Family)] = append(families[normalizeFamily(face.metadata.Family)], face)
-	}
-	return &FontIndex{families: families}
+	return newFontIndex(faces)
 }
 
 func resolvedPlanSignatures(plans []resolvedFacePlan) []string {
@@ -270,12 +266,12 @@ func resolverNamedTestFace(family, path string, index int, subfamily string, wei
 		Family: family, Subfamily: subfamily, Weight: weight, Style: style,
 		Stretch: stretch, CollectionIndex: uint32(index),
 	}.Normalized()
-	return faceInfo{path: path, index: index, family: metadata.Family, subfamily: metadata.Subfamily, metadata: metadata}
+	return newFaceInfo(path, index, metadata.Family, metadata.Subfamily, metadata)
 }
 
 func resolveTestCandidates(t *testing.T, faces []faceInfo, descriptor fontdesc.Descriptor, target fontdesc.FaceTarget, tier fontdesc.SourceTier, authoredOrder uint32) []faceCandidate {
 	t.Helper()
-	index := &FontIndex{families: map[string][]faceInfo{"example mono": faces}}
+	index := newFontIndex(faces)
 	candidates, err := resolveFaceCandidates(index, descriptor, target, tier, authoredOrder)
 	if err != nil {
 		t.Fatal(err)

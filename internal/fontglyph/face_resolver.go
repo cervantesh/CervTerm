@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"cervterm/internal/fontdesc"
+	"cervterm/internal/fontglyph/discovery"
 
 	"golang.org/x/image/font/sfnt"
 )
@@ -191,7 +192,7 @@ func resolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, tar
 	if index == nil {
 		return nil, fmt.Errorf("resolve font family %q: nil font index", descriptor.Family)
 	}
-	faces := index.families[normalizeFamily(descriptor.Family)]
+	faces := fontIndexFaces(index, descriptor.Family)
 	if len(faces) == 0 {
 		return nil, fmt.Errorf("resolve font family %q: no discovered faces", descriptor.Family)
 	}
@@ -199,7 +200,8 @@ func resolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, tar
 	candidates := make([]faceCandidate, 0, len(faces))
 	for _, face := range faces {
 		metadata := face.metadata.Normalized()
-		if descriptor.CollectionIndex.Present && (face.index < 0 || uint32(face.index) != descriptor.CollectionIndex.Value) {
+		faceIndex := face.index
+		if descriptor.CollectionIndex.Present && (faceIndex < 0 || uint32(faceIndex) != descriptor.CollectionIndex.Value) {
 			continue
 		}
 		if descriptor.CollectionFace != "" && normalizeFamily(metadata.Subfamily) != normalizeFamily(descriptor.CollectionFace) {
@@ -210,9 +212,9 @@ func resolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, tar
 			Tier: tier, AuthoredOrder: authoredOrder, CanonicalSource: canonical,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("rank font face %q index %d: %w", canonical, face.index, err)
+			return nil, fmt.Errorf("rank font face %q index %d: %w", canonical, faceIndex, err)
 		}
-		candidates = append(candidates, faceCandidate{path: canonical, index: face.index, metadata: metadata, rank: rank})
+		candidates = append(candidates, faceCandidate{path: canonical, index: faceIndex, metadata: metadata, rank: rank})
 	}
 	if len(candidates) == 0 {
 		if descriptor.CollectionIndex.Present {
@@ -265,6 +267,13 @@ func selectTopKPaths(paths []string, limit int) []string {
 }
 
 func fontFaces(path string) []faceInfo {
-	faces, _, _, _ := fontFacesBounded(path, fontdesc.MaxFacesPerFile)
+	discovered := discovery.FacesInFile(path)
+	faces := make([]faceInfo, len(discovered))
+	for i := range discovered {
+		faces[i] = faceInfo{
+			path: discovered[i].Path(), index: discovered[i].Index(), family: discovered[i].Family(),
+			subfamily: discovered[i].Subfamily(), metadata: discovered[i].Metadata(),
+		}
+	}
 	return faces
 }

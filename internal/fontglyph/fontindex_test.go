@@ -2,6 +2,7 @@ package fontglyph
 
 import (
 	"encoding/binary"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"cervterm/internal/fontdesc"
+	"cervterm/internal/fontglyph/discovery"
 
 	"golang.org/x/image/font/gofont/gomono"
 )
@@ -39,14 +41,12 @@ func TestNormalizeFamily(t *testing.T) {
 }
 
 func TestFontIndexLookup(t *testing.T) {
-	index := &FontIndex{families: map[string][]faceInfo{
-		"example mono": {
-			{path: "regular.ttc", index: 3, family: "Example Mono", subfamily: "Book"},
-			{path: "bold.ttc", index: 4, family: "Example Mono", subfamily: "Bold"},
-			{path: "italic.ttc", index: 5, family: "Example Mono", subfamily: "Oblique"},
-			{path: "bold-italic.ttc", index: 6, family: "Example Mono", subfamily: "Italic Bold"},
-		},
-	}}
+	index := newFontIndex([]faceInfo{
+		newFaceInfo("regular.ttc", 3, "Example Mono", "Book", fontdesc.FaceMetadata{Family: "Example Mono", Subfamily: "Book"}),
+		newFaceInfo("bold.ttc", 4, "Example Mono", "Bold", fontdesc.FaceMetadata{Family: "Example Mono", Subfamily: "Bold"}),
+		newFaceInfo("italic.ttc", 5, "Example Mono", "Oblique", fontdesc.FaceMetadata{Family: "Example Mono", Subfamily: "Oblique"}),
+		newFaceInfo("bold-italic.ttc", 6, "Example Mono", "Italic Bold", fontdesc.FaceMetadata{Family: "Example Mono", Subfamily: "Italic Bold"}),
+	})
 	regular, bold, italic, boldItalic := index.Lookup(" EXAMPLE   MONO ")
 	if regular == nil || regular.path != "regular.ttc" || regular.index != 3 || bold == nil || bold.index != 4 || italic == nil || italic.index != 5 || boldItalic == nil || boldItalic.index != 6 {
 		t.Fatalf("Lookup variants = %#v %#v %#v %#v", regular, bold, italic, boldItalic)
@@ -335,4 +335,102 @@ func testTableRecord(t *testing.T, data []byte, tag string) int {
 	}
 	t.Fatalf("table %q not found", tag)
 	return 0
+}
+
+func newFaceInfo(path string, index int, family, subfamily string, metadata fontdesc.FaceMetadata) faceInfo {
+	return faceInfo{path: path, index: index, family: family, subfamily: subfamily, metadata: metadata}
+}
+
+func newFontIndex(faces []faceInfo) *FontIndex {
+	discovered := make([]discovery.Face, len(faces))
+	for i := range faces {
+		discovered[i] = discovery.NewFace(faces[i].path, faces[i].index, faces[i].family, faces[i].subfamily, faces[i].metadata)
+	}
+	return wrapDiscoveryIndex(discovery.NewIndex(discovered))
+}
+
+func TestFontIndexCompatibilityFacadeKeepsConcreteLegacyMethodSet(t *testing.T) {
+	tests := []struct {
+		value      any
+		name       string
+		printed    string
+		fieldNames []string
+		fieldTypes []reflect.Type
+	}{
+		{faceInfo{}, "faceInfo", "fontglyph.faceInfo", []string{"path", "index", "family", "subfamily", "metadata"}, []reflect.Type{reflect.TypeOf(""), reflect.TypeOf(int(0)), reflect.TypeOf(""), reflect.TypeOf(""), reflect.TypeOf(fontdesc.FaceMetadata{})}},
+		{FontIndexDiagnostics{}, "FontIndexDiagnostics", "fontglyph.FontIndexDiagnostics", []string{"Roots", "CandidateFiles", "SelectedFiles", "FilesTruncated", "FacesExamined", "FacesIndexed", "FacesTruncated", "FilesSkipped", "DuplicateFiles", "SymlinkDirectoriesSkipped", "SymlinkFilesSkipped"}, []reflect.Type{reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0))}},
+		{FontResolution{}, "FontResolution", "fontglyph.FontResolution", []string{"Configured", "Found", "Regular", "Bold", "Italic", "BoldItalic", "FaceIndex", "RegularFaceIndex", "BoldFaceIndex", "ItalicFaceIndex", "BoldItalicFaceIndex"}, []reflect.Type{reflect.TypeOf(""), reflect.TypeOf(false), reflect.TypeOf(""), reflect.TypeOf(""), reflect.TypeOf(""), reflect.TypeOf(""), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0))}},
+	}
+	for _, test := range tests {
+		typeOf := reflect.TypeOf(test.value)
+		if got := typeOf.Name(); got != test.name {
+			t.Errorf("%T name = %q, want %q", test.value, got, test.name)
+		}
+		if got := fmt.Sprintf("%T", test.value); got != test.printed {
+			t.Errorf("%s %%T = %q, want %q", test.name, got, test.printed)
+		}
+		if got := typeOf.NumMethod(); got != 0 {
+			t.Errorf("%s value method count = %d, want 0", test.name, got)
+		}
+		if typeOf.NumField() != len(test.fieldNames) {
+			t.Errorf("%s field count = %d, want %d", test.name, typeOf.NumField(), len(test.fieldNames))
+			continue
+		}
+		for i, wantName := range test.fieldNames {
+			field := typeOf.Field(i)
+			if field.Name != wantName || field.Type != test.fieldTypes[i] || field.Anonymous || field.Tag != "" {
+				t.Errorf("%s field %d = name %q type %v anonymous=%v tag=%q, want name %q type %v", test.name, i, field.Name, field.Type, field.Anonymous, field.Tag, wantName, test.fieldTypes[i])
+			}
+		}
+	}
+	valueType := reflect.TypeOf(FontIndex{})
+	if got := fmt.Sprintf("%T", FontIndex{}); got != "fontglyph.FontIndex" {
+		t.Fatalf("FontIndex %%T = %q, want fontglyph.FontIndex", got)
+	}
+	pointerType := reflect.PointerTo(valueType)
+	methods := make([]string, pointerType.NumMethod())
+	for i := range methods {
+		methods[i] = pointerType.Method(i).Name
+	}
+	if want := []string{"Diagnostics", "Lookup"}; !reflect.DeepEqual(methods, want) {
+		t.Fatalf("FontIndex method set = %v, want %v", methods, want)
+	}
+	if _, exposed := pointerType.MethodByName("Faces"); exposed {
+		t.Fatal("FontIndex compatibility facade exposes mutable Faces authority")
+	}
+}
+
+func TestFontIndexCompatibilityFacadeIsNilSafeAndDetached(t *testing.T) {
+	var nilIndex *FontIndex
+	if got := nilIndex.Diagnostics(); got != (FontIndexDiagnostics{}) {
+		t.Fatalf("nil diagnostics = %+v", got)
+	}
+	regular, bold, italic, boldItalic := nilIndex.Lookup("Example Mono")
+	if regular != nil || bold != nil || italic != nil || boldItalic != nil {
+		t.Fatalf("nil lookup = %#v %#v %#v %#v", regular, bold, italic, boldItalic)
+	}
+	if faces := fontIndexFaces(nilIndex, "Example Mono"); faces != nil {
+		t.Fatalf("nil private bridge = %#v", faces)
+	}
+
+	zeroIndex := &FontIndex{}
+	regular, bold, italic, boldItalic = zeroIndex.Lookup("Example Mono")
+	if regular != nil || bold != nil || italic != nil || boldItalic != nil || zeroIndex.Diagnostics() != (FontIndexDiagnostics{}) {
+		t.Fatalf("zero index was not nil-safe: lookup=%#v %#v %#v %#v diagnostics=%+v", regular, bold, italic, boldItalic, zeroIndex.Diagnostics())
+	}
+
+	index := newFontIndex([]faceInfo{newFaceInfo("regular.ttf", 3, "Example Mono", "Regular", fontdesc.FaceMetadata{Family: "Example Mono", Subfamily: "Regular", Weight: 400})})
+	regular, _, _, _ = index.Lookup("Example Mono")
+	if regular == nil {
+		t.Fatal("missing regular face")
+	}
+	regular.path = "mutated.ttf"
+	regular.metadata.Weight = 900
+	bridge := fontIndexFaces(index, "Example Mono")
+	bridge[0].path = "bridge-mutated.ttf"
+	bridge[0].metadata.Weight = 100
+	fresh, _, _, _ := index.Lookup("Example Mono")
+	if fresh == nil || fresh.path != "regular.ttf" || fresh.metadata.Weight != 400 {
+		t.Fatalf("facade mutation changed discovery authority: %#v", fresh)
+	}
 }

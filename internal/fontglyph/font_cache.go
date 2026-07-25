@@ -1,7 +1,6 @@
 package fontglyph
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -10,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"cervterm/internal/fontdesc"
+	"cervterm/internal/fontglyph/cache"
 
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/font/sfnt"
@@ -34,8 +33,8 @@ const (
 )
 
 var (
-	errFontCacheCapacity = errors.New("font parse cache capacity exceeded")
-	errFontFileGrew      = errors.New("font file grew while loading")
+	errFontCacheCapacity = cache.ErrCapacity
+	errFontFileGrew      = cache.ErrFileGrew
 )
 
 type fontSourceBlob struct {
@@ -103,7 +102,7 @@ func newFontCacheManager(maxFaces int, maxBytes int64) *fontCacheManager {
 
 var (
 	fontCacheManagerMu sync.Mutex
-	fontCache          = newFontCacheManager(fontdesc.MaxParsedFaces, fontdesc.MaxParsedBytes)
+	fontCache          *fontCacheManager
 )
 
 func currentFontCache() *fontCacheManager {
@@ -139,7 +138,7 @@ func (m *fontCacheManager) stats() fontCacheStats {
 	}
 	return stats
 }
-func canonicalFontCacheSource(source string) string {
+func legacyCanonicalFontCacheSource(source string) string {
 	if strings.HasPrefix(source, "embedded:") || strings.HasPrefix(source, "test:") {
 		return source
 	}
@@ -156,8 +155,8 @@ func canonicalFontCacheSource(source string) string {
 	}
 	return canonical
 }
-func fontCacheKey(source string, index int) string {
-	return canonicalFontCacheSource(source) + "#" + strconv.Itoa(index)
+func legacyFontCacheKey(source string, index int) string {
+	return legacyCanonicalFontCacheSource(source) + "#" + strconv.Itoa(index)
 }
 func checkedAddInt64(a, b int64) (int64, bool) {
 	if b > 0 && a > math.MaxInt64-b || b < 0 && a < math.MinInt64-b {
@@ -175,7 +174,7 @@ func (m *fontCacheManager) acquire(source string, index int, knownSize int64, lo
 	if reservation == 0 {
 		reservation = m.maxBytes
 	}
-	canonical := canonicalFontCacheSource(source)
+	canonical := legacyCanonicalFontCacheSource(source)
 	key := canonical + "#" + strconv.Itoa(index)
 	m.mu.Lock()
 	if entry := m.entries[key]; entry != nil {

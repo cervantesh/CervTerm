@@ -104,33 +104,42 @@ func (index *Index) Diagnostics() Diagnostics {
 }
 
 func (index *Index) Lookup(family string) (regular, bold, italic, boldItalic *Face) {
+	if index == nil {
+		return nil, nil, nil, nil
+	}
 	faces := index.families[normalizeFamily(family)]
 	for i := range faces {
-		face := &faces[i]
+		face := faces[i]
 		isBold, isItalic := classifySubfamily(face.subfamily)
 		switch {
 		case isBold && isItalic && boldItalic == nil:
-			boldItalic = face
+			boldItalic = detachedFace(face)
 		case isBold && bold == nil:
-			bold = face
+			bold = detachedFace(face)
 		case isItalic && italic == nil:
-			italic = face
+			italic = detachedFace(face)
 		case !isBold && !isItalic && regular == nil:
-			regular = face
+			regular = detachedFace(face)
 		}
 	}
 	if regular == nil && len(faces) > 0 {
-		regular = &faces[0]
+		regular = detachedFace(faces[0])
 	}
 	return regular, bold, italic, boldItalic
 }
 
-// Faces returns the immutable indexed face slice for read-only resolution.
+func detachedFace(face Face) *Face {
+	detached := face
+	return &detached
+}
+
+// Faces returns a detached copy of the indexed faces. Callers may mutate the
+// returned slice and values without changing the immutable index.
 func (index *Index) Faces(family string) []Face {
 	if index == nil {
 		return nil
 	}
-	return index.families[normalizeFamily(family)]
+	return append([]Face(nil), index.families[normalizeFamily(family)]...)
 }
 
 func canonicalDiscoveryRoots(dirs []string, diagnostics *Diagnostics) []string {
@@ -513,4 +522,9 @@ func selectTopKPaths(paths []string, limit int) []string {
 func fontFaces(path string) []Face {
 	faces, _, _, _ := fontFacesBounded(path, fontdesc.MaxFacesPerFile)
 	return faces
+}
+
+// FacesInFile returns the bounded parsed discovery records for one font file.
+func FacesInFile(path string) []Face {
+	return fontFaces(path)
 }

@@ -36,33 +36,6 @@ var (
 	_ func(int, int64) *fontCacheManager = newFontCacheManager
 )
 
-func TestL402RootCompatibilityTypeAndMethodInventory(t *testing.T) {
-	faceType := reflect.TypeOf(faceInfo{})
-	if faceType.Name() != "faceInfo" || faceType.NumMethod() != 0 {
-		t.Fatalf("face compatibility identity = %q with %d methods", faceType.Name(), faceType.NumMethod())
-	}
-	fields := make([]string, faceType.NumField())
-	for i := range fields {
-		fields[i] = faceType.Field(i).Name
-	}
-	if want := []string{"path", "index", "family", "subfamily", "metadata"}; !reflect.DeepEqual(fields, want) {
-		t.Fatalf("faceInfo fields = %v, want %v", fields, want)
-	}
-
-	indexType := reflect.TypeOf(FontIndex{})
-	if indexType.Name() != "FontIndex" {
-		t.Fatalf("index compatibility identity = %q, want FontIndex", indexType.Name())
-	}
-	pointerType := reflect.PointerTo(indexType)
-	methods := make([]string, pointerType.NumMethod())
-	for i := range methods {
-		methods[i] = pointerType.Method(i).Name
-	}
-	if want := []string{"Diagnostics", "Lookup"}; !reflect.DeepEqual(methods, want) {
-		t.Fatalf("FontIndex method set = %v, want %v", methods, want)
-	}
-}
-
 func TestL402DiscoveryFailureAndOrderingContract(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing")
 	index := BuildFontIndex([]string{missing, missing})
@@ -203,7 +176,7 @@ func TestL402CacheDeterministicTieEviction(t *testing.T) {
 }
 
 func TestL402CachedFaceIdentityAndOutputParity(t *testing.T) {
-	manager := useTestFontCache(t, fontdesc.MaxParsedFaces, fontdesc.MaxParsedBytes)
+	manager := useTestParsedFaceCache(t, fontdesc.MaxParsedFaces, fontdesc.MaxParsedBytes)
 	var loads atomic.Int32
 	load := func() ([]byte, error) {
 		loads.Add(1)
@@ -228,7 +201,7 @@ func TestL402CachedFaceIdentityAndOutputParity(t *testing.T) {
 	if firstOK != secondOK || firstBounds != secondBounds || firstAdvance != secondAdvance {
 		t.Fatalf("cached face output drift: first=(%v,%v,%v) second=(%v,%v,%v)", firstBounds, firstAdvance, firstOK, secondBounds, secondAdvance, secondOK)
 	}
-	if got := manager.stats().Pinned; got != 2 {
+	if got := manager.Stats().Pinned; got != 2 {
 		t.Fatalf("cached face pins = %d, want 2", got)
 	}
 }
@@ -261,22 +234,21 @@ func BenchmarkL402BuildIndexGoMono(b *testing.B) {
 }
 
 func BenchmarkL402CacheHitLease(b *testing.B) {
-	manager := newFontCacheManager(1, 8)
-	manager.parse = func([]byte, int) (*parsedFontData, error) { return &parsedFontData{}, nil }
-	load := func() ([]byte, error) { return []byte{1}, nil }
-	_, seed, err := manager.acquire("test:benchmark-hit", 0, 1, load)
+	manager := newParsedFaceCache(1, int64(len(gomono.TTF)))
+	load := func() ([]byte, error) { return gomono.TTF, nil }
+	_, seed, err := manager.Acquire("test:benchmark-hit", 0, int64(len(gomono.TTF)), load)
 	if err != nil {
 		b.Fatal(err)
 	}
-	seed.release()
+	seed.Close()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		_, handle, err := manager.acquire("test:benchmark-hit", 0, 1, load)
+		_, lease, err := manager.Acquire("test:benchmark-hit", 0, int64(len(gomono.TTF)), load)
 		if err != nil {
 			b.Fatal(err)
 		}
-		handle.release()
+		lease.Close()
 	}
 }
 

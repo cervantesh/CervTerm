@@ -100,7 +100,7 @@ type loadedFace struct {
 	svg         *svgExtractor
 	sourcePath  string
 	faceIndex   int
-	cacheHandle *parsedFontHandle
+	cacheHandle *parsedFaceLease
 }
 
 func NewOpenTypeBackend(spec Spec) (*OpenTypeBackend, error) {
@@ -183,19 +183,31 @@ func (b *OpenTypeBackend) Close() {
 	}
 	b.closeOnce.Do(func() {
 		b.closed = true
-		for i := range b.faces {
-			if closer, ok := b.faces[i].face.(interface{ Close() error }); ok {
-				_ = closer.Close()
-			}
-			b.faces[i].face = nil
-			b.faces[i].cacheHandle.release()
-			b.faces[i].cacheHandle = nil
-		}
 		if b.dwRaster != nil {
 			b.dwRaster.Close()
 			b.dwRaster = nil
 		}
+		for i := len(b.faces) - 1; i >= 0; i-- {
+			closeLoadedFace(&b.faces[i])
+		}
+		b.faces = nil
 	})
+}
+
+func closeLoadedFace(loaded *loadedFace) {
+	if loaded == nil {
+		return
+	}
+	lease := loaded.cacheHandle
+	closeRasterFace(loaded.face)
+	*loaded = loadedFace{}
+	lease.Close()
+}
+
+func closeRasterFace(raster font.Face) {
+	if closer, ok := raster.(interface{ Close() error }); ok {
+		_ = closer.Close()
+	}
 }
 
 func (b *OpenTypeBackend) TextRasterEngine() string {

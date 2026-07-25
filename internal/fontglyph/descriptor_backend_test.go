@@ -91,7 +91,8 @@ func TestDescriptorBackendContinuesAfterUnusableCandidates(t *testing.T) {
 				}
 			}
 			good := descriptorTestFace(t, dir, "good.ttf", "Good Mono", "Regular", 400, fontdesc.StyleNormal, 0, gomono.TTF)
-			bad := faceInfo{path: badPath, index: 0, family: "Bad Mono", subfamily: "Regular", metadata: fontdesc.FaceMetadata{Family: "Bad Mono", Subfamily: "Regular", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100}}
+			badMetadata := fontdesc.FaceMetadata{Family: "Bad Mono", Subfamily: "Regular", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100}
+			bad := newFaceInfo(badPath, 0, badMetadata.Family, badMetadata.Subfamily, badMetadata)
 			descriptors := []fontdesc.Descriptor{{Family: "Bad Mono"}, {Family: "Good Mono"}}
 			backend := newDescriptorTestBackend(t, descriptors, []faceInfo{bad, good})
 			defer backend.Close()
@@ -110,10 +111,8 @@ func TestDescriptorBackendLoadsNonzeroCollectionFace(t *testing.T) {
 	if err := os.WriteFile(path, makeTestTTC(t, gomono.TTF, gomono.TTF), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	face := faceInfo{
-		path: path, index: 1, family: "Collection Mono", subfamily: "Second",
-		metadata: fontdesc.FaceMetadata{Family: "Collection Mono", Subfamily: "Second", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100, CollectionIndex: 1},
-	}
+	metadata := fontdesc.FaceMetadata{Family: "Collection Mono", Subfamily: "Second", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100, CollectionIndex: 1}
+	face := newFaceInfo(path, 1, metadata.Family, metadata.Subfamily, metadata)
 	descriptors := []fontdesc.Descriptor{{Family: "Collection Mono", CollectionIndex: fontdesc.SomeCollectionIndex(1)}}
 	backend := newDescriptorTestBackend(t, descriptors, []faceInfo{face})
 	defer backend.Close()
@@ -161,8 +160,8 @@ func TestDescriptorBackendProjectsStyleMetricsToNormalGrid(t *testing.T) {
 }
 
 func TestDescriptorBackendRollbackAndCloseReleaseCachePins(t *testing.T) {
-	manager := newFontCacheManager(fontdesc.MaxParsedFaces, fontdesc.MaxParsedBytes)
-	restore := resetFontCacheForTest(manager)
+	manager := newParsedFaceCache(fontdesc.MaxParsedFaces, fontdesc.MaxParsedBytes)
+	restore := resetParsedFaceCacheForTest(manager)
 	defer restore()
 
 	dir := t.TempDir()
@@ -182,17 +181,17 @@ func TestDescriptorBackendRollbackAndCloseReleaseCachePins(t *testing.T) {
 	if err == nil || backend != nil || !strings.Contains(err.Error(), "prepare requested style 1") || !strings.Contains(err.Error(), "injected style load failure") {
 		t.Fatalf("rollback constructor = %#v, %v", backend, err)
 	}
-	if stats := manager.stats(); stats.Pinned != 0 {
+	if stats := manager.Stats(); stats.Pinned != 0 {
 		t.Fatalf("cache pins after constructor rollback = %d, want 0", stats.Pinned)
 	}
 
 	backend = newDescriptorTestBackendWithManager(t, descriptors, []faceInfo{face}, manager)
-	if stats := manager.stats(); stats.Pinned != 4 {
+	if stats := manager.Stats(); stats.Pinned != 4 {
 		t.Fatalf("cache pins before close = %d, want 4", stats.Pinned)
 	}
 	backend.Close()
 	backend.Close()
-	if stats := manager.stats(); stats.Pinned != 0 {
+	if stats := manager.Stats(); stats.Pinned != 0 {
 		t.Fatalf("cache pins after idempotent close = %d, want 0", stats.Pinned)
 	}
 }
@@ -242,13 +241,13 @@ func TestNewDescriptorBackendRejectsEmptyAndTooManyDescriptorsBeforeSystemDiscov
 
 func newDescriptorTestBackend(t *testing.T, descriptors []fontdesc.Descriptor, faces []faceInfo) *descriptorBackend {
 	t.Helper()
-	manager := newFontCacheManager(fontdesc.MaxParsedFaces, fontdesc.MaxParsedBytes)
-	restore := resetFontCacheForTest(manager)
+	manager := newParsedFaceCache(fontdesc.MaxParsedFaces, fontdesc.MaxParsedBytes)
+	restore := resetParsedFaceCacheForTest(manager)
 	t.Cleanup(restore)
 	return newDescriptorTestBackendWithManager(t, descriptors, faces, manager)
 }
 
-func newDescriptorTestBackendWithManager(t *testing.T, descriptors []fontdesc.Descriptor, faces []faceInfo, _ *fontCacheManager) *descriptorBackend {
+func newDescriptorTestBackendWithManager(t *testing.T, descriptors []fontdesc.Descriptor, faces []faceInfo, _ *parsedFaceCache) *descriptorBackend {
 	t.Helper()
 	backend, err := newDescriptorBackend(Spec{Family: "ignored", Size: 14, DPI: 96}, descriptorTestEnvironment(t, descriptors), descriptors, descriptorTestIndex(faces))
 	if err != nil {
@@ -267,11 +266,7 @@ func descriptorTestEnvironment(t *testing.T, descriptors []fontdesc.Descriptor) 
 }
 
 func descriptorTestIndex(faces []faceInfo) *FontIndex {
-	index := &FontIndex{families: make(map[string][]faceInfo)}
-	for _, face := range faces {
-		index.families[normalizeFamily(face.family)] = append(index.families[normalizeFamily(face.family)], face)
-	}
-	return index
+	return newFontIndex(faces)
 }
 
 func descriptorTestFace(t *testing.T, dir, filename, family, subfamily string, weight int, style fontdesc.Style, index int, data []byte) faceInfo {
@@ -280,8 +275,6 @@ func descriptorTestFace(t *testing.T, dir, filename, family, subfamily string, w
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return faceInfo{
-		path: path, index: index, family: family, subfamily: subfamily,
-		metadata: fontdesc.FaceMetadata{Family: family, Subfamily: subfamily, Weight: weight, Style: style, Stretch: 100, CollectionIndex: uint32(index)},
-	}
+	metadata := fontdesc.FaceMetadata{Family: family, Subfamily: subfamily, Weight: weight, Style: style, Stretch: 100, CollectionIndex: uint32(index)}
+	return newFaceInfo(path, index, family, subfamily, metadata)
 }
