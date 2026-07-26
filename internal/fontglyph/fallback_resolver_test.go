@@ -134,14 +134,13 @@ func newFallbackTestBackend(t *testing.T, descriptors, fallback []fontdesc.Descr
 	}
 	backend := &fallbackBackend{
 		primary: primary, spec: Spec{Size: 14, DPI: 96}, environment: environment, index: index,
-		descriptors: descriptors, fallback: fallback, rules: cloneResolvedRules(rules),
-		loaded: make(map[fontdesc.ResolvedFaceKey]*OpenTypeBackend), loadFailed: make(map[fontdesc.ResolvedFaceKey]struct{}), resolved: make(map[contentResolutionKey]fallbackSelection), covers: covers,
+		loaded: make(map[fontdesc.ResolvedFaceKey]*OpenTypeBackend), covers: covers,
 	}
 	backend.load = func(spec Spec, plan resolvedFacePlan) (loadedFace, font.Metrics, error) {
 		(*loads)++
 		return loadResolvedFacePlan(spec, plan)
 	}
-	if err := backend.installShapePolicy(); err != nil {
+	if err := backend.installShapePolicy(descriptors, fallback, rules); err != nil {
 		backend.Close()
 		t.Fatal(err)
 	}
@@ -243,28 +242,6 @@ func TestFallbackBackendReleasesLosingCandidatePins(t *testing.T) {
 	backend.Close()
 	if final := manager.Stats().Pinned; final != 0 {
 		t.Fatalf("pins after close = %d, want 0", final)
-	}
-}
-
-func TestFallbackResolutionCacheIsBounded(t *testing.T) {
-	backend := &fallbackBackend{resolved: make(map[contentResolutionKey]fallbackSelection), loadFailed: make(map[fontdesc.ResolvedFaceKey]struct{})}
-	for index := 0; index <= fontdesc.MaxNegativeEntries; index++ {
-		key := contentResolutionKey{content: string(rune(index + 1))}
-		backend.rememberResolution(key, fallbackSelection{})
-	}
-	if len(backend.resolved) != fontdesc.MaxNegativeEntries || len(backend.resolvedRing) != fontdesc.MaxNegativeEntries {
-		t.Fatalf("resolution cache/ring = %d/%d, want %d", len(backend.resolved), len(backend.resolvedRing), fontdesc.MaxNegativeEntries)
-	}
-	if _, retained := backend.resolved[contentResolutionKey{content: string(rune(1))}]; retained {
-		t.Fatal("oldest resolution was not evicted")
-	}
-	for index := 0; index <= fontdesc.MaxNegativeEntries; index++ {
-		var key fontdesc.ResolvedFaceKey
-		key[0], key[1] = byte(index), byte(index>>8)
-		backend.recordLoadFailure(key)
-	}
-	if len(backend.loadFailed) != fontdesc.MaxNegativeEntries || len(backend.loadFailedRing) != fontdesc.MaxNegativeEntries {
-		t.Fatalf("load-failure cache/ring = %d/%d, want %d", len(backend.loadFailed), len(backend.loadFailedRing), fontdesc.MaxNegativeEntries)
 	}
 }
 

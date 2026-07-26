@@ -20,7 +20,6 @@ import (
 	"golang.org/x/image/font/gofont/gomono"
 	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
-	"golang.org/x/text/unicode/norm"
 )
 
 // Spec describes the font input for a glyph backend. It intentionally avoids
@@ -400,23 +399,6 @@ func (b *OpenTypeBackend) InspectClusterGlyph(cluster string, cellSpan int) Glyp
 
 func normalizeClusterToSingleRune(cluster string) (rune, bool) {
 	return shapepkg.NormalizeSingleRune(cluster)
-}
-
-func legacyNormalizeClusterToSingleRune(cluster string) (rune, bool) {
-	normalized := norm.NFC.String(cluster)
-	var out rune
-	count := 0
-	for _, r := range normalized {
-		out = r
-		count++
-		if count > 1 {
-			return 0, false
-		}
-	}
-	if count != 1 {
-		return 0, false
-	}
-	return out, normalized != cluster
 }
 
 func (b *OpenTypeBackend) rasterizeBitmapColorGlyph(lf loadedFace, r rune, cellSpan int, advance fixed.Int26_6) (RasterizedGlyph, bool) {

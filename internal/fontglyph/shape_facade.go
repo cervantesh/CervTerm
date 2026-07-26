@@ -89,10 +89,10 @@ func resolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, tar
 	return out, err
 }
 
-func (b *fallbackBackend) installShapePolicy() error {
+func (b *fallbackBackend) installShapePolicy(descriptors, fallback []fontdesc.Descriptor, rules []fontdesc.Rule) error {
 	resolver := shapeResolver(b.index)
 	policy, err := shapepkg.NewPolicy(shapepkg.PolicyConfig{
-		Resolver: resolver, Environment: b.environment, Descriptors: b.descriptors, Fallback: b.fallback, Rules: b.rules,
+		Resolver: resolver, Environment: b.environment, Descriptors: descriptors, Fallback: fallback, Rules: rules,
 		FeaturePayload: b.features.CanonicalBytes(),
 		Hooks: shapepkg.PolicyHooks{
 			Primary: func(request fontdesc.RequestedFaceStyle) (shapepkg.Plan, bool) {
@@ -164,7 +164,7 @@ func (b *fallbackBackend) removeLoadedOrder(key fontdesc.ResolvedFaceKey) {
 
 func (b *fallbackBackend) resolveContent(request fontdesc.RequestedFaceStyle, content string) (fallbackSelection, bool) {
 	if b == nil || b.closed || b.primary == nil || b.policy == nil {
-		return b.legacyResolveContent(request, content)
+		return fallbackSelection{}, false
 	}
 	plan, ok := b.policy.Resolve(request, content)
 	if !ok {
