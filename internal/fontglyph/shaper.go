@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"cervterm/internal/fontdesc"
+	shapepkg "cervterm/internal/fontglyph/shape"
 
 	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font/sfnt"
@@ -49,7 +50,7 @@ func ConfigureBackendFeatures(backend Backend, features fontdesc.FeatureSet) {
 		}
 		item.features = features
 		if features.RequestsFeatureCapability() {
-			if _, portable := item.shaper.(SimpleShaper); portable {
+			if isPortableShaper(item.shaper) {
 				portableFeatureDiagnosticOnce.Do(func() {
 					log.Printf("font feature capability: portable SimpleShaper preserves the fixed grid but does not apply OpenType substitutions")
 				})
@@ -107,21 +108,19 @@ func (b *OpenTypeBackend) SetShaper(shaper Shaper) {
 }
 
 func centerShapedGlyphsInCells(shaped []ShapedGlyph, cellPixels int) []ShapedGlyph {
-	if len(shaped) == 0 || cellPixels <= 0 {
-		return shaped
+	return shapedGlyphsFromShape(shapepkg.CenterInCells(shapedGlyphsToShape(shaped), cellPixels))
+}
+
+func isPortableShaper(shaper Shaper) bool {
+	switch typed := shaper.(type) {
+	case SimpleShaper:
+		return true
+	case shapeToRootShaper:
+		_, portable := typed.inner.(shapepkg.Simple)
+		return portable
+	default:
+		return false
 	}
-	advance := 0.0
-	for _, glyph := range shaped {
-		advance += glyph.XAdvance
-	}
-	if advance <= 0 {
-		return shaped
-	}
-	centered := append([]ShapedGlyph(nil), shaped...)
-	// rasterizeShapedCluster starts at x=1; offset that origin so the shaped
-	// advance box is centered exactly like the fixed-grid per-rune path.
-	centered[0].XOffset += (float64(cellPixels)-advance)/2 - 1
-	return centered
 }
 
 func (b *OpenTypeBackend) rasterizeShapedCluster(lf loadedFace, shaped []ShapedGlyph, cellSpan int) (RasterizedGlyph, bool) {

@@ -6,13 +6,27 @@ import (
 	"cervterm/internal/fontdesc"
 )
 
-// NewPolicy validates budgets and clones authored fallback policy.
+// NewPolicy validates every authored budget and clones fallback policy.
 func NewPolicy(config PolicyConfig) (*Policy, error) {
+	if config.Environment == (fontdesc.FontEnvironmentKey{}) {
+		return nil, fmt.Errorf("font policy has zero environment key")
+	}
+	if len(config.Descriptors) > fontdesc.MaxPrimaryDescriptors {
+		return nil, fmt.Errorf("primary descriptor count %d exceeds %d", len(config.Descriptors), fontdesc.MaxPrimaryDescriptors)
+	}
 	if len(config.Fallback) > fontdesc.MaxFallbackDescriptors {
 		return nil, fmt.Errorf("fallback descriptor count %d exceeds %d", len(config.Fallback), fontdesc.MaxFallbackDescriptors)
 	}
 	if len(config.Rules) > fontdesc.MaxRules {
 		return nil, fmt.Errorf("font rule count %d exceeds %d", len(config.Rules), fontdesc.MaxRules)
+	}
+	if err := fontdesc.ValidateCanonicalFeaturePayload(config.FeaturePayload); err != nil {
+		return nil, fmt.Errorf("font policy features: %w", err)
+	}
+	if _, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{
+		Descriptors: config.Descriptors, Fallback: config.Fallback, Rules: config.Rules, Features: config.FeaturePayload,
+	}); err != nil {
+		return nil, fmt.Errorf("font policy payload: %w", err)
 	}
 	policy := &Policy{
 		resolver: config.Resolver, environment: config.Environment,
@@ -20,7 +34,7 @@ func NewPolicy(config PolicyConfig) (*Policy, error) {
 		fallback:    append([]fontdesc.Descriptor(nil), config.Fallback...),
 		rules:       cloneRules(config.Rules), hooks: config.Hooks,
 		inflight: make(map[ContentKey]*resolutionCall), resolved: make(map[ContentKey]Plan),
-		loadFailed: make(map[fontdesc.ResolvedFaceKey]struct{}),
+		loadFailed: make(map[fontdesc.ResolvedFaceKey]struct{}), closeDone: make(chan struct{}),
 	}
 	return policy, nil
 }
@@ -38,12 +52,15 @@ func cloneRules(rules []fontdesc.Rule) []fontdesc.Rule {
 // Resolve applies rule, primary, authored fallback, and embedded order to one
 // complete cluster. Same-key concurrent callers share one callback execution.
 func (p *Policy) Resolve(request fontdesc.RequestedFaceStyle, content string) (Plan, bool) {
-	if p == nil || content == "" || request > fontdesc.RequestedFaceStyleBoldItalic {
+	if p == nil || content == "" || request > fontdesc.RequestedFaceStyleBoldItalic || p.closing.Load() {
 		return Plan{}, false
 	}
 	key := ContentKey{Request: request, Content: content}
+	if hit := p.last.Load(); hit != nil && hit.key == key {
+		return hit.plan, true
+	}
 	p.mu.Lock()
-	if p.closed {
+	if p.closed || p.closing.Load() {
 		p.mu.Unlock()
 		return Plan{}, false
 	}
@@ -207,6 +224,7 @@ func (p *Policy) recordFailure(key fontdesc.ResolvedFaceKey) {
 func (p *Policy) rememberLocked(key ContentKey, selected Plan) {
 	if _, exists := p.resolved[key]; exists {
 		p.resolved[key] = selected
+		p.last.Store(&resolutionHit{key: key, plan: selected})
 		return
 	}
 	if len(p.resolvedRing) < fontdesc.MaxNegativeEntries {
@@ -218,6 +236,7 @@ func (p *Policy) rememberLocked(key ContentKey, selected Plan) {
 		p.resolvedNext = (p.resolvedNext + 1) % len(p.resolvedRing)
 	}
 	p.resolved[key] = selected
+	p.last.Store(&resolutionHit{key: key, plan: selected})
 }
 
 // Stats returns detached bounded-cache accounting.
@@ -239,19 +258,25 @@ func (p *Policy) Close() {
 	if p == nil {
 		return
 	}
-	p.mu.Lock()
-	if p.closed {
-		p.mu.Unlock()
+	if !p.closing.CompareAndSwap(false, true) {
+		<-p.closeDone
 		return
 	}
+	p.mu.Lock()
 	p.closed = true
+	p.last.Store(nil)
 	clear(p.resolved)
 	p.resolvedRing = nil
 	clear(p.loadFailed)
 	p.loadFailedRing = nil
+	p.mu.Unlock()
+
+	p.active.Wait()
+
+	p.mu.Lock()
 	p.descriptors = nil
 	p.fallback = nil
 	p.rules = nil
 	p.mu.Unlock()
-	p.active.Wait()
+	close(p.closeDone)
 }

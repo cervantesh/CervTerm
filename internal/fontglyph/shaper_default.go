@@ -2,6 +2,8 @@
 
 package fontglyph
 
+import shapepkg "cervterm/internal/fontglyph/shape"
+
 func newDefaultShaper() Shaper {
-	return SimpleShaper{}
+	return rootShaperFromShape(shapepkg.Default(nil))
 }

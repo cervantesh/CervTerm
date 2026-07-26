@@ -1,6 +1,9 @@
 package fontglyph
 
-import "cervterm/internal/fontdesc"
+import (
+	"cervterm/internal/fontdesc"
+	shapepkg "cervterm/internal/fontglyph/shape"
+)
 
 // SupportsLigatures reports whether the active shaper can produce GSUB
 // substitutions across multiple cells. The pure-Go SimpleShaper only maps one
@@ -10,8 +13,7 @@ func (b *OpenTypeBackend) SupportsLigatures() bool {
 	if b == nil || b.shaper == nil {
 		return false
 	}
-	_, simple := b.shaper.(SimpleShaper)
-	return !simple
+	return !isPortableShaper(b.shaper)
 }
 
 // RasterizeRun shapes a multi-cell run of programming-symbol characters and, if
@@ -53,41 +55,8 @@ func (b *OpenTypeBackend) RasterizeRun(run string, cellSpan int) (RasterizedGlyp
 	return glyph, true
 }
 
-// runSubstituted decides whether shaping the whole run differs from shaping each
-// rune independently. Fewer output glyphs than input runes is an unambiguous
-// ligature. Otherwise the glyph IDs are compared position-by-position: matching
-// IDs mean only advances changed (kerning/GPOS), which is not a ligature.
-func runSubstituted(shaper Shaper, lf loadedFace, ppem uint16, run string, shaped []ShapedGlyph, features fontdesc.FeatureSet) bool {
-	runeCount := 0
-	perChar := make([]ShapedGlyph, 0, len(shaped))
-	perCharOK := true
-	for _, r := range run {
-		runeCount++
-		if !perCharOK {
-			continue
-		}
-		g, ok := shapeWithFeatures(shaper, string(r), lf, ppem, features)
-		if !ok {
-			perCharOK = false
-			continue
-		}
-		perChar = append(perChar, g...)
-	}
-	if len(shaped) < runeCount {
-		return true
-	}
-	if !perCharOK {
-		// No reliable per-rune baseline to compare against; stay per-cell so a
-		// kerned pair can never be mistaken for a ligature and break the grid.
-		return false
-	}
-	if len(shaped) != len(perChar) {
-		return true
-	}
-	for i := range shaped {
-		if shaped[i].GlyphID != perChar[i].GlyphID {
-			return true
-		}
-	}
-	return false
+// runSubstituted keeps the historical root helper while shape owns the
+// GSUB-vs-GPOS decision and all per-rune comparison behavior.
+func runSubstituted(shaper Shaper, source loadedFace, ppem uint16, run string, shaped []ShapedGlyph, features fontdesc.FeatureSet) bool {
+	return shapepkg.RunSubstituted(rootToShapeShaper{root: shaper}, shapingFaceRef(source), ppem, run, shapedGlyphsToShape(shaped), features)
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"cervterm/internal/fontdesc"
@@ -36,29 +37,53 @@ func (r Resolver) DescriptorPlans(environment fontdesc.FontEnvironmentKey, descr
 			continue
 		}
 		order := authoredOffset + uint32(authoredIndex)
-		candidates, err := r.Candidates(descriptor, target, tier, order)
-		if err != nil {
-			failures = append(failures, fmt.Errorf("descriptor %d family %q: %w", authoredIndex, descriptor.Family, err))
+		if r.lookup == nil {
+			failures = append(failures, fmt.Errorf("descriptor %d family %q: resolve font family %q: nil font index", authoredIndex, descriptor.Family, descriptor.Family))
 			continue
 		}
-		for _, candidate := range candidates {
-			synthetic, compatible := ClassifySynthetic(target, candidate.Metadata)
+		sources := r.lookup(descriptor.Family)
+		if len(sources) == 0 {
+			failures = append(failures, fmt.Errorf("descriptor %d family %q: resolve font family %q: no discovered faces", authoredIndex, descriptor.Family, descriptor.Family))
+			continue
+		}
+		matchedSelector := false
+		for _, source := range sources {
+			metadata := source.Metadata.Normalized()
+			if descriptor.CollectionIndex.Present && (source.Index < 0 || uint32(source.Index) != descriptor.CollectionIndex.Value) {
+				continue
+			}
+			if descriptor.CollectionFace != "" && normalizeFamily(metadata.Subfamily) != normalizeFamily(descriptor.CollectionFace) {
+				continue
+			}
+			matchedSelector = true
+			synthetic, compatible := classifySyntheticNormalized(target, metadata)
 			if !compatible {
 				continue
 			}
-			candidate.Rank, err = fontdesc.Rank(target, candidate.Metadata, fontdesc.RankingTieBreaks{
-				Tier: tier, AuthoredOrder: order, Synthetic: synthetic != fontdesc.SyntheticNone, CanonicalSource: candidate.Source,
+			rank, rankErr := fontdesc.Rank(target, metadata, fontdesc.RankingTieBreaks{
+				Tier: tier, AuthoredOrder: order, Synthetic: synthetic != fontdesc.SyntheticNone, CanonicalSource: source.Source,
 			})
-			if err != nil {
-				failures = append(failures, fmt.Errorf("descriptor %d family %q candidate %q index %d: %w", authoredIndex, descriptor.Family, candidate.Source, candidate.Index, err))
+			if rankErr != nil {
+				failures = append(failures, fmt.Errorf("descriptor %d family %q candidate %q index %d: %w", authoredIndex, descriptor.Family, source.Source, source.Index, rankErr))
 				continue
 			}
+			candidate := Candidate{Source: source.Source, Index: source.Index, Metadata: metadata, Rank: rank}
 			plan, planErr := NewPlan(environment, descriptor, target, candidate, tier, order, synthetic)
 			if planErr != nil {
 				failures = append(failures, fmt.Errorf("descriptor %d family %q candidate %q index %d: %w", authoredIndex, descriptor.Family, candidate.Source, candidate.Index, planErr))
 				continue
 			}
 			plans = append(plans, plan)
+		}
+		if !matchedSelector {
+			switch {
+			case descriptor.CollectionIndex.Present:
+				failures = append(failures, fmt.Errorf("descriptor %d family %q: resolve font family %q: no face at collection_index %d", authoredIndex, descriptor.Family, descriptor.Family, descriptor.CollectionIndex.Value))
+			case descriptor.CollectionFace != "":
+				failures = append(failures, fmt.Errorf("descriptor %d family %q: resolve font family %q: no face named %q", authoredIndex, descriptor.Family, descriptor.Family, descriptor.CollectionFace))
+			default:
+				failures = append(failures, fmt.Errorf("descriptor %d family %q: resolve font family %q: no rankable faces", authoredIndex, descriptor.Family, descriptor.Family))
+			}
 		}
 	}
 	if len(plans) == 0 {
@@ -73,7 +98,10 @@ func (r Resolver) DescriptorPlans(environment fontdesc.FontEnvironmentKey, descr
 
 // ClassifySynthetic maps one concrete face onto an effective target.
 func ClassifySynthetic(target fontdesc.FaceTarget, metadata fontdesc.FaceMetadata) (fontdesc.SyntheticMode, bool) {
-	metadata = metadata.Normalized()
+	return classifySyntheticNormalized(target, metadata.Normalized())
+}
+
+func classifySyntheticNormalized(target fontdesc.FaceTarget, metadata fontdesc.FaceMetadata) (fontdesc.SyntheticMode, bool) {
 	synthetic := fontdesc.SyntheticNone
 	switch target.Style {
 	case fontdesc.StyleNormal:
@@ -99,7 +127,7 @@ func ClassifySynthetic(target fontdesc.FaceTarget, metadata fontdesc.FaceMetadat
 
 // NewPlan constructs the stable face and resolved identities for one attempt.
 func NewPlan(environment fontdesc.FontEnvironmentKey, descriptor fontdesc.Descriptor, target fontdesc.FaceTarget, candidate Candidate, tier fontdesc.SourceTier, authoredIndex uint32, synthetic fontdesc.SyntheticMode) (Plan, error) {
-	canonicalFaceID := fontdesc.CanonicalFaceIDFromBytes([]byte(fmt.Sprintf("%s#%d", candidate.Source, candidate.Index)))
+	canonicalFaceID := fontdesc.CanonicalFaceIDFromBytes([]byte(candidate.Source + "#" + strconv.Itoa(candidate.Index)))
 	resolvedKey, err := fontdesc.NewResolvedFaceKey(fontdesc.ResolvedFaceInput{
 		Environment: environment, Face: canonicalFaceID, Tier: tier, SourceIndex: authoredIndex, Target: target, Synthetic: synthetic,
 	})

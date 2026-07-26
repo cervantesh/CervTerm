@@ -2,6 +2,7 @@ package shape
 
 import (
 	"unicode"
+	"unicode/utf8"
 
 	"cervterm/internal/fontdesc"
 	"cervterm/internal/fontglyph/internal/face"
@@ -21,10 +22,23 @@ func (s Simple) ShapeFeatures(cluster string, ref face.Ref, ppem uint16, _ fontd
 	return s.Shape(cluster, ref, ppem)
 }
 
+// SingleSimpleRune recognizes the allocation-free one-rune fast path while
+// preserving complex-script rejection.
+func SingleSimpleRune(cluster string) (rune, bool) {
+	value, size := utf8.DecodeRuneInString(cluster)
+	if size == 0 || size != len(cluster) || value == utf8.RuneError && size == 1 || IsComplexRune(value) {
+		return 0, false
+	}
+	return value, true
+}
+
 // Shape maps simple clusters without script substitution.
 func (Simple) Shape(cluster string, ref face.Ref, ppem uint16) ([]Glyph, bool) {
 	if cluster == "" || !ref.Valid() {
 		return nil, false
+	}
+	if value, ok := SingleSimpleRune(cluster); ok {
+		return ShapeOneRune(ref, value, ppem)
 	}
 	if value, ok := NormalizeSingleRune(cluster); ok {
 		return ShapeOneRune(ref, value, ppem)
@@ -46,21 +60,30 @@ func (Simple) Shape(cluster string, ref face.Ref, ppem uint16) ([]Glyph, bool) {
 	return out, true
 }
 
-// ShapeOneRune maps one scalar and preserves exact SFNT advance units.
-func ShapeOneRune(ref face.Ref, value rune, ppem uint16) ([]Glyph, bool) {
+// OneRune maps one scalar without allocating an output slice.
+func OneRune(ref face.Ref, value rune, ppem uint16) (Glyph, bool) {
 	if !ref.Valid() {
-		return nil, false
+		return Glyph{}, false
 	}
 	var buffer sfnt.Buffer
 	glyphID, err := ref.GlyphIndex(&buffer, value)
 	if err != nil || glyphID == 0 {
-		return nil, false
+		return Glyph{}, false
 	}
 	advance, err := ref.GlyphAdvance(&buffer, glyphID, fixed.I(int(ppem)), font.HintingFull)
 	if err != nil {
+		return Glyph{}, false
+	}
+	return Glyph{GlyphID: uint16(glyphID), XAdvance: float64(advance) / 64.0}, true
+}
+
+// ShapeOneRune preserves the slice-returning subsystem contract.
+func ShapeOneRune(ref face.Ref, value rune, ppem uint16) ([]Glyph, bool) {
+	glyph, ok := OneRune(ref, value, ppem)
+	if !ok {
 		return nil, false
 	}
-	return []Glyph{{GlyphID: uint16(glyphID), XAdvance: float64(advance) / 64.0}}, true
+	return []Glyph{glyph}, true
 }
 
 // NormalizeSingleRune applies NFC and reports only changed single-rune clusters.

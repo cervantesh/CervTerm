@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"cervterm/internal/fontdesc"
+	shapepkg "cervterm/internal/fontglyph/shape"
 
 	"golang.org/x/image/font/sfnt"
 )
@@ -38,6 +39,7 @@ type fallbackBackend struct {
 	rules          []fontdesc.Rule
 	features       fontdesc.FeatureSet
 	loaded         map[fontdesc.ResolvedFaceKey]*OpenTypeBackend
+	loadedOrder    []fontdesc.ResolvedFaceKey
 	loadFailed     map[fontdesc.ResolvedFaceKey]struct{}
 	loadFailedRing []fontdesc.ResolvedFaceKey
 	loadFailedNext int
@@ -46,6 +48,7 @@ type fallbackBackend struct {
 	resolved       map[contentResolutionKey]fallbackSelection
 	resolvedRing   []contentResolutionKey
 	resolvedNext   int
+	policy         *shapepkg.Policy
 	closed         bool
 	closeOnce      sync.Once
 }
@@ -82,6 +85,10 @@ func NewFallbackBackend(spec Spec, environment fontdesc.FontEnvironmentKey, desc
 		if child != nil {
 			child.fallbacksLoaded = true
 		}
+	}
+	if err := backend.installShapePolicy(); err != nil {
+		backend.Close()
+		return nil, err
 	}
 	return backend, nil
 }
@@ -173,7 +180,7 @@ func (b *fallbackBackend) RasterizeRunStyle(request fontdesc.RequestedFaceStyle,
 	return selection.backend.RasterizeRun(run, cellSpan)
 }
 
-func (b *fallbackBackend) resolveContent(request fontdesc.RequestedFaceStyle, content string) (fallbackSelection, bool) {
+func (b *fallbackBackend) legacyResolveContent(request fontdesc.RequestedFaceStyle, content string) (fallbackSelection, bool) {
 	if b == nil || b.closed || b.primary == nil || content == "" || request > fontdesc.RequestedFaceStyleBoldItalic {
 		return fallbackSelection{}, false
 	}
@@ -361,16 +368,23 @@ func (b *fallbackBackend) Close() {
 	}
 	b.closeOnce.Do(func() {
 		b.closed = true
+		if b.policy != nil {
+			b.policy.Close()
+			b.policy = nil
+		}
 		clear(b.resolved)
 		b.resolvedRing = nil
 		clear(b.loadFailed)
 		b.loadFailedRing = nil
-		for key, backend := range b.loaded {
-			if backend != nil {
+		for index := len(b.loadedOrder) - 1; index >= 0; index-- {
+			key := b.loadedOrder[index]
+			if backend := b.loaded[key]; backend != nil {
 				backend.Close()
+				delete(b.loaded, key)
 			}
-			delete(b.loaded, key)
 		}
+		clear(b.loaded)
+		b.loadedOrder = nil
 		if b.primary != nil {
 			b.primary.Close()
 			b.primary = nil

@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"cervterm/internal/fontdesc"
+	shapepkg "cervterm/internal/fontglyph/shape"
 	"cervterm/internal/unicodecluster"
 
 	xdraw "golang.org/x/image/draw"
@@ -398,6 +399,10 @@ func (b *OpenTypeBackend) InspectClusterGlyph(cluster string, cellSpan int) Glyp
 }
 
 func normalizeClusterToSingleRune(cluster string) (rune, bool) {
+	return shapepkg.NormalizeSingleRune(cluster)
+}
+
+func legacyNormalizeClusterToSingleRune(cluster string) (rune, bool) {
 	normalized := norm.NFC.String(cluster)
 	var out rune
 	count := 0
