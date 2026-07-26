@@ -3,6 +3,7 @@ package fontglyph
 import (
 	"errors"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -140,6 +141,10 @@ func newFallbackTestBackend(t *testing.T, descriptors, fallback []fontdesc.Descr
 		(*loads)++
 		return loadResolvedFacePlan(spec, plan)
 	}
+	if err := backend.installShapePolicy(); err != nil {
+		backend.Close()
+		t.Fatal(err)
+	}
 	return backend
 }
 
@@ -229,6 +234,9 @@ func TestFallbackBackendReleasesLosingCandidatePins(t *testing.T) {
 	if !ok || filepath.Base(selected.plan.selected.path) != "winner.ttf" || loads != 2 {
 		t.Fatalf("fallback failover = %#v ok=%v loads=%d", selected.plan, ok, loads)
 	}
+	if len(backend.loadedOrder) != 1 || backend.loadedOrder[0] != selected.plan.resolvedKey || len(backend.loaded) != 1 {
+		t.Fatalf("retained fallback accounting = order %v loaded %d", backend.loadedOrder, len(backend.loaded))
+	}
 	if after := manager.Stats().Pinned; after != 5 {
 		t.Fatalf("pins after losing/winning candidates = %d, want 5", after)
 	}
@@ -257,5 +265,36 @@ func TestFallbackResolutionCacheIsBounded(t *testing.T) {
 	}
 	if len(backend.loadFailed) != fontdesc.MaxNegativeEntries || len(backend.loadFailedRing) != fontdesc.MaxNegativeEntries {
 		t.Fatalf("load-failure cache/ring = %d/%d, want %d", len(backend.loadFailed), len(backend.loadFailedRing), fontdesc.MaxNegativeEntries)
+	}
+}
+
+func TestFallbackBackendClosesRetainedBackendsInReverseAcquisitionOrder(t *testing.T) {
+	events := make([]string, 0, 3)
+	appendEvent := func(name string) func() {
+		return func() { events = append(events, name) }
+	}
+	first := fontdesc.ResolvedFaceKey{1}
+	second := fontdesc.ResolvedFaceKey{2}
+	firstBackend := &OpenTypeBackend{dwRaster: &closeOrderingGlyphRasterizer{close: appendEvent("fallback-first")}}
+	secondBackend := &OpenTypeBackend{dwRaster: &closeOrderingGlyphRasterizer{close: appendEvent("fallback-second")}}
+	primaryBackend := &OpenTypeBackend{dwRaster: &closeOrderingGlyphRasterizer{close: appendEvent("primary")}}
+	backend := &fallbackBackend{
+		primary: &descriptorBackend{backends: [4]*OpenTypeBackend{primaryBackend}},
+		loaded: map[fontdesc.ResolvedFaceKey]*OpenTypeBackend{
+			second: secondBackend,
+			first:  firstBackend,
+		},
+		loadedOrder: []fontdesc.ResolvedFaceKey{first, second},
+	}
+	backend.Close()
+	if want := []string{"fallback-second", "fallback-first", "primary"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("close order = %v, want %v", events, want)
+	}
+	if len(backend.loaded) != 0 || backend.loadedOrder != nil || backend.primary != nil {
+		t.Fatalf("closed fallback retained accounting: loaded=%d order=%v primary=%p", len(backend.loaded), backend.loadedOrder, backend.primary)
+	}
+	backend.Close()
+	if want := []string{"fallback-second", "fallback-first", "primary"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("idempotent close order = %v, want %v", events, want)
 	}
 }

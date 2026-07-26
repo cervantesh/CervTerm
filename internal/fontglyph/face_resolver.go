@@ -34,11 +34,11 @@ type resolvedFacePlan struct {
 // resolvePrimaryFacePlan resolves every usable primary descriptor into ordered
 // load attempts. Missing families and selectors do not prevent later authored
 // descriptors from contributing attempts.
-func resolvePrimaryFacePlan(index *FontIndex, environment fontdesc.FontEnvironmentKey, descriptors []fontdesc.Descriptor, request fontdesc.RequestedFaceStyle) ([]resolvedFacePlan, error) {
-	return resolveDescriptorFacePlans(index, environment, descriptors, request, fontdesc.SourceTierPrimary, 0)
+func legacyResolvePrimaryFacePlan(index *FontIndex, environment fontdesc.FontEnvironmentKey, descriptors []fontdesc.Descriptor, request fontdesc.RequestedFaceStyle) ([]resolvedFacePlan, error) {
+	return legacyResolveDescriptorFacePlans(index, environment, descriptors, request, fontdesc.SourceTierPrimary, 0)
 }
 
-func resolveDescriptorFacePlans(index *FontIndex, environment fontdesc.FontEnvironmentKey, descriptors []fontdesc.Descriptor, request fontdesc.RequestedFaceStyle, tier fontdesc.SourceTier, authoredOffset uint32) ([]resolvedFacePlan, error) {
+func legacyResolveDescriptorFacePlans(index *FontIndex, environment fontdesc.FontEnvironmentKey, descriptors []fontdesc.Descriptor, request fontdesc.RequestedFaceStyle, tier fontdesc.SourceTier, authoredOffset uint32) ([]resolvedFacePlan, error) {
 	if environment == (fontdesc.FontEnvironmentKey{}) {
 		return nil, fmt.Errorf("resolve primary face plan: zero font environment key")
 	}
@@ -60,13 +60,13 @@ func resolveDescriptorFacePlans(index *FontIndex, environment fontdesc.FontEnvir
 			continue
 		}
 		order := authoredOffset + uint32(authoredIndex)
-		candidates, err := resolveFaceCandidates(index, descriptor, target, tier, order)
+		candidates, err := legacyResolveFaceCandidates(index, descriptor, target, tier, order)
 		if err != nil {
 			failures = append(failures, fmt.Errorf("descriptor %d family %q: %w", authoredIndex, descriptor.Family, err))
 			continue
 		}
 		for _, candidate := range candidates {
-			synthetic, compatible := classifySyntheticFallback(target, candidate.metadata)
+			synthetic, compatible := legacyClassifySyntheticFallback(target, candidate.metadata)
 			if !compatible {
 				continue
 			}
@@ -80,7 +80,7 @@ func resolveDescriptorFacePlans(index *FontIndex, environment fontdesc.FontEnvir
 				failures = append(failures, fmt.Errorf("descriptor %d family %q candidate %q index %d: %w", authoredIndex, descriptor.Family, candidate.path, candidate.index, err))
 				continue
 			}
-			plan, err := newResolvedFacePlan(environment, descriptor, target, candidate, tier, order, synthetic)
+			plan, err := legacyNewResolvedFacePlan(environment, descriptor, target, candidate, tier, order, synthetic)
 			if err != nil {
 				failures = append(failures, fmt.Errorf("descriptor %d family %q candidate %q index %d: %w", authoredIndex, descriptor.Family, candidate.path, candidate.index, err))
 				continue
@@ -104,7 +104,7 @@ func resolveDescriptorFacePlans(index *FontIndex, environment fontdesc.FontEnvir
 // A weight of 600 is the documented real-bold threshold: lighter faces need
 // synthetic bold for targets of 700 or above. Italic and oblique are mutually
 // real-compatible; a normal face can provide either through synthetic italic.
-func classifySyntheticFallback(target fontdesc.FaceTarget, metadata fontdesc.FaceMetadata) (fontdesc.SyntheticMode, bool) {
+func legacyClassifySyntheticFallback(target fontdesc.FaceTarget, metadata fontdesc.FaceMetadata) (fontdesc.SyntheticMode, bool) {
 	metadata = metadata.Normalized()
 	synthetic := fontdesc.SyntheticNone
 	switch target.Style {
@@ -129,7 +129,7 @@ func classifySyntheticFallback(target fontdesc.FaceTarget, metadata fontdesc.Fac
 	return synthetic, true
 }
 
-func newResolvedFacePlan(environment fontdesc.FontEnvironmentKey, descriptor fontdesc.Descriptor, target fontdesc.FaceTarget, candidate faceCandidate, tier fontdesc.SourceTier, authoredIndex uint32, synthetic fontdesc.SyntheticMode) (resolvedFacePlan, error) {
+func legacyNewResolvedFacePlan(environment fontdesc.FontEnvironmentKey, descriptor fontdesc.Descriptor, target fontdesc.FaceTarget, candidate faceCandidate, tier fontdesc.SourceTier, authoredIndex uint32, synthetic fontdesc.SyntheticMode) (resolvedFacePlan, error) {
 	canonicalFaceID := fontdesc.CanonicalFaceIDFromBytes([]byte(fmt.Sprintf("%s#%d", candidate.path, candidate.index)))
 	resolvedKey, err := fontdesc.NewResolvedFaceKey(fontdesc.ResolvedFaceInput{
 		Environment: environment,
@@ -151,7 +151,7 @@ func newResolvedFacePlan(environment fontdesc.FontEnvironmentKey, descriptor fon
 // resolveEmbeddedFallbackPlan returns the final fallback separately so callers
 // can append it only after exhausting all primary attempts. Its concrete stable
 // source identity is embedded:gomono#0.
-func resolveEmbeddedFallbackPlan(environment fontdesc.FontEnvironmentKey, request fontdesc.RequestedFaceStyle) (resolvedFacePlan, error) {
+func legacyResolveEmbeddedFallbackPlan(environment fontdesc.FontEnvironmentKey, request fontdesc.RequestedFaceStyle) (resolvedFacePlan, error) {
 	if environment == (fontdesc.FontEnvironmentKey{}) {
 		return resolvedFacePlan{}, fmt.Errorf("resolve embedded fallback plan: zero font environment key")
 	}
@@ -163,7 +163,7 @@ func resolveEmbeddedFallbackPlan(environment fontdesc.FontEnvironmentKey, reques
 	metadata := fontdesc.FaceMetadata{
 		Family: "Go Mono", Subfamily: "Regular", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100, CollectionIndex: 0,
 	}.Normalized()
-	synthetic, _ := classifySyntheticFallback(target, metadata)
+	synthetic, _ := legacyClassifySyntheticFallback(target, metadata)
 	rank, err := fontdesc.Rank(target, metadata, fontdesc.RankingTieBreaks{
 		Tier: fontdesc.SourceTierEmbedded, Synthetic: synthetic != fontdesc.SyntheticNone, CanonicalSource: "embedded:gomono",
 	})
@@ -171,7 +171,7 @@ func resolveEmbeddedFallbackPlan(environment fontdesc.FontEnvironmentKey, reques
 		return resolvedFacePlan{}, fmt.Errorf("resolve embedded fallback plan: %w", err)
 	}
 	candidate := faceCandidate{path: "embedded:gomono", index: 0, metadata: metadata, rank: rank}
-	plan, err := newResolvedFacePlan(environment, descriptor, target, candidate, fontdesc.SourceTierEmbedded, 0, synthetic)
+	plan, err := legacyNewResolvedFacePlan(environment, descriptor, target, candidate, fontdesc.SourceTierEmbedded, 0, synthetic)
 	if err != nil {
 		return resolvedFacePlan{}, fmt.Errorf("resolve embedded fallback plan: %w", err)
 	}
@@ -180,7 +180,7 @@ func resolveEmbeddedFallbackPlan(environment fontdesc.FontEnvironmentKey, reques
 
 // resolveFaceCandidates performs deterministic selection over discovery data.
 // It deliberately performs no font I/O or loading.
-func resolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, target fontdesc.FaceTarget, tier fontdesc.SourceTier, authoredOrder uint32) ([]faceCandidate, error) {
+func legacyResolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, target fontdesc.FaceTarget, tier fontdesc.SourceTier, authoredOrder uint32) ([]faceCandidate, error) {
 	descriptor, err := descriptor.Normalize()
 	if err != nil {
 		return nil, fmt.Errorf("normalize font descriptor: %w", err)

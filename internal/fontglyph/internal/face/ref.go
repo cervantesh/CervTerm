@@ -22,6 +22,10 @@ func NewRef(parsed *sfnt.Font, canonicalSource string, collectionIndex int) Ref 
 // Valid reports whether the reference contains a parsed SFNT face.
 func (r Ref) Valid() bool { return r.font != nil }
 
+// Parsed returns the immutable SFNT parser shared by shaping adapters. It does
+// not transfer ownership or expose source bytes, leases, or native resources.
+func (r Ref) Parsed() *sfnt.Font { return r.font }
+
 // Source returns the stable source and collection index needed by an injected
 // platform shaper. The bool is false when no source was projected.
 func (r Ref) Source() (string, int, bool) {

@@ -4,6 +4,8 @@ import (
 	"unicode"
 
 	"cervterm/internal/fontdesc"
+	faceleaf "cervterm/internal/fontglyph/internal/face"
+	shapepkg "cervterm/internal/fontglyph/shape"
 	"cervterm/internal/unicodeprops"
 
 	"golang.org/x/image/font"
@@ -13,15 +15,24 @@ import (
 
 type SimpleShaper struct{}
 
-func (SimpleShaper) FeatureCapability() string { return "portable-unsupported" }
+func (SimpleShaper) FeatureCapability() string { return (shapepkg.Simple{}).FeatureCapability() }
 
-func (s SimpleShaper) ShapeFeatures(cluster string, face loadedFace, ppem uint16, _ fontdesc.FeatureSet) ([]ShapedGlyph, bool) {
-	return s.Shape(cluster, face, ppem)
+func (SimpleShaper) ShapeFeatures(cluster string, source loadedFace, ppem uint16, features fontdesc.FeatureSet) ([]ShapedGlyph, bool) {
+	glyphs, ok := (shapepkg.Simple{}).ShapeFeatures(cluster, shapingFaceRef(source), ppem, features)
+	return shapedGlyphsFromShape(glyphs), ok
 }
 
-func (SimpleShaper) Shape(cluster string, face loadedFace, ppem uint16) ([]ShapedGlyph, bool) {
+func (SimpleShaper) Shape(cluster string, source loadedFace, ppem uint16) ([]ShapedGlyph, bool) {
+	glyphs, ok := (shapepkg.Simple{}).Shape(cluster, shapingFaceRef(source), ppem)
+	return shapedGlyphsFromShape(glyphs), ok
+}
+
+func legacySimpleShape(cluster string, face loadedFace, ppem uint16) ([]ShapedGlyph, bool) {
 	if cluster == "" || face.sfnt == nil {
 		return nil, false
+	}
+	if value, ok := shapepkg.SingleSimpleRune(cluster); ok {
+		return shapeOneRune(face.sfnt, value, ppem)
 	}
 	if r, ok := normalizeClusterToSingleRune(cluster); ok {
 		return shapeOneRune(face.sfnt, r, ppem)
@@ -43,7 +54,14 @@ func (SimpleShaper) Shape(cluster string, face loadedFace, ppem uint16) ([]Shape
 	return out, true
 }
 
-func shapeOneRune(sfntFont *sfnt.Font, r rune, ppem uint16) ([]ShapedGlyph, bool) {
+// shapeOneRune is retained only as the same-package concrete compatibility
+// bridge used by injected shapers and tests.
+func shapeOneRune(parsed *sfnt.Font, value rune, ppem uint16) ([]ShapedGlyph, bool) {
+	glyphs, ok := shapepkg.ShapeOneRune(faceleaf.NewRef(parsed, "", 0), value, ppem)
+	return shapedGlyphsFromShape(glyphs), ok
+}
+
+func legacyShapeOneRune(sfntFont *sfnt.Font, r rune, ppem uint16) ([]ShapedGlyph, bool) {
 	var buf sfnt.Buffer
 	glyphID, err := sfntFont.GlyphIndex(&buf, r)
 	if err != nil || glyphID == 0 {
@@ -56,7 +74,9 @@ func shapeOneRune(sfntFont *sfnt.Font, r rune, ppem uint16) ([]ShapedGlyph, bool
 	return []ShapedGlyph{{GlyphID: uint16(glyphID), XAdvance: float64(advance) / 64.0}}, true
 }
 
-func isSimpleShapeableCluster(cluster string) bool {
+func isSimpleShapeableCluster(cluster string) bool { return shapepkg.IsSimpleCluster(cluster) }
+
+func legacyIsSimpleShapeableCluster(cluster string) bool {
 	for _, r := range cluster {
 		if isComplexShapingRune(r) {
 			return false
@@ -65,7 +85,9 @@ func isSimpleShapeableCluster(cluster string) bool {
 	return true
 }
 
-func isComplexShapingRune(r rune) bool {
+func isComplexShapingRune(r rune) bool { return shapepkg.IsComplexRune(r) }
+
+func legacyIsComplexShapingRune(r rune) bool {
 	if unicodeprops.IsEmojiControl(r) {
 		return true
 	}

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"cervterm/internal/fontdesc"
+	shapepkg "cervterm/internal/fontglyph/shape"
 
 	"golang.org/x/image/font/gofont/gomono"
 )
@@ -33,6 +34,44 @@ func TestL402ShapeRootConcreteCompatibility(t *testing.T) {
 	simple := reflect.TypeOf(SimpleShaper{})
 	if simple.PkgPath() != "cervterm/internal/fontglyph" || simple.Name() != "SimpleShaper" || simple.Kind() != reflect.Struct || simple.NumField() != 0 || simple.NumMethod() != 3 {
 		t.Fatalf("SimpleShaper identity/method set = %s.%s kind=%s fields=%d methods=%d", simple.PkgPath(), simple.Name(), simple.Kind(), simple.NumField(), simple.NumMethod())
+	}
+}
+
+func TestL402RootPortableShapingAdaptersPreserveLeafOutput(t *testing.T) {
+	backend, err := NewOpenTypeBackend(Spec{Family: "Go Mono", Size: 14, DPI: 96})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	source := backend.faces[0]
+	adapted := rootShaperFromShape(shapepkg.Simple{})
+	if _, unwrapped := adapted.(SimpleShaper); unwrapped {
+		t.Fatal("rootShaperFromShape unwrapped shape.Simple to the root concrete type")
+	}
+	if !isPortableShaper(adapted) {
+		t.Fatal("shape.Simple adapter lost portable-shaper behavior")
+	}
+	for _, cluster := range []string{"A", "e\u0301", "->", "م"} {
+		got, gotOK := (SimpleShaper{}).Shape(cluster, source, backend.ppem)
+		leaf, leafOK := (shapepkg.Simple{}).Shape(cluster, shapingFaceRef(source), backend.ppem)
+		want := shapedGlyphsFromShape(leaf)
+		if gotOK != leafOK || !reflect.DeepEqual(got, want) {
+			t.Fatalf("cluster %q root=%#v/%v leaf=%#v/%v", cluster, got, gotOK, want, leafOK)
+		}
+		adaptedOutput, adaptedOK := adapted.Shape(cluster, source, backend.ppem)
+		if adaptedOK != leafOK || !reflect.DeepEqual(adaptedOutput, want) {
+			t.Fatalf("cluster %q adapter=%#v/%v leaf=%#v/%v", cluster, adaptedOutput, adaptedOK, want, leafOK)
+		}
+	}
+	shaped, ok := adapted.Shape("->", source, backend.ppem)
+	if !ok {
+		t.Fatal("portable pair shaping failed")
+	}
+	if got, want := runSubstituted(adapted, source, backend.ppem, "->", shaped, fontdesc.FeatureSet{}), shapepkg.RunSubstituted(shapepkg.Simple{}, shapingFaceRef(source), backend.ppem, "->", shapedGlyphsToShape(shaped), fontdesc.FeatureSet{}); got != want {
+		t.Fatalf("run substitution root=%v leaf=%v", got, want)
+	}
+	if got, want := centerShapedGlyphsInCells(shaped, backend.cellW*2), shapedGlyphsFromShape(shapepkg.CenterInCells(shapedGlyphsToShape(shaped), backend.cellW*2)); !reflect.DeepEqual(got, want) {
+		t.Fatalf("centering root=%#v leaf=%#v", got, want)
 	}
 }
 
@@ -122,14 +161,37 @@ func BenchmarkL402SimpleShapeASCII(b *testing.B) {
 }
 
 func BenchmarkL402FallbackResolutionHit(b *testing.B) {
-	key := contentResolutionKey{request: fontdesc.RequestedFaceStyleNormal, content: "A"}
-	selection := fallbackSelection{plan: resolvedFacePlan{tier: fontdesc.SourceTierPrimary}}
-	backend := &fallbackBackend{primary: &descriptorBackend{}, resolved: map[contentResolutionKey]fallbackSelection{key: selection}}
+	descriptor := fontdesc.Descriptor{Family: "Primary"}
+	environment, err := fontdesc.NewFontEnvironmentKey(fontdesc.FontEnvironmentInput{Descriptors: []fontdesc.Descriptor{descriptor}})
+	if err != nil {
+		b.Fatal(err)
+	}
+	resolver := shapepkg.NewResolver(func(string) []shapepkg.SourceFace {
+		return []shapepkg.SourceFace{{Source: "test:primary", Metadata: fontdesc.FaceMetadata{Family: "Primary", Subfamily: "Regular", Weight: 400, Style: fontdesc.StyleNormal, Stretch: 100}}}
+	})
+	plans, err := resolver.PrimaryPlans(environment, []fontdesc.Descriptor{descriptor}, fontdesc.RequestedFaceStyleNormal)
+	if err != nil {
+		b.Fatal(err)
+	}
+	policy, err := shapepkg.NewPolicy(shapepkg.PolicyConfig{
+		Resolver: resolver, Environment: environment, Descriptors: []fontdesc.Descriptor{descriptor},
+		Hooks: shapepkg.PolicyHooks{
+			Primary:       func(fontdesc.RequestedFaceStyle) (shapepkg.Plan, bool) { return plans[0], true },
+			PrimaryCovers: func(fontdesc.RequestedFaceStyle, string) bool { return true },
+		},
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer policy.Close()
+	if _, ok := policy.Resolve(fontdesc.RequestedFaceStyleNormal, "A"); !ok {
+		b.Fatal("seed resolution failed")
+	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		got, ok := backend.resolveContent(fontdesc.RequestedFaceStyleNormal, "A")
-		if !ok || got.plan.tier != fontdesc.SourceTierPrimary {
+		plan, ok := policy.Resolve(fontdesc.RequestedFaceStyleNormal, "A")
+		if !ok || plan.Tier != fontdesc.SourceTierPrimary {
 			b.Fatal("cached resolution failed")
 		}
 	}

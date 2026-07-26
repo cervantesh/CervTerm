@@ -2,6 +2,7 @@ package shape
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"cervterm/internal/fontdesc"
 )
@@ -26,18 +27,24 @@ type PolicyHooks struct {
 // PolicyConfig is cloned by NewPolicy so authored slices cannot be mutated
 // after installation.
 type PolicyConfig struct {
-	Resolver    Resolver
-	Environment fontdesc.FontEnvironmentKey
-	Descriptors []fontdesc.Descriptor
-	Fallback    []fontdesc.Descriptor
-	Rules       []fontdesc.Rule
-	Hooks       PolicyHooks
+	Resolver       Resolver
+	Environment    fontdesc.FontEnvironmentKey
+	Descriptors    []fontdesc.Descriptor
+	Fallback       []fontdesc.Descriptor
+	Rules          []fontdesc.Rule
+	FeaturePayload []byte
+	Hooks          PolicyHooks
 }
 
 type resolutionCall struct {
 	done chan struct{}
 	plan Plan
 	ok   bool
+}
+
+type resolutionHit struct {
+	key  ContentKey
+	plan Plan
 }
 
 // Policy owns lazy fallback ordering plus bounded positive and load-failure
@@ -50,6 +57,7 @@ type Policy struct {
 	rules       []fontdesc.Rule
 	hooks       PolicyHooks
 
+	last           atomic.Pointer[resolutionHit]
 	mu             sync.Mutex
 	active         sync.WaitGroup
 	inflight       map[ContentKey]*resolutionCall
@@ -59,6 +67,8 @@ type Policy struct {
 	loadFailed     map[fontdesc.ResolvedFaceKey]struct{}
 	loadFailedRing []fontdesc.ResolvedFaceKey
 	loadFailedNext int
+	closing        atomic.Bool
+	closeDone      chan struct{}
 	closed         bool
 }
 

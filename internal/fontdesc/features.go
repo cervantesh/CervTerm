@@ -80,6 +80,40 @@ func ValidateFeatureTag(tag string) error {
 	return nil
 }
 
+// ValidateCanonicalFeaturePayload checks the bounded encoding emitted by
+// FeatureSet.CanonicalBytes without retaining caller-owned bytes.
+func ValidateCanonicalFeaturePayload(payload []byte) error {
+	if len(payload) == 0 {
+		return nil
+	}
+	if len(payload) > MaxDescriptorPayloadBytes {
+		return fmt.Errorf("feature payload size %d exceeds %d", len(payload), MaxDescriptorPayloadBytes)
+	}
+	if len(payload) < 3 || payload[0] != featureEncodingV1 {
+		return fmt.Errorf("invalid canonical feature payload header")
+	}
+	count := int(binary.BigEndian.Uint16(payload[1:3]))
+	if count > MaxEffectiveFeatures {
+		return fmt.Errorf("effective feature count %d exceeds %d", count, MaxEffectiveFeatures)
+	}
+	if len(payload) != 3+count*6 {
+		return fmt.Errorf("canonical feature payload length %d does not match count %d", len(payload), count)
+	}
+	previous := ""
+	for index := 0; index < count; index++ {
+		offset := 3 + index*6
+		tag := string(payload[offset : offset+4])
+		if err := ValidateFeatureTag(tag); err != nil {
+			return err
+		}
+		if index != 0 && tag <= previous {
+			return fmt.Errorf("canonical feature tags are not strictly ordered")
+		}
+		previous = tag
+	}
+	return nil
+}
+
 func (s FeatureSet) ID() FeatureSetID { return s.id }
 
 func (s FeatureSet) IsZero() bool { return len(s.entries) == 0 }
