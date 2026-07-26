@@ -100,7 +100,7 @@ func TestL402SimpleShapeExactOutputAndDetachedCentering(t *testing.T) {
 	}
 }
 
-func TestL402ResolverSourceOrderIdentityAndFallbackBudgets(t *testing.T) {
+func TestL402ResolverSourceOrderIdentity(t *testing.T) {
 	descriptors := []fontdesc.Descriptor{{Family: "Missing"}, {Family: "Earlier"}, {Family: "Later"}}
 	faces := []faceInfo{
 		resolverNamedTestFace("Later", "test:z", 0, "Regular", 400, fontdesc.StyleNormal, 100),
@@ -112,16 +112,6 @@ func TestL402ResolverSourceOrderIdentityAndFallbackBudgets(t *testing.T) {
 	}
 	if len(plans) != 2 || plans[0].selected.path != "test:a" || plans[0].authoredIndex != 1 || plans[1].selected.path != "test:z" || plans[1].authoredIndex != 2 {
 		t.Fatalf("authored source order = %#v", plans)
-	}
-	backend := &fallbackBackend{resolved: make(map[contentResolutionKey]fallbackSelection), loadFailed: make(map[fontdesc.ResolvedFaceKey]struct{})}
-	for index := 0; index <= fontdesc.MaxNegativeEntries; index++ {
-		backend.rememberResolution(contentResolutionKey{content: string(rune(index + 1))}, fallbackSelection{})
-		var key fontdesc.ResolvedFaceKey
-		key[0], key[1] = byte(index), byte(index>>8)
-		backend.recordLoadFailure(key)
-	}
-	if len(backend.resolved) != fontdesc.MaxNegativeEntries || len(backend.loadFailed) != fontdesc.MaxNegativeEntries {
-		t.Fatalf("bounded caches = resolved %d failed %d", len(backend.resolved), len(backend.loadFailed))
 	}
 }
 

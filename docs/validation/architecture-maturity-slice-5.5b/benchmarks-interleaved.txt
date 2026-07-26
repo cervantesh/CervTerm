@@ -1,0 +1,759 @@
+=== sample=01 order=AB side=base package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  461894	      2427 ns/op	    2264 B/op	      56 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5144835	       218.3 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	18017962	        68.33 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=01 order=AB side=base package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  114307	     10878 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=01 order=AB side=base package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  136926	      8839 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=01 order=AB side=base package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25837	     45622 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=01 order=AB side=candidate package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  650924	      1773 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5377827	       207.7 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	40777351	        31.50 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=01 order=AB side=candidate package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  112015	     10744 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=01 order=AB side=candidate package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  133987	      8849 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=01 order=AB side=candidate package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25495	     45786 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=02 order=BA side=candidate package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  595000	      1875 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5855946	       207.1 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	40899376	        33.78 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=02 order=BA side=candidate package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  111318	     10890 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=02 order=BA side=candidate package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  134145	      8845 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=02 order=BA side=candidate package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25701	     47688 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=02 order=BA side=base package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  430520	      2532 ns/op	    2264 B/op	      56 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5191509	       234.1 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	17569468	        72.63 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=02 order=BA side=base package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  106248	     11335 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=02 order=BA side=base package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  129633	      9188 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=02 order=BA side=base package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   24886	     47914 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=03 order=AB side=base package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  441853	      2585 ns/op	    2264 B/op	      56 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5449228	       248.0 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	14711940	        80.16 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=03 order=AB side=base package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  110626	     11376 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=03 order=AB side=base package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  132955	      9328 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=03 order=AB side=base package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25346	     47148 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=03 order=AB side=candidate package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  541638	      1960 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5443112	       214.0 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	39224786	        34.34 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=03 order=AB side=candidate package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  106195	     11105 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=03 order=AB side=candidate package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  119454	      9917 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=03 order=AB side=candidate package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   24507	     49569 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=04 order=BA side=candidate package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  578139	      2609 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkL402SimpleShapeASCII      	 4891308	       259.0 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	31124690	        37.31 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=04 order=BA side=candidate package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  109479	     11541 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=04 order=BA side=candidate package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  135032	      9179 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=04 order=BA side=candidate package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25722	     46044 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=04 order=BA side=base package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  458960	      2538 ns/op	    2264 B/op	      56 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5031703	       231.4 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	17993270	        71.47 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=04 order=BA side=base package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  113667	     10919 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=04 order=BA side=base package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  131949	      8944 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=04 order=BA side=base package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25780	     46513 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=05 order=AB side=base package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  454834	      2450 ns/op	    2264 B/op	      56 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5718901	       215.5 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	16878490	        72.98 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=05 order=AB side=base package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  108814	     11438 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=05 order=AB side=base package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  136804	      8954 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=05 order=AB side=base package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26314	     45880 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=05 order=AB side=candidate package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  609000	      1894 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5367352	       216.1 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	39265858	        32.28 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=05 order=AB side=candidate package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  103482	     11460 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=05 order=AB side=candidate package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  130771	      9084 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=05 order=AB side=candidate package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25401	     48051 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=06 order=BA side=candidate package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  592440	      1815 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5711752	       203.7 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	41037986	        31.56 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=06 order=BA side=candidate package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  113068	     10661 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=06 order=BA side=candidate package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  133696	      8815 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=06 order=BA side=candidate package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26175	     46348 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=06 order=BA side=base package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  459148	      2462 ns/op	    2264 B/op	      56 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5451345	       224.9 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	17944246	        73.13 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=06 order=BA side=base package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  111324	     10757 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=06 order=BA side=base package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  136820	      8774 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=06 order=BA side=base package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26970	     45543 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=07 order=AB side=base package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  466920	      2455 ns/op	    2264 B/op	      56 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5606179	       216.9 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	17929473	        70.26 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=07 order=AB side=base package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  112353	     10737 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=07 order=AB side=base package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  137265	      8684 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=07 order=AB side=base package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26208	     44863 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=07 order=AB side=candidate package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  578521	      1987 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5711652	       226.9 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	40456892	        32.89 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=07 order=AB side=candidate package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  114800	     10722 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=07 order=AB side=candidate package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  133038	      8902 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=07 order=AB side=candidate package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25492	     45739 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=08 order=BA side=candidate package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  589106	      1792 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5957880	       204.3 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	40559724	        30.75 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=08 order=BA side=candidate package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  112746	     10415 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=08 order=BA side=candidate package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  137734	      8703 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=08 order=BA side=candidate package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25988	     46385 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=08 order=BA side=base package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  452995	      2453 ns/op	    2264 B/op	      56 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5054194	       217.5 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	18718762	        67.81 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=08 order=BA side=base package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  113620	     10540 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=08 order=BA side=base package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  137031	      8819 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=08 order=BA side=base package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26259	     45636 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=09 order=AB side=base package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  465337	      2403 ns/op	    2264 B/op	      56 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5421993	       230.8 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	18398050	        69.29 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=09 order=AB side=base package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  114775	     10548 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=09 order=AB side=base package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  139041	      8824 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=09 order=AB side=base package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26175	     45717 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=09 order=AB side=candidate package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  660080	      1818 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5613196	       226.3 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	36881768	        34.08 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=09 order=AB side=candidate package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  114735	     10612 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=09 order=AB side=candidate package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  136522	      8900 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=09 order=AB side=candidate package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26100	     46054 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=10 order=BA side=candidate package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  606160	      1840 ns/op	    2240 B/op	      39 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5661604	       206.0 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	40483370	        31.54 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=10 order=BA side=candidate package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  106678	     10422 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=10 order=BA side=candidate package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  136898	      8722 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=10 order=BA side=candidate package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\candidate-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26422	     45205 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=10 order=BA side=base package=fontglyph ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-fontglyph.test.exe -test.run=^$ -test.bench=BenchmarkL402(ResolvePrimaryPlans|SimpleShapeASCII|FallbackResolutionHit)$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402ResolvePrimaryPlans   	  460958	      2397 ns/op	    2264 B/op	      56 allocs/op
+BenchmarkL402SimpleShapeASCII      	 5295136	       219.8 ns/op	    1856 B/op	       3 allocs/op
+BenchmarkL402FallbackResolutionHit 	18149149	        67.44 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=10 order=BA side=base package=core ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-core.test.exe -test.run=^$ -test.bench=BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  117680	     10427 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+=== sample=10 order=BA side=base package=render ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-render.test.exe -test.run=^$ -test.bench=BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  138060	      8769 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+=== sample=10 order=BA side=base package=glfwgl ===
+command: GOMAXPROCS=1 C:\temp\cerv55b-bin\base-glfwgl.test.exe -test.run=^$ -test.bench=BenchmarkPhase13DisabledDraw$ -test.benchmem -test.benchtime=1s -test.count=1 -test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26546	     43893 ns/op	       0 B/op	       0 allocs/op
+PASS

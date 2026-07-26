@@ -1,0 +1,22 @@
+schema=slice55b-platform-gates-v1
+candidate=present-tree-w-semantic
+candidate-lineage-w=d6e1a81dfedb4f8910b9340b6da0d3c2b8b8291c
+candidate-source-manifest-sha256=7aa058a776c6f57cf686b7ac675da430caf0c94f8a37abf1a813a1393bd8bee9
+go=go1.25.8 windows/amd64
+
+PASS execution host=windows/amd64 command="go test ./..."
+PASS execution host=windows/amd64 command="go test -race ./internal/fontdesc ./internal/fontglyph ./internal/fontglyph/shape ./internal/fontglyph/discovery ./internal/fontglyph/cache ./internal/fontglyph/internal/face"
+PASS execution host=windows/amd64 tags=glfw command="go test -tags glfw ./..."
+PASS static host=windows/amd64 command="go vet -unsafeptr=false ./..."
+PASS package-cycle command="go list -deps -test ./internal/fontglyph/..."
+PASS compile target=windows/amd64 CGO_ENABLED=0 command="GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test -exec=true -run '^$' ./..."
+PASS compile target=windows/arm64 CGO_ENABLED=0 command="GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go test -exec=true -run '^$' ./..."
+PASS compile target=darwin/amd64 CGO_ENABLED=0 command="GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go test -exec=true -run '^$' ./..."
+PASS compile target=darwin/arm64 CGO_ENABLED=0 command="GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go test -exec=true -run '^$' ./..."
+PASS compile target=linux/amd64 CGO_ENABLED=0 command="GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -exec=true -run '^$' ./..."
+PASS compile target=linux/arm64 CGO_ENABLED=0 command="GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go test -exec=true -run '^$' ./..."
+UNAVAILABLE execution target=linux/amd64 reason="default WSL2 docker-desktop distribution has no Go toolchain" probe="wsl.exe -e sh -lc 'uname -a; go version'" observed="Linux docker-desktop 6.6.87.2-microsoft-standard-WSL2 x86_64; sh: go: not found"
+NOT-CLAIMED execution target=windows/arm64
+NOT-CLAIMED execution target=darwin/amd64
+NOT-CLAIMED execution target=darwin/arm64
+NOT-CLAIMED gui/native-window target=all

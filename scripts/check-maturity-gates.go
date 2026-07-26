@@ -97,6 +97,7 @@ var requiredDocs = []string{
 	"docs/validation/architecture-maturity-slice-6.2b.md",
 	"docs/validation/architecture-maturity-slice-6.2c.md",
 	"docs/validation/architecture-maturity-slice-5.5a.md",
+	"docs/validation/architecture-maturity-slice-5.5b.md",
 	"scripts/capture-phase15-benchmarks.go",
 	"scripts/capture-phase15-process.py",
 	"scripts/check-phase15-recovery.go",
@@ -127,6 +128,7 @@ func main() {
 	findings = append(findings, checkSlice62bGuard()...)
 	findings = append(findings, checkSlice62cGuard()...)
 	findings = append(findings, checkSlice55aGuard()...)
+	findings = append(findings, checkSlice55bGuard()...)
 	if len(findings) > 0 {
 		fmt.Fprintln(os.Stderr, "maturity gate failures:")
 		for _, f := range findings {
@@ -4756,4 +4758,13 @@ func nonEmptyLines(text string) []string {
 		}
 	}
 	return lines
+}
+
+func checkSlice55bGuard() []finding {
+	command := exec.Command("go", "run", "./scripts/check-slice55b-evidence.go")
+	output, err := command.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	return []finding{{path: "scripts/check-slice55b-evidence.go", reason: strings.TrimSpace(string(output))}}
 }
