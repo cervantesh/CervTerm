@@ -1,0 +1,38 @@
+Stage 3 Slice 5.5a final platform evidence
+host=windows/amd64
+compiler=go version go1.25.8 windows/amd64
+candidate_head=295ef3f847c2be13f20fee250aeb06d39b67ccc7
+candidate_state=immutable W production and benchmark source bound by source-manifest-candidate.txt; final G adds cleanup and guards
+
+linux_runtime=WSL2 Ubuntu-24.04
+linux_kernel=6.6.87.2-microsoft-standard-WSL2 x86_64
+linux_mode=execution
+platform name=linux_fontglyph_focus mode=execution goos=linux goarch=amd64 cgo=0 tags=none package=./internal/fontglyph gomaxprocs=1 warmup=none run=^(TestFontIndexCompatibilityFacade.*|TestOpenTypeBackendClose(ReleasesPinAndRejectsRaster|ReversesAcquisitionAndClearsRetainedFaces)|TestL402(DiscoveryFailureContract|DiscoveryIdentityAndPlatformRootsContract|CachedFaceIdentityAndOutputParity))$ count=1 benchtime=none cpu=none build_command=GOOS=linux+GOARCH=amd64+CGO_ENABLED=0+GOMAXPROCS=1+go+test+-c+-trimpath+-o+<artifact-root>/linux/fontglyph.test+./internal/fontglyph run_command=MSYS_NO_PATHCONV=1+wsl.exe+-d+Ubuntu-24.04+--+<artifact-root>/linux/fontglyph.test+-test.run=^(TestFontIndexCompatibilityFacade.*|TestOpenTypeBackendClose(ReleasesPinAndRejectsRaster|ReversesAcquisitionAndClearsRetainedFaces)|TestL402(DiscoveryFailureContract|DiscoveryIdentityAndPlatformRootsContract|CachedFaceIdentityAndOutputParity))$+-test.count=1
+platform name=linux_cache mode=execution goos=linux goarch=amd64 cgo=0 tags=none package=./internal/fontglyph/cache gomaxprocs=1 warmup=none run=.* count=1 benchtime=none cpu=none build_command=GOOS=linux+GOARCH=amd64+CGO_ENABLED=0+GOMAXPROCS=1+go+test+-c+-trimpath+-o+<artifact-root>/linux/cache.test+./internal/fontglyph/cache run_command=MSYS_NO_PATHCONV=1+wsl.exe+-d+Ubuntu-24.04+--+<artifact-root>/linux/cache.test+-test.run=.*+-test.count=1
+platform name=linux_discovery mode=execution goos=linux goarch=amd64 cgo=0 tags=none package=./internal/fontglyph/discovery gomaxprocs=1 warmup=none run=.* count=1 benchtime=none cpu=none build_command=GOOS=linux+GOARCH=amd64+CGO_ENABLED=0+GOMAXPROCS=1+go+test+-c+-trimpath+-o+<artifact-root>/linux/discovery.test+./internal/fontglyph/discovery run_command=MSYS_NO_PATHCONV=1+wsl.exe+-d+Ubuntu-24.04+--+<artifact-root>/linux/discovery.test+-test.run=.*+-test.count=1
+platform name=linux_face mode=execution goos=linux goarch=amd64 cgo=0 tags=none package=./internal/fontglyph/internal/face gomaxprocs=1 warmup=none run=.* count=1 benchtime=none cpu=none build_command=GOOS=linux+GOARCH=amd64+CGO_ENABLED=0+GOMAXPROCS=1+go+test+-c+-trimpath+-o+<artifact-root>/linux/face.test+./internal/fontglyph/internal/face run_command=MSYS_NO_PATHCONV=1+wsl.exe+-d+Ubuntu-24.04+--+<artifact-root>/linux/face.test+-test.run=.*+-test.count=1
+linux_result=PASS
+linux_output:
+  TestFontIndexCompatibilityFacadeKeepsConcreteLegacyMethodSet PASS
+  TestFontIndexCompatibilityFacadeIsNilSafeAndDetached PASS
+  TestL402DiscoveryFailureContract PASS
+  TestL402DiscoveryIdentityAndPlatformRootsContract PASS
+  TestL402CachedFaceIdentityAndOutputParity PASS
+  TestOpenTypeBackendCloseReleasesPinAndRejectsRaster PASS
+  TestOpenTypeBackendCloseReversesAcquisitionAndClearsRetainedFaces PASS
+  cervterm/internal/fontglyph/cache PASS
+  cervterm/internal/fontglyph/discovery PASS
+  cervterm/internal/fontglyph/internal/face PASS
+linux_scope_note=The complete internal/fontglyph binary was also attempted. It was not used as PASS evidence because WSL lacks the host emoji font inventory and three environment-dependent emoji selection tests failed. Focused repaired-contract execution plus complete extracted-package execution is the narrow stable Linux evidence.
+
+platform name=windows_amd64 mode=compile-only goos=windows goarch=amd64 cgo=0 tags=none package=./... gomaxprocs=1 warmup=none run=^$ count=1 benchtime=none cpu=none build_command=GOOS=windows+GOARCH=amd64+CGO_ENABLED=0+GOMAXPROCS=1+go+test+-run+^$+-count=1+-exec=true+./... run_command=none
+windows_amd64_result=PASS
+platform name=windows_arm64 mode=compile-only goos=windows goarch=arm64 cgo=0 tags=none package=./... gomaxprocs=1 warmup=none run=^$ count=1 benchtime=none cpu=none build_command=GOOS=windows+GOARCH=arm64+CGO_ENABLED=0+GOMAXPROCS=1+go+test+-run+^$+-count=1+-exec=true+./... run_command=none
+windows_arm64_result=PASS
+platform name=darwin_amd64 mode=compile-only goos=darwin goarch=amd64 cgo=0 tags=none package=./... gomaxprocs=1 warmup=none run=^$ count=1 benchtime=none cpu=none build_command=GOOS=darwin+GOARCH=amd64+CGO_ENABLED=0+GOMAXPROCS=1+go+test+-run+^$+-count=1+-exec=true+./... run_command=none
+darwin_amd64_result=PASS
+platform name=darwin_arm64 mode=compile-only goos=darwin goarch=arm64 cgo=0 tags=none package=./... gomaxprocs=1 warmup=none run=^$ count=1 benchtime=none cpu=none build_command=GOOS=darwin+GOARCH=arm64+CGO_ENABLED=0+GOMAXPROCS=1+go+test+-run+^$+-count=1+-exec=true+./... run_command=none
+darwin_arm64_result=PASS
+compile_scope=all 40 repository packages reported ok for every target; -exec=true means binaries were compiled but not executed
+
+No GUI, window-system, or native-font execution claim is made. Linux rows are execution of CGO-disabled test binaries inside WSL2. Darwin and both Windows architecture rows are compile-only. The Windows host execution gates are retained separately in gates.txt.

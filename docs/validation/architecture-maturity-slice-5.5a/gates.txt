@@ -1,0 +1,72 @@
+Stage 3 Slice 5.5a final gate log
+base=320deef1ecb16db212cfee692128591359bebc70
+candidate_W=295ef3f847c2be13f20fee250aeb06d39b67ccc7
+candidate_state=final G tree; candidate source manifest is immutable W; G is identified by unique full-history exact W parent and subject
+host=windows/amd64
+compiler=go version go1.25.8 windows/amd64
+
+===== recovery =====
+artifact=C:/dev/cervterm-5.5a-recovery-20260725T195103Z
+result=PASS bundle verified; base patch applies; exact changed-file archive preserves 39 pre-rewrite files
+
+===== source-format-and-diff =====
+command=gofmt -l <all repaired/guard Go files>
+result=PASS
+command=git diff --check
+result=PASS
+
+===== full-test =====
+command=go test ./... -count=1
+result=PASS
+packages=40/40
+
+===== focused-race =====
+command=go test -race ./internal/fontglyph ./internal/fontglyph/cache ./internal/fontglyph/discovery ./internal/fontglyph/internal/face -count=1
+result=PASS
+
+===== glfw-tags =====
+command=go test -tags glfw ./internal/fontglyph ./internal/fontglyph/cache ./internal/fontglyph/discovery ./internal/fontglyph/internal/face ./internal/frontend/glfwgl ./cmd/cervterm -count=1
+result=PASS
+
+===== vet =====
+command=go vet -unsafeptr=false ./...
+result=PASS
+default_command=go vet ./...
+default_status=known pre-existing DirectWrite unsafe.Pointer findings; not relabeled as a clean pass
+note=The pre-existing DirectWrite unsafe.Pointer baseline is excluded explicitly and is not relabeled as a clean default vet pass.
+
+===== evidence-validator =====
+command=go run ./scripts/check-slice55a-evidence.go
+result=PASS
+output=Slice 5.5a evidence guard ok
+
+===== platform-compile =====
+command=GOMAXPROCS=1 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -run '^$' -count=1 -exec=true ./...
+result=PASS compile-only
+command=GOMAXPROCS=1 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test -run '^$' -count=1 -exec=true ./...
+result=PASS compile-only
+command=GOMAXPROCS=1 GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go test -run '^$' -count=1 -exec=true ./...
+result=PASS compile-only
+command=GOMAXPROCS=1 GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go test -run '^$' -count=1 -exec=true ./...
+result=PASS compile-only
+command=GOMAXPROCS=1 GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go test -run '^$' -count=1 -exec=true ./...
+result=PASS compile-only
+details=docs/validation/architecture-maturity-slice-5.5a/platform-gates.txt
+
+===== benchmark-evidence =====
+command=compile exact -trimpath binaries and execute ten odd-AB/even-BA samples with no warm-up; recompute medians and allocation maxima
+result=PASS
+base_manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+candidate_manifest_sha256=73de78a927b3e29210306c641ed343093e6554655a528b0ca0f01aaf17ca0d6e
+benchmark_binaries_sha256=7f50b1b2fef1e11e17d9107362bcd743a8e55c19d1aa7b755e4188e191f1d7e1
+platform_evidence_sha256=d5606957fd718b30a19c289ebcee913a71ad17ddf56beb482aba500367377c39
+validation_doc_sha256=4375abd7229e77be55ba6bf2b10e9c7256788b7840bc414bf50ec3d54d945b0f
+threshold=candidate median <= base median +3%; candidate worst B/op and allocs/op <= base
+
+===== maturity =====
+command=go run ./scripts/check-maturity-gates.go
+result=PASS
+pre_G_mode=active HEAD exactly W; dirty path set exactly G allowlist
+post_G_mode=active HEAD exactly unique G; clean worktree required
+merged_mode=full-history parent+subject lookup requires exactly one G across all refs
+shallow_mode=present-tree, pinned immutable-W manifest, and evidence checks remain mandatory when historical objects are unavailable

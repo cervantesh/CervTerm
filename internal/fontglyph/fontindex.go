@@ -1,24 +1,14 @@
 package fontglyph
 
 import (
-	"container/heap"
-	"encoding/binary"
-	"fmt"
-	"io"
-	"log"
-	"os"
-	"path/filepath"
-	"runtime"
-	"sort"
-	"strings"
 	"sync"
-	"time"
 
 	"cervterm/internal/fontdesc"
-
-	"golang.org/x/image/font/sfnt"
+	"cervterm/internal/fontglyph/discovery"
 )
 
+// Compatibility facade: discovery/index ownership lives in discovery while the
+// root package retains its concrete legacy type identity and method set.
 type faceInfo struct {
 	path      string
 	index     int
@@ -27,10 +17,12 @@ type faceInfo struct {
 	metadata  fontdesc.FaceMetadata
 }
 
-// FontIndexDiagnostics summarizes bounded discovery without changing the
-// legacy BuildFontIndex and ResolveSystemFont APIs. DuplicateFiles is a bounded
-// diagnostic: it counts duplicates of identities currently retained by top-K
-// selection and deliberately does not require an unbounded global seen set.
+type FontIndex struct {
+	discovery *discovery.Index
+}
+
+// FontIndexDiagnostics preserves the legacy root package identity while the
+// discovery package owns the authoritative index and accounting.
 type FontIndexDiagnostics struct {
 	Roots                     int
 	CandidateFiles            int
@@ -45,11 +37,7 @@ type FontIndexDiagnostics struct {
 	SymlinkFilesSkipped       int
 }
 
-type FontIndex struct {
-	families    map[string][]faceInfo
-	diagnostics FontIndexDiagnostics
-}
-
+// FontResolution preserves the legacy root result identity at the facade.
 type FontResolution struct {
 	Configured          string
 	Found               bool
@@ -57,7 +45,7 @@ type FontResolution struct {
 	Bold                string
 	Italic              string
 	BoldItalic          string
-	FaceIndex           int // legacy alias for RegularFaceIndex
+	FaceIndex           int
 	RegularFaceIndex    int
 	BoldFaceIndex       int
 	ItalicFaceIndex     int
@@ -65,434 +53,86 @@ type FontResolution struct {
 }
 
 func BuildFontIndex(dirs []string) *FontIndex {
-	index := &FontIndex{families: make(map[string][]faceInfo)}
-	roots := canonicalDiscoveryRoots(dirs, &index.diagnostics)
-	index.diagnostics.Roots = len(roots)
-	selector := newTopKPathSelector(fontdesc.MaxDiscoveryFiles)
-	for _, root := range roots {
-		_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				index.diagnostics.FilesSkipped++
-				return nil
-			}
-			if path == root {
-				return nil
-			}
-			if entry.Type()&os.ModeSymlink != 0 {
-				targetInfo, err := os.Stat(path)
-				if err != nil {
-					index.diagnostics.SymlinkFilesSkipped++
-					return nil
-				}
-				if targetInfo.IsDir() {
-					index.diagnostics.SymlinkDirectoriesSkipped++
-					return nil
-				}
-				target, err := filepath.EvalSymlinks(path)
-				if err != nil || !pathWithinRoots(target, roots) || !isFontFile(target) {
-					index.diagnostics.SymlinkFilesSkipped++
-					return nil
-				}
-				addDiscoveryCandidate(target, selector, &index.diagnostics)
-				return nil
-			}
-			if entry.IsDir() || !isFontFile(path) {
-				return nil
-			}
-			addDiscoveryCandidate(path, selector, &index.diagnostics)
-			return nil
-		})
+	return wrapDiscoveryIndex(discovery.Build(dirs))
+}
+
+func wrapDiscoveryIndex(index *discovery.Index) *FontIndex {
+	if index == nil {
+		return nil
 	}
-	paths := selector.sorted()
-	index.diagnostics.SelectedFiles = len(paths)
-	index.diagnostics.FilesTruncated = max(0, index.diagnostics.CandidateFiles-len(paths))
-	for _, path := range paths {
-		remaining := fontdesc.MaxDiscoveryFaces - index.diagnostics.FacesExamined
-		if remaining <= 0 {
-			break
-		}
-		faces, examined, truncated, skipped := fontFacesBounded(path, min(fontdesc.MaxFacesPerFile, remaining))
-		index.diagnostics.FacesExamined += examined
-		index.diagnostics.FacesTruncated += truncated
-		if skipped {
-			index.diagnostics.FilesSkipped++
-			continue
-		}
-		for _, info := range faces {
-			key := normalizeFamily(info.family)
-			if key != "" {
-				index.families[key] = append(index.families[key], info)
-				index.diagnostics.FacesIndexed++
-			}
-		}
-	}
-	return index
+	return &FontIndex{discovery: index}
 }
 
 func (index *FontIndex) Diagnostics() FontIndexDiagnostics {
-	if index == nil {
+	if index == nil || index.discovery == nil {
 		return FontIndexDiagnostics{}
 	}
-	return index.diagnostics
+	return rootFontIndexDiagnostics(index.discovery.Diagnostics())
+}
+
+func rootFontIndexDiagnostics(value discovery.Diagnostics) FontIndexDiagnostics {
+	return FontIndexDiagnostics{
+		Roots: value.Roots, CandidateFiles: value.CandidateFiles, SelectedFiles: value.SelectedFiles, FilesTruncated: value.FilesTruncated,
+		FacesExamined: value.FacesExamined, FacesIndexed: value.FacesIndexed, FacesTruncated: value.FacesTruncated, FilesSkipped: value.FilesSkipped,
+		DuplicateFiles: value.DuplicateFiles, SymlinkDirectoriesSkipped: value.SymlinkDirectoriesSkipped, SymlinkFilesSkipped: value.SymlinkFilesSkipped,
+	}
 }
 
 func (index *FontIndex) Lookup(family string) (regular, bold, italic, boldItalic *faceInfo) {
-	faces := index.families[normalizeFamily(family)]
-	for i := range faces {
-		face := &faces[i]
-		isBold, isItalic := classifySubfamily(face.subfamily)
-		switch {
-		case isBold && isItalic && boldItalic == nil:
-			boldItalic = face
-		case isBold && bold == nil:
-			bold = face
-		case isItalic && italic == nil:
-			italic = face
-		case !isBold && !isItalic && regular == nil:
-			regular = face
-		}
+	if index == nil || index.discovery == nil {
+		return nil, nil, nil, nil
 	}
-	if regular == nil && len(faces) > 0 {
-		regular = &faces[0]
-	}
-	return regular, bold, italic, boldItalic
+	discoveredRegular, discoveredBold, discoveredItalic, discoveredBoldItalic := index.discovery.Lookup(family)
+	return rootFaceInfo(discoveredRegular), rootFaceInfo(discoveredBold), rootFaceInfo(discoveredItalic), rootFaceInfo(discoveredBoldItalic)
 }
 
-func canonicalDiscoveryRoots(dirs []string, diagnostics *FontIndexDiagnostics) []string {
-	seen := make(map[string]struct{})
-	roots := make([]string, 0, len(dirs))
-	for _, dir := range dirs {
-		absolute, err := filepath.Abs(dir)
-		if err != nil {
-			diagnostics.FilesSkipped++
-			continue
-		}
-		canonical, err := filepath.EvalSymlinks(absolute)
-		if err != nil {
-			diagnostics.FilesSkipped++
-			continue
-		}
-		info, err := os.Stat(canonical)
-		if err != nil || !info.IsDir() {
-			diagnostics.FilesSkipped++
-			continue
-		}
-		canonical = filepath.Clean(canonical)
-		key := discoveryPathKey(canonical)
-		if _, exists := seen[key]; exists {
-			continue
-		}
-		seen[key] = struct{}{}
-		roots = append(roots, canonical)
+func rootFaceInfo(discovered *discovery.Face) *faceInfo {
+	if discovered == nil {
+		return nil
 	}
-	sort.Slice(roots, func(i, j int) bool { return compareDiscoveryPaths(roots[i], roots[j]) < 0 })
-	return roots
+	value := faceInfo{
+		path: discovered.Path(), index: discovered.Index(), family: discovered.Family(),
+		subfamily: discovered.Subfamily(), metadata: discovered.Metadata(),
+	}
+	return &value
 }
 
-func discoveryPathKey(path string) string {
-	path = filepath.Clean(path)
-	if runtime.GOOS == "windows" {
-		return strings.ToLower(path)
+func fontIndexFaces(index *FontIndex, family string) []faceInfo {
+	if index == nil || index.discovery == nil {
+		return nil
 	}
-	return path
-}
-
-func compareDiscoveryPaths(a, b string) int {
-	aKey, bKey := discoveryPathKey(a), discoveryPathKey(b)
-	if aKey < bKey {
-		return -1
-	}
-	if aKey > bKey {
-		return 1
-	}
-	if a < b {
-		return -1
-	}
-	if a > b {
-		return 1
-	}
-	return 0
-}
-
-func pathWithinRoots(path string, roots []string) bool {
-	canonical, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return false
-	}
-	for _, root := range roots {
-		relative, err := filepath.Rel(root, canonical)
-		if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative) {
-			return true
+	discovered := index.discovery.Faces(family)
+	faces := make([]faceInfo, len(discovered))
+	for i := range discovered {
+		faces[i] = faceInfo{
+			path: discovered[i].Path(), index: discovered[i].Index(), family: discovered[i].Family(),
+			subfamily: discovered[i].Subfamily(), metadata: discovered[i].Metadata(),
 		}
 	}
-	return false
-}
-
-func addDiscoveryCandidate(path string, selector *topKPathSelector, diagnostics *FontIndexDiagnostics) {
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		diagnostics.FilesSkipped++
-		return
-	}
-	canonical, err := filepath.EvalSymlinks(absolute)
-	if err != nil {
-		diagnostics.FilesSkipped++
-		return
-	}
-	canonical = filepath.Clean(canonical)
-	if selector.add(canonical) {
-		diagnostics.DuplicateFiles++
-		return
-	}
-	diagnostics.CandidateFiles++
-}
-
-type selectedPath struct {
-	key  string
-	path string
-}
-
-type maxPathHeap []selectedPath
-
-func (paths maxPathHeap) Len() int { return len(paths) }
-func (paths maxPathHeap) Less(i, j int) bool {
-	return compareDiscoveryPaths(paths[i].path, paths[j].path) > 0
-}
-func (paths maxPathHeap) Swap(i, j int)   { paths[i], paths[j] = paths[j], paths[i] }
-func (paths *maxPathHeap) Push(value any) { *paths = append(*paths, value.(selectedPath)) }
-func (paths *maxPathHeap) Pop() any {
-	old := *paths
-	last := old[len(old)-1]
-	*paths = old[:len(old)-1]
-	return last
-}
-
-type topKPathSelector struct {
-	limit int
-	paths maxPathHeap
-	keys  map[string]struct{}
-}
-
-func newTopKPathSelector(limit int) *topKPathSelector {
-	selector := &topKPathSelector{limit: max(0, limit), keys: make(map[string]struct{}, max(0, limit))}
-	heap.Init(&selector.paths)
-	return selector
-}
-
-// add reports whether path duplicates one of the at-most-K selected identities.
-func (selector *topKPathSelector) add(path string) bool {
-	if selector.limit == 0 {
-		return false
-	}
-	key := discoveryPathKey(path)
-	if _, exists := selector.keys[key]; exists {
-		return true
-	}
-	candidate := selectedPath{key: key, path: path}
-	if selector.paths.Len() < selector.limit {
-		heap.Push(&selector.paths, candidate)
-		selector.keys[key] = struct{}{}
-		return false
-	}
-	if compareDiscoveryPaths(path, selector.paths[0].path) < 0 {
-		delete(selector.keys, selector.paths[0].key)
-		selector.paths[0] = candidate
-		selector.keys[key] = struct{}{}
-		heap.Fix(&selector.paths, 0)
-	}
-	return false
-}
-
-func (selector *topKPathSelector) sorted() []string {
-	selected := append([]selectedPath(nil), selector.paths...)
-	sort.Slice(selected, func(i, j int) bool { return compareDiscoveryPaths(selected[i].path, selected[j].path) < 0 })
-	paths := make([]string, len(selected))
-	for i := range selected {
-		paths[i] = selected[i].path
-	}
-	return paths
-}
-
-// fontFacesBounded examines at most limit collection faces. examined counts
-// every attempted face, including parse failures and faces without usable names.
-func fontFacesBounded(path string, limit int) (faces []faceInfo, examined, truncated int, skipped bool) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, 0, 0, true
-	}
-	defer file.Close()
-	stat, err := file.Stat()
-	if err != nil {
-		return nil, 0, 0, true
-	}
-	collection, err := sfnt.ParseCollectionReaderAt(file)
-	if err != nil {
-		return nil, 0, 0, true
-	}
-	count := min(collection.NumFonts(), max(0, limit))
-	faces = make([]faceInfo, 0, count)
-	for i := 0; i < count; i++ {
-		examined++
-		font, err := collection.Font(i)
-		if err != nil {
-			continue
-		}
-		family := fontName(font, sfnt.NameIDTypographicFamily, sfnt.NameIDFamily)
-		if family == "" {
-			continue
-		}
-		subfamily := fontName(font, sfnt.NameIDTypographicSubfamily, sfnt.NameIDSubfamily)
-		metadata, err := readFaceMetadata(file, stat.Size(), i, family, subfamily)
-		if err != nil {
-			continue // malformed per-face metadata is diagnosed as examined but not indexed
-		}
-		faces = append(faces, faceInfo{
-			path: path, index: i, family: family, subfamily: subfamily, metadata: metadata,
-		})
-	}
-	return faces, examined, max(0, collection.NumFonts()-count), false
-}
-
-const maxSFNTTableRecords = 256
-
-func readFaceMetadata(reader io.ReaderAt, size int64, faceIndex int, family, subfamily string) (fontdesc.FaceMetadata, error) {
-	metadata := fontdesc.FaceMetadata{Family: family, Subfamily: subfamily, Weight: 400, Stretch: 100, Style: fontdesc.StyleNormal, CollectionIndex: uint32(faceIndex)}.Normalized()
-	header, err := readFontRange(reader, size, 0, 12)
-	if err != nil {
-		return fontdesc.FaceMetadata{}, err
-	}
-	faceOffset := int64(0)
-	if string(header[:4]) == "ttcf" {
-		count := binary.BigEndian.Uint32(header[8:12])
-		if faceIndex < 0 || uint32(faceIndex) >= count || count > fontdesc.MaxFacesPerFile {
-			return fontdesc.FaceMetadata{}, fmt.Errorf("collection face %d outside count %d", faceIndex, count)
-		}
-		offsetBytes, err := readFontRange(reader, size, 12+int64(faceIndex)*4, 4)
-		if err != nil {
-			return fontdesc.FaceMetadata{}, err
-		}
-		faceOffset = int64(binary.BigEndian.Uint32(offsetBytes))
-	} else if faceIndex != 0 {
-		return fontdesc.FaceMetadata{}, fmt.Errorf("standalone font has no face %d", faceIndex)
-	}
-	directoryHeader, err := readFontRange(reader, size, faceOffset, 12)
-	if err != nil {
-		return fontdesc.FaceMetadata{}, err
-	}
-	numTables := int(binary.BigEndian.Uint16(directoryHeader[4:6]))
-	if numTables > maxSFNTTableRecords {
-		return fontdesc.FaceMetadata{}, fmt.Errorf("sfnt table count %d exceeds %d", numTables, maxSFNTTableRecords)
-	}
-	directory, err := readFontRange(reader, size, faceOffset+12, int64(numTables)*16)
-	if err != nil {
-		return fontdesc.FaceMetadata{}, err
-	}
-	for i := 0; i < numTables; i++ {
-		record := directory[i*16 : (i+1)*16]
-		if string(record[:4]) != "OS/2" {
-			continue
-		}
-		offset, length := int64(binary.BigEndian.Uint32(record[8:12])), int64(binary.BigEndian.Uint32(record[12:16]))
-		if length < 64 {
-			return fontdesc.FaceMetadata{}, fmt.Errorf("OS/2 table length %d is below 64", length)
-		}
-		os2, err := readFontRange(reader, size, offset, length)
-		if err != nil {
-			return fontdesc.FaceMetadata{}, fmt.Errorf("OS/2 table: %w", err)
-		}
-		if weight := int(binary.BigEndian.Uint16(os2[4:6])); weight >= 100 && weight <= 900 {
-			metadata.Weight = weight
-		}
-		widths := [...]int{0, 50, 62, 75, 87, 100, 112, 125, 150, 200}
-		if width := int(binary.BigEndian.Uint16(os2[6:8])); width >= 1 && width <= 9 {
-			metadata.Stretch = widths[width]
-		}
-		version := binary.BigEndian.Uint16(os2[0:2])
-		selection := binary.BigEndian.Uint16(os2[62:64])
-		if version >= 4 && selection&(1<<9) != 0 {
-			metadata.Style = fontdesc.StyleOblique
-		} else if selection&1 != 0 {
-			metadata.Style = fontdesc.StyleItalic
-		}
-		return metadata, nil
-	}
-	return metadata, nil
-}
-
-func readFontRange(reader io.ReaderAt, size, offset, length int64) ([]byte, error) {
-	if offset < 0 || length < 0 || offset > size || length > size-offset || length > int64(maxSFNTTableRecords*16) {
-		return nil, fmt.Errorf("font range offset=%d length=%d outside size=%d", offset, length, size)
-	}
-	data := make([]byte, int(length))
-	if _, err := reader.ReadAt(data, offset); err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
-func systemFontDirs() []string {
-	if runtime.GOOS == "windows" {
-		dirs := []string{filepath.Join(os.Getenv("SystemRoot"), "Fonts")}
-		if dirs[0] == "Fonts" {
-			dirs[0] = `C:\Windows\Fonts`
-		}
-		if local := os.Getenv("LOCALAPPDATA"); local != "" {
-			dirs = append(dirs, filepath.Join(local, "Microsoft", "Windows", "Fonts"))
-		}
-		return dirs
-	}
-	home, _ := os.UserHomeDir()
-	dirs := []string{"/usr/share/fonts", "/usr/local/share/fonts"}
-	if home != "" {
-		dirs = append(dirs, filepath.Join(home, ".fonts"))
-	}
-	if dataHome := os.Getenv("XDG_DATA_HOME"); dataHome != "" {
-		dirs = append(dirs, filepath.Join(dataHome, "fonts"))
-	} else if home != "" {
-		dirs = append(dirs, filepath.Join(home, ".local", "share", "fonts"))
-	}
-	return dirs
+	return faces
 }
 
 var (
-	systemIndexOnce sync.Once
-	systemIndex     *FontIndex
+	rootSystemIndexOnce sync.Once
+	rootSystemIndex     *FontIndex
 )
 
 func loadSystemFontIndex() *FontIndex {
-	systemIndexOnce.Do(func() {
-		started := time.Now()
-		systemIndex = BuildFontIndex(systemFontDirs())
-		log.Printf("system font index scan completed in %s", time.Since(started).Round(time.Millisecond))
-	})
-	return systemIndex
+	rootSystemIndexOnce.Do(func() { rootSystemIndex = wrapDiscoveryIndex(discovery.SystemIndex()) })
+	return rootSystemIndex
 }
 
 func ResolveSystemFont(family string) FontResolution {
-	resolution := FontResolution{Configured: family}
-	if isEmbeddedFamily(family) {
-		resolution.Found = true
-		resolution.Regular = "embedded Go Mono"
-		return resolution
-	}
-	regular, bold, italic, boldItalic := loadSystemFontIndex().Lookup(family)
-	if regular == nil {
-		return resolution
-	}
-	resolution.Found = true
-	resolution.Regular, resolution.FaceIndex, resolution.RegularFaceIndex = regular.path, regular.index, regular.index
-	if bold != nil {
-		resolution.Bold, resolution.BoldFaceIndex = bold.path, bold.index
-	}
-	if italic != nil {
-		resolution.Italic, resolution.ItalicFaceIndex = italic.path, italic.index
-	}
-	if boldItalic != nil {
-		resolution.BoldItalic, resolution.BoldItalicFaceIndex = boldItalic.path, boldItalic.index
-	}
-	return resolution
+	return rootFontResolution(discovery.ResolveSystemFont(family))
 }
-
+func rootFontResolution(value discovery.Resolution) FontResolution {
+	return FontResolution{
+		Configured: value.Configured, Found: value.Found, Regular: value.Regular, Bold: value.Bold, Italic: value.Italic, BoldItalic: value.BoldItalic,
+		FaceIndex: value.FaceIndex, RegularFaceIndex: value.RegularFaceIndex, BoldFaceIndex: value.BoldFaceIndex,
+		ItalicFaceIndex: value.ItalicFaceIndex, BoldItalicFaceIndex: value.BoldItalicFaceIndex,
+	}
+}
+func systemFontDirs() []string { return discovery.SystemFontDirs() }
 func isEmbeddedFamily(family string) bool {
 	normalized := normalizeFamily(family)
 	return normalized == "" || normalized == "go mono"

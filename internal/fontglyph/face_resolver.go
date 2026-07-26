@@ -3,13 +3,10 @@ package fontglyph
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"cervterm/internal/fontdesc"
-
-	"golang.org/x/image/font/sfnt"
 )
 
 // faceCandidate is a ranked concrete face. path and index provide the stable
@@ -191,7 +188,7 @@ func resolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, tar
 	if index == nil {
 		return nil, fmt.Errorf("resolve font family %q: nil font index", descriptor.Family)
 	}
-	faces := index.families[normalizeFamily(descriptor.Family)]
+	faces := fontIndexFaces(index, descriptor.Family)
 	if len(faces) == 0 {
 		return nil, fmt.Errorf("resolve font family %q: no discovered faces", descriptor.Family)
 	}
@@ -199,7 +196,8 @@ func resolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, tar
 	candidates := make([]faceCandidate, 0, len(faces))
 	for _, face := range faces {
 		metadata := face.metadata.Normalized()
-		if descriptor.CollectionIndex.Present && (face.index < 0 || uint32(face.index) != descriptor.CollectionIndex.Value) {
+		faceIndex := face.index
+		if descriptor.CollectionIndex.Present && (faceIndex < 0 || uint32(faceIndex) != descriptor.CollectionIndex.Value) {
 			continue
 		}
 		if descriptor.CollectionFace != "" && normalizeFamily(metadata.Subfamily) != normalizeFamily(descriptor.CollectionFace) {
@@ -210,9 +208,9 @@ func resolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, tar
 			Tier: tier, AuthoredOrder: authoredOrder, CanonicalSource: canonical,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("rank font face %q index %d: %w", canonical, face.index, err)
+			return nil, fmt.Errorf("rank font face %q index %d: %w", canonical, faceIndex, err)
 		}
-		candidates = append(candidates, faceCandidate{path: canonical, index: face.index, metadata: metadata, rank: rank})
+		candidates = append(candidates, faceCandidate{path: canonical, index: faceIndex, metadata: metadata, rank: rank})
 	}
 	if len(candidates) == 0 {
 		if descriptor.CollectionIndex.Present {
@@ -229,42 +227,4 @@ func resolveFaceCandidates(index *FontIndex, descriptor fontdesc.Descriptor, tar
 
 func normalizeFamily(value string) string {
 	return strings.Join(strings.Fields(strings.ToLower(value)), " ")
-}
-
-func classifySubfamily(value string) (bold, italic bool) {
-	normalized := normalizeFamily(value)
-	return strings.Contains(normalized, "bold"), strings.Contains(normalized, "italic") || strings.Contains(normalized, "oblique")
-}
-
-func isFontFile(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".ttf", ".otf", ".ttc":
-		return true
-	default:
-		return false
-	}
-}
-
-func fontName(font *sfnt.Font, preferred, fallback sfnt.NameID) string {
-	var buffer sfnt.Buffer
-	if name, err := font.Name(&buffer, preferred); err == nil && strings.TrimSpace(name) != "" {
-		return strings.TrimSpace(name)
-	}
-	if name, err := font.Name(&buffer, fallback); err == nil {
-		return strings.TrimSpace(name)
-	}
-	return ""
-}
-
-func selectTopKPaths(paths []string, limit int) []string {
-	selector := newTopKPathSelector(limit)
-	for _, path := range paths {
-		selector.add(path)
-	}
-	return selector.sorted()
-}
-
-func fontFaces(path string) []faceInfo {
-	faces, _, _, _ := fontFacesBounded(path, fontdesc.MaxFacesPerFile)
-	return faces
 }
