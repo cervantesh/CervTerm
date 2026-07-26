@@ -2,56 +2,13 @@ package fontglyph
 
 import (
 	"encoding/binary"
-	"os"
-	"path/filepath"
+	"fmt"
 	"reflect"
-	"runtime"
 	"testing"
 
 	"cervterm/internal/fontdesc"
-
-	"golang.org/x/image/font/gofont/gomono"
+	"cervterm/internal/fontglyph/discovery"
 )
-
-func TestFontNameExtraction(t *testing.T) {
-	faces := fontFaces(filepath.Join("testdata", "noto-color-emoji-smoke.ttf"))
-	if len(faces) == 0 {
-		t.Fatal("fixture produced no named faces")
-	}
-	if faces[0].family == "" || faces[0].subfamily == "" {
-		t.Fatalf("fixture names = family %q, subfamily %q", faces[0].family, faces[0].subfamily)
-	}
-}
-
-func TestNormalizeFamily(t *testing.T) {
-	tests := []struct {
-		input, want string
-	}{
-		{"Cascadia Mono", "cascadia mono"},
-		{"  CASCADIA   mono  ", "cascadia mono"},
-		{"Go Mono", "go mono"},
-	}
-	for _, tt := range tests {
-		if got := normalizeFamily(tt.input); got != tt.want {
-			t.Errorf("normalizeFamily(%q) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestFontIndexLookup(t *testing.T) {
-	index := &FontIndex{families: map[string][]faceInfo{
-		"example mono": {
-			{path: "regular.ttc", index: 3, family: "Example Mono", subfamily: "Book"},
-			{path: "bold.ttc", index: 4, family: "Example Mono", subfamily: "Bold"},
-			{path: "italic.ttc", index: 5, family: "Example Mono", subfamily: "Oblique"},
-			{path: "bold-italic.ttc", index: 6, family: "Example Mono", subfamily: "Italic Bold"},
-		},
-	}}
-	regular, bold, italic, boldItalic := index.Lookup(" EXAMPLE   MONO ")
-	if regular == nil || regular.path != "regular.ttc" || regular.index != 3 || bold == nil || bold.index != 4 || italic == nil || italic.index != 5 || boldItalic == nil || boldItalic.index != 6 {
-		t.Fatalf("Lookup variants = %#v %#v %#v %#v", regular, bold, italic, boldItalic)
-	}
-}
 
 func TestMissingFamilyFallsBack(t *testing.T) {
 	backend, err := NewOpenTypeBackend(Spec{Family: "CervTerm Definitely Missing Family", Size: 14, DPI: 96})
@@ -64,109 +21,16 @@ func TestMissingFamilyFallsBack(t *testing.T) {
 	backend.Close()
 }
 
-func TestSelectTopKPathsIndependentOfTraversalOrder(t *testing.T) {
-	first := []string{"z.ttf", "c.ttf", "a.ttf", "m.ttf", "b.ttf"}
-	second := []string{"b.ttf", "m.ttf", "a.ttf", "c.ttf", "z.ttf"}
-	want := []string{"a.ttf", "b.ttf", "c.ttf"}
-	if got := selectTopKPaths(first, 3); !reflect.DeepEqual(got, want) {
-		t.Fatalf("first selection = %v, want %v", got, want)
-	}
-	if got := selectTopKPaths(second, 3); !reflect.DeepEqual(got, want) {
-		t.Fatalf("second selection = %v, want %v", got, want)
-	}
-	if got := selectTopKPaths(first, 0); len(got) != 0 {
-		t.Fatalf("zero selection = %v", got)
-	}
+func newFaceInfo(path string, index int, family, subfamily string, metadata fontdesc.FaceMetadata) faceInfo {
+	return faceInfo{path: path, index: index, family: family, subfamily: subfamily, metadata: metadata}
 }
 
-func TestBuildFontIndexCanonicalizesAndDeduplicatesRoots(t *testing.T) {
-	root := t.TempDir()
-	fontPath := filepath.Join(root, "GoMono.ttf")
-	if err := os.WriteFile(fontPath, gomono.TTF, 0o600); err != nil {
-		t.Fatal(err)
+func newFontIndex(faces []faceInfo) *FontIndex {
+	discovered := make([]discovery.Face, len(faces))
+	for i := range faces {
+		discovered[i] = discovery.NewFace(faces[i].path, faces[i].index, faces[i].family, faces[i].subfamily, faces[i].metadata)
 	}
-	index := BuildFontIndex([]string{root, filepath.Join(root, ".")})
-	regular, _, _, _ := index.Lookup("Go Mono")
-	if regular == nil {
-		t.Fatal("Go Mono was not indexed")
-	}
-	canonical, err := filepath.EvalSymlinks(fontPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if regular.path != canonical {
-		t.Fatalf("indexed path = %q, want canonical %q", regular.path, canonical)
-	}
-	diagnostics := index.Diagnostics()
-	if diagnostics.Roots != 1 || diagnostics.CandidateFiles != 1 || diagnostics.SelectedFiles != 1 || diagnostics.FacesExamined != 1 || diagnostics.FacesIndexed != 1 {
-		t.Fatalf("diagnostics = %+v", diagnostics)
-	}
-}
-
-func TestBuildFontIndexSymlinkPolicy(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		// Developer-mode/privilege availability varies; attempt below and skip on
-		// the actual operation rather than assuming it is available.
-	}
-	parent := t.TempDir()
-	root := filepath.Join(parent, "root")
-	outside := filepath.Join(parent, "outside")
-	if err := os.MkdirAll(filepath.Join(root, "fonts"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(outside, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	insideFont := filepath.Join(root, "fonts", "inside.ttf")
-	outsideFont := filepath.Join(outside, "outside.ttf")
-	for _, path := range []string{insideFont, outsideFont} {
-		if err := os.WriteFile(path, gomono.TTF, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.Symlink(insideFont, filepath.Join(root, "inside-link.ttf")); err != nil {
-		t.Skipf("file symlinks unavailable: %v", err)
-	}
-	if err := os.Symlink(outsideFont, filepath.Join(root, "outside-link.ttf")); err != nil {
-		t.Skipf("file symlinks unavailable: %v", err)
-	}
-	if err := os.Symlink(outside, filepath.Join(root, "outside-dir")); err != nil {
-		t.Skipf("directory symlinks unavailable: %v", err)
-	}
-	index := BuildFontIndex([]string{root})
-	diagnostics := index.Diagnostics()
-	if diagnostics.CandidateFiles != 1 || diagnostics.DuplicateFiles != 1 {
-		t.Fatalf("inside symlink was not canonicalized/deduplicated: %+v", diagnostics)
-	}
-	if diagnostics.SymlinkFilesSkipped != 1 || diagnostics.SymlinkDirectoriesSkipped != 1 {
-		t.Fatalf("symlink skip diagnostics = %+v", diagnostics)
-	}
-	regular, _, _, _ := index.Lookup("Go Mono")
-	canonicalInside, err := filepath.EvalSymlinks(insideFont)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if regular == nil || discoveryPathKey(regular.path) != discoveryPathKey(canonicalInside) {
-		t.Fatalf("regular = %#v, want canonical inside target %q", regular, canonicalInside)
-	}
-}
-
-func TestTTCMultiFaceIndexing(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "two-face.ttc")
-	if err := os.WriteFile(path, makeTestTTC(t, gomono.TTF, gomono.TTF), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	faces, examined, truncated, skipped := fontFacesBounded(path, 2)
-	if skipped || examined != 2 || truncated != 0 || len(faces) != 2 {
-		t.Fatalf("faces=%d examined=%d truncated=%d skipped=%v", len(faces), examined, truncated, skipped)
-	}
-	if faces[0].index != 0 || faces[1].index != 1 {
-		t.Fatalf("face indices = %d, %d", faces[0].index, faces[1].index)
-	}
-	limited, examined, truncated, skipped := fontFacesBounded(path, 1)
-	if skipped || examined != 1 || truncated != 1 || len(limited) != 1 {
-		t.Fatalf("limited faces=%d examined=%d truncated=%d skipped=%v", len(limited), examined, truncated, skipped)
-	}
+	return wrapDiscoveryIndex(discovery.NewIndex(discovered))
 }
 
 func makeTestTTC(t *testing.T, fonts ...[]byte) []byte {
@@ -203,136 +67,88 @@ func makeTestTTC(t *testing.T, fonts ...[]byte) []byte {
 	return out
 }
 
-func TestGoMonoFaceMetadataFromOS2(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "GoMono.ttf")
-	if err := os.WriteFile(path, gomono.TTF, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	faces := fontFaces(path)
-	if len(faces) != 1 {
-		t.Fatalf("fontFaces() returned %d faces", len(faces))
-	}
-	metadata := faces[0].metadata
-	if metadata.Family != "Go Mono" || metadata.Weight != 400 || metadata.Stretch != 100 || metadata.Style != fontdesc.StyleNormal || metadata.CollectionIndex != 0 {
-		t.Fatalf("Go Mono metadata = %+v", metadata)
-	}
-}
-
-func TestOS2NumericMetadataAndDefaults(t *testing.T) {
+func TestFontIndexCompatibilityFacadeKeepsConcreteLegacyMethodSet(t *testing.T) {
 	tests := []struct {
-		name                     string
-		weight, width, selection uint16
-		wantWeight, wantStretch  int
-		wantStyle                fontdesc.Style
+		value      any
+		name       string
+		printed    string
+		fieldNames []string
+		fieldTypes []reflect.Type
 	}{
-		{name: "italic condensed", weight: 200, width: 3, selection: 1, wantWeight: 200, wantStretch: 75, wantStyle: fontdesc.StyleItalic},
-		{name: "oblique expanded", weight: 800, width: 8, selection: 1 << 9, wantWeight: 800, wantStretch: 150, wantStyle: fontdesc.StyleOblique},
-		{name: "invalid defaults", weight: 99, width: 10, selection: 0, wantWeight: 400, wantStretch: 100, wantStyle: fontdesc.StyleNormal},
+		{faceInfo{}, "faceInfo", "fontglyph.faceInfo", []string{"path", "index", "family", "subfamily", "metadata"}, []reflect.Type{reflect.TypeOf(""), reflect.TypeOf(int(0)), reflect.TypeOf(""), reflect.TypeOf(""), reflect.TypeOf(fontdesc.FaceMetadata{})}},
+		{FontIndexDiagnostics{}, "FontIndexDiagnostics", "fontglyph.FontIndexDiagnostics", []string{"Roots", "CandidateFiles", "SelectedFiles", "FilesTruncated", "FacesExamined", "FacesIndexed", "FacesTruncated", "FilesSkipped", "DuplicateFiles", "SymlinkDirectoriesSkipped", "SymlinkFilesSkipped"}, []reflect.Type{reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0))}},
+		{FontResolution{}, "FontResolution", "fontglyph.FontResolution", []string{"Configured", "Found", "Regular", "Bold", "Italic", "BoldItalic", "FaceIndex", "RegularFaceIndex", "BoldFaceIndex", "ItalicFaceIndex", "BoldItalicFaceIndex"}, []reflect.Type{reflect.TypeOf(""), reflect.TypeOf(false), reflect.TypeOf(""), reflect.TypeOf(""), reflect.TypeOf(""), reflect.TypeOf(""), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0)), reflect.TypeOf(int(0))}},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "patched.ttf")
-			if err := os.WriteFile(path, patchTestOS2(t, gomono.TTF, tt.weight, tt.width, tt.selection), 0o600); err != nil {
-				t.Fatal(err)
+	for _, test := range tests {
+		typeOf := reflect.TypeOf(test.value)
+		if got := typeOf.Name(); got != test.name {
+			t.Errorf("%T name = %q, want %q", test.value, got, test.name)
+		}
+		if got := fmt.Sprintf("%T", test.value); got != test.printed {
+			t.Errorf("%s %%T = %q, want %q", test.name, got, test.printed)
+		}
+		if got := typeOf.NumMethod(); got != 0 {
+			t.Errorf("%s value method count = %d, want 0", test.name, got)
+		}
+		if typeOf.NumField() != len(test.fieldNames) {
+			t.Errorf("%s field count = %d, want %d", test.name, typeOf.NumField(), len(test.fieldNames))
+			continue
+		}
+		for i, wantName := range test.fieldNames {
+			field := typeOf.Field(i)
+			if field.Name != wantName || field.Type != test.fieldTypes[i] || field.Anonymous || field.Tag != "" {
+				t.Errorf("%s field %d = name %q type %v anonymous=%v tag=%q, want name %q type %v", test.name, i, field.Name, field.Type, field.Anonymous, field.Tag, wantName, test.fieldTypes[i])
 			}
-			faces := fontFaces(path)
-			if len(faces) != 1 {
-				t.Fatalf("fontFaces() returned %d faces", len(faces))
-			}
-			got := faces[0].metadata
-			if got.Weight != tt.wantWeight || got.Stretch != tt.wantStretch || got.Style != tt.wantStyle {
-				t.Fatalf("metadata = %+v, want weight=%d stretch=%d style=%s", got, tt.wantWeight, tt.wantStretch, tt.wantStyle)
-			}
-		})
-	}
-}
-
-func TestOS2ReservedObliqueBitIgnoredBeforeVersion4(t *testing.T) {
-	data := patchTestOS2(t, gomono.TTF, 400, 5, 1<<9)
-	record := testTableRecord(t, data, "OS/2")
-	offset := int(binary.BigEndian.Uint32(data[record+8 : record+12]))
-	binary.BigEndian.PutUint16(data[offset:offset+2], 3)
-	path := filepath.Join(t.TempDir(), "old-os2.ttf")
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	faces := fontFaces(path)
-	if len(faces) != 1 || faces[0].metadata.Style != fontdesc.StyleNormal {
-		t.Fatalf("old OS/2 reserved bit metadata = %+v", faces)
-	}
-}
-
-func TestTTCFacesHaveIndependentOS2Metadata(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "independent.ttc")
-	light := patchTestOS2(t, gomono.TTF, 200, 2, 0)
-	oblique := patchTestOS2(t, gomono.TTF, 800, 9, 1<<9)
-	if err := os.WriteFile(path, makeTestTTC(t, light, oblique), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	faces, examined, truncated, skipped := fontFacesBounded(path, 2)
-	if skipped || examined != 2 || truncated != 0 || len(faces) != 2 {
-		t.Fatalf("faces=%d examined=%d truncated=%d skipped=%v", len(faces), examined, truncated, skipped)
-	}
-	if faces[0].index != 0 || faces[0].metadata.CollectionIndex != 0 || faces[0].metadata.Weight != 200 || faces[0].metadata.Stretch != 62 || faces[0].metadata.Style != fontdesc.StyleNormal {
-		t.Fatalf("face 0 = %+v", faces[0])
-	}
-	if faces[1].index != 1 || faces[1].metadata.CollectionIndex != 1 || faces[1].metadata.Weight != 800 || faces[1].metadata.Stretch != 200 || faces[1].metadata.Style != fontdesc.StyleOblique {
-		t.Fatalf("face 1 = %+v", faces[1])
-	}
-}
-
-func TestCorruptOS2BoundsSkipOnlyFace(t *testing.T) {
-	data := append([]byte(nil), gomono.TTF...)
-	record := testTableRecord(t, data, "OS/2")
-	binary.BigEndian.PutUint32(data[record+8:record+12], uint32(len(data)+1))
-	path := filepath.Join(t.TempDir(), "corrupt.ttf")
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	faces, examined, truncated, skipped := fontFacesBounded(path, 1)
-	if skipped || examined != 1 || truncated != 0 || len(faces) != 0 {
-		t.Fatalf("corrupt metadata policy: faces=%d examined=%d truncated=%d skipped=%v", len(faces), examined, truncated, skipped)
-	}
-	index := BuildFontIndex([]string{filepath.Dir(path)})
-	diagnostics := index.Diagnostics()
-	if diagnostics.FacesExamined != 1 || diagnostics.FacesIndexed != 0 || diagnostics.FilesSkipped != 0 {
-		t.Fatalf("corrupt metadata diagnostics = %+v", diagnostics)
-	}
-}
-
-func patchTestOS2(t *testing.T, source []byte, weight, width, selection uint16) []byte {
-	t.Helper()
-	data := append([]byte(nil), source...)
-	record := testTableRecord(t, data, "OS/2")
-	offset := int(binary.BigEndian.Uint32(data[record+8 : record+12]))
-	length := int(binary.BigEndian.Uint32(data[record+12 : record+16]))
-	if offset < 0 || length < 64 || offset > len(data)-length {
-		t.Fatal("invalid OS/2 fixture bounds")
-	}
-	if selection&(1<<9) != 0 {
-		binary.BigEndian.PutUint16(data[offset:offset+2], 4)
-	}
-	binary.BigEndian.PutUint16(data[offset+4:offset+6], weight)
-	binary.BigEndian.PutUint16(data[offset+6:offset+8], width)
-	binary.BigEndian.PutUint16(data[offset+62:offset+64], selection)
-	return data
-}
-
-func testTableRecord(t *testing.T, data []byte, tag string) int {
-	t.Helper()
-	if len(data) < 12 {
-		t.Fatal("invalid sfnt fixture")
-	}
-	numTables := int(binary.BigEndian.Uint16(data[4:6]))
-	if numTables > maxSFNTTableRecords || 12+numTables*16 > len(data) {
-		t.Fatal("invalid sfnt table directory")
-	}
-	for i := 0; i < numTables; i++ {
-		record := 12 + i*16
-		if string(data[record:record+4]) == tag {
-			return record
 		}
 	}
-	t.Fatalf("table %q not found", tag)
-	return 0
+	valueType := reflect.TypeOf(FontIndex{})
+	if got := fmt.Sprintf("%T", FontIndex{}); got != "fontglyph.FontIndex" {
+		t.Fatalf("FontIndex %%T = %q, want fontglyph.FontIndex", got)
+	}
+	pointerType := reflect.PointerTo(valueType)
+	methods := make([]string, pointerType.NumMethod())
+	for i := range methods {
+		methods[i] = pointerType.Method(i).Name
+	}
+	if want := []string{"Diagnostics", "Lookup"}; !reflect.DeepEqual(methods, want) {
+		t.Fatalf("FontIndex method set = %v, want %v", methods, want)
+	}
+	if _, exposed := pointerType.MethodByName("Faces"); exposed {
+		t.Fatal("FontIndex compatibility facade exposes mutable Faces authority")
+	}
+}
+
+func TestFontIndexCompatibilityFacadeIsNilSafeAndDetached(t *testing.T) {
+	var nilIndex *FontIndex
+	if got := nilIndex.Diagnostics(); got != (FontIndexDiagnostics{}) {
+		t.Fatalf("nil diagnostics = %+v", got)
+	}
+	regular, bold, italic, boldItalic := nilIndex.Lookup("Example Mono")
+	if regular != nil || bold != nil || italic != nil || boldItalic != nil {
+		t.Fatalf("nil lookup = %#v %#v %#v %#v", regular, bold, italic, boldItalic)
+	}
+	if faces := fontIndexFaces(nilIndex, "Example Mono"); faces != nil {
+		t.Fatalf("nil private bridge = %#v", faces)
+	}
+
+	zeroIndex := &FontIndex{}
+	regular, bold, italic, boldItalic = zeroIndex.Lookup("Example Mono")
+	if regular != nil || bold != nil || italic != nil || boldItalic != nil || zeroIndex.Diagnostics() != (FontIndexDiagnostics{}) {
+		t.Fatalf("zero index was not nil-safe: lookup=%#v %#v %#v %#v diagnostics=%+v", regular, bold, italic, boldItalic, zeroIndex.Diagnostics())
+	}
+
+	index := newFontIndex([]faceInfo{newFaceInfo("regular.ttf", 3, "Example Mono", "Regular", fontdesc.FaceMetadata{Family: "Example Mono", Subfamily: "Regular", Weight: 400})})
+	regular, _, _, _ = index.Lookup("Example Mono")
+	if regular == nil {
+		t.Fatal("missing regular face")
+	}
+	regular.path = "mutated.ttf"
+	regular.metadata.Weight = 900
+	bridge := fontIndexFaces(index, "Example Mono")
+	bridge[0].path = "bridge-mutated.ttf"
+	bridge[0].metadata.Weight = 100
+	fresh, _, _, _ := index.Lookup("Example Mono")
+	if fresh == nil || fresh.path != "regular.ttf" || fresh.metadata.Weight != 400 {
+		t.Fatalf("facade mutation changed discovery authority: %#v", fresh)
+	}
 }

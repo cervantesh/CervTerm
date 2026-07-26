@@ -1,0 +1,310 @@
+sample=1 side=base order=AB manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+binary=fontglyph sha256=49bb7c515503730dffb4594efe5b25d953bad68a9bc9e9c80d7410d3ca7d1c32 command=C:\dev\cervterm-55a-benchmark-artifacts\base\fontglyph.test.exe+-test.run=^$+-test.bench=^BenchmarkL402+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402DiscoveryTopK    	      31	  37415626 ns/op	 5762088 B/op	   20094 allocs/op
+BenchmarkL402BuildIndexGoMono 	    1521	    761502 ns/op	  894778 B/op	     203 allocs/op
+BenchmarkL402CacheHitLease    	20192977	        65.76 ns/op	      56 B/op	       2 allocs/op
+PASS
+binary=core sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6 command=C:\dev\cervterm-55a-benchmark-artifacts\base\core.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase15TerminalStartupMemory$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  118056	     10840 ns/op	  125344 B/op	       4 allocs/op
+PASS
+binary=render sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e command=C:\dev\cervterm-55a-benchmark-artifacts\base\render.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13TextOnlySnapshot$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  136394	      8741 ns/op	       0 B/op	       0 allocs/op
+PASS
+binary=glfwgl sha256=5303f0bc60b08c6fb17b9aecf40f8791d36fab89e4762a081116f4692883c306 command=C:\dev\cervterm-55a-benchmark-artifacts\base\glfwgl.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13DisabledDraw$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26769	     48936 ns/op	       0 B/op	       0 allocs/op
+PASS
+sample=2 side=base order=BA manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+binary=fontglyph sha256=49bb7c515503730dffb4594efe5b25d953bad68a9bc9e9c80d7410d3ca7d1c32 command=C:\dev\cervterm-55a-benchmark-artifacts\base\fontglyph.test.exe+-test.run=^$+-test.bench=^BenchmarkL402+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402DiscoveryTopK    	      31	  41390610 ns/op	 5762088 B/op	   20094 allocs/op
+BenchmarkL402BuildIndexGoMono 	    1398	   1028987 ns/op	  894789 B/op	     203 allocs/op
+BenchmarkL402CacheHitLease    	10968529	        95.29 ns/op	      56 B/op	       2 allocs/op
+PASS
+binary=core sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6 command=C:\dev\cervterm-55a-benchmark-artifacts\base\core.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase15TerminalStartupMemory$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  111294	     11889 ns/op	  125344 B/op	       4 allocs/op
+PASS
+binary=render sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e command=C:\dev\cervterm-55a-benchmark-artifacts\base\render.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13TextOnlySnapshot$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  121344	      8922 ns/op	       0 B/op	       0 allocs/op
+PASS
+binary=glfwgl sha256=5303f0bc60b08c6fb17b9aecf40f8791d36fab89e4762a081116f4692883c306 command=C:\dev\cervterm-55a-benchmark-artifacts\base\glfwgl.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13DisabledDraw$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   24848	     46897 ns/op	       0 B/op	       0 allocs/op
+PASS
+sample=3 side=base order=AB manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+binary=fontglyph sha256=49bb7c515503730dffb4594efe5b25d953bad68a9bc9e9c80d7410d3ca7d1c32 command=C:\dev\cervterm-55a-benchmark-artifacts\base\fontglyph.test.exe+-test.run=^$+-test.bench=^BenchmarkL402+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402DiscoveryTopK    	      31	  37321832 ns/op	 5762088 B/op	   20094 allocs/op
+BenchmarkL402BuildIndexGoMono 	    1584	    772292 ns/op	  894781 B/op	     203 allocs/op
+BenchmarkL402CacheHitLease    	19992502	        72.30 ns/op	      56 B/op	       2 allocs/op
+PASS
+binary=core sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6 command=C:\dev\cervterm-55a-benchmark-artifacts\base\core.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase15TerminalStartupMemory$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  111070	     11440 ns/op	  125344 B/op	       4 allocs/op
+PASS
+binary=render sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e command=C:\dev\cervterm-55a-benchmark-artifacts\base\render.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13TextOnlySnapshot$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  125421	      9061 ns/op	       0 B/op	       0 allocs/op
+PASS
+binary=glfwgl sha256=5303f0bc60b08c6fb17b9aecf40f8791d36fab89e4762a081116f4692883c306 command=C:\dev\cervterm-55a-benchmark-artifacts\base\glfwgl.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13DisabledDraw$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25692	     46964 ns/op	       0 B/op	       0 allocs/op
+PASS
+sample=4 side=base order=BA manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+binary=fontglyph sha256=49bb7c515503730dffb4594efe5b25d953bad68a9bc9e9c80d7410d3ca7d1c32 command=C:\dev\cervterm-55a-benchmark-artifacts\base\fontglyph.test.exe+-test.run=^$+-test.bench=^BenchmarkL402+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402DiscoveryTopK    	      31	  39269297 ns/op	 5762088 B/op	   20094 allocs/op
+BenchmarkL402BuildIndexGoMono 	    1356	    816640 ns/op	  894793 B/op	     203 allocs/op
+BenchmarkL402CacheHitLease    	18386830	        76.33 ns/op	      56 B/op	       2 allocs/op
+PASS
+binary=core sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6 command=C:\dev\cervterm-55a-benchmark-artifacts\base\core.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase15TerminalStartupMemory$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  104100	     10701 ns/op	  125344 B/op	       4 allocs/op
+PASS
+binary=render sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e command=C:\dev\cervterm-55a-benchmark-artifacts\base\render.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13TextOnlySnapshot$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  135224	      8782 ns/op	       0 B/op	       0 allocs/op
+PASS
+binary=glfwgl sha256=5303f0bc60b08c6fb17b9aecf40f8791d36fab89e4762a081116f4692883c306 command=C:\dev\cervterm-55a-benchmark-artifacts\base\glfwgl.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13DisabledDraw$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26233	     46456 ns/op	       0 B/op	       0 allocs/op
+PASS
+sample=5 side=base order=AB manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+binary=fontglyph sha256=49bb7c515503730dffb4594efe5b25d953bad68a9bc9e9c80d7410d3ca7d1c32 command=C:\dev\cervterm-55a-benchmark-artifacts\base\fontglyph.test.exe+-test.run=^$+-test.bench=^BenchmarkL402+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402DiscoveryTopK    	      31	  41960842 ns/op	 5762088 B/op	   20094 allocs/op
+BenchmarkL402BuildIndexGoMono 	    1093	    940062 ns/op	  894794 B/op	     203 allocs/op
+BenchmarkL402CacheHitLease    	17672605	        74.34 ns/op	      56 B/op	       2 allocs/op
+PASS
+binary=core sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6 command=C:\dev\cervterm-55a-benchmark-artifacts\base\core.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase15TerminalStartupMemory$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  108088	     10539 ns/op	  125344 B/op	       4 allocs/op
+PASS
+binary=render sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e command=C:\dev\cervterm-55a-benchmark-artifacts\base\render.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13TextOnlySnapshot$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  138853	      8950 ns/op	       0 B/op	       0 allocs/op
+PASS
+binary=glfwgl sha256=5303f0bc60b08c6fb17b9aecf40f8791d36fab89e4762a081116f4692883c306 command=C:\dev\cervterm-55a-benchmark-artifacts\base\glfwgl.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13DisabledDraw$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25191	     49350 ns/op	       0 B/op	       0 allocs/op
+PASS
+sample=6 side=base order=BA manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+binary=fontglyph sha256=49bb7c515503730dffb4594efe5b25d953bad68a9bc9e9c80d7410d3ca7d1c32 command=C:\dev\cervterm-55a-benchmark-artifacts\base\fontglyph.test.exe+-test.run=^$+-test.bench=^BenchmarkL402+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402DiscoveryTopK    	      31	  37534790 ns/op	 5762088 B/op	   20094 allocs/op
+BenchmarkL402BuildIndexGoMono 	    1351	    862164 ns/op	  894793 B/op	     203 allocs/op
+BenchmarkL402CacheHitLease    	16631416	        88.64 ns/op	      56 B/op	       2 allocs/op
+PASS
+binary=core sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6 command=C:\dev\cervterm-55a-benchmark-artifacts\base\core.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase15TerminalStartupMemory$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  101506	     11321 ns/op	  125344 B/op	       4 allocs/op
+PASS
+binary=render sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e command=C:\dev\cervterm-55a-benchmark-artifacts\base\render.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13TextOnlySnapshot$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  121641	      9373 ns/op	       0 B/op	       0 allocs/op
+PASS
+binary=glfwgl sha256=5303f0bc60b08c6fb17b9aecf40f8791d36fab89e4762a081116f4692883c306 command=C:\dev\cervterm-55a-benchmark-artifacts\base\glfwgl.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13DisabledDraw$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   23074	     48094 ns/op	       0 B/op	       0 allocs/op
+PASS
+sample=7 side=base order=AB manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+binary=fontglyph sha256=49bb7c515503730dffb4594efe5b25d953bad68a9bc9e9c80d7410d3ca7d1c32 command=C:\dev\cervterm-55a-benchmark-artifacts\base\fontglyph.test.exe+-test.run=^$+-test.bench=^BenchmarkL402+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402DiscoveryTopK    	      31	  38462406 ns/op	 5762088 B/op	   20094 allocs/op
+BenchmarkL402BuildIndexGoMono 	    1394	    772563 ns/op	  894618 B/op	     203 allocs/op
+BenchmarkL402CacheHitLease    	17406944	        68.07 ns/op	      56 B/op	       2 allocs/op
+PASS
+binary=core sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6 command=C:\dev\cervterm-55a-benchmark-artifacts\base\core.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase15TerminalStartupMemory$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  113997	     10665 ns/op	  125344 B/op	       4 allocs/op
+PASS
+binary=render sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e command=C:\dev\cervterm-55a-benchmark-artifacts\base\render.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13TextOnlySnapshot$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  139326	      8761 ns/op	       0 B/op	       0 allocs/op
+PASS
+binary=glfwgl sha256=5303f0bc60b08c6fb17b9aecf40f8791d36fab89e4762a081116f4692883c306 command=C:\dev\cervterm-55a-benchmark-artifacts\base\glfwgl.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13DisabledDraw$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26797	     44828 ns/op	       0 B/op	       0 allocs/op
+PASS
+sample=8 side=base order=BA manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+binary=fontglyph sha256=49bb7c515503730dffb4594efe5b25d953bad68a9bc9e9c80d7410d3ca7d1c32 command=C:\dev\cervterm-55a-benchmark-artifacts\base\fontglyph.test.exe+-test.run=^$+-test.bench=^BenchmarkL402+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402DiscoveryTopK    	      30	  40467763 ns/op	 5762088 B/op	   20094 allocs/op
+BenchmarkL402BuildIndexGoMono 	    1377	    774176 ns/op	  894789 B/op	     203 allocs/op
+BenchmarkL402CacheHitLease    	20108416	        70.16 ns/op	      56 B/op	       2 allocs/op
+PASS
+binary=core sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6 command=C:\dev\cervterm-55a-benchmark-artifacts\base\core.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase15TerminalStartupMemory$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  111990	     11008 ns/op	  125344 B/op	       4 allocs/op
+PASS
+binary=render sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e command=C:\dev\cervterm-55a-benchmark-artifacts\base\render.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13TextOnlySnapshot$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  127861	      9626 ns/op	       0 B/op	       0 allocs/op
+PASS
+binary=glfwgl sha256=5303f0bc60b08c6fb17b9aecf40f8791d36fab89e4762a081116f4692883c306 command=C:\dev\cervterm-55a-benchmark-artifacts\base\glfwgl.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13DisabledDraw$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   24578	     45711 ns/op	       0 B/op	       0 allocs/op
+PASS
+sample=9 side=base order=AB manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+binary=fontglyph sha256=49bb7c515503730dffb4594efe5b25d953bad68a9bc9e9c80d7410d3ca7d1c32 command=C:\dev\cervterm-55a-benchmark-artifacts\base\fontglyph.test.exe+-test.run=^$+-test.bench=^BenchmarkL402+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402DiscoveryTopK    	      31	  38616623 ns/op	 5762088 B/op	   20094 allocs/op
+BenchmarkL402BuildIndexGoMono 	    1489	    767611 ns/op	  894778 B/op	     203 allocs/op
+BenchmarkL402CacheHitLease    	21013258	        70.02 ns/op	      56 B/op	       2 allocs/op
+PASS
+binary=core sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6 command=C:\dev\cervterm-55a-benchmark-artifacts\base\core.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase15TerminalStartupMemory$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  105231	     10857 ns/op	  125344 B/op	       4 allocs/op
+PASS
+binary=render sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e command=C:\dev\cervterm-55a-benchmark-artifacts\base\render.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13TextOnlySnapshot$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  138242	      8983 ns/op	       0 B/op	       0 allocs/op
+PASS
+binary=glfwgl sha256=5303f0bc60b08c6fb17b9aecf40f8791d36fab89e4762a081116f4692883c306 command=C:\dev\cervterm-55a-benchmark-artifacts\base\glfwgl.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13DisabledDraw$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26220	     48263 ns/op	       0 B/op	       0 allocs/op
+PASS
+sample=10 side=base order=BA manifest_sha256=f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9
+binary=fontglyph sha256=49bb7c515503730dffb4594efe5b25d953bad68a9bc9e9c80d7410d3ca7d1c32 command=C:\dev\cervterm-55a-benchmark-artifacts\base\fontglyph.test.exe+-test.run=^$+-test.bench=^BenchmarkL402+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402DiscoveryTopK    	      33	  38374136 ns/op	 5762088 B/op	   20094 allocs/op
+BenchmarkL402BuildIndexGoMono 	    1332	    897891 ns/op	  894789 B/op	     203 allocs/op
+BenchmarkL402CacheHitLease    	16413667	        94.10 ns/op	      56 B/op	       2 allocs/op
+PASS
+binary=core sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6 command=C:\dev\cervterm-55a-benchmark-artifacts\base\core.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase15TerminalStartupMemory$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  114042	     10657 ns/op	  125344 B/op	       4 allocs/op
+PASS
+binary=render sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e command=C:\dev\cervterm-55a-benchmark-artifacts\base\render.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13TextOnlySnapshot$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  141166	      8847 ns/op	       0 B/op	       0 allocs/op
+PASS
+binary=glfwgl sha256=5303f0bc60b08c6fb17b9aecf40f8791d36fab89e4762a081116f4692883c306 command=C:\dev\cervterm-55a-benchmark-artifacts\base\glfwgl.test.exe+-test.run=^$+-test.bench=^BenchmarkPhase13DisabledDraw$+-test.benchmem+-test.benchtime=1s+-test.count=1+-test.cpu=1
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   27289	     43871 ns/op	       0 B/op	       0 allocs/op
+PASS
