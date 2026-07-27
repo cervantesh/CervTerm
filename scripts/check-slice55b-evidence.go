@@ -27,6 +27,8 @@ const (
 	commitA           = "0f3892fe31feef94b43bf07fe733b9f4d57fc2de"
 	commitM           = "6ae3f60cacd51851d96f2fc5ecb6aa3bbcb7fcdd"
 	commitW           = "d6e1a81dfedb4f8910b9340b6da0d3c2b8b8291c"
+	commitG           = "b6a09b949b76aba5ca8274f0d01df1ef3e63d333"
+	successorW        = "7df9952db6d35a031da783479eb4d5c7f7d30ba3"
 	gSubject          = "refactor(fontglyph): guard resolution and shaping extraction"
 	evidence          = "docs/validation/architecture-maturity-slice-5.5b"
 	cleanupDiffHash   = "ed6becd4ae19c55f89083d817fdd3049536208a919e2baf945fd222af6d53e8c"
@@ -91,7 +93,7 @@ var functionHashes = map[string]string{
 	"internal/fontglyph/shape_facade.go:shapeToRootShaper.ShapeFeatures":                                                 "6c984c3b702aab4d3d0c872b7c5caa8b9bfec265ad5dd8a41734ea6b95b0bfef",
 	"internal/fontglyph/shape_facade.go:shapeToRootShaper.FeatureCapability":                                             "a2c9225bf5f9be1d52b4e5d992614ba91a33a92c197080df0d09382c2dfbc095",
 	"internal/fontglyph/shaper_default.go:newDefaultShaper":                                                              "eee8aeaaccd83a5298076e6d88a8bcf04f31c2732cee9a782039405b601fba4b",
-	"internal/fontglyph/shaper_default_windows.go:newDefaultShaper":                                                      "2edac3627b3cfb4252e4422c3ec848a0e0254e895df515c8ca138ff08051d4de",
+	"internal/fontglyph/shaper_default_windows.go:newDefaultShaper":                                                      "a638a6a0a06c08efa8a41efc9a43695f7ab37f73fc0580736abe981bde641133",
 	"internal/fontglyph/simple_shaper.go:SimpleShaper.FeatureCapability":                                                 "c80070e4faedd366e8da9c0bf0db1f08f624d44e34ac5f16e5ac5e17c4e96b89",
 	"internal/fontglyph/shape_facade.go:fallbackBackend.installShapePolicy":                                              "5b9307d70c45c1a6606980d890ae2eec990ed7c56ddb8f5f52b5d4cff53b3255",
 	"internal/fontglyph/shape_facade.go:fallbackBackend.loadShapePlan":                                                   "64b63d815000dc0d50fab25bbd50a39004dd5ab7c3777e9d84b37dc5624bb9da",
@@ -588,9 +590,22 @@ func checkManifests() []string {
 			}
 		}
 	}
-	wantCandidate, presentFailures := presentTreeManifestEntries()
-	failures = append(failures, presentFailures...)
-	failures = append(failures, compareManifestEntries(candidatePath, candidateEntries, wantCandidate)...)
+	head := git("rev-parse", "HEAD")
+	if inSuccessorMode(head) {
+		if gitObjectExists(commitG) {
+			wantCandidate, err := manifestEntriesAtCommit(commitG)
+			if err != nil {
+				failures = append(failures, "historical candidate manifest: "+err.Error())
+			} else {
+				delete(wantCandidate, "scripts/check-slice55b-evidence.go")
+				failures = append(failures, comparePinnedManifestEntries(candidatePath, candidateEntries, wantCandidate)...)
+			}
+		}
+	} else {
+		wantCandidate, presentFailures := presentTreeManifestEntries()
+		failures = append(failures, presentFailures...)
+		failures = append(failures, compareManifestEntries(candidatePath, candidateEntries, wantCandidate)...)
+	}
 	return failures
 }
 
@@ -699,6 +714,18 @@ func compareManifestEntries(path string, actual, expected map[string]string) []s
 	for sourcePath := range actual {
 		if expected[sourcePath] == "" {
 			failures = append(failures, path+" unexpected source path "+sourcePath)
+		}
+	}
+	return failures
+}
+
+// comparePinnedManifestEntries preserves the historical manifest as an immutable
+// ledger while allowing later slices to add source paths of their own.
+func comparePinnedManifestEntries(path string, actual, pinned map[string]string) []string {
+	var failures []string
+	for sourcePath, want := range pinned {
+		if actual[sourcePath] != want {
+			failures = append(failures, path+" pinned manifest entry drift "+sourcePath)
 		}
 	}
 	return failures
@@ -1050,6 +1077,24 @@ func checkGuardSelfTests() []string {
 		if len(compareManifestEntries("synthetic-merge-source-mutation", mutatedManifest, presentManifest)) == 0 {
 			failures = append(failures, "altered source with exact synthetic merge identities escaped present-tree manifest guard")
 		}
+	}
+
+	pinnedManifest := map[string]string{"go.mod": strings.Repeat("1", 64), "internal/fontglyph/shape/policy.go": strings.Repeat("2", 64)}
+	descendantManifest := map[string]string{"go.mod": pinnedManifest["go.mod"], "internal/fontglyph/shape/policy.go": pinnedManifest["internal/fontglyph/shape/policy.go"], "scripts/check-slice55c-evidence.go": strings.Repeat("3", 64)}
+	if got := comparePinnedManifestEntries("descendant-addition", descendantManifest, pinnedManifest); len(got) != 0 {
+		failures = append(failures, "legitimate descendant manifest addition rejected: "+strings.Join(got, "; "))
+	}
+	mutatedManifest := make(map[string]string, len(descendantManifest))
+	for path, hash := range descendantManifest {
+		mutatedManifest[path] = hash
+	}
+	mutatedManifest["internal/fontglyph/shape/policy.go"] = strings.Repeat("0", 64)
+	if len(comparePinnedManifestEntries("manifest-entry-mutation", mutatedManifest, pinnedManifest)) == 0 {
+		failures = append(failures, "historical manifest entry mutation escaped descendant guard")
+	}
+	delete(mutatedManifest, "go.mod")
+	if len(comparePinnedManifestEntries("manifest-entry-deletion", mutatedManifest, pinnedManifest)) == 0 {
+		failures = append(failures, "historical manifest entry deletion escaped descendant guard")
 	}
 
 	metadata, err := readLF(filepath.Join(evidence, "benchmark-binaries.txt"))
@@ -1415,6 +1460,12 @@ func checkCommitsAndPaths() []string {
 		facts.cleanupHash = gitDiffDigest(commitW, "")
 	}
 	if !facts.wExists {
+		if inSuccessorMode(head) {
+			if len(facts.dirty) != 0 {
+				return []string{fmt.Sprintf("detached successor worktree dirty=%v", facts.dirty)}
+			}
+			return nil
+		}
 		if facts.headSubject != gSubject {
 			var err error
 			facts.expectedG, facts.expectedBase, err = pullRequestIdentitiesFromEnvironment()
@@ -1451,6 +1502,13 @@ func checkCommitsAndPaths() []string {
 		if len(facts.g) == 1 && len(facts.dirty) == 0 {
 			facts.cleanupHash = gitDiffDigest(commitW, facts.g[0].hash)
 		}
+	}
+	if inSuccessorMode(head) {
+		if len(facts.g) == 1 {
+			facts.cleanupHash = gitDiffDigest(commitW, facts.g[0].hash)
+		}
+		failures = append(failures, validateSuccessorHistory(facts)...)
+		return failures
 	}
 	failures = append(failures, validateHistoryMode(facts)...)
 	return failures
@@ -1522,6 +1580,37 @@ func validateHistoryMode(facts historyModeFacts) []string {
 		failures = append(failures, fmt.Sprintf("G commit %s is not an ancestor of HEAD %s", g.hash, facts.head))
 	}
 	return failures
+}
+
+func validateSuccessorHistory(facts historyModeFacts) []string {
+	var failures []string
+	if len(facts.g) != 1 {
+		return []string{fmt.Sprintf("historical G commit cardinality=%d want=1", len(facts.g))}
+	}
+	g := facts.g[0]
+	if g.hash != commitG || g.parent != commitW || g.subject != gSubject {
+		failures = append(failures, fmt.Sprintf("historical G identity=%s parent/subject=%s/%q", g.hash, g.parent, g.subject))
+	}
+	if !equalStrings(g.paths, sorted(stageGPaths)) {
+		failures = append(failures, fmt.Sprintf("historical G paths=%v want=%v", g.paths, sorted(stageGPaths)))
+	}
+	if facts.cleanupHash != cleanupDiffHash {
+		failures = append(failures, fmt.Sprintf("historical G cleanup diff hash=%s want=%s", facts.cleanupHash, cleanupDiffHash))
+	}
+	if !facts.gAncestor {
+		failures = append(failures, fmt.Sprintf("historical G commit %s is not an ancestor of successor HEAD %s", g.hash, facts.head))
+	}
+	return failures
+}
+
+func inSuccessorMode(head string) bool {
+	if _, err := os.Stat("scripts/check-slice55c-evidence.go"); err == nil {
+		return true
+	}
+	if !gitObjectExists(successorW) {
+		return false
+	}
+	return head == successorW || exec.Command("git", "merge-base", "--is-ancestor", successorW, head).Run() == nil
 }
 
 func gitDiffDigest(from, to string) string {

@@ -88,7 +88,7 @@ var declarationPins = []declarationPin{
 	{path: "internal/fontglyph/cache/cache_test.go", name: "TestFontParseCacheEvictionCloserCanReenterManager", hash: "3a4d2f9d3f0de203b87fdf0c7e34a6bf134de26c5351b0f80cf824a9b370eb67"},
 	{path: "internal/fontglyph/cache/cache_test.go", name: "TestFontParseCacheSlowEvictionCloserDoesNotHoldManagerLock", hash: "8829e4f8ab12620e5ee755e8f232cbde121851c8573828554173ebd8a00f8416"},
 	{path: "internal/fontglyph/font_cache_test.go", name: "TestOpenTypeBackendCloseReleasesPinAndRejectsRaster", hash: "0dc4a5dc7fed540920490502c5573668907e7860877def2ef979bf515ed929d2"},
-	{path: "internal/fontglyph/font_cache_test.go", name: "TestOpenTypeBackendCloseReversesAcquisitionAndClearsRetainedFaces", hash: "87951d50e5fc09b56cb03dfb94aafd2d160872ff385bad0259ec4b031237f4e0"},
+	{path: "internal/fontglyph/font_cache_test.go", name: "TestOpenTypeBackendCloseReversesAcquisitionAndClearsRetainedFaces", hash: "5d040f2254df1d91672dd6c27d8a565a35d98aef49febfc5aebbd2346a9d34e1"},
 }
 
 type benchmarkSpec struct {

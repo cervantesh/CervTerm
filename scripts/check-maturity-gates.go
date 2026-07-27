@@ -98,6 +98,7 @@ var requiredDocs = []string{
 	"docs/validation/architecture-maturity-slice-6.2c.md",
 	"docs/validation/architecture-maturity-slice-5.5a.md",
 	"docs/validation/architecture-maturity-slice-5.5b.md",
+	"docs/validation/architecture-maturity-slice-5.5c.md",
 	"scripts/capture-phase15-benchmarks.go",
 	"scripts/capture-phase15-process.py",
 	"scripts/check-phase15-recovery.go",
@@ -108,10 +109,9 @@ var requiredDocs = []string{
 }
 
 var largeGoAllowlist = map[string]string{
-	filepath.ToSlash("internal/fontglyph/backend.go"):           "known font fallback/raster orchestration split target",
-	filepath.ToSlash("internal/fontglyph/color_colr_render.go"): "known COLRv1 render split target",
-	filepath.ToSlash("internal/fontglyph/discovery/index.go"):   "bounded discovery implementation extracted in Slice 5.5a; split target remains 5.5b/5.5c-neutral",
-	filepath.ToSlash("internal/mux/mux.go"):                     "L3-01 preparatory facade; formal split target Slice 6.2d",
+	filepath.ToSlash("internal/fontglyph/backend.go"):         "known font fallback/raster orchestration split target",
+	filepath.ToSlash("internal/fontglyph/discovery/index.go"): "bounded discovery implementation extracted in Slice 5.5a; split target remains 5.5b/5.5c-neutral",
+	filepath.ToSlash("internal/mux/mux.go"):                   "L3-01 preparatory facade; formal split target Slice 6.2d",
 }
 
 func main() {
@@ -129,6 +129,7 @@ func main() {
 	findings = append(findings, checkSlice62cGuard()...)
 	findings = append(findings, checkSlice55aGuard()...)
 	findings = append(findings, checkSlice55bGuard()...)
+	findings = append(findings, checkSlice55cGuard()...)
 	if len(findings) > 0 {
 		fmt.Fprintln(os.Stderr, "maturity gate failures:")
 		for _, f := range findings {
@@ -4767,4 +4768,13 @@ func checkSlice55bGuard() []finding {
 		return nil
 	}
 	return []finding{{path: "scripts/check-slice55b-evidence.go", reason: strings.TrimSpace(string(output))}}
+}
+
+func checkSlice55cGuard() []finding {
+	command := exec.Command("go", "run", "./scripts/check-slice55c-evidence.go")
+	output, err := command.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	return []finding{{path: "scripts/check-slice55c-evidence.go", reason: strings.TrimSpace(string(output))}}
 }

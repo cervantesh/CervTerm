@@ -83,3 +83,5 @@ func assignRootShapedGlyph(target *ShapedGlyph, glyph platformpkg.ShapeGlyph) {
 }
 
 func directWriteAvailable() bool { return platformpkg.Available() }
+
+func directWriteTextAnalyzerAvailable() bool { return platformpkg.Available() }

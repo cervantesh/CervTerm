@@ -7,6 +7,7 @@ internal/vt/testdata/*.golden text eol=lf
 *.ico binary
 *.png binary
 *.ttf binary
+internal/fontglyph/raster/testdata/fuzz/** -text
 
 ## Architecture evidence hashes use canonical LF bytes on every platform.
 .architecture-ai-project-advisor/.asi/projects/cervterm/guardrails.md text eol=lf

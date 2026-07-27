@@ -1,0 +1,18 @@
+schema=slice55c-directwrite-allocation-v1
+command="go test ./internal/fontglyph -run '^$' -bench '^BenchmarkDirectWriteShapingResultAllocations$' -benchmem -benchtime=1s -count=5 -cpu=1"
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkDirectWriteShapingResultAllocations/two-result-baseline          	    8565	    148675 ns/op	     976 B/op	      12 allocs/op
+BenchmarkDirectWriteShapingResultAllocations/two-result-baseline          	    8128	    152506 ns/op	     976 B/op	      12 allocs/op
+BenchmarkDirectWriteShapingResultAllocations/two-result-baseline          	    8960	    168545 ns/op	     976 B/op	      12 allocs/op
+BenchmarkDirectWriteShapingResultAllocations/two-result-baseline          	    7609	    168278 ns/op	     976 B/op	      12 allocs/op
+BenchmarkDirectWriteShapingResultAllocations/two-result-baseline          	    7228	    159273 ns/op	     976 B/op	      12 allocs/op
+BenchmarkDirectWriteShapingResultAllocations/one-result-root-concrete    	    8168	    157793 ns/op	     784 B/op	      11 allocs/op
+BenchmarkDirectWriteShapingResultAllocations/one-result-root-concrete    	    7516	    163299 ns/op	     784 B/op	      11 allocs/op
+BenchmarkDirectWriteShapingResultAllocations/one-result-root-concrete    	    7810	    146190 ns/op	     784 B/op	      11 allocs/op
+BenchmarkDirectWriteShapingResultAllocations/one-result-root-concrete    	    6505	    164642 ns/op	     784 B/op	      11 allocs/op
+BenchmarkDirectWriteShapingResultAllocations/one-result-root-concrete    	    7180	    157173 ns/op	     784 B/op	      11 allocs/op
+PASS
+ok  	cervterm/internal/fontglyph	14.272s

@@ -1,0 +1,19 @@
+schema=slice55c-gates-v2
+command="go test ./..." result=PASS
+command="go test -race ./..." result=PASS
+command="go test -tags glfw ./..." result=PASS
+command="go vet -unsafeptr=false ./..." result=PASS
+command="go list -deps -test ./internal/fontglyph/..." result=PASS
+command="go test ./internal/fontglyph/... -count=1" result=PASS
+command="go test ./internal/fontglyph/raster -run Test(CBDT|Sbix|SVG|COLR|Color|Redistributable|Draw|Raster|Var|Composite) -count=1" result=PASS
+command="go test ./internal/fontglyph -run Test(L402Raster|L402SVG|NotoColor|Color|Subpixel|DirectWrite|RootConcrete) -count=1" result=PASS
+command="go test ./internal/fontglyph/platform ./internal/fontglyph -run Test(DirectWrite|L402DirectWrite) -count=1" result=PASS
+command="go test ./internal/fontglyph/raster -run ^$ -fuzz ^FuzzPortableRasterInputs$ -fuzztime=10s" result=PASS execs=3611530
+command="go run ./scripts/check-slice55a-evidence.go" result=PASS
+command="go run ./scripts/check-slice55b-evidence.go" result=PASS
+command="go run ./scripts/check-slice55c-evidence.go" result=PASS
+command="go run ./scripts/check-maturity-gates.go" result=PASS
+command="git diff --check 504f5f54187ef9eb696bd14bd90a8c18940fb586..HEAD" result=PASS
+benchmark_capture="ten physical samples; odd AB; even BA; no warmup" result=PASS
+benchmark_threshold="candidate median <= base median +3%; no worst-sample B/op or allocs/op increase" result=PASS
+command="go test ./internal/fontglyph -run '^$' -bench '^BenchmarkDirectWriteShapingResultAllocations$' -benchmem -benchtime=1s -count=5 -cpu=1" result=PASS evidence=directwrite-allocation-benchmark.txt
