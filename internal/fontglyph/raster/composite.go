@@ -4,8 +4,6 @@ import (
 	"image"
 	"image/color"
 	"math"
-
-	"golang.org/x/image/math/fixed"
 )
 
 func overRGBA(dst *image.RGBA, x int, y int, src color.RGBA) {
@@ -219,9 +217,4 @@ func hardLightChannel(s, b float64) float64 {
 		return 2 * s * b
 	}
 	return 1 - 2*(1-s)*(1-b)
-}
-
-func pointXY(p fixed.Point26_6, offset int, baseline int, transform COLRTransform) (float32, float32) {
-	x, y := transform.Apply(float64(p.X)/64, float64(p.Y)/64)
-	return float32(offset) + float32(x), float32(baseline) + float32(y)
 }

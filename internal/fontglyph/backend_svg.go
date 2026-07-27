@@ -1,15 +1,12 @@
 package fontglyph
 
 import (
-	"image"
-	"image/draw"
-
 	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
 )
 
 func (b *OpenTypeBackend) rasterizeSVGColorGlyph(lf loadedFace, r rune, cellSpan int, advance fixed.Int26_6) (RasterizedGlyph, bool) {
-	if lf.sfnt == nil || lf.svg == nil {
+	if lf.sfnt == nil || lf.rasterColor == nil || !lf.rasterColor.HasSVG() {
 		return RasterizedGlyph{}, false
 	}
 	var buf sfnt.Buffer
@@ -17,19 +14,13 @@ func (b *OpenTypeBackend) rasterizeSVGColorGlyph(lf loadedFace, r rune, cellSpan
 	if err != nil || glyphID == 0 {
 		return RasterizedGlyph{}, false
 	}
-	doc, ok := lf.svg.document(uint16(glyphID))
-	if !ok {
-		return RasterizedGlyph{}, false
-	}
 	canvasW := b.cellW * max(1, cellSpan)
 	canvasH := b.cellH
-	svgImg, ok := rasterizeSVGDocument(doc, canvasW, canvasH)
+	svgImg, ok := lf.rasterColor.RasterizeSVG(uint16(glyphID), canvasW, canvasH)
 	if !ok {
 		return RasterizedGlyph{}, false
 	}
-	img := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
-	draw.Draw(img, img.Bounds(), image.Transparent, image.Point{}, draw.Src)
-	draw.Draw(img, img.Bounds(), svgImg, image.Point{}, draw.Over)
+	img := svgImg
 	return RasterizedGlyph{
 		Image:    img,
 		Width:    canvasW,

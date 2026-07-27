@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"cervterm/internal/fontdesc"
+	rasterpkg "cervterm/internal/fontglyph/raster"
 	shapepkg "cervterm/internal/fontglyph/shape"
 	"cervterm/internal/unicodecluster"
 
@@ -94,6 +95,7 @@ type loadedFace struct {
 	face        font.Face
 	sfnt        *sfnt.Font
 	tables      ColorTables
+	rasterColor *rasterpkg.ColorFace
 	sbix        *sbixExtractor
 	cbdt        *cbdtExtractor
 	colr        *colrParser
@@ -492,7 +494,7 @@ func (b *OpenTypeBackend) ensureFallbacks() {
 }
 
 func (b *OpenTypeBackend) faceHasColorGlyph(face loadedFace, r rune) bool {
-	if face.sfnt == nil || !face.tables.HasAnyColor() {
+	if face.sfnt == nil || face.rasterColor == nil || !face.tables.HasAnyColor() {
 		return false
 	}
 	var buf sfnt.Buffer
@@ -503,7 +505,7 @@ func (b *OpenTypeBackend) faceHasColorGlyph(face loadedFace, r rune) bool {
 	if _, ok := bitmapColorGlyph(face, uint16(glyphID), b.ppem); ok {
 		return true
 	}
-	return face.colr != nil || face.svg != nil
+	return face.rasterColor.HasCOLR() || face.rasterColor.HasSVG()
 }
 func (b *OpenTypeBackend) faceForCluster(cluster string) (loadedFace, bool) {
 	if b == nil || b.closed {
@@ -657,17 +659,20 @@ func loadFallbackFaces(spec Spec) []loadedFace {
 }
 
 func bitmapColorGlyph(lf loadedFace, glyphID uint16, ppem uint16) (bitmapGlyph, bool) {
-	if lf.sbix != nil {
-		if glyph, ok := lf.sbix.glyph(glyphID, ppem); ok {
-			return glyph, true
-		}
+	if lf.rasterColor == nil {
+		return bitmapGlyph{}, false
 	}
-	if lf.cbdt != nil {
-		if glyph, ok := lf.cbdt.glyph(glyphID, ppem); ok {
-			return glyph, true
-		}
+	glyph, ok := lf.rasterColor.Bitmap(glyphID, ppem)
+	if !ok {
+		return bitmapGlyph{}, false
 	}
-	return bitmapGlyph{}, false
+	return bitmapGlyph{
+		Image:         glyph.Image,
+		PPEM:          glyph.PPEM,
+		OriginOffsetX: glyph.OriginOffsetX,
+		OriginOffsetY: glyph.OriginOffsetY,
+		Format:        glyph.Format,
+	}, true
 }
 
 func fallbackFontPaths() []string {

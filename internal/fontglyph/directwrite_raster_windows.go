@@ -5,13 +5,13 @@ package fontglyph
 import (
 	"fmt"
 	"image"
-	"log"
 	"math"
 	"os"
 	"path/filepath"
-	"sync"
 	"syscall"
 	"unsafe"
+
+	platformpkg "cervterm/internal/fontglyph/platform"
 
 	"golang.org/x/image/font/gofont/gomono"
 )
@@ -50,27 +50,16 @@ type dwriteGlyphRun struct {
 }
 type dwriteRect struct{ Left, Top, Right, Bottom int32 }
 
-var embeddedFontLogOnce sync.Once
-
 func newPlatformTextRasterizer(spec Spec, primary loadedFace) glyphRasterizer {
-	if spec.TextRaster != "auto" {
-		return nil
-	}
-	path := primary.sourcePath
-	if path == "" {
-		var err error
-		path, err = cachedGoMonoPath()
-		if err != nil {
-			embeddedFontLogOnce.Do(func() { log.Printf("DirectWrite raster disabled: cache embedded Go Mono: %v", err) })
-			return nil
-		}
-	}
-	raster, err := newDWriteRasterizer(path, primary.faceIndex, spec.Size, spec.DPI)
-	if err != nil {
-		log.Printf("DirectWrite raster unavailable for %s: %v", path, err)
-		return nil
-	}
-	return raster
+	return platformpkg.NewTextRasterizer(platformpkg.TextRasterSpec{
+		Mode: spec.TextRaster,
+		Source: platformpkg.FaceSource{
+			Path:  primary.sourcePath,
+			Index: primary.faceIndex,
+		},
+		SizePoints: spec.Size,
+		DPI:        spec.DPI,
+	})
 }
 
 func cachedGoMonoPath() (string, error) {

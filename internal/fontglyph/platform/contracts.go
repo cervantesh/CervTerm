@@ -16,6 +16,12 @@ type ShapeGlyph struct {
 	XAdvance float64
 }
 
+// ShapeAllocator creates the caller-owned concrete result slice exactly once.
+type ShapeAllocator[T any] func(int) []T
+
+// ShapeAssigner projects one detached native glyph into caller-owned storage.
+type ShapeAssigner[T any] func(*T, ShapeGlyph)
+
 // FaceSource identifies one native face without transferring source bytes,
 // cache leases, parsed-face ownership, or native handles.
 type FaceSource struct {

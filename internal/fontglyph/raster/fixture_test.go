@@ -80,7 +80,7 @@ func TestRedistributableCOLRCompositeFixture(t *testing.T) {
 
 func readFixture(t *testing.T, name string) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", name))
+	data, err := os.ReadFile(filepath.Join("..", "testdata", name))
 	if err != nil {
 		t.Fatalf("read fixture %s: %v", name, err)
 	}

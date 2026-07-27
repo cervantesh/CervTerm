@@ -83,11 +83,13 @@ func (e *sbixExtractor) glyph(glyphID uint16, ppem uint16) (bitmapGlyph, bool) {
 	if start == end {
 		return bitmapGlyph{}, false
 	}
-	absStart := int(strike.Offset + start)
-	absEnd := int(strike.Offset + end)
-	if absStart+8 > len(e.data) || absEnd > len(e.data) || absStart >= absEnd {
+	absStart64 := uint64(strike.Offset) + uint64(start)
+	absEnd64 := uint64(strike.Offset) + uint64(end)
+	if absStart64+8 > uint64(len(e.data)) || absEnd64 > uint64(len(e.data)) || absStart64+8 > absEnd64 {
 		return bitmapGlyph{}, false
 	}
+	absStart := int(absStart64)
+	absEnd := int(absEnd64)
 	originX := int16(binary.BigEndian.Uint16(e.data[absStart : absStart+2]))
 	originY := int16(binary.BigEndian.Uint16(e.data[absStart+2 : absStart+4]))
 	format := string(e.data[absStart+4 : absStart+8])

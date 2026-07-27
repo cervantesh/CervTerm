@@ -198,10 +198,14 @@ func (a *dwriteFeatureArguments) callPointers() (features, lengths uintptr, rang
 }
 
 func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uint16, features fontdesc.FeatureSet) ([]ShapeGlyph, bool, error) {
+	return shapeTextInto(a, text, fontFace, ppem, features, allocatePlatformShapeGlyphs, assignPlatformShapeGlyph)
+}
+
+func shapeTextInto[T any](a *iWriteTextAnalyzer, text string, fontFace *iUnknown, ppem uint16, features fontdesc.FeatureSet, allocate ShapeAllocator[T], assign ShapeAssigner[T]) ([]T, bool, error) {
 	if !a.hasGlyphShapingMethods() {
 		return nil, false, fmt.Errorf("IDWriteTextAnalyzer shaping methods unavailable")
 	}
-	if text == "" || fontFace == nil {
+	if text == "" || fontFace == nil || ppem == 0 || allocate == nil || assign == nil {
 		return nil, false, nil
 	}
 	utf16Text := utf16.Encode([]rune(text))
@@ -286,21 +290,32 @@ func (a *iWriteTextAnalyzer) shapeText(text string, fontFace *iUnknown, ppem uin
 		return nil, false, fmt.Errorf("IDWriteTextAnalyzer::GetGlyphPlacements: HRESULT 0x%08x (%v)", uint32(hr), callErr)
 	}
 
-	shaped := make([]ShapeGlyph, 0, actualGlyphCount)
+	resultCount := 0
+	for i := uint32(0); i < actualGlyphCount; i++ {
+		if glyphIndices[i] != 0 {
+			resultCount++
+		}
+	}
+	if resultCount == 0 {
+		return nil, false, nil
+	}
+	shaped := allocate(resultCount)
+	if len(shaped) != resultCount {
+		return nil, false, fmt.Errorf("shape allocator returned %d glyphs, want %d", len(shaped), resultCount)
+	}
+	resultIndex := 0
 	for i := uint32(0); i < actualGlyphCount; i++ {
 		glyphID := glyphIndices[i]
 		if glyphID == 0 {
 			continue
 		}
-		shaped = append(shaped, ShapeGlyph{
+		assign(&shaped[resultIndex], ShapeGlyph{
 			GlyphID:  glyphID,
 			XOffset:  float64(glyphOffsets[i].AdvanceOffset),
 			YOffset:  -float64(glyphOffsets[i].AscenderOffset),
 			XAdvance: float64(glyphAdvances[i]),
 		})
-	}
-	if len(shaped) == 0 {
-		return nil, false, nil
+		resultIndex++
 	}
 	return shaped, true, nil
 }
@@ -317,14 +332,17 @@ func (f *iWriteFactory) createFontFaceFromPathIndex(path string, faceIndex int) 
 	if f == nil || f.lpVtbl == nil || f.lpVtbl.createFontFileReference == 0 || f.lpVtbl.createFontFace == 0 {
 		return nil, fmt.Errorf("IDWriteFactory font-face APIs unavailable")
 	}
-	if faceIndex < 0 || faceIndex >= fontdesc.MaxFacesPerFile {
-		return nil, fmt.Errorf("font face index %d is outside 0..%d", faceIndex, fontdesc.MaxFacesPerFile-1)
+	if err := validateDWriteFaceIndex(faceIndex, 0); err != nil {
+		return nil, err
 	}
-	fontFile, faceType, err := f.openFontFile(path)
+	fontFile, faceType, faceCount, err := f.openFontFile(path)
 	if err != nil {
 		return nil, err
 	}
 	defer fontFile.release()
+	if err := validateDWriteFaceIndex(faceIndex, faceCount); err != nil {
+		return nil, err
+	}
 	return f.createAnalyzedFontFace(fontFile, faceType, faceIndex)
 }
 

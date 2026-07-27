@@ -58,6 +58,11 @@ type FeaturePolicy struct {
 	Features fontdesc.FeatureSet
 }
 
-// ColorFace is private-owned parsed bitmap/COLR/SVG state. Its representation
-// is completed by the mechanical-copy stage.
-type ColorFace struct{}
+// ColorFace privately owns parsed bitmap/COLR/SVG state.
+type ColorFace struct {
+	tables ColorTables
+	sbix   *sbixExtractor
+	cbdt   *cbdtExtractor
+	colr   *colrParser
+	svg    *svgExtractor
+}
