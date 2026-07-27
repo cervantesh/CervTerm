@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"cervterm/internal/fontdesc"
 	"golang.org/x/image/font/gofont/gomono"
 )
 
@@ -93,15 +94,32 @@ func cachedGoMonoPath() (string, error) {
 	return path, nil
 }
 
+type dwriteRasterFactory func(uintptr) (*iWriteFactory, error)
+
 func newDWriteRasterizer(fontPath string, faceIndex int, sizePt, dpi float64) (*dwriteRasterizer, error) {
+	return newDWriteRasterizerWithFactory(fontPath, faceIndex, sizePt, dpi, newDirectWriteFactoryOfType)
+}
+
+func newDWriteRasterizerWithFactory(fontPath string, faceIndex int, sizePt, dpi float64, createFactory dwriteRasterFactory) (*dwriteRasterizer, error) {
+	if err := validateDWriteRasterRequest(fontPath, faceIndex, sizePt, dpi); err != nil {
+		return nil, err
+	}
+	if createFactory == nil {
+		return nil, fmt.Errorf("DirectWrite raster factory is unavailable")
+	}
 	// Isolated factory: the shared factory's font-file cache would keep
 	// fontPath locked for the process lifetime even after Close.
-	factory, err := newDirectWriteFactoryOfType(dwriteFactoryTypeIsolated)
+	factory, err := createFactory(dwriteFactoryTypeIsolated)
 	if err != nil {
 		return nil, err
 	}
-	fontFile, faceType, err := factory.openFontFile(fontPath)
+	fontFile, faceType, faceCount, err := factory.openFontFile(fontPath)
 	if err != nil {
+		factory.release()
+		return nil, err
+	}
+	if err := validateDWriteFaceIndex(faceIndex, faceCount); err != nil {
+		fontFile.release()
 		factory.release()
 		return nil, err
 	}
@@ -114,10 +132,36 @@ func newDWriteRasterizer(fontPath string, faceIndex int, sizePt, dpi float64) (*
 	return &dwriteRasterizer{factory: factory, fontFace: fontFace, emSize: float32(sizePt * dpi / 72)}, nil
 }
 
-func (f *iWriteFactory) openFontFile(path string) (*dwriteFontFile, uint32, error) {
+func validateDWriteRasterRequest(fontPath string, faceIndex int, sizePt, dpi float64) error {
+	if fontPath == "" {
+		return fmt.Errorf("font path is empty")
+	}
+	if err := validateDWriteFaceIndex(faceIndex, 0); err != nil {
+		return err
+	}
+	if sizePt <= 0 || math.IsNaN(sizePt) || math.IsInf(sizePt, 0) {
+		return fmt.Errorf("font size must be positive and finite: %v", sizePt)
+	}
+	if dpi <= 0 || math.IsNaN(dpi) || math.IsInf(dpi, 0) {
+		return fmt.Errorf("font DPI must be positive and finite: %v", dpi)
+	}
+	return nil
+}
+
+func validateDWriteFaceIndex(faceIndex int, faceCount uint32) error {
+	if faceIndex < 0 || faceIndex >= fontdesc.MaxFacesPerFile {
+		return fmt.Errorf("font face index %d is outside 0..%d", faceIndex, fontdesc.MaxFacesPerFile-1)
+	}
+	if faceCount != 0 && uint32(faceIndex) >= faceCount {
+		return fmt.Errorf("font face index %d is outside collection count %d", faceIndex, faceCount)
+	}
+	return nil
+}
+
+func (f *iWriteFactory) openFontFile(path string) (*dwriteFontFile, uint32, uint32, error) {
 	path16, err := syscall.UTF16PtrFromString(path)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	var file *dwriteFontFile
 	hr, _, callErr := syscall.SyscallN(f.lpVtbl.createFontFileReference, uintptr(unsafe.Pointer(f)), uintptr(unsafe.Pointer(path16)), 0, uintptr(unsafe.Pointer(&file)))
@@ -125,16 +169,16 @@ func (f *iWriteFactory) openFontFile(path string) (*dwriteFontFile, uint32, erro
 		if file != nil {
 			file.release()
 		}
-		return nil, 0, fmt.Errorf("IDWriteFactory::CreateFontFileReference(%s): HRESULT 0x%08x (%v)", path, uint32(hr), callErr)
+		return nil, 0, 0, fmt.Errorf("IDWriteFactory::CreateFontFileReference(%s): HRESULT 0x%08x (%v)", path, uint32(hr), callErr)
 	}
 	var supported int32
 	var fileType, faceType, faceCount uint32
 	hr, _, callErr = syscall.SyscallN(file.lpVtbl.analyze, uintptr(unsafe.Pointer(file)), uintptr(unsafe.Pointer(&supported)), uintptr(unsafe.Pointer(&fileType)), uintptr(unsafe.Pointer(&faceType)), uintptr(unsafe.Pointer(&faceCount)))
 	if failedHRESULT(hr) || supported == 0 || faceCount == 0 {
 		file.release()
-		return nil, 0, fmt.Errorf("IDWriteFontFile::Analyze(%s): HRESULT 0x%08x, supported=%t, faces=%d (%v)", path, uint32(hr), supported != 0, faceCount, callErr)
+		return nil, 0, 0, fmt.Errorf("IDWriteFontFile::Analyze(%s): HRESULT 0x%08x, supported=%t, faces=%d (%v)", path, uint32(hr), supported != 0, faceCount, callErr)
 	}
-	return file, faceType, nil
+	return file, faceType, faceCount, nil
 }
 
 func (f *iWriteFactory) createAnalyzedFontFace(file *dwriteFontFile, faceType uint32, faceIndex int) (*iUnknown, error) {

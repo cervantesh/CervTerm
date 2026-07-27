@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+
+	rasterpkg "cervterm/internal/fontglyph/raster"
 )
 
 func TestL402RasterColorFixtureCharacterization(t *testing.T) {
@@ -35,15 +37,7 @@ func TestL402RasterColorFixtureCharacterization(t *testing.T) {
 }
 
 func TestL402SVGGradientFixtureCharacterization(t *testing.T) {
-	extractor, err := newSVGExtractor(readFixture(t, "svg-gradient-table.bin"))
-	if err != nil {
-		t.Fatalf("newSVGExtractor: %v", err)
-	}
-	doc, ok := extractor.document(10)
-	if !ok {
-		t.Fatal("SVG fixture has no glyph 10")
-	}
-	img, ok := rasterizeSVGDocument(doc, 48, 32)
+	img, ok := rasterpkg.RasterizeSVGTableGlyph(readFixture(t, "svg-gradient-table.bin"), 10, 48, 32)
 	if !ok {
 		t.Fatal("SVG fixture did not rasterize")
 	}
@@ -66,7 +60,7 @@ func TestL402ConcreteCompatibilitySurface(t *testing.T) {
 		"glyph":   reflect.TypeOf(RasterizedGlyph{}).PkgPath() + "." + reflect.TypeOf(RasterizedGlyph{}).Name(),
 		"tables":  reflect.TypeOf(ColorTables{}).PkgPath() + "." + reflect.TypeOf(ColorTables{}).Name(),
 	}
-	wantShaper := "fontglyph.SimpleShaper"
+	wantShaper := "fontglyph.shapeToRootShaper"
 	if runtime.GOOS == "windows" {
 		wantShaper = "fontglyph.DirectWriteShaper"
 	}

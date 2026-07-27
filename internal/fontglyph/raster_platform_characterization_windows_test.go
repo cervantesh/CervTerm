@@ -5,21 +5,17 @@ package fontglyph
 import (
 	"reflect"
 	"testing"
-	"unsafe"
+
+	platformpkg "cervterm/internal/fontglyph/platform"
 )
 
 func TestL402DirectWriteSelectionABIAndCloseCharacterization(t *testing.T) {
 	if got := reflect.TypeOf(newDefaultShaper()).String(); got != "fontglyph.DirectWriteShaper" {
 		t.Fatalf("default Windows shaper type = %q", got)
 	}
-	if got, want := unsafe.Sizeof(dwriteScriptAnalysis{}), uintptr(8); got != want {
-		t.Fatalf("DWRITE_SCRIPT_ANALYSIS size = %d, want %d", got, want)
-	}
-	if got, want := unsafe.Offsetof(dwriteScriptAnalysis{}.Shapes), uintptr(4); got != want {
-		t.Fatalf("DWRITE_SCRIPT_ANALYSIS.shapes offset = %d, want %d", got, want)
-	}
-	if got, want := unsafe.Sizeof(dwriteGlyphOffset{}), uintptr(8); got != want {
-		t.Fatalf("DWRITE_GLYPH_OFFSET size = %d, want %d", got, want)
+	abi := platformpkg.ABI()
+	if abi.ScriptAnalysisSize != 8 || abi.ScriptOffset != 0 || abi.ShapesOffset != 4 || abi.GlyphOffsetSize != 8 {
+		t.Fatalf("DirectWrite ABI layout = %#v", abi)
 	}
 
 	backend, err := NewOpenTypeBackend(Spec{Family: "Go Mono", Size: 14, DPI: 96, TextRaster: "auto"})

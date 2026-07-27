@@ -6,6 +6,8 @@ import (
 	"image/draw"
 	"math"
 
+	rasterpkg "cervterm/internal/fontglyph/raster"
+
 	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
@@ -13,7 +15,7 @@ import (
 )
 
 func (b *OpenTypeBackend) rasterizeCOLRGlyph(lf loadedFace, r rune, cellSpan int, bounds fixed.Rectangle26_6, advance fixed.Int26_6) (RasterizedGlyph, bool) {
-	if lf.sfnt == nil || lf.colr == nil {
+	if lf.sfnt == nil || lf.rasterColor == nil || !lf.rasterColor.HasCOLR() {
 		return RasterizedGlyph{}, false
 	}
 	var buf sfnt.Buffer
@@ -48,7 +50,7 @@ func (b *OpenTypeBackend) rasterizeCOLRGlyph(lf loadedFace, r rune, cellSpan int
 }
 
 func (b *OpenTypeBackend) rasterizeShapedColorCluster(lf loadedFace, shaped []ShapedGlyph, cellSpan int) (RasterizedGlyph, bool) {
-	if lf.sfnt == nil || lf.colr == nil || len(shaped) == 0 {
+	if lf.sfnt == nil || lf.rasterColor == nil || !lf.rasterColor.HasCOLR() || len(shaped) == 0 {
 		return RasterizedGlyph{}, false
 	}
 	canvasW := b.cellW * max(1, cellSpan)
@@ -100,15 +102,46 @@ func (b *OpenTypeBackend) rasterizeShapedColorCluster(lf loadedFace, shaped []Sh
 }
 
 func colorGlyphForFace(lf loadedFace, glyphID uint16) (COLRGlyph, error) {
-	if lf.colr == nil {
+	if lf.rasterColor == nil {
 		return COLRGlyph{}, ErrNoCOLRTable
 	}
-	if isSegoeEmojiFace(lf) {
-		if glyph, err := lf.colr.glyphV0(glyphID, lf.colr.palettes[0]); err == nil && len(glyph.Layers) > 0 {
-			return glyph, nil
+	glyph, err := lf.rasterColor.COLRGlyph(glyphID, isSegoeEmojiFace(lf))
+	if err != nil {
+		return COLRGlyph{}, err
+	}
+	return colrGlyphFromRaster(glyph), nil
+}
+func colrGlyphFromRaster(glyph rasterpkg.COLRGlyph) COLRGlyph {
+	return COLRGlyph{GlyphID: glyph.GlyphID, Layers: colrLayersFromRaster(glyph.Layers)}
+}
+
+func colrLayersFromRaster(layers []rasterpkg.COLRLayer) []COLRLayer {
+	if len(layers) == 0 {
+		return nil
+	}
+	out := make([]COLRLayer, len(layers))
+	for i, layer := range layers {
+		out[i] = COLRLayer{
+			GlyphID: layer.GlyphID, PaletteIndex: layer.PaletteIndex, Color: layer.Color, Foreground: layer.Foreground,
+			Transform: COLRTransform(layer.Transform), Fill: COLRFillKind(layer.Fill), CompositeMode: layer.CompositeMode,
+			LinearGradient: COLRLinearGradient{X0: layer.LinearGradient.X0, Y0: layer.LinearGradient.Y0, X1: layer.LinearGradient.X1, Y1: layer.LinearGradient.Y1, X2: layer.LinearGradient.X2, Y2: layer.LinearGradient.Y2, Stops: colrStopsFromRaster(layer.LinearGradient.Stops)},
+			RadialGradient: COLRRadialGradient{X0: layer.RadialGradient.X0, Y0: layer.RadialGradient.Y0, Radius0: layer.RadialGradient.Radius0, X1: layer.RadialGradient.X1, Y1: layer.RadialGradient.Y1, Radius1: layer.RadialGradient.Radius1, Stops: colrStopsFromRaster(layer.RadialGradient.Stops)},
+			SweepGradient:  COLRSweepGradient{CenterX: layer.SweepGradient.CenterX, CenterY: layer.SweepGradient.CenterY, StartAngle: layer.SweepGradient.StartAngle, EndAngle: layer.SweepGradient.EndAngle, Stops: colrStopsFromRaster(layer.SweepGradient.Stops)},
+			Source:         colrLayersFromRaster(layer.Source), Backdrop: colrLayersFromRaster(layer.Backdrop),
 		}
 	}
-	return lf.colr.glyph(glyphID, 0)
+	return out
+}
+
+func colrStopsFromRaster(stops []rasterpkg.COLRColorStop) []COLRColorStop {
+	if len(stops) == 0 {
+		return nil
+	}
+	out := make([]COLRColorStop, len(stops))
+	for i, stop := range stops {
+		out[i] = COLRColorStop{Offset: stop.Offset, Color: stop.Color}
+	}
+	return out
 }
 
 func fitColorGlyphToCanvas(img *image.RGBA, padding int) *image.RGBA {

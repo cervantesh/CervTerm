@@ -28,6 +28,9 @@ func newCOLRParser(colrData, cpalData []byte) (*colrParser, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(palettes) == 0 {
+		return nil, ErrInvalidCPALTable
+	}
 	version, baseGlyphs, layers, basePaints, layerPaints, err := parseCOLR(colrData)
 	if err != nil {
 		return nil, err

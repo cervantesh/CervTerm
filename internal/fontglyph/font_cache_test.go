@@ -125,15 +125,11 @@ func TestOpenTypeBackendCloseReversesAcquisitionAndClearsRetainedFaces(t *testin
 		{
 			face: &closeOrderingFontFace{close: func() { appendEvent("first-face", 1) }},
 			sfnt: &sfnt.Font{}, tables: ColorTables{HasSVG: true},
-			sbix: &sbixExtractor{data: []byte{1}}, cbdt: &cbdtExtractor{cbdt: []byte{1}},
-			colr: &colrParser{data: []byte{1}}, svg: &svgExtractor{documents: []svgDocumentRecord{{document: []byte{1}}}},
 			sourcePath: "first.ttf", faceIndex: 1, cacheHandle: firstLease,
 		},
 		{
 			face: &closeOrderingFontFace{close: func() { appendEvent("second-face", 2) }},
 			sfnt: &sfnt.Font{}, tables: ColorTables{HasSVG: true},
-			sbix: &sbixExtractor{data: []byte{2}}, cbdt: &cbdtExtractor{cbdt: []byte{2}},
-			colr: &colrParser{data: []byte{2}}, svg: &svgExtractor{documents: []svgDocumentRecord{{document: []byte{2}}}},
 			sourcePath: "second.ttf", faceIndex: 2, cacheHandle: secondLease,
 		},
 	}
@@ -151,7 +147,7 @@ func TestOpenTypeBackendCloseReversesAcquisitionAndClearsRetainedFaces(t *testin
 		t.Fatalf("backend retained resources after close: dw=%#v faces=%#v", backend.dwRaster, backend.faces)
 	}
 	for i, face := range retained {
-		if face.face != nil || face.sfnt != nil || face.tables != (ColorTables{}) || face.sbix != nil || face.cbdt != nil || face.colr != nil || face.svg != nil || face.sourcePath != "" || face.faceIndex != 0 || face.cacheHandle != nil {
+		if face.face != nil || face.sfnt != nil || face.tables != (ColorTables{}) || face.rasterColor != nil || face.sourcePath != "" || face.faceIndex != 0 || face.cacheHandle != nil {
 			t.Fatalf("retained face %d still references parsed/source-backed state: %#v", i, face)
 		}
 	}
