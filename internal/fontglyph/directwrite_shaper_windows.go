@@ -3,10 +3,10 @@
 package fontglyph
 
 import (
-	"syscall"
 	"unicode/utf8"
 
 	"cervterm/internal/fontdesc"
+	platformpkg "cervterm/internal/fontglyph/platform"
 	"cervterm/internal/unicodecluster"
 )
 
@@ -15,7 +15,7 @@ type DirectWriteShaper struct {
 }
 
 func (s DirectWriteShaper) FeatureCapability() string {
-	if directWriteTextAnalyzerAvailable() {
+	if platformpkg.Available() {
 		return "directwrite"
 	}
 	if reporter, ok := s.Fallback.(featureCapabilityReporter); ok {
@@ -29,7 +29,7 @@ func (s DirectWriteShaper) Shape(cluster string, face loadedFace, ppem uint16) (
 }
 
 func (s DirectWriteShaper) ShapeFeatures(cluster string, face loadedFace, ppem uint16, features fontdesc.FeatureSet) ([]ShapedGlyph, bool) {
-	if !directWriteTextAnalyzerAvailable() {
+	if !platformpkg.Available() {
 		return fallbackShapeFeatures(s.Fallback, cluster, face, ppem, features)
 	}
 	if isSimpleShapeableCluster(cluster) && !unicodecluster.IsEmojiString(cluster) {
@@ -49,7 +49,7 @@ func (s DirectWriteShaper) ShapeFeatures(cluster string, face loadedFace, ppem u
 }
 
 func (s DirectWriteShaper) Available() bool {
-	return directWriteTextAnalyzerAvailable()
+	return platformpkg.Available()
 }
 
 func fallbackShapeFeatures(fallback Shaper, cluster string, face loadedFace, ppem uint16, features fontdesc.FeatureSet) ([]ShapedGlyph, bool) {
@@ -60,34 +60,28 @@ func fallbackShapeFeatures(fallback Shaper, cluster string, face loadedFace, ppe
 }
 
 func shapeWithDirectWrite(cluster string, fontPath string, faceIndex int, ppem uint16, features fontdesc.FeatureSet) ([]ShapedGlyph, bool) {
-	factory, err := newDirectWriteFactory()
-	if err != nil {
-		return nil, false
-	}
-	defer factory.release()
-	fontFace, err := factory.createFontFaceFromPathIndex(fontPath, faceIndex)
-	if err != nil {
-		return nil, false
-	}
-	defer fontFace.release()
-	analyzer, err := factory.createTextAnalyzer()
-	if err != nil {
-		return nil, false
-	}
-	defer analyzer.release()
-	shaped, ok, err := analyzer.shapeText(cluster, fontFace, ppem, features)
-	if err != nil {
-		return nil, false
-	}
-	return shaped, ok
+	return platformpkg.ShapeInto(platformpkg.ShapeRequest{
+		Text: cluster,
+		Face: platformpkg.FaceSource{
+			Path:  fontPath,
+			Index: faceIndex,
+		},
+		PPEM:     ppem,
+		Features: features,
+	}, allocateRootShapedGlyphs, assignRootShapedGlyph)
 }
 
-func directWriteAvailable() bool {
-	dll, err := syscall.LoadDLL("dwrite.dll")
-	if err != nil {
-		return false
+func allocateRootShapedGlyphs(count int) []ShapedGlyph { return make([]ShapedGlyph, count) }
+
+func assignRootShapedGlyph(target *ShapedGlyph, glyph platformpkg.ShapeGlyph) {
+	*target = ShapedGlyph{
+		GlyphID:  glyph.GlyphID,
+		XOffset:  glyph.XOffset,
+		YOffset:  glyph.YOffset,
+		XAdvance: glyph.XAdvance,
 	}
-	defer dll.Release()
-	proc, err := dll.FindProc("DWriteCreateFactory")
-	return err == nil && proc != nil
 }
+
+func directWriteAvailable() bool { return platformpkg.Available() }
+
+func directWriteTextAnalyzerAvailable() bool { return platformpkg.Available() }

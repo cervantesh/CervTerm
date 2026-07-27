@@ -13,7 +13,7 @@ func faceFromParsed(pf *parsedFontData, spec Spec) (loadedFace, font.Metrics, er
 	if err != nil {
 		return loadedFace{}, font.Metrics{}, err
 	}
-	lf := loadedFace{face: face, sfnt: pf.sfnt, tables: pf.tables, sbix: pf.sbix, cbdt: pf.cbdt, colr: pf.colr, svg: pf.svg}
+	lf := loadedFace{face: face, sfnt: pf.sfnt, tables: pf.tables, rasterColor: pf.rasterColor}
 	return lf, face.Metrics(), nil
 }
 

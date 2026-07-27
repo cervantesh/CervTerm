@@ -1,8 +1,8 @@
 package fontglyph
 
-import "errors"
+import rasterpkg "cervterm/internal/fontglyph/raster"
 
-var ErrInvalidFontData = errors.New("fontglyph: invalid sfnt font data")
+var ErrInvalidFontData = rasterpkg.ErrInvalidFontData
 
 type ColorTables struct {
 	HasCBDT        bool
@@ -38,32 +38,17 @@ func (c ColorTables) PreferredFormat() string {
 }
 
 func DetectColorTables(fontData []byte) (ColorTables, error) {
-	tableList, err := listSFNTTables(fontData)
+	tables, err := rasterpkg.DetectColorTables(fontData)
 	if err != nil {
 		return ColorTables{}, err
 	}
-	var tables ColorTables
-	for _, table := range tableList {
-		switch table.Tag {
-		case "CBDT":
-			tables.HasCBDT = true
-		case "CBLC":
-			tables.HasCBLC = true
-		case "sbix":
-			tables.HasSbix = true
-		case "COLR":
-			tables.HasCOLR = true
-		case "CPAL":
-			tables.HasCPAL = true
-		case "SVG ":
-			tables.HasSVG = true
-		}
+	return colorTablesFromRaster(tables), nil
+}
+
+func colorTablesFromRaster(tables rasterpkg.ColorTables) ColorTables {
+	return ColorTables{
+		HasCBDT: tables.HasCBDT, HasCBLC: tables.HasCBLC, HasSbix: tables.HasSbix,
+		HasCOLR: tables.HasCOLR, HasCPAL: tables.HasCPAL, HasSVG: tables.HasSVG,
+		HasCOLRVersion: tables.HasCOLRVersion, COLRVersion: tables.COLRVersion,
 	}
-	if tables.HasCOLR {
-		if data, ok, err := getSFNTTable(fontData, "COLR"); err == nil && ok && len(data) >= 2 {
-			tables.HasCOLRVersion = true
-			tables.COLRVersion = uint16(data[0])<<8 | uint16(data[1])
-		}
-	}
-	return tables, nil
 }

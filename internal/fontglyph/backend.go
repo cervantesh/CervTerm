@@ -2,8 +2,6 @@ package fontglyph
 
 import (
 	"image"
-	"image/color"
-	"image/draw"
 	"log"
 	"math"
 	"os"
@@ -12,10 +10,10 @@ import (
 	"sync"
 
 	"cervterm/internal/fontdesc"
+	rasterpkg "cervterm/internal/fontglyph/raster"
 	shapepkg "cervterm/internal/fontglyph/shape"
 	"cervterm/internal/unicodecluster"
 
-	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gomono"
 	"golang.org/x/image/font/sfnt"
@@ -94,10 +92,7 @@ type loadedFace struct {
 	face        font.Face
 	sfnt        *sfnt.Font
 	tables      ColorTables
-	sbix        *sbixExtractor
-	cbdt        *cbdtExtractor
-	colr        *colrParser
-	svg         *svgExtractor
+	rasterColor *rasterpkg.ColorFace
 	sourcePath  string
 	faceIndex   int
 	cacheHandle *parsedFaceLease
@@ -271,34 +266,8 @@ func (b *OpenTypeBackend) Rasterize(r rune, cellSpan int) (RasterizedGlyph, bool
 		}
 	}
 
-	img := image.NewRGBA(image.Rect(0, 0, b.cellW*cellSpan, b.cellH))
-	draw.Draw(img, img.Bounds(), image.Transparent, image.Point{}, draw.Src)
-
-	// Center the glyph's advance box within the cell instead of jamming its ink
-	// to the left edge. cellW is the font's monospace advance, so for narrow,
-	// font-centered glyphs (period, colon, comma, quotes) this restores their
-	// designed position; the old left-align (fixed.I(1) - bounds.Min.X) left a
-	// near-full-cell gap after them that read as an extra space.
-	dotX := (fixed.I(b.cellW*cellSpan) - advance) / 2
-	dotY := fixed.I(b.baseline)
-	d := &font.Drawer{
-		Dst:  img,
-		Src:  image.NewUniform(color.RGBA{255, 255, 255, 255}),
-		Face: lf.face,
-		Dot:  fixed.Point26_6{X: dotX, Y: dotY},
-	}
-	d.DrawString(string(r))
-
-	return RasterizedGlyph{
-		Image:    img,
-		Width:    (bounds.Max.X - bounds.Min.X).Ceil(),
-		Height:   (bounds.Max.Y - bounds.Min.Y).Ceil(),
-		BearingX: bounds.Min.X.Ceil(),
-		BearingY: -bounds.Min.Y.Ceil(),
-		AdvanceX: float64(advance) / 64.0,
-		CellSpan: cellSpan,
-		HasColor: false,
-	}, true
+	glyph := rasterpkg.RasterizeRuneValue(lf.face, r, bounds, advance, rasterMetrics(b), cellSpan)
+	return rasterGlyphToRoot(glyph), true
 }
 
 func (b *OpenTypeBackend) RasterizeCluster(cluster string, cellSpan int) (RasterizedGlyph, bool) {
@@ -352,30 +321,8 @@ func (b *OpenTypeBackend) rasterizeClusterWithFace(cluster string, cellSpan int,
 			}
 		}
 	}
-	cellSpan = max(1, cellSpan)
-	img := image.NewRGBA(image.Rect(0, 0, b.cellW*cellSpan, b.cellH))
-	draw.Draw(img, img.Bounds(), image.Transparent, image.Point{}, draw.Src)
-
-	dot := fixed.Point26_6{X: fixed.I(1), Y: fixed.I(b.baseline)}
-	d := &font.Drawer{
-		Dst:  img,
-		Src:  image.NewUniform(color.RGBA{255, 255, 255, 255}),
-		Face: lf.face,
-		Dot:  dot,
-	}
-	d.DrawString(cluster)
-	advance := d.MeasureString(cluster)
-
-	return RasterizedGlyph{
-		Image:    img,
-		Width:    max(1, advance.Ceil()),
-		Height:   b.cellH,
-		BearingX: 1,
-		BearingY: b.baseline,
-		AdvanceX: float64(advance) / 64.0,
-		CellSpan: cellSpan,
-		HasColor: false,
-	}, true
+	glyph := rasterpkg.RasterizeCluster(lf.face, cluster, rasterMetrics(b), cellSpan)
+	return rasterGlyphToRoot(glyph), true
 }
 
 func (b *OpenTypeBackend) InspectClusterGlyph(cluster string, cellSpan int) GlyphInspection {
@@ -414,39 +361,11 @@ func (b *OpenTypeBackend) rasterizeBitmapColorGlyph(lf loadedFace, r rune, cellS
 	if !ok {
 		return RasterizedGlyph{}, false
 	}
-	canvasW := b.cellW * cellSpan
-	canvasH := b.cellH
-	img := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
-	draw.Draw(img, img.Bounds(), image.Transparent, image.Point{}, draw.Src)
-
-	srcBounds := bitmap.Image.Bounds()
-	if srcBounds.Dx() <= 0 || srcBounds.Dy() <= 0 {
-		return RasterizedGlyph{}, false
-	}
-	scale := math.Min(float64(canvasW)/float64(srcBounds.Dx()), float64(canvasH)/float64(srcBounds.Dy()))
-	if scale <= 0 {
-		return RasterizedGlyph{}, false
-	}
-	dstW := max(1, int(math.Round(float64(srcBounds.Dx())*scale)))
-	dstH := max(1, int(math.Round(float64(srcBounds.Dy())*scale)))
-	dstX := (canvasW - dstW) / 2
-	dstY := b.baseline - int(math.Round(float64(bitmap.OriginOffsetY)*scale))
-	if dstY < 0 || dstY+dstH > canvasH {
-		dstY = (canvasH - dstH) / 2
-	}
-	dst := image.Rect(dstX, dstY, dstX+dstW, dstY+dstH)
-	xdraw.CatmullRom.Scale(img, dst, bitmap.Image, srcBounds, xdraw.Over, nil)
-
-	return RasterizedGlyph{
-		Image:    img,
-		Width:    dstW,
-		Height:   dstH,
-		BearingX: dstX,
-		BearingY: canvasH - dstY,
-		AdvanceX: float64(advance) / 64.0,
-		CellSpan: cellSpan,
-		HasColor: true,
-	}, true
+	glyph, ok := rasterpkg.RasterizeBitmap(rasterpkg.BitmapGlyph{
+		Image: bitmap.Image, PPEM: bitmap.PPEM,
+		OriginOffsetX: bitmap.OriginOffsetX, OriginOffsetY: bitmap.OriginOffsetY, Format: bitmap.Format,
+	}, rasterMetrics(b), cellSpan, advance)
+	return rasterGlyphToRoot(glyph), ok
 }
 
 func (b *OpenTypeBackend) faceForRune(r rune) (loadedFace, fixed.Rectangle26_6, fixed.Int26_6, bool) {
@@ -492,7 +411,7 @@ func (b *OpenTypeBackend) ensureFallbacks() {
 }
 
 func (b *OpenTypeBackend) faceHasColorGlyph(face loadedFace, r rune) bool {
-	if face.sfnt == nil || !face.tables.HasAnyColor() {
+	if face.sfnt == nil || face.rasterColor == nil || !face.tables.HasAnyColor() {
 		return false
 	}
 	var buf sfnt.Buffer
@@ -503,7 +422,7 @@ func (b *OpenTypeBackend) faceHasColorGlyph(face loadedFace, r rune) bool {
 	if _, ok := bitmapColorGlyph(face, uint16(glyphID), b.ppem); ok {
 		return true
 	}
-	return face.colr != nil || face.svg != nil
+	return face.rasterColor.HasCOLR() || face.rasterColor.HasSVG()
 }
 func (b *OpenTypeBackend) faceForCluster(cluster string) (loadedFace, bool) {
 	if b == nil || b.closed {
@@ -657,17 +576,20 @@ func loadFallbackFaces(spec Spec) []loadedFace {
 }
 
 func bitmapColorGlyph(lf loadedFace, glyphID uint16, ppem uint16) (bitmapGlyph, bool) {
-	if lf.sbix != nil {
-		if glyph, ok := lf.sbix.glyph(glyphID, ppem); ok {
-			return glyph, true
-		}
+	if lf.rasterColor == nil {
+		return bitmapGlyph{}, false
 	}
-	if lf.cbdt != nil {
-		if glyph, ok := lf.cbdt.glyph(glyphID, ppem); ok {
-			return glyph, true
-		}
+	glyph, ok := lf.rasterColor.Bitmap(glyphID, ppem)
+	if !ok {
+		return bitmapGlyph{}, false
 	}
-	return bitmapGlyph{}, false
+	return bitmapGlyph{
+		Image:         glyph.Image,
+		PPEM:          glyph.PPEM,
+		OriginOffsetX: glyph.OriginOffsetX,
+		OriginOffsetY: glyph.OriginOffsetY,
+		Format:        glyph.Format,
+	}, true
 }
 
 func fallbackFontPaths() []string {

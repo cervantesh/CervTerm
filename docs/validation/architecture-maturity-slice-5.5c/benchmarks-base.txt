@@ -1,0 +1,319 @@
+### sample=1 side=base package=fontglyph benchmark=BenchmarkL402RasterColorGlyph command=D:/Temp/base55c-fontglyph.test.exe -test.run=^$ -test.bench=^BenchmarkL402RasterColorGlyph$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402RasterColorGlyph 	    1887	    639654 ns/op	  284048 B/op	     528 allocs/op
+PASS
+
+### sample=1 side=base package=core benchmark=BenchmarkPhase15TerminalStartupMemory command=D:/Temp/base55c-core.test.exe -test.run=^$ -test.bench=^BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  110352	     11097 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+### sample=1 side=base package=render benchmark=BenchmarkPhase13TextOnlySnapshot command=D:/Temp/base55c-render.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  140262	      8709 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=1 side=base package=glfwgl benchmark=BenchmarkPhase13DisabledDraw command=D:/Temp/base55c-glfwgl.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13DisabledDraw$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25987	     45008 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=2 side=base package=fontglyph benchmark=BenchmarkL402RasterColorGlyph command=D:/Temp/base55c-fontglyph.test.exe -test.run=^$ -test.bench=^BenchmarkL402RasterColorGlyph$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402RasterColorGlyph 	    1846	    630315 ns/op	  284048 B/op	     528 allocs/op
+PASS
+
+### sample=2 side=base package=core benchmark=BenchmarkPhase15TerminalStartupMemory command=D:/Temp/base55c-core.test.exe -test.run=^$ -test.bench=^BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  111914	     10508 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+### sample=2 side=base package=render benchmark=BenchmarkPhase13TextOnlySnapshot command=D:/Temp/base55c-render.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  135624	      8729 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=2 side=base package=glfwgl benchmark=BenchmarkPhase13DisabledDraw command=D:/Temp/base55c-glfwgl.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13DisabledDraw$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26322	     45684 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=3 side=base package=fontglyph benchmark=BenchmarkL402RasterColorGlyph command=D:/Temp/base55c-fontglyph.test.exe -test.run=^$ -test.bench=^BenchmarkL402RasterColorGlyph$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402RasterColorGlyph 	    1851	    637133 ns/op	  284048 B/op	     528 allocs/op
+PASS
+
+### sample=3 side=base package=core benchmark=BenchmarkPhase15TerminalStartupMemory command=D:/Temp/base55c-core.test.exe -test.run=^$ -test.bench=^BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  111097	     10443 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+### sample=3 side=base package=render benchmark=BenchmarkPhase13TextOnlySnapshot command=D:/Temp/base55c-render.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  136809	      8702 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=3 side=base package=glfwgl benchmark=BenchmarkPhase13DisabledDraw command=D:/Temp/base55c-glfwgl.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13DisabledDraw$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26677	     45740 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=4 side=base package=fontglyph benchmark=BenchmarkL402RasterColorGlyph command=D:/Temp/base55c-fontglyph.test.exe -test.run=^$ -test.bench=^BenchmarkL402RasterColorGlyph$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402RasterColorGlyph 	    1846	    631258 ns/op	  284048 B/op	     528 allocs/op
+PASS
+
+### sample=4 side=base package=core benchmark=BenchmarkPhase15TerminalStartupMemory command=D:/Temp/base55c-core.test.exe -test.run=^$ -test.bench=^BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  117558	     10294 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+### sample=4 side=base package=render benchmark=BenchmarkPhase13TextOnlySnapshot command=D:/Temp/base55c-render.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  138831	      8642 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=4 side=base package=glfwgl benchmark=BenchmarkPhase13DisabledDraw command=D:/Temp/base55c-glfwgl.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13DisabledDraw$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26316	     45225 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=5 side=base package=fontglyph benchmark=BenchmarkL402RasterColorGlyph command=D:/Temp/base55c-fontglyph.test.exe -test.run=^$ -test.bench=^BenchmarkL402RasterColorGlyph$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402RasterColorGlyph 	    1939	    618083 ns/op	  284049 B/op	     528 allocs/op
+PASS
+
+### sample=5 side=base package=core benchmark=BenchmarkPhase15TerminalStartupMemory command=D:/Temp/base55c-core.test.exe -test.run=^$ -test.bench=^BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  112435	     10578 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+### sample=5 side=base package=render benchmark=BenchmarkPhase13TextOnlySnapshot command=D:/Temp/base55c-render.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  138234	      8728 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=5 side=base package=glfwgl benchmark=BenchmarkPhase13DisabledDraw command=D:/Temp/base55c-glfwgl.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13DisabledDraw$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26384	     45302 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=6 side=base package=fontglyph benchmark=BenchmarkL402RasterColorGlyph command=D:/Temp/base55c-fontglyph.test.exe -test.run=^$ -test.bench=^BenchmarkL402RasterColorGlyph$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402RasterColorGlyph 	    1814	    634156 ns/op	  284048 B/op	     528 allocs/op
+PASS
+
+### sample=6 side=base package=core benchmark=BenchmarkPhase15TerminalStartupMemory command=D:/Temp/base55c-core.test.exe -test.run=^$ -test.bench=^BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  114427	     10413 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+### sample=6 side=base package=render benchmark=BenchmarkPhase13TextOnlySnapshot command=D:/Temp/base55c-render.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  137220	      8686 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=6 side=base package=glfwgl benchmark=BenchmarkPhase13DisabledDraw command=D:/Temp/base55c-glfwgl.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13DisabledDraw$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   25404	     46112 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=7 side=base package=fontglyph benchmark=BenchmarkL402RasterColorGlyph command=D:/Temp/base55c-fontglyph.test.exe -test.run=^$ -test.bench=^BenchmarkL402RasterColorGlyph$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402RasterColorGlyph 	    1880	    644224 ns/op	  284049 B/op	     528 allocs/op
+PASS
+
+### sample=7 side=base package=core benchmark=BenchmarkPhase15TerminalStartupMemory command=D:/Temp/base55c-core.test.exe -test.run=^$ -test.bench=^BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  114843	     10477 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+### sample=7 side=base package=render benchmark=BenchmarkPhase13TextOnlySnapshot command=D:/Temp/base55c-render.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  137762	      8812 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=7 side=base package=glfwgl benchmark=BenchmarkPhase13DisabledDraw command=D:/Temp/base55c-glfwgl.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13DisabledDraw$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26986	     45069 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=8 side=base package=fontglyph benchmark=BenchmarkL402RasterColorGlyph command=D:/Temp/base55c-fontglyph.test.exe -test.run=^$ -test.bench=^BenchmarkL402RasterColorGlyph$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402RasterColorGlyph 	    1879	    633277 ns/op	  284048 B/op	     528 allocs/op
+PASS
+
+### sample=8 side=base package=core benchmark=BenchmarkPhase15TerminalStartupMemory command=D:/Temp/base55c-core.test.exe -test.run=^$ -test.bench=^BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  114790	     10556 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+### sample=8 side=base package=render benchmark=BenchmarkPhase13TextOnlySnapshot command=D:/Temp/base55c-render.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  138086	      8713 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=8 side=base package=glfwgl benchmark=BenchmarkPhase13DisabledDraw command=D:/Temp/base55c-glfwgl.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13DisabledDraw$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26419	     45857 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=9 side=base package=fontglyph benchmark=BenchmarkL402RasterColorGlyph command=D:/Temp/base55c-fontglyph.test.exe -test.run=^$ -test.bench=^BenchmarkL402RasterColorGlyph$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402RasterColorGlyph 	    1784	    639406 ns/op	  284049 B/op	     528 allocs/op
+PASS
+
+### sample=9 side=base package=core benchmark=BenchmarkPhase15TerminalStartupMemory command=D:/Temp/base55c-core.test.exe -test.run=^$ -test.bench=^BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  118273	     10600 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+### sample=9 side=base package=render benchmark=BenchmarkPhase13TextOnlySnapshot command=D:/Temp/base55c-render.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  134455	      8941 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=9 side=base package=glfwgl benchmark=BenchmarkPhase13DisabledDraw command=D:/Temp/base55c-glfwgl.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13DisabledDraw$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26126	     45274 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=10 side=base package=fontglyph benchmark=BenchmarkL402RasterColorGlyph command=D:/Temp/base55c-fontglyph.test.exe -test.run=^$ -test.bench=^BenchmarkL402RasterColorGlyph$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/fontglyph
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkL402RasterColorGlyph 	    1832	    644056 ns/op	  284049 B/op	     528 allocs/op
+PASS
+
+### sample=10 side=base package=core benchmark=BenchmarkPhase15TerminalStartupMemory command=D:/Temp/base55c-core.test.exe -test.run=^$ -test.bench=^BenchmarkPhase15TerminalStartupMemory$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/core
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase15TerminalStartupMemory 	  110374	     10729 ns/op	  125344 B/op	       4 allocs/op
+PASS
+
+### sample=10 side=base package=render benchmark=BenchmarkPhase13TextOnlySnapshot command=D:/Temp/base55c-render.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13TextOnlySnapshot$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/render
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13TextOnlySnapshot 	  135075	      8757 ns/op	       0 B/op	       0 allocs/op
+PASS
+
+### sample=10 side=base package=glfwgl benchmark=BenchmarkPhase13DisabledDraw command=D:/Temp/base55c-glfwgl.test.exe -test.run=^$ -test.bench=^BenchmarkPhase13DisabledDraw$ -test.benchmem -test.count=1 -test.cpu=1 -test.benchtime=1s
+goos: windows
+goarch: amd64
+pkg: cervterm/internal/frontend/glfwgl
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics
+BenchmarkPhase13DisabledDraw 	   26888	     46104 ns/op	       0 B/op	       0 allocs/op
+PASS

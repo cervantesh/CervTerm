@@ -1,0 +1,12 @@
+schema=slice55c-platform-gates-v3
+host=windows/amd64 go1.25.8
+platform=windows/amd64 mode=compile-only CGO_ENABLED=0 command="go test -exec=true ./... -run ^$ -count=1" result=PASS
+platform=windows/arm64 mode=compile-only CGO_ENABLED=0 command="go test -exec=true ./... -run ^$ -count=1" result=PASS
+platform=linux/amd64 mode=compile-only CGO_ENABLED=0 command="go test -exec=true ./... -run ^$ -count=1" result=PASS
+platform=linux/arm64 mode=compile-only CGO_ENABLED=0 command="go test -exec=true ./... -run ^$ -count=1" result=PASS
+platform=darwin/amd64 mode=compile-only CGO_ENABLED=0 command="go test -exec=true ./... -run ^$ -count=1" result=PASS
+platform=darwin/arm64 mode=compile-only CGO_ENABLED=0 command="go test -exec=true ./... -run ^$ -count=1" result=PASS
+platform=linux/amd64 mode=execution host="WSL2 Ubuntu-24.04" suite=packages command="powershell.exe -NoProfile -File scripts/run-slice55c-linux-wsl.ps1 -Suite packages" result=UNAVAILABLE exit=1 detail="Go toolchain not found in Ubuntu-24.04"
+platform=linux/amd64 mode=execution host="WSL2 Ubuntu-24.04" suite=root command="powershell.exe -NoProfile -File scripts/run-slice55c-linux-wsl.ps1 -Suite root" result=UNAVAILABLE exit=1 detail="Go toolchain not found in Ubuntu-24.04"
+platform=windows/amd64 mode=execution command="go test ./internal/fontglyph/platform ./internal/fontglyph -run Test(DirectWrite|L402DirectWrite) -count=1" result=PASS
+platform=windows/amd64 mode=execution command="go test -tags glfw ./..." result=PASS

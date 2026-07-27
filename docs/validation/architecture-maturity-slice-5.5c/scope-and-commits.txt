@@ -1,0 +1,18 @@
+schema=slice55c-scope-commits-v3
+base=504f5f54187ef9eb696bd14bd90a8c18940fb586
+T=8074203cfdc516be4c887c8c4ec800b187cd85bf subject="test(fontglyph): characterize raster color and platform extraction"
+A=eec331ce666212bdf7476136e6ed39a7c599e000 subject="refactor(fontglyph): add raster and platform seams"
+M=b1f19a5937346f27245984158f782bf5ffe27b51 subject="refactor(fontglyph): copy raster color and native implementations"
+W=7df9952db6d35a031da783479eb4d5c7f7d30ba3 subject="refactor(fontglyph): wire raster and platform packages"
+G-parent=7df9952db6d35a031da783479eb4d5c7f7d30ba3
+G-subject="refactor(fontglyph): guard raster color and platform extraction"
+G-cleanup-sha256=9a07bbf9e544ba50789083adda46849209a0393016121a3c1a51dd170277c5af
+sequence=T>A>M>W>G
+owned=internal/fontglyph/raster,internal/fontglyph/platform
+shared-fixture-authority=internal/fontglyph/testdata
+facade=internal/fontglyph
+immutable-predecessors=Slice-5.5a,Slice-5.5b
+push=false
+merge=false
+shallow-non-pr=requires-fetch-or-unshallow
+shallow-synthetic-pr=exact-event-G-base-plus-exact-merge-parents-plus-present-tree

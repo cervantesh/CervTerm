@@ -2,6 +2,7 @@ package fontglyph
 
 import (
 	"cervterm/internal/fontglyph/cache"
+	rasterpkg "cervterm/internal/fontglyph/raster"
 
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/font/sfnt"
@@ -9,12 +10,9 @@ import (
 
 // parsedFontData is the size-independent result of parsing a font file.
 type parsedFontData struct {
-	sfnt   *sfnt.Font
-	tables ColorTables
-	sbix   *sbixExtractor
-	cbdt   *cbdtExtractor
-	colr   *colrParser
-	svg    *svgExtractor
+	sfnt        *sfnt.Font
+	tables      ColorTables
+	rasterColor *rasterpkg.ColorFace
 }
 
 var (
@@ -36,34 +34,11 @@ func parseFontData(data []byte, index int) (*parsedFontData, error) {
 	if index != 0 {
 		return pf, nil
 	}
-	tables, err := DetectColorTables(data)
+	colorFace, err := rasterpkg.NewColorFace(data, parsed)
 	if err != nil {
 		return pf, nil
 	}
-	pf.tables = tables
-	if tables.HasSbix && parsed != nil {
-		if table, ok, tableErr := getSFNTTable(data, "sbix"); tableErr == nil && ok {
-			pf.sbix, _ = newSbixExtractor(table, parsed.NumGlyphs())
-		}
-	}
-	if tables.HasCBDT && tables.HasCBLC {
-		cbdt, hasCBDT, cbdtErr := getSFNTTable(data, "CBDT")
-		cblc, hasCBLC, cblcErr := getSFNTTable(data, "CBLC")
-		if cbdtErr == nil && cblcErr == nil && hasCBDT && hasCBLC {
-			pf.cbdt, _ = newCBDTExtractor(cbdt, cblc)
-		}
-	}
-	if tables.HasRenderableLayerColor() {
-		colr, hasCOLR, colrErr := getSFNTTable(data, "COLR")
-		cpal, hasCPAL, cpalErr := getSFNTTable(data, "CPAL")
-		if colrErr == nil && cpalErr == nil && hasCOLR && hasCPAL {
-			pf.colr, _ = newCOLRParser(colr, cpal)
-		}
-	}
-	if tables.HasSVG {
-		if table, ok, tableErr := getSFNTTable(data, "SVG "); tableErr == nil && ok {
-			pf.svg, _ = newSVGExtractor(table)
-		}
-	}
+	pf.rasterColor = colorFace
+	pf.tables = colorTablesFromRaster(colorFace.Tables())
 	return pf, nil
 }

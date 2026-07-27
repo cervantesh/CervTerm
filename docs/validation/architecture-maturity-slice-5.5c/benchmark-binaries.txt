@@ -1,0 +1,27 @@
+schema=slice55c-benchmark-binaries-v3
+base_production_commit=504f5f54187ef9eb696bd14bd90a8c18940fb586
+base_characterization_commit=8074203cfdc516be4c887c8c4ec800b187cd85bf
+candidate_production=present-tree-w-semantic
+candidate_lineage_W=7df9952db6d35a031da783479eb4d5c7f7d30ba3
+candidate_harness=present-tree
+candidate_source_state=dirty-pre-G
+go_version=go version go1.25.8 windows/amd64
+environment=GOMAXPROCS=1
+warmup=none
+samples=10
+physical_order=odd:AB,even:BA
+physical_witness=per-run-strict-monotonic-Stopwatch-ticks-plus-unique-GUID-nonce
+threshold_median_ns_percent=3
+allocation_rule=no-increase-in-worst-B/op-or-allocs/op
+compile side=base name=fontglyph package=./internal/fontglyph GOOS=windows GOARCH=amd64 tags=none command="go test -c -trimpath -o D:/Temp/base55c-fontglyph.test.exe ./internal/fontglyph" sha256=1c817fbd03e75374d15d2e4bcae47b532a4eee9cadb6ba97703200a2b79465bd
+compile side=base name=core package=./internal/core GOOS=windows GOARCH=amd64 tags=none command="go test -c -trimpath -o D:/Temp/base55c-core.test.exe ./internal/core" sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6
+compile side=base name=render package=./internal/render GOOS=windows GOARCH=amd64 tags=none command="go test -c -trimpath -o D:/Temp/base55c-render.test.exe ./internal/render" sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e
+compile side=base name=glfwgl package=./internal/frontend/glfwgl GOOS=windows GOARCH=amd64 tags=glfw command="go test -c -trimpath -tags glfw -o D:/Temp/base55c-glfwgl.test.exe ./internal/frontend/glfwgl" sha256=e40b5863f3fc2e42792211b6c2dd1f72e5ff783a05a39ed8d110d59f5c7ea299
+compile side=candidate name=fontglyph package=./internal/fontglyph GOOS=windows GOARCH=amd64 tags=none command="go test -c -trimpath -o D:/Temp/candidate55c-fontglyph.test.exe ./internal/fontglyph" sha256=6391475aed23a6a1c3af1a69f191d418d895bbab0444c37c045c0d0d541968b7
+compile side=candidate name=core package=./internal/core GOOS=windows GOARCH=amd64 tags=none command="go test -c -trimpath -o D:/Temp/candidate55c-core.test.exe ./internal/core" sha256=215100d246e3184c0bec4b685a642c2c303e4bf6befe0d0c7a1298a5b06d9de6
+compile side=candidate name=render package=./internal/render GOOS=windows GOARCH=amd64 tags=none command="go test -c -trimpath -o D:/Temp/candidate55c-render.test.exe ./internal/render" sha256=3535a8e405b1c4212dd5ee7f728d661a6e885eb35facd099922b703009a2c96e
+compile side=candidate name=glfwgl package=./internal/frontend/glfwgl GOOS=windows GOARCH=amd64 tags=glfw command="go test -c -trimpath -tags glfw -o D:/Temp/candidate55c-glfwgl.test.exe ./internal/frontend/glfwgl" sha256=277af3d269596263999e8e39c1a4711c700eccb47b0569f5edc8e4fcf998060e
+run name=fontglyph benchmark=BenchmarkL402RasterColorGlyph GOMAXPROCS=1 cpu=1 run="^$" bench="^BenchmarkL402RasterColorGlyph$" benchmem=true benchtime=1s count=1
+run name=core benchmark=BenchmarkPhase15TerminalStartupMemory GOMAXPROCS=1 cpu=1 run="^$" bench="^BenchmarkPhase15TerminalStartupMemory$" benchmem=true benchtime=1s count=1
+run name=render benchmark=BenchmarkPhase13TextOnlySnapshot GOMAXPROCS=1 cpu=1 run="^$" bench="^BenchmarkPhase13TextOnlySnapshot$" benchmem=true benchtime=1s count=1
+run name=glfwgl benchmark=BenchmarkPhase13DisabledDraw GOMAXPROCS=1 cpu=1 run="^$" bench="^BenchmarkPhase13DisabledDraw$" benchmem=true benchtime=1s count=1
