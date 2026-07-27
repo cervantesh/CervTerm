@@ -13,10 +13,6 @@ type parsedFontData struct {
 	sfnt        *sfnt.Font
 	tables      ColorTables
 	rasterColor *rasterpkg.ColorFace
-	sbix        *sbixExtractor
-	cbdt        *cbdtExtractor
-	colr        *colrParser
-	svg         *svgExtractor
 }
 
 var (

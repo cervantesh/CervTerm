@@ -404,6 +404,7 @@ Every slice is effort L and must begin with a separate passing `T` commit.
 
 - **Files:** raster paths, COLR/SVG/bitmap paint, DirectWrite adapters, backend facade and platform/performance tests.
 - **Depends on:** 5.5b; **Commits:** `T → A → M → W → G`; separate branch/PR.
+- **Status:** **complete**. Portable bitmap/SVG/COLR paint and DirectWrite analysis/raster ownership are extracted into `internal/fontglyph/raster` and `internal/fontglyph/platform`; root retains concrete compatibility types and cross-subsystem orchestration. Evidence: `docs/validation/architecture-maturity-slice-5.5c.md`.
 - Every 5.5 PR preserves cache budgets, glyph outputs, startup memory and frame/allocation baselines.
 
 ### Phase 5 Success Criteria

@@ -1,0 +1,6 @@
+threshold_percent=3.000000
+allocation_policy=no increase in worst sample
+BenchmarkL402RasterColorGlyph base_median_ns=635644.500 candidate_median_ns=636569.500 delta_percent=0.145522 base_max_B=284049 candidate_max_B=284049 base_max_allocs=528 candidate_max_allocs=528 result=PASS
+BenchmarkPhase15TerminalStartupMemory base_median_ns=10532.000 candidate_median_ns=10490.500 delta_percent=-0.394037 base_max_B=125344 candidate_max_B=125344 base_max_allocs=4 candidate_max_allocs=4 result=PASS
+BenchmarkPhase13TextOnlySnapshot base_median_ns=8720.500 candidate_median_ns=8760.000 delta_percent=0.452956 base_max_B=0 candidate_max_B=0 base_max_allocs=0 candidate_max_allocs=0 result=PASS
+BenchmarkPhase13DisabledDraw base_median_ns=45493.000 candidate_median_ns=45489.500 delta_percent=-0.007693 base_max_B=0 candidate_max_B=0 base_max_allocs=0 candidate_max_allocs=0 result=PASS
