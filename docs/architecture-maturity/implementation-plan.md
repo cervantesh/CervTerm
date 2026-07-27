@@ -398,6 +398,7 @@ Every slice is effort L and must begin with a separate passing `T` commit.
 
 - **Files:** face resolver, fallback/rules, run shaping, backend facade and shaping/identity tests.
 - **Depends on:** 5.5a; **Commits:** `T → A → M → W → G`; separate branch/PR.
+- **Status:** **complete**. Deterministic face resolution, lazy authored fallback policy, bounded policy caches and portable/run shaping are extracted behind concrete root compatibility types; DirectWrite/native raster/color remains deferred to 5.5c. Evidence: `docs/validation/architecture-maturity-slice-5.5b.md`.
 
 ### Slice 5.5c — L4-02 raster/color/native extraction
 
