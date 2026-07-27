@@ -1,0 +1,17 @@
+schema=slice55b-scope-commits-v1
+base=973660df6ea31112a6984a39421ad60783e706d4
+T=d0bfd354bc088093621348a817ed005cc1e1df70 subject="test(fontglyph): characterize resolution and shaping extraction"
+A=0f3892fe31feef94b43bf07fe733b9f4d57fc2de subject="refactor(fontglyph): add resolution and shaping seams"
+M=6ae3f60cacd51851d96f2fc5ecb6aa3bbcb7fcdd subject="refactor(fontglyph): copy resolution and shaping implementations"
+W=d6e1a81dfedb4f8910b9340b6da0d3c2b8b8291c subject="refactor(fontglyph): wire resolution and shaping package"
+G-parent=d6e1a81dfedb4f8910b9340b6da0d3c2b8b8291c
+G-subject="refactor(fontglyph): guard resolution and shaping extraction"
+sequence=T>A>M>W>G
+push=false
+merge=false
+
+owned=internal/fontglyph/shape
+shared-leaf=internal/fontglyph/internal/face
+facade=internal/fontglyph
+immutable-predecessor=Slice-5.5a
+raster-color-native=deferred-Slice-5.5c

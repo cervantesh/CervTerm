@@ -3,6 +3,7 @@ package fontglyph
 import (
 	"errors"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -133,12 +134,15 @@ func newFallbackTestBackend(t *testing.T, descriptors, fallback []fontdesc.Descr
 	}
 	backend := &fallbackBackend{
 		primary: primary, spec: Spec{Size: 14, DPI: 96}, environment: environment, index: index,
-		descriptors: descriptors, fallback: fallback, rules: cloneResolvedRules(rules),
-		loaded: make(map[fontdesc.ResolvedFaceKey]*OpenTypeBackend), loadFailed: make(map[fontdesc.ResolvedFaceKey]struct{}), resolved: make(map[contentResolutionKey]fallbackSelection), covers: covers,
+		loaded: make(map[fontdesc.ResolvedFaceKey]*OpenTypeBackend), covers: covers,
 	}
 	backend.load = func(spec Spec, plan resolvedFacePlan) (loadedFace, font.Metrics, error) {
 		(*loads)++
 		return loadResolvedFacePlan(spec, plan)
+	}
+	if err := backend.installShapePolicy(descriptors, fallback, rules); err != nil {
+		backend.Close()
+		t.Fatal(err)
 	}
 	return backend
 }
@@ -229,6 +233,9 @@ func TestFallbackBackendReleasesLosingCandidatePins(t *testing.T) {
 	if !ok || filepath.Base(selected.plan.selected.path) != "winner.ttf" || loads != 2 {
 		t.Fatalf("fallback failover = %#v ok=%v loads=%d", selected.plan, ok, loads)
 	}
+	if len(backend.loadedOrder) != 1 || backend.loadedOrder[0] != selected.plan.resolvedKey || len(backend.loaded) != 1 {
+		t.Fatalf("retained fallback accounting = order %v loaded %d", backend.loadedOrder, len(backend.loaded))
+	}
 	if after := manager.Stats().Pinned; after != 5 {
 		t.Fatalf("pins after losing/winning candidates = %d, want 5", after)
 	}
@@ -238,24 +245,33 @@ func TestFallbackBackendReleasesLosingCandidatePins(t *testing.T) {
 	}
 }
 
-func TestFallbackResolutionCacheIsBounded(t *testing.T) {
-	backend := &fallbackBackend{resolved: make(map[contentResolutionKey]fallbackSelection), loadFailed: make(map[fontdesc.ResolvedFaceKey]struct{})}
-	for index := 0; index <= fontdesc.MaxNegativeEntries; index++ {
-		key := contentResolutionKey{content: string(rune(index + 1))}
-		backend.rememberResolution(key, fallbackSelection{})
+func TestFallbackBackendClosesRetainedBackendsInReverseAcquisitionOrder(t *testing.T) {
+	events := make([]string, 0, 3)
+	appendEvent := func(name string) func() {
+		return func() { events = append(events, name) }
 	}
-	if len(backend.resolved) != fontdesc.MaxNegativeEntries || len(backend.resolvedRing) != fontdesc.MaxNegativeEntries {
-		t.Fatalf("resolution cache/ring = %d/%d, want %d", len(backend.resolved), len(backend.resolvedRing), fontdesc.MaxNegativeEntries)
+	first := fontdesc.ResolvedFaceKey{1}
+	second := fontdesc.ResolvedFaceKey{2}
+	firstBackend := &OpenTypeBackend{dwRaster: &closeOrderingGlyphRasterizer{close: appendEvent("fallback-first")}}
+	secondBackend := &OpenTypeBackend{dwRaster: &closeOrderingGlyphRasterizer{close: appendEvent("fallback-second")}}
+	primaryBackend := &OpenTypeBackend{dwRaster: &closeOrderingGlyphRasterizer{close: appendEvent("primary")}}
+	backend := &fallbackBackend{
+		primary: &descriptorBackend{backends: [4]*OpenTypeBackend{primaryBackend}},
+		loaded: map[fontdesc.ResolvedFaceKey]*OpenTypeBackend{
+			second: secondBackend,
+			first:  firstBackend,
+		},
+		loadedOrder: []fontdesc.ResolvedFaceKey{first, second},
 	}
-	if _, retained := backend.resolved[contentResolutionKey{content: string(rune(1))}]; retained {
-		t.Fatal("oldest resolution was not evicted")
+	backend.Close()
+	if want := []string{"fallback-second", "fallback-first", "primary"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("close order = %v, want %v", events, want)
 	}
-	for index := 0; index <= fontdesc.MaxNegativeEntries; index++ {
-		var key fontdesc.ResolvedFaceKey
-		key[0], key[1] = byte(index), byte(index>>8)
-		backend.recordLoadFailure(key)
+	if len(backend.loaded) != 0 || backend.loadedOrder != nil || backend.primary != nil {
+		t.Fatalf("closed fallback retained accounting: loaded=%d order=%v primary=%p", len(backend.loaded), backend.loadedOrder, backend.primary)
 	}
-	if len(backend.loadFailed) != fontdesc.MaxNegativeEntries || len(backend.loadFailedRing) != fontdesc.MaxNegativeEntries {
-		t.Fatalf("load-failure cache/ring = %d/%d, want %d", len(backend.loadFailed), len(backend.loadFailedRing), fontdesc.MaxNegativeEntries)
+	backend.Close()
+	if want := []string{"fallback-second", "fallback-first", "primary"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("idempotent close order = %v, want %v", events, want)
 	}
 }
