@@ -13,7 +13,7 @@ type testResult struct{ closes atomic.Int32 }
 
 func (r *testResult) Close() {
 	if r != nil {
-		r.closes.CompareAndSwap(0, 1)
+		r.closes.Add(1)
 	}
 }
 
@@ -262,11 +262,21 @@ func TestSchedulerCloseSubmitRaceOwnsEveryJobExactlyOnce(t *testing.T) {
 }
 
 func TestSchedulerCloseUnblocksSaturatedResultPublication(t *testing.T) {
-	const workers, queued = 2, 32
+	const workers, queued, closeCallers = 2, 32, 4
+	// Now runs with the scheduler lock held immediately before result-space waiting.
+	// Observing every call proves no job remains queued when Close starts.
+	publishing := make(chan struct{}, workers+queued)
 	wakes := make(chan struct{}, workers+queued)
 	started := make(chan string, workers)
 	release := make(chan struct{})
-	scheduler, err := New[uint64, string, *testResult](Options{Workers: workers, QueueCapacity: queued, Wake: func() { wakes <- struct{}{} }})
+	scheduler, err := New[uint64, string, *testResult](Options{
+		Workers: workers, QueueCapacity: queued,
+		Wake: func() { wakes <- struct{}{} },
+		Now: func() time.Time {
+			publishing <- struct{}{}
+			return time.Now()
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,21 +296,41 @@ func TestSchedulerCloseUnblocksSaturatedResultPublication(t *testing.T) {
 		}
 	}
 	close(release)
-	for index := 0; index < queued; index++ {
+	publicationDeadline := time.NewTimer(2 * time.Second)
+	for index := range jobs {
 		select {
-		case <-wakes:
-		case <-time.After(2 * time.Second):
-			t.Fatalf("received %d of %d buffered results", index, queued)
+		case <-publishing:
+		case <-publicationDeadline.C:
+			t.Fatalf("received %d of %d result publication attempts", index, len(jobs))
 		}
 	}
-	done := make(chan struct{})
-	go func() { scheduler.Close(); close(done) }()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("close deadlocked behind saturated result publication")
+	publicationDeadline.Stop()
+	if got := len(wakes); got != queued {
+		t.Fatalf("published wake count=%d want=%d", got, queued)
+	}
+	closeStart := make(chan struct{})
+	closed := make(chan struct{}, closeCallers)
+	for range closeCallers {
+		go func() {
+			<-closeStart
+			scheduler.Close()
+			closed <- struct{}{}
+		}()
+	}
+	close(closeStart)
+	closeDeadline := time.NewTimer(2 * time.Second)
+	defer closeDeadline.Stop()
+	for index := range closeCallers {
+		select {
+		case <-closed:
+		case <-closeDeadline.C:
+			t.Fatalf("close caller %d deadlocked behind saturated result publication", index)
+		}
 	}
 	for index, job := range jobs {
+		if runs, closes := job.runs.Load(), job.closes.Load(); runs != 1 || closes != 0 {
+			t.Fatalf("job %d runs=%d closes=%d", index, runs, closes)
+		}
 		if job.result == nil || job.result.closes.Load() != 1 {
 			t.Fatalf("result %d not drained exactly once", index)
 		}
