@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -23,14 +22,18 @@ import (
 )
 
 const (
-	baseCommit  = "504f5f54187ef9eb696bd14bd90a8c18940fb586"
-	commitT     = "8074203cfdc516be4c887c8c4ec800b187cd85bf"
-	commitA     = "eec331ce666212bdf7476136e6ed39a7c599e000"
-	commitM     = "b1f19a5937346f27245984158f782bf5ffe27b51"
-	commitW     = "7df9952db6d35a031da783479eb4d5c7f7d30ba3"
-	gSubject    = "refactor(fontglyph): guard raster color and platform extraction"
-	evidenceDir = "docs/validation/architecture-maturity-slice-5.5c"
-	cleanupHash = "9a07bbf9e544ba50789083adda46849209a0393016121a3c1a51dd170277c5af"
+	baseCommit         = "09ebf4f3e668c0bba4c94f1aa7bf2e2c3e55883d"
+	commitT            = "95f7269bc3ce438579c3fe256bf87edbff9e5cc3"
+	commitA            = "d9885d18d3980ae1e90a7aa4df0ffaa97284167b"
+	commitM            = "5c9714e9da95a7685c37aca318d8e0486c5a9413"
+	commitW            = "b6d724c363bd7aa28119fd4ed208ab0b0d11f650"
+	commitG            = "83be41ff1ff0c6dbc1cd67b0af1ca87f41a58def"
+	evidenceBaseCommit = "504f5f54187ef9eb696bd14bd90a8c18940fb586"
+	evidenceCommitT    = "8074203cfdc516be4c887c8c4ec800b187cd85bf"
+	evidenceCommitW    = "7df9952db6d35a031da783479eb4d5c7f7d30ba3"
+	gSubject           = "refactor(fontglyph): guard raster color and platform extraction"
+	evidenceDir        = "docs/validation/architecture-maturity-slice-5.5c"
+	cleanupHash        = "9a07bbf9e544ba50789083adda46849209a0393016121a3c1a51dd170277c5af"
 )
 
 var artifactHashes = map[string]string{
@@ -447,8 +450,8 @@ func checkBenchmarkMetadata() []string {
 		}
 	}
 	for _, required := range []string{
-		"base_production_commit=" + baseCommit, "base_characterization_commit=" + commitT,
-		"candidate_lineage_W=" + commitW, "environment=GOMAXPROCS=1", "warmup=none", "samples=10",
+		"base_production_commit=" + evidenceBaseCommit, "base_characterization_commit=" + evidenceCommitT,
+		"candidate_lineage_W=" + evidenceCommitW, "environment=GOMAXPROCS=1", "warmup=none", "samples=10",
 		"physical_order=odd:AB,even:BA", "physical_witness=per-run-strict-monotonic-Stopwatch-ticks-plus-unique-GUID-nonce",
 		"threshold_median_ns_percent=3", "allocation_rule=no-increase-in-worst-B/op-or-allocs/op",
 		"run name=fontglyph benchmark=BenchmarkL402RasterColorGlyph", "run name=core benchmark=BenchmarkPhase15TerminalStartupMemory",
@@ -825,8 +828,17 @@ func checkManifests() []string {
 	}
 	present, pf := presentManifest()
 	failures = append(failures, pf...)
-	failures = append(failures, compareManifest(candidatePath, candidateEntries, present)...)
+	if exactCandidateManifestRequired() {
+		failures = append(failures, compareManifest(candidatePath, candidateEntries, present)...)
+	} else {
+		failures = append(failures, comparePinnedManifest(candidatePath, candidateEntries, present)...)
+	}
 	return failures
+}
+
+func exactCandidateManifestRequired() bool {
+	head := git("rev-parse", "HEAD")
+	return head == commitW || head == commitG
 }
 
 func parseManifest(path string, data []byte) (map[string]string, []string) {
@@ -934,44 +946,108 @@ func compareManifest(label string, actual, expected map[string]string) []string 
 	return failures
 }
 
-func checkDAG() []string {
-	allowed := map[string]map[string]bool{
-		"discovery":     {"cervterm/internal/fontdesc": true},
-		"cache":         {"cervterm/internal/fontglyph/internal/face": true},
-		"shape":         {"cervterm/internal/fontglyph/internal/face": true, "cervterm/internal/fontdesc": true, "cervterm/internal/unicodecluster": true, "cervterm/internal/unicodeprops": true},
-		"raster":        {"cervterm/internal/fontglyph/internal/face": true, "cervterm/internal/fontdesc": true, "cervterm/internal/unicodecluster": true, "cervterm/internal/unicodeprops": true},
-		"platform":      {"cervterm/internal/fontglyph/internal/face": true, "cervterm/internal/fontdesc": true, "cervterm/internal/unicodecluster": true, "cervterm/internal/unicodeprops": true},
-		"internal/face": {"cervterm/internal/fontdesc": true},
-	}
+// comparePinnedManifest treats the retained Slice 5.5c manifest as historical
+// evidence rather than a repository-cardinality freeze. Successors may add paths,
+// but retained non-guard sources and fixtures remain exact; compatibility-maintained
+// guard programs are validated by the current maturity suite and rewritten-history pins.
+func comparePinnedManifest(label string, pinned, present map[string]string) []string {
 	var failures []string
-	for subsystem, edges := range allowed {
-		root := filepath.Join("internal", "fontglyph", filepath.FromSlash(subsystem))
-		_ = filepath.WalkDir(root, func(path string, e os.DirEntry, err error) error {
-			if err != nil {
-				failures = append(failures, err.Error())
-				return nil
-			}
-			if e.IsDir() || !strings.HasSuffix(path, ".go") {
-				return nil
-			}
-			file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
-			if err != nil {
-				failures = append(failures, err.Error())
-				return nil
-			}
-			for _, imp := range file.Imports {
-				name := strings.Trim(imp.Path.Value, "\"")
-				if strings.HasPrefix(name, "cervterm/internal/") && !edges[name] {
-					failures = append(failures, fmt.Sprintf("%s imports forbidden local package %s", filepath.ToSlash(path), name))
-				}
-			}
-			return nil
-		})
+	for p, want := range pinned {
+		if guardCompatibilityPath(p) {
+			continue
+		}
+		if present[p] != want {
+			failures = append(failures, label+" pinned source/fixture drift "+p)
+		}
 	}
+	return failures
+}
+
+func guardCompatibilityPath(path string) bool {
+	switch filepath.ToSlash(path) {
+	case "scripts/check-maturity-gates.go", "scripts/check-slice55a-evidence.go", "scripts/check-slice55b-evidence.go", "scripts/check-slice55c-evidence.go":
+		return true
+	default:
+		return false
+	}
+}
+
+var slice55cDAGEdges = map[string]map[string]bool{
+	".": {
+		"cervterm/internal/fontdesc":                true,
+		"cervterm/internal/fontglyph/cache":         true,
+		"cervterm/internal/fontglyph/discovery":     true,
+		"cervterm/internal/fontglyph/internal/face": true,
+		"cervterm/internal/fontglyph/platform":      true,
+		"cervterm/internal/fontglyph/raster":        true,
+		"cervterm/internal/fontglyph/shape":         true,
+		"cervterm/internal/unicodecluster":          true,
+	},
+	"discovery":     {"cervterm/internal/fontdesc": true},
+	"cache":         {"cervterm/internal/fontglyph/internal/face": true},
+	"shape":         {"cervterm/internal/fontglyph/internal/face": true, "cervterm/internal/fontdesc": true, "cervterm/internal/unicodecluster": true, "cervterm/internal/unicodeprops": true},
+	"raster":        {"cervterm/internal/fontglyph/internal/face": true, "cervterm/internal/fontdesc": true, "cervterm/internal/unicodecluster": true, "cervterm/internal/unicodeprops": true},
+	"platform":      {"cervterm/internal/fontglyph/internal/face": true, "cervterm/internal/fontdesc": true, "cervterm/internal/unicodecluster": true, "cervterm/internal/unicodeprops": true},
+	"internal/face": {"cervterm/internal/fontdesc": true},
+}
+
+func checkDAG() []string {
+	var failures []string
+	_ = filepath.WalkDir("internal/fontglyph", func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			failures = append(failures, err.Error())
+			return nil
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		if parseErr != nil {
+			failures = append(failures, parseErr.Error())
+			return nil
+		}
+		failures = append(failures, slice55cDAGFindings(filepath.ToSlash(path), file)...)
+		return nil
+	})
 	if out, err := exec.Command("go", "list", "-deps", "-test", "./internal/fontglyph/...").CombinedOutput(); err != nil {
 		failures = append(failures, "package cycle/dependency check: "+string(out))
 	}
 	return failures
+}
+
+// slice55cDAGFindings applies ADR-0021 to every production Go file below
+// internal/fontglyph. The root facade and known subsystems use closed edge
+// allowlists. A future package is additive-safe only when it has no local
+// dependency, preventing sibling and facade back-imports.
+func slice55cDAGFindings(path string, file *ast.File) []string {
+	rel := strings.TrimPrefix(filepath.ToSlash(path), "internal/fontglyph/")
+	if rel == path {
+		return []string{path + " is outside internal/fontglyph"}
+	}
+	directory := filepath.ToSlash(filepath.Dir(rel))
+	edges := slice55cDAGEdges[directory] // Unknown additive packages default to no local edges.
+	var failures []string
+	for _, imported := range file.Imports {
+		name, err := strconv.Unquote(imported.Path.Value)
+		if err == nil && strings.HasPrefix(name, "cervterm/internal/") && !edges[name] {
+			failures = append(failures, fmt.Sprintf("%s imports forbidden local package %s", path, name))
+		}
+	}
+	return failures
+}
+
+func obsoleteRootSource(path string) bool {
+	clean := filepath.ToSlash(filepath.Clean(path))
+	if filepath.ToSlash(filepath.Dir(clean)) != "internal/fontglyph" {
+		return false
+	}
+	name := filepath.Base(clean)
+	for _, obsolete := range obsoleteRootFiles {
+		if name == obsolete {
+			return true
+		}
+	}
+	return false
 }
 
 func checkRootOwnership() []string {
@@ -1336,50 +1412,87 @@ func checkGuardSelfTests() []string {
 	if manifestDigest(binaryPath, []byte("line\n")) == manifestDigest(binaryPath, []byte("line\r\n")) {
 		failures = append(failures, "binary fixture line-ending bytes were normalized")
 	}
-	validEvent := []byte(`{"pull_request":{"head":{"sha":"1111111111111111111111111111111111111111"},"base":{"sha":"` + baseCommit + `"}}}`)
-	h, b, err := parsePREvent(validEvent)
-	if err != nil || h != strings.Repeat("1", 40) || b != baseCommit {
-		failures = append(failures, "synthetic PR event parser rejected exact identity")
-	}
-	for _, data := range [][]byte{[]byte(`{}`), []byte(`{"pull_request":{"head":{"sha":"ABC"},"base":{"sha":"` + baseCommit + `"}}}`)} {
-		if _, _, err := parsePREvent(data); err == nil {
-			failures = append(failures, "synthetic PR event parser accepted malformed identity")
-		}
-	}
 	valid := historyFacts{wExists: true, head: commitW, cleanup: cleanupHash, dirty: sorted(stageGPaths)}
 	if got := validateHistoryFacts(valid); len(got) != 0 {
-		failures = append(failures, "pre-G history fixture rejected: "+strings.Join(got, "; "))
+		failures = append(failures, "full-history pre-G fixture rejected: "+strings.Join(got, "; "))
 	}
 	invalid := valid
 	invalid.dirty = []string{"unexpected"}
 	if len(validateHistoryFacts(invalid)) == 0 {
 		failures = append(failures, "invalid pre-G history fixture escaped")
 	}
-	shallowG := historyFacts{headSubject: gSubject, headParents: []string{commitW}}
-	if got := validateHistoryFacts(shallowG); len(got) != 0 {
-		failures = append(failures, "exact depth-1 G fixture rejected: "+strings.Join(got, "; "))
+	fullHistoryDescendant := historyFacts{
+		wExists: true, head: strings.Repeat("5", 40), cleanup: cleanupHash, gAncestor: true,
+		g: []commitFact{{hash: commitG, parent: commitW, subject: gSubject, paths: sorted(stageGPaths)}},
 	}
-	forgedShallowG := shallowG
-	forgedShallowG.headParents = []string{baseCommit}
-	if len(validateHistoryFacts(forgedShallowG)) == 0 {
-		failures = append(failures, "depth-1 G with forged parent escaped")
+	if got := validateHistoryFacts(fullHistoryDescendant); len(got) != 0 {
+		failures = append(failures, "full-history successor/tag fixture rejected: "+strings.Join(got, "; "))
 	}
-	expectedG := strings.Repeat("1", 40)
-	synthetic := historyFacts{head: strings.Repeat("2", 40), headSubject: "Merge " + expectedG + " into " + baseCommit, headParents: []string{baseCommit, expectedG}, expectedG: expectedG, expectedBase: baseCommit}
-	if got := validateHistoryFacts(synthetic); len(got) != 0 {
-		failures = append(failures, "exact synthetic PR fixture rejected: "+strings.Join(got, "; "))
+	shallowFixtures := []struct {
+		depth int
+		facts historyFacts
+	}{
+		{1, historyFacts{shallow: true, head: commitG, headSubject: gSubject, headParents: []string{commitW}}},
+		{3, historyFacts{shallow: true, wExists: true, head: commitG, cleanup: cleanupHash, gAncestor: true, g: []commitFact{{hash: commitG, parent: commitW, subject: gSubject, paths: sorted(stageGPaths)}}}},
+		{50, historyFacts{shallow: true, wExists: true, head: strings.Repeat("5", 40), cleanup: cleanupHash, gAncestor: true, g: []commitFact{{hash: commitG, parent: commitW, subject: gSubject, paths: sorted(stageGPaths)}}}},
+		{200, historyFacts{shallow: true, wExists: true, head: strings.Repeat("6", 40), cleanup: cleanupHash, gAncestor: true, g: []commitFact{{hash: commitG, parent: commitW, subject: gSubject, paths: sorted(stageGPaths)}}}},
 	}
-	forged := synthetic
-	forged.expectedG = baseCommit
-	forged.headSubject = "Merge " + baseCommit + " into " + baseCommit
-	forged.headParents = []string{baseCommit, baseCommit}
-	if len(validateHistoryFacts(forged)) == 0 {
-		failures = append(failures, "forged synthetic PR G equal to parent base escaped")
+	for _, fixture := range shallowFixtures {
+		got := validateHistoryFacts(fixture.facts)
+		if len(got) == 0 || !strings.Contains(strings.Join(got, "; "), "fetch-depth: 0") {
+			failures = append(failures, fmt.Sprintf("depth-%d shallow fixture did not require fetch-depth: 0", fixture.depth))
+		}
 	}
-	forgedParent := synthetic
-	forgedParent.headParents = []string{baseCommit, baseCommit}
-	if len(validateHistoryFacts(forgedParent)) == 0 {
-		failures = append(failures, "forged synthetic PR parent base escaped")
+	pinnedFixture := map[string]string{
+		"internal/fontglyph/backend.go":                         strings.Repeat("a", 64),
+		"internal/fontglyph/raster/testdata/cpal-red-green.bin": strings.Repeat("b", 64),
+	}
+	presentFixture := map[string]string{
+		"internal/fontglyph/backend.go":                         strings.Repeat("a", 64),
+		"internal/fontglyph/raster/testdata/cpal-red-green.bin": strings.Repeat("b", 64),
+		"internal/fontglyph/future/additive.go":                 strings.Repeat("c", 64),
+	}
+	if got := comparePinnedManifest("fixture", pinnedFixture, presentFixture); len(got) != 0 {
+		failures = append(failures, "safe additive package fixture rejected: "+strings.Join(got, "; "))
+	}
+	for _, path := range []string{"internal/fontglyph/backend.go", "internal/fontglyph/raster/testdata/cpal-red-green.bin"} {
+		mutated := make(map[string]string, len(presentFixture))
+		for name, hash := range presentFixture {
+			mutated[name] = hash
+		}
+		mutated[path] = strings.Repeat("d", 64)
+		if len(comparePinnedManifest("fixture", pinnedFixture, mutated)) == 0 {
+			failures = append(failures, "altered pinned source/fixture escaped: "+path)
+		}
+	}
+	dagFixtures := []struct {
+		name, path, source string
+		wantFailure        bool
+	}{
+		{"safe additive package", "internal/fontglyph/future/additive.go", `package future; import "fmt"; var _ = fmt.Sprintf`, false},
+		{"root stable leaf", "internal/fontglyph/additive.go", `package fontglyph; import fontdesc "cervterm/internal/fontdesc"; var _ fontdesc.FeatureSet`, false},
+		{"root forbidden action", "internal/fontglyph/additive.go", `package fontglyph; import "cervterm/internal/action"`, true},
+		{"root forbidden alias import", "internal/fontglyph/additive.go", `package fontglyph; import forbidden "cervterm/internal/action"`, true},
+		{"root forbidden dot import", "internal/fontglyph/additive.go", `package fontglyph; import . "cervterm/internal/action"`, true},
+		{"root forbidden blank import", "internal/fontglyph/additive.go", `package fontglyph; import _ "cervterm/internal/action"`, true},
+		{"additive root back-import", "internal/fontglyph/future/root.go", `package future; import _ "cervterm/internal/fontglyph"`, true},
+		{"public subsystem sibling import", "internal/fontglyph/raster/shape.go", `package raster; import sibling "cervterm/internal/fontglyph/shape"`, true},
+		{"public subsystem facade back-import", "internal/fontglyph/shape/root.go", `package shape; import _ "cervterm/internal/fontglyph"`, true},
+		{"raster platform back-import", "internal/fontglyph/raster/platform.go", `package raster; import . "cervterm/internal/fontglyph/platform"`, true},
+		{"platform raster back-import", "internal/fontglyph/platform/raster.go", `package platform; import _ "cervterm/internal/fontglyph/raster"`, true},
+	}
+	for _, fixture := range dagFixtures {
+		file, err := parser.ParseFile(token.NewFileSet(), fixture.path, fixture.source, parser.ImportsOnly)
+		got := []string(nil)
+		if err == nil {
+			got = slice55cDAGFindings(fixture.path, file)
+		}
+		if err != nil || (len(got) != 0) != fixture.wantFailure {
+			failures = append(failures, "DAG fixture did not enforce "+fixture.name)
+		}
+	}
+	if !obsoleteRootSource("internal/fontglyph/bitmap_cbdt.go") {
+		failures = append(failures, "resurrected cleanup source fixture escaped")
 	}
 	return failures
 }
@@ -1388,28 +1501,25 @@ type commitFact struct {
 	hash, parent, subject string
 	paths                 []string
 }
-type historyFacts struct {
-	wExists                                bool
-	head, headSubject, cleanup             string
-	headParents                            []string
-	dirty                                  []string
-	g                                      []commitFact
-	gAncestor                              bool
-	expectedG, expectedBase, identityError string
-}
 
-var syntheticMergeSubject = regexp.MustCompile(`^Merge ([0-9a-f]{40}) into ([0-9a-f]{40})$`)
-var fullCommitIdentity = regexp.MustCompile(`^[0-9a-f]{40}$`)
+type historyFacts struct {
+	shallow                    bool
+	wExists                    bool
+	head, headSubject, cleanup string
+	headParents                []string
+	dirty                      []string
+	g                          []commitFact
+	gAncestor                  bool
+}
 
 func checkHistory() []string {
 	head := git("rev-parse", "HEAD")
-	facts := historyFacts{wExists: gitObjectExists(commitW), head: head, headSubject: git("show", "-s", "--format=%s", "HEAD"), headParents: commitObjectParents(head), dirty: dirtyPaths()}
-	if !facts.wExists {
-		expectedG, expectedBase, err := prEventFromEnvironment()
-		facts.expectedG, facts.expectedBase = expectedG, expectedBase
-		if err != nil {
-			facts.identityError = err.Error()
-		}
+	facts := historyFacts{
+		shallow: git("rev-parse", "--is-shallow-repository") == "true",
+		wExists: gitObjectExists(commitW) && (head == commitW || exec.Command("git", "merge-base", "--is-ancestor", commitW, head).Run() == nil),
+		head:    head, headSubject: git("show", "-s", "--format=%s", "HEAD"), headParents: commitObjectParents(head), dirty: dirtyPaths(),
+	}
+	if facts.shallow || !facts.wExists {
 		return validateHistoryFacts(facts)
 	}
 	var failures []string
@@ -1443,34 +1553,15 @@ func checkHistory() []string {
 }
 
 func validateHistoryFacts(f historyFacts) []string {
+	if f.shallow {
+		return []string{"shallow repository is unsupported; use actions/checkout with fetch-depth: 0 or fetch full history before running maturity gates"}
+	}
 	var failures []string
 	if !f.wExists {
 		if len(f.dirty) != 0 {
-			failures = append(failures, fmt.Sprintf("detached depth-1 worktree dirty=%v", f.dirty))
+			failures = append(failures, fmt.Sprintf("detached/descendant worktree dirty=%v", f.dirty))
 		}
-		if f.headSubject == gSubject {
-			if !equalStrings(f.headParents, []string{commitW}) {
-				failures = append(failures, fmt.Sprintf("detached depth-1 G parents=%v want=[%s]", f.headParents, commitW))
-			}
-			return failures
-		}
-		match := syntheticMergeSubject.FindStringSubmatch(f.headSubject)
-		if match == nil {
-			return append(failures, "required W/G ancestry unavailable; fetch history or unshallow unless validating an exact synthetic pull-request merge")
-		}
-		if f.identityError != "" {
-			failures = append(failures, "detached synthetic merge event identity: "+f.identityError)
-		}
-		if f.expectedG == baseCommit || f.expectedG == f.expectedBase {
-			failures = append(failures, "detached synthetic merge forged G equals parent base")
-		}
-		if match[1] != f.expectedG || match[2] != baseCommit || f.expectedBase != baseCommit {
-			failures = append(failures, "detached synthetic merge identities do not match exact pull_request G/base")
-		}
-		if !equalStrings(f.headParents, []string{baseCommit, f.expectedG}) {
-			failures = append(failures, fmt.Sprintf("detached synthetic merge parents=%v want=[%s %s]", f.headParents, baseCommit, f.expectedG))
-		}
-		return failures
+		return append(failures, "required W/G ancestry unavailable; use actions/checkout with fetch-depth: 0 or fetch full history before running maturity gates")
 	}
 	if f.cleanup != cleanupHash {
 		failures = append(failures, fmt.Sprintf("G cleanup hash=%s want=%s", f.cleanup, cleanupHash))
@@ -1485,8 +1576,8 @@ func validateHistoryFacts(f historyFacts) []string {
 		return append(failures, fmt.Sprintf("G commit cardinality=%d want=1", len(f.g)))
 	}
 	g := f.g[0]
-	if g.parent != commitW || g.subject != gSubject {
-		failures = append(failures, "G parent/subject identity changed")
+	if g.hash != commitG || g.parent != commitW || g.subject != gSubject {
+		failures = append(failures, "G hash/parent/subject identity changed")
 	}
 	if !equalStrings(g.paths, sorted(stageGPaths)) {
 		failures = append(failures, fmt.Sprintf("G paths=%v want=%v", g.paths, sorted(stageGPaths)))
@@ -1500,49 +1591,19 @@ func validateHistoryFacts(f historyFacts) []string {
 	return failures
 }
 
-func parsePREvent(data []byte) (string, string, error) {
-	var event struct {
-		PullRequest struct {
-			Head struct {
-				SHA string `json:"sha"`
-			} `json:"head"`
-			Base struct {
-				SHA string `json:"sha"`
-			} `json:"base"`
-		} `json:"pull_request"`
-	}
-	if err := json.Unmarshal(data, &event); err != nil {
-		return "", "", err
-	}
-	h, b := event.PullRequest.Head.SHA, event.PullRequest.Base.SHA
-	if !fullCommitIdentity.MatchString(h) || !fullCommitIdentity.MatchString(b) {
-		return "", "", fmt.Errorf("pull_request head/base are not exact lowercase 40-character SHA-1 identities")
-	}
-	return h, b, nil
-}
-func prEventFromEnvironment() (string, string, error) {
-	path := os.Getenv("GITHUB_EVENT_PATH")
-	if path == "" {
-		return "", "", fmt.Errorf("GITHUB_EVENT_PATH missing")
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", "", err
-	}
-	return parsePREvent(data)
-}
 func checkDiffCheck() []string {
 	gates, err := readLF(filepath.Join(evidenceDir, "gates.txt"))
 	if err != nil {
 		return []string{err.Error()}
 	}
-	command := "git diff --check " + baseCommit + "..HEAD"
-	if strings.Count(string(gates), `command="`+command+`" result=PASS`) != 1 {
-		return []string{"gates must retain exact " + command + " semantics"}
+	retainedCommand := "git diff --check " + evidenceBaseCommit + "..HEAD"
+	if strings.Count(string(gates), `command="`+retainedCommand+`" result=PASS`) != 1 {
+		return []string{"gates must retain exact " + retainedCommand + " semantics"}
 	}
 	if !gitObjectExists(baseCommit) {
 		return nil
 	}
+	command := "git diff --check " + baseCommit + "..HEAD"
 	out, err := exec.Command("git", "diff", "--check", baseCommit+"..HEAD").CombinedOutput()
 	if err != nil {
 		return []string{command + ": " + strings.TrimSpace(string(out))}

@@ -123,6 +123,7 @@ func main() {
 	findings = append(findings, checkCIGates()...)
 	findings = append(findings, checkPhase15Evidence()...)
 	findings = append(findings, checkPhase15SupportMatrix()...)
+	findings = append(findings, checkRewrittenHistoryEvidence()...)
 	findings = append(findings, checkSlice63cGuard()...)
 	findings = append(findings, checkSlice62aGuard()...)
 	findings = append(findings, checkSlice62bGuard()...)
@@ -141,6 +142,92 @@ func main() {
 	for path, reason := range largeGoAllowlist {
 		fmt.Printf("known large-file exception: %s (%s)\n", path, reason)
 	}
+}
+
+type rewrittenHistoryEvidence struct {
+	label, commit, tree, patchID string
+}
+
+// Each stable patch ID below was compared with its retained pre-rewrite commit,
+// and each old/current changed-path set was exact. The corresponding commit trees
+// differed only by the intentional removal of .agent. Pinning the authoritative
+// current tree and retained stable diff identity prevents a silent SHA-only repin.
+var rewrittenHistoryPins = []rewrittenHistoryEvidence{
+	{"6.2a/base", "d16e8c88d20b67f6f1568ca47b017032c5fd3309", "ff76d5b1574884c6546259cd6af31d912aa64555", ""},
+	{"6.2a/T", "068e3f0693797e266e9697fed85df9e1814fccb5", "276c6034d52f74061cf72f485123f6962fd0e729", "4276a6ca64ef2b035950662cbdf5eeae1fcd446e"},
+	{"6.2a/A", "b15312e565ab84e479c5d1fd591687137197d70e", "00d3d80ff3ca6e2985803de581356e5c0dd5c774", "8ff77428379c1bc7bcce8fe1612fa887bfae9b4e"},
+	{"6.2a/M", "e738b94ecc1f0d238504f2dc16f88e2b9ffe655c", "89519f13bfe887f2c23a2f4c7af7848cefd6c7e0", "41ce87914ddcb95ccce5e5c4a7d16e4aa11c1bb6"},
+	{"6.2a/W", "fbc7fec58cbcae5977859f4317a9dcc45a7315f1", "40c4769cb902b874cbc9df39b33c78345a1a14f7", "a0d5b0c485ffa19df2fa7aeeb273284da92544d6"},
+	{"6.2b/base", "dfc62d62e047d5a46e95f9d8f930fca3b95b70b3", "d05b848dfac38c6ccacca6febaba4dd3f96fb227", ""},
+	{"6.2b/T", "051709757f008da8bafb25f89567925d8d19c92f", "afd441935fccb708977a01c54b531fc644020a8e", "c16e27ad207896b660789e9e32d6681c2bc22691"},
+	{"6.2b/A", "71d21bbbf43dd54fd7a855d95e5e37122f437002", "1dfb935fe3db39b3cc6db4fcdf6322e5f09e464e", "43c9f332272e1f63084973dd6dbbe3314aaa8b74"},
+	{"6.2b/M", "2f918e72b89064da2c8782699c5d00a794c2a635", "c25b68c355634e84bcf349d5a5d733d4c2a0c948", "8fae7f0ac9c587926e5904d72a9fcfb2aa7754a8"},
+	{"6.2b/W", "caaa979cf85c7d19ed25aa9655dffe0e5beb7409", "52eab1e8cfa3bfa4fa38cf06c53dbfdb19d3cd1e", "5187cf894ad03b8b62870a7ec26f5d866de692fb"},
+	{"6.2c/base", "005da8f19e0227e0a133b7d9b50dce4a191d66ee", "122e47eae55ddc0d351e15b6d7983e48c445fce1", ""},
+	{"6.2c/T", "e126a428330e3d13b309ccb03286f76a9f3e00a7", "45088533a38dba6e0916f4792365a12a71066a28", "47ce219ca5a1ba82d63c3a8950cd9ee0543123e2"},
+	{"6.2c/A", "780a36658d9c02ea51ac259545e1e6a2cc25b55b", "b69cbfc2ab26154e79c1b64a1c5455b2f89c1cf5", "7c03226764aa90b7df29fc79f4e9ddf8bf1d5c33"},
+	{"6.2c/M", "3f75bf11f5440f00664665b08a85e07ceae27bdd", "b7b37e99f9d5d87dde04702bbe445d299d05a521", "49ce8c2a0229be97874a365ebf1f295bab38f8fc"},
+	{"6.2c/W", "62d3b959e7e1b3934a231ccf43bb0021661f10c3", "f8b6c8a41401b87ba8abf623bdea066889baacd9", "77c2d3b7768c15db15c9269e42ecec5809123ec7"},
+	{"5.5a/base", "c027fd1228af792203d3361a671a9b01017b2e23", "600e5c86ad52bf654c4a12d6af8fed549ac61197", ""},
+	{"5.5a/T", "35243d7f7672f28ddb39ac55cd404e5fa96ed990", "45ce7f9e853f58f86a1dda5aef1382b53363e049", "e29d84b7808e8e27816adc72ddea4b0ad48785b1"},
+	{"5.5a/A", "2485ea931a8c1a781b17cc26851ff325c0c7ceb2", "4784aea789d97725fbc2b2b060cff34ffa2613d5", "cf2f9f8cddfc630f047649266e1e62aa62cae113"},
+	{"5.5a/M", "1ecc9cda5cccedb86ecca8d5a8803143c88d11d5", "43feed9cc1501723c3372cc68a04243b58fe0f22", "ebd2371abb4e09ffe419f2c618866b9ae92b33ce"},
+	{"5.5a/W", "28326fa5bb05850a0d12c31afe0f334fa329b636", "f55cace39032fbac046a83ceee12fe71bd71b5bf", "facd079fb8e5f0e633fa057775946b3f4b80e612"},
+	{"5.5b/base", "10857a0a53815e375894bebebc7326c119fda350", "851a7e1cabc99f1053b539985bc08202fefa4f81", ""},
+	{"5.5b/T", "09da2261e2965e2bbe0d56f49f1b20eab7ca4e13", "46bf2630e747dc90b1680f5effd239b59e752757", "cbcbe27db2aff28b6af6d6260e720adf42ed57e2"},
+	{"5.5b/A", "b8d603295e82cc581b86711f06208af04afe911e", "993172bbec5c27d4afae1d4358970daaee36ca38", "5ca61693bac7c790c79d26932ad9db5f6d555150"},
+	{"5.5b/M", "2b3686a029a611a74be621dc8b09dc8bd28e5826", "44eb6d1b24f3565aee621c2e9057a4bdd1b1e1ab", "70a155851f2c43ed2dca62f1ba53e10146e88006"},
+	{"5.5b/W", "b98ee43fe500f40fbd6c16799d1b58551e85cfb7", "8d0e13a065c720ce33dd728cb3ea6a88a54f718c", "6251cab6ac181b0e4942320cdb962fc6cf72d443"},
+	{"5.5b/G", "92fa34a2d18455581a8916ef1a2bcb5af195c881", "ff21b8405fb00a91e926e7f5fa255dce837e9e52", "dae9df1275a06a6ff982df86864ca9abd74cb541"},
+	{"5.5c/base", "09ebf4f3e668c0bba4c94f1aa7bf2e2c3e55883d", "ff21b8405fb00a91e926e7f5fa255dce837e9e52", ""},
+	{"5.5c/T", "95f7269bc3ce438579c3fe256bf87edbff9e5cc3", "05d336f4db28d40761611c8a5dd195b2c5227995", "6cc9a079a2e7dda396077ec753945d16c92aad7d"},
+	{"5.5c/A", "d9885d18d3980ae1e90a7aa4df0ffaa97284167b", "99bc8d25b238878cad165d6ed7251efc0caa3f7d", "534cab5bf7d6e448e887b46ba7900914ca1f7c24"},
+	{"5.5c/M", "5c9714e9da95a7685c37aca318d8e0486c5a9413", "d3482a330312b0cb62447aff277509771f23c361", "fa0ab9636d70d471f49462c2babc754d05ac5fa0"},
+	{"5.5c/W", "b6d724c363bd7aa28119fd4ed208ab0b0d11f650", "386886309a600617cbc28330e264bfc3d2102ea8", "506dcf4db32de716de8dc654be5250dd08623bc4"},
+	{"5.5c/G", "83be41ff1ff0c6dbc1cd67b0af1ca87f41a58def", "d690b83cf09e029a01ee35c0da1fce90702c7969", "1f63a2c8af0e4b6df434c97d2eec290256185eb7"},
+}
+
+func checkRewrittenHistoryEvidence() []finding {
+	shallow, _ := gitText("rev-parse", "--is-shallow-repository")
+	var findings []finding
+	for _, pin := range rewrittenHistoryPins {
+		if !slice55aCommitExists(pin.commit) {
+			if shallow != "true" {
+				findings = append(findings, finding{path: "git:" + pin.label, reason: "authoritative rewritten commit is unavailable in full history"})
+			}
+			continue
+		}
+		tree, treeErr := gitText("rev-parse", pin.commit+"^{tree}")
+		if treeErr != nil || tree != pin.tree {
+			findings = append(findings, finding{path: "git:" + pin.label, reason: fmt.Sprintf("rewritten tree=%q want exact %s", tree, pin.tree)})
+		}
+		patchID, patchErr := rewrittenStablePatchID(pin.commit)
+		if patchErr != nil || patchID != pin.patchID {
+			findings = append(findings, finding{path: "git:" + pin.label, reason: fmt.Sprintf("rewritten stable patch=%q want retained %s", patchID, pin.patchID)})
+		}
+	}
+	return findings
+}
+
+func rewrittenStablePatchID(commit string) (string, error) {
+	patch, err := exec.Command("git", "show", "--pretty=format:", "--no-ext-diff", commit).Output()
+	if err != nil {
+		return "", err
+	}
+	command := exec.Command("git", "patch-id", "--stable")
+	command.Stdin = bytes.NewReader(patch)
+	output, err := command.Output()
+	if err != nil {
+		return "", err
+	}
+	fields := strings.Fields(string(output))
+	if len(fields) == 0 {
+		return "", nil
+	}
+	if len(fields) != 2 {
+		return "", fmt.Errorf("unexpected git patch-id output %q", strings.TrimSpace(string(output)))
+	}
+	return fields[0], nil
 }
 
 func checkRequiredDocs() []finding {
@@ -621,10 +708,10 @@ func forbiddenSlice63cType(path, owner, typeText string) []finding {
 
 func checkSlice63cCommitsAndPaths() []finding {
 	const (
-		base        = "7656960bd334640b5e4c377bbde71b1dc9d6a3c1"
-		tCommit     = "412a5ce"
-		aCommit     = "43afad3"
-		mCommit     = "5d9628c"
+		base        = "1f1a8b957fc411f67376672b3769ecda83dd74ea"
+		tCommit     = "c201129eb583edad3e98db1372e93f62fa76e124"
+		aCommit     = "260f3cf145d36b236370bb25ce7c2c92ebfd862c"
+		mCommit     = "dabc1f5f6e0959731fcbe8f79d09bfdad65cfaf4"
 		wSubject    = "refactor(frontend): wire script and native controllers"
 		gSubject    = "refactor(frontend): guard script and native controller delegation"
 		sliceBranch = "arch/l1-01c-app-script-native-prep"
@@ -1374,11 +1461,11 @@ func receiverNamed(fields *ast.FieldList, name string) bool {
 
 func checkSlice62aCommitsAndPaths() []finding {
 	const (
-		base        = "c2a0137c50c099ce28014a7582eac3ee6a4340f1"
-		tCommit     = "271325ba47efe7e948f58fa314475f37e1176bc3"
-		aCommit     = "45514c813494351e7608b858aa6ab35e7643d33a"
-		mCommit     = "66072c984f6df723412cadb0cc43a8fb147c255e"
-		wCommit     = "aa1bfd4a830cd7fc88e7f6e25288ed4eb3879ae2"
+		base        = "d16e8c88d20b67f6f1568ca47b017032c5fd3309"
+		tCommit     = "068e3f0693797e266e9697fed85df9e1814fccb5"
+		aCommit     = "b15312e565ab84e479c5d1fd591687137197d70e"
+		mCommit     = "e738b94ecc1f0d238504f2dc16f88e2b9ffe655c"
+		wCommit     = "fbc7fec58cbcae5977859f4317a9dcc45a7315f1"
 		gSubject    = "refactor(mux): guard session ingress controller delegation"
 		sliceBranch = "arch/l3-01a-mux-session-ingress"
 	)
@@ -2250,11 +2337,11 @@ func checkSlice62bKnownDefects() []finding {
 
 func checkSlice62bCommitsAndPaths() []finding {
 	const (
-		base        = "801285e56fe85c503f0de3a0f459df8c7356286a"
-		tCommit     = "ac708cab6c2f468cc04c2e762a97c2cf19375ca3"
-		aCommit     = "fb30dff9de599c2043c06f96b6466377fa3482fa"
-		mCommit     = "64d407e23e0a857d0638b6460e69a15a32ee03ef"
-		wCommit     = "4ba1b3eb83577f02d555e8d23f059e89bd2de9b5"
+		base        = "dfc62d62e047d5a46e95f9d8f930fca3b95b70b3"
+		tCommit     = "051709757f008da8bafb25f89567925d8d19c92f"
+		aCommit     = "71d21bbbf43dd54fd7a855d95e5e37122f437002"
+		mCommit     = "2f918e72b89064da2c8782699c5d00a794c2a635"
+		wCommit     = "caaa979cf85c7d19ed25aa9655dffe0e5beb7409"
 		gSubject    = "refactor(mux): guard protocol scheduling controller delegation"
 		sliceBranch = "arch/l3-01b-mux-protocol-scheduling"
 	)
@@ -3081,7 +3168,7 @@ func checkSlice62cRestoreOrder() []finding {
 	} else {
 		findings = append(findings, slice62cRestoreCommitOrderFindings(fset, path, commit.Body)...)
 		wantHash := slice62cRestoreCommitBodyFingerprint
-		if immutable, immutableErr := gitText("show", "294b2f20ab3afd8c3fdbfd4d876e02a9fd86a7f1:"+path); immutableErr == nil {
+		if immutable, immutableErr := gitText("show", "62d3b959e7e1b3934a231ccf43bb0021661f10c3:"+path); immutableErr == nil {
 			immutableHash, hashErr := slice62cRestoreCommitHashFromSource(path, immutable)
 			if hashErr != nil {
 				findings = append(findings, finding{path: path, reason: "cannot parse immutable W restore publication body: " + hashErr.Error()})
@@ -3137,7 +3224,7 @@ func checkSlice62cKnownDefects() []finding {
 	const (
 		root    = "internal/mux"
 		path    = "internal/mux/mux_restore_characterization_test.go"
-		tCommit = "bec3126e00acc76e3303d4bc65259f379e9750ab"
+		tCommit = "e126a428330e3d13b309ccb03286f76a9f3e00a7"
 	)
 	wantExpiry := map[string]string{
 		"TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread":  "expires Slice 3.1",
@@ -3185,11 +3272,11 @@ func checkSlice62cKnownDefects() []finding {
 
 func checkSlice62cCommitsAndPaths() []finding {
 	const (
-		base        = "36450fed2b22f6ae4894a7e0051f98d0fd9192ee"
-		tCommit     = "bec3126e00acc76e3303d4bc65259f379e9750ab"
-		aCommit     = "d073df16d9ba0ec810d35c7b2ac9e17dfd196e6c"
-		mCommit     = "fe91ce085b985aff4cf5be5b5527b67a3c88d0fa"
-		wCommit     = "294b2f20ab3afd8c3fdbfd4d876e02a9fd86a7f1"
+		base        = "005da8f19e0227e0a133b7d9b50dce4a191d66ee"
+		tCommit     = "e126a428330e3d13b309ccb03286f76a9f3e00a7"
+		aCommit     = "780a36658d9c02ea51ac259545e1e6a2cc25b55b"
+		mCommit     = "3f75bf11f5440f00664665b08a85e07ceae27bdd"
+		wCommit     = "62d3b959e7e1b3934a231ccf43bb0021661f10c3"
 		gSubject    = "refactor(mux): guard restore coordinator delegation"
 		sliceBranch = "arch/l3-01c-mux-restore-coordinator"
 	)
@@ -4186,10 +4273,10 @@ type slice55aStage struct {
 }
 
 var slice55aStages = []slice55aStage{
-	{class: "T", commit: "6efd6cd8e6df21a57886257552c31fd76be7c533", parent: "320deef1ecb16db212cfee692128591359bebc70", subject: "test(fontglyph): characterize discovery and cache extraction", paths: []string{
+	{class: "T", commit: "35243d7f7672f28ddb39ac55cd404e5fa96ed990", parent: "c027fd1228af792203d3361a671a9b01017b2e23", subject: "test(fontglyph): characterize discovery and cache extraction", paths: []string{
 		"internal/fontglyph/discovery_cache_characterization_test.go",
 	}},
-	{class: "A", commit: "faa01bce3337e61205f924063c913922a0feb15a", parent: "6efd6cd8e6df21a57886257552c31fd76be7c533", subject: "refactor(fontglyph): add discovery cache and face seams", paths: []string{
+	{class: "A", commit: "2485ea931a8c1a781b17cc26851ff325c0c7ceb2", parent: "35243d7f7672f28ddb39ac55cd404e5fa96ed990", subject: "refactor(fontglyph): add discovery cache and face seams", paths: []string{
 		"internal/fontglyph/cache/contracts.go",
 		"internal/fontglyph/cache/contracts_test.go",
 		"internal/fontglyph/discovery/contracts.go",
@@ -4197,7 +4284,7 @@ var slice55aStages = []slice55aStage{
 		"internal/fontglyph/internal/face/owner.go",
 		"internal/fontglyph/internal/face/owner_test.go",
 	}},
-	{class: "M", commit: "cf15fb9b043c27979d8336cb383b97b7c429748b", parent: "faa01bce3337e61205f924063c913922a0feb15a", subject: "refactor(fontglyph): copy discovery and cache implementations", paths: []string{
+	{class: "M", commit: "1ecc9cda5cccedb86ecca8d5a8803143c88d11d5", parent: "2485ea931a8c1a781b17cc26851ff325c0c7ceb2", subject: "refactor(fontglyph): copy discovery and cache implementations", paths: []string{
 		"internal/fontglyph/cache/benchmark_test.go",
 		"internal/fontglyph/cache/cache.go",
 		"internal/fontglyph/cache/cache_test.go",
@@ -4206,7 +4293,7 @@ var slice55aStages = []slice55aStage{
 		"internal/fontglyph/discovery/index.go",
 		"internal/fontglyph/discovery/index_test.go",
 	}},
-	{class: "W", commit: "295ef3f847c2be13f20fee250aeb06d39b67ccc7", parent: "cf15fb9b043c27979d8336cb383b97b7c429748b", subject: "refactor(fontglyph): wire discovery and parsed-face cache", paths: []string{
+	{class: "W", commit: "28326fa5bb05850a0d12c31afe0f334fa329b636", parent: "1ecc9cda5cccedb86ecca8d5a8803143c88d11d5", subject: "refactor(fontglyph): wire discovery and parsed-face cache", paths: []string{
 		"internal/fontglyph/backend.go",
 		"internal/fontglyph/cache/cache.go",
 		"internal/fontglyph/cache/cache_test.go",
@@ -4580,8 +4667,8 @@ func checkSlice55aEvidence() []finding {
 }
 
 func checkSlice55aCommitsAndPaths() []finding {
-	const base = "320deef1ecb16db212cfee692128591359bebc70"
-	const wCommit = "295ef3f847c2be13f20fee250aeb06d39b67ccc7"
+	const base = "c027fd1228af792203d3361a671a9b01017b2e23"
+	const wCommit = "28326fa5bb05850a0d12c31afe0f334fa329b636"
 	const gSubject = "refactor(fontglyph): guard discovery and cache extraction"
 	var findings []finding
 	shallowText, _ := gitText("rev-parse", "--is-shallow-repository")

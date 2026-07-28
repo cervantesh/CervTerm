@@ -22,13 +22,16 @@ import (
 )
 
 const (
-	baseCommit        = "973660df6ea31112a6984a39421ad60783e706d4"
-	commitT           = "d0bfd354bc088093621348a817ed005cc1e1df70"
-	commitA           = "0f3892fe31feef94b43bf07fe733b9f4d57fc2de"
-	commitM           = "6ae3f60cacd51851d96f2fc5ecb6aa3bbcb7fcdd"
-	commitW           = "d6e1a81dfedb4f8910b9340b6da0d3c2b8b8291c"
-	commitG           = "b6a09b949b76aba5ca8274f0d01df1ef3e63d333"
-	successorW        = "7df9952db6d35a031da783479eb4d5c7f7d30ba3"
+	baseCommit        = "10857a0a53815e375894bebebc7326c119fda350"
+	commitT           = "09da2261e2965e2bbe0d56f49f1b20eab7ca4e13"
+	commitA           = "b8d603295e82cc581b86711f06208af04afe911e"
+	commitM           = "2b3686a029a611a74be621dc8b09dc8bd28e5826"
+	commitW           = "b98ee43fe500f40fbd6c16799d1b58551e85cfb7"
+	commitG           = "92fa34a2d18455581a8916ef1a2bcb5af195c881"
+	successorW        = "b6d724c363bd7aa28119fd4ed208ab0b0d11f650"
+	evidenceBase      = "973660df6ea31112a6984a39421ad60783e706d4"
+	evidenceT         = "d0bfd354bc088093621348a817ed005cc1e1df70"
+	evidenceW         = "d6e1a81dfedb4f8910b9340b6da0d3c2b8b8291c"
 	gSubject          = "refactor(fontglyph): guard resolution and shaping extraction"
 	evidence          = "docs/validation/architecture-maturity-slice-5.5b"
 	cleanupDiffHash   = "ed6becd4ae19c55f89083d817fdd3049536208a919e2baf945fd222af6d53e8c"
@@ -235,7 +238,7 @@ func checkArtifacts() []string {
 		if got := digest(doc); got != validationDocHash {
 			failures = append(failures, fmt.Sprintf("validation narrative hash=%s want=%s", got, validationDocHash))
 		}
-		for _, required := range []string{commitW, "exactly ten physical samples", "No push or merge", "internal/fontglyph/shape"} {
+		for _, required := range []string{evidenceW, "exactly ten physical samples", "No push or merge", "internal/fontglyph/shape"} {
 			if !bytes.Contains(doc, []byte(required)) {
 				failures = append(failures, "validation doc missing "+required)
 			}
@@ -260,8 +263,8 @@ func validateBenchmarkMetadata(text string) []string {
 		}
 	}
 	for _, required := range []string{
-		"base-production=" + baseCommit, "base-harness=" + commitT, "candidate-production=present-tree-w-semantic",
-		"candidate-lineage-w=" + commitW, "candidate-harness=present-tree", "candidate-source-state=dirty-pre-G",
+		"base-production=" + evidenceBase, "base-harness=" + evidenceT, "candidate-production=present-tree-w-semantic",
+		"candidate-lineage-w=" + evidenceW, "candidate-harness=present-tree", "candidate-source-state=dirty-pre-G",
 		"source-manifest-base-sha256=" + artifactHashes["source-manifest-base.txt"],
 		"source-manifest-candidate-sha256=" + artifactHashes["source-manifest-candidate.txt"],
 		"warmup=none", "samples=10", "physical-order=odd:AB,even:BA",

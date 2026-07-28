@@ -24,9 +24,12 @@ import (
 )
 
 const (
-	baseCommit              = "320deef1ecb16db212cfee692128591359bebc70"
-	baseHarness             = "6efd6cd8e6df21a57886257552c31fd76be7c533"
-	candidateCommit         = "295ef3f847c2be13f20fee250aeb06d39b67ccc7"
+	baseCommit              = "c027fd1228af792203d3361a671a9b01017b2e23"
+	baseHarness             = "35243d7f7672f28ddb39ac55cd404e5fa96ed990"
+	candidateCommit         = "28326fa5bb05850a0d12c31afe0f334fa329b636"
+	evidenceBaseCommit      = "320deef1ecb16db212cfee692128591359bebc70"
+	evidenceBaseHarness     = "6efd6cd8e6df21a57886257552c31fd76be7c533"
+	evidenceCandidateCommit = "295ef3f847c2be13f20fee250aeb06d39b67ccc7"
 	baseManifestDigest      = "f06959254d1a16a107eac3def00804f087902c780db5f52a1f182e3a8ae56ea9"
 	candidateManifestDigest = "73de78a927b3e29210306c641ed343093e6554655a528b0ca0f01aaf17ca0d6e"
 	benchmarkRecordsDigest  = "7f50b1b2fef1e11e17d9107362bcd743a8e55c19d1aa7b755e4188e191f1d7e1"
@@ -370,7 +373,7 @@ func checkAdversarialSelfFixtures() []finding {
 	}
 	records, parseFindings := parseBinaryEvidence(binaryEvidence)
 	if len(parseFindings) == 0 {
-		for key, value := range map[string]string{"base_prepare_command": strings.Replace(records.metadata["base_prepare_command"], baseCommit, candidateCommit, 1), "candidate_prepare_command": strings.Replace(records.metadata["candidate_prepare_command"], candidateCommit, baseCommit, 1)} {
+		for key, value := range map[string]string{"base_prepare_command": strings.Replace(records.metadata["base_prepare_command"], evidenceBaseCommit, evidenceCandidateCommit, 1), "candidate_prepare_command": strings.Replace(records.metadata["candidate_prepare_command"], evidenceCandidateCommit, evidenceBaseCommit, 1)} {
 			mutated := cloneStrings(records.metadata)
 			mutated[key] = value
 			if len(benchmarkMetadataFindings("fixture", mutated)) == 0 {
@@ -438,10 +441,10 @@ func checkBenchmarkEvidence() []finding {
 	metadata := records.metadata
 	findings = append(findings, benchmarkMetadataFindings(binaryEvidence, metadata)...)
 	findings = append(findings, validateBinaryEvidenceRecords(binaryEvidence, records)...)
-	if metadata["base_production_commit"] != baseCommit || metadata["base_harness_commit"] != baseHarness || metadata["base_overlay_path"] != "internal/fontglyph/discovery_cache_characterization_test.go" {
+	if metadata["base_production_commit"] != evidenceBaseCommit || metadata["base_harness_commit"] != evidenceBaseHarness || metadata["base_overlay_path"] != "internal/fontglyph/discovery_cache_characterization_test.go" {
 		findings = append(findings, finding{binaryEvidence, "immutable base/overlay identity drift"})
 	}
-	if metadata["candidate_head"] != candidateCommit {
+	if metadata["candidate_head"] != evidenceCandidateCommit {
 		findings = append(findings, finding{binaryEvidence, "immutable candidate W identity drift"})
 	}
 	if metadata["base_manifest_sha256"] != baseManifestDigest || metadata["candidate_manifest_sha256"] != candidateManifestDigest {
@@ -464,13 +467,13 @@ func checkBenchmarkEvidence() []finding {
 
 func expectedBenchmarkMetadata() map[string]string {
 	return map[string]string{
-		"schema": "2", "base_production_commit": baseCommit, "base_harness_commit": baseHarness,
+		"schema": "2", "base_production_commit": evidenceBaseCommit, "base_harness_commit": evidenceBaseHarness,
 		"base_overlay_path":    "internal/fontglyph/discovery_cache_characterization_test.go",
-		"base_manifest_sha256": baseManifestDigest, "candidate_head": candidateCommit,
+		"base_manifest_sha256": baseManifestDigest, "candidate_head": evidenceCandidateCommit,
 		"candidate_manifest_sha256": candidateManifestDigest,
 		"normalization":             "path-slash+content-CRLF-or-CR-to-LF+sorted-SHA256-lines",
-		"base_prepare_command":      "git+worktree+add+--detach+<base-worktree>+" + baseCommit + ";git+show+" + baseHarness + ":internal/fontglyph/discovery_cache_characterization_test.go+>+<base-worktree>/internal/fontglyph/discovery_cache_characterization_test.go",
-		"candidate_prepare_command": "git+worktree+add+--detach+<candidate-worktree>+" + candidateCommit,
+		"base_prepare_command":      "git+worktree+add+--detach+<base-worktree>+" + evidenceBaseCommit + ";git+show+" + evidenceBaseHarness + ":internal/fontglyph/discovery_cache_characterization_test.go+>+<base-worktree>/internal/fontglyph/discovery_cache_characterization_test.go",
+		"candidate_prepare_command": "git+worktree+add+--detach+<candidate-worktree>+" + evidenceCandidateCommit,
 	}
 }
 
@@ -1099,7 +1102,7 @@ func checkPlatformEvidence() []finding {
 	for name := range records {
 		findings = append(findings, finding{platformEvidence, "unexpected platform record " + name})
 	}
-	expectedMetadata := map[string]string{"host": "windows/amd64", "compiler": "go version go1.25.8 windows/amd64", "candidate_head": candidateCommit, "linux_runtime": "WSL2 Ubuntu-24.04", "linux_mode": "execution", "linux_result": "PASS", "windows_amd64_result": "PASS", "windows_arm64_result": "PASS", "darwin_amd64_result": "PASS", "darwin_arm64_result": "PASS"}
+	expectedMetadata := map[string]string{"host": "windows/amd64", "compiler": "go version go1.25.8 windows/amd64", "candidate_head": evidenceCandidateCommit, "linux_runtime": "WSL2 Ubuntu-24.04", "linux_mode": "execution", "linux_result": "PASS", "windows_amd64_result": "PASS", "windows_arm64_result": "PASS", "darwin_amd64_result": "PASS", "darwin_arm64_result": "PASS"}
 	for key, want := range expectedMetadata {
 		if metadata[key] != want {
 			findings = append(findings, finding{platformEvidence, fmt.Sprintf("platform metadata %s=%q want exact %q", key, metadata[key], want)})
