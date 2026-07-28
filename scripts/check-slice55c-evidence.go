@@ -832,6 +832,7 @@ func checkManifests() []string {
 		failures = append(failures, compareManifest(candidatePath, candidateEntries, present)...)
 	} else {
 		failures = append(failures, comparePinnedManifest(candidatePath, candidateEntries, present)...)
+		failures = append(failures, checkSuccessorTrackedScope(candidateEntries)...)
 	}
 	return failures
 }
@@ -947,13 +948,14 @@ func compareManifest(label string, actual, expected map[string]string) []string 
 }
 
 // comparePinnedManifest treats the retained Slice 5.5c manifest as historical
-// evidence rather than a repository-cardinality freeze. Successors may add paths,
-// but retained non-guard sources and fixtures remain exact; compatibility-maintained
-// guard programs are validated by the current maturity suite and rewritten-history pins.
+// evidence rather than a repository-wide source freeze. Successors retain exact
+// hashes only for Slice 5.5c-owned fontglyph sources, tests, fixtures, and its
+// platform evidence runner. Historical manifests and artifacts remain exact,
+// while unrelated Go and module files remain governed by the current maturity suite.
 func comparePinnedManifest(label string, pinned, present map[string]string) []string {
 	var failures []string
 	for p, want := range pinned {
-		if guardCompatibilityPath(p) {
+		if !successorProtectedManifestPath(p) {
 			continue
 		}
 		if present[p] != want {
@@ -963,13 +965,147 @@ func comparePinnedManifest(label string, pinned, present map[string]string) []st
 	return failures
 }
 
-func guardCompatibilityPath(path string) bool {
-	switch filepath.ToSlash(path) {
-	case "scripts/check-maturity-gates.go", "scripts/check-slice55a-evidence.go", "scripts/check-slice55b-evidence.go", "scripts/check-slice55c-evidence.go":
-		return true
-	default:
-		return false
+func successorProtectedManifestPath(path string) bool {
+	path = filepath.ToSlash(path)
+	return strings.HasPrefix(path, "internal/fontglyph/") || path == "scripts/run-slice55c-linux-wsl.ps1"
+}
+
+func cloneManifest(source map[string]string) map[string]string {
+	clone := make(map[string]string, len(source))
+	for path, hash := range source {
+		clone[path] = hash
 	}
+	return clone
+}
+
+type trackedFontglyphEntry struct {
+	mode, object, stage string
+}
+
+func checkSuccessorTrackedScope(pinned map[string]string) []string {
+	current, failures := trackedFontglyphEntries()
+	historical, historicalFailures := historicalFontglyphEntries()
+	failures = append(failures, historicalFailures...)
+	failures = append(failures, successorTrackedScopeFindings(pinned, historical, current)...)
+	for path, entry := range current {
+		if pinned[path] != "" || !strings.HasSuffix(path, ".go") || entry.mode != "100644" || entry.stage != "0" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.FromSlash(path))
+		if err != nil {
+			failures = append(failures, path+": "+err.Error())
+			continue
+		}
+		failures = append(failures, successorNewGoFindings(path, data)...)
+	}
+	return failures
+}
+
+func trackedFontglyphEntries() (map[string]trackedFontglyphEntry, []string) {
+	out, err := exec.Command("git", "ls-files", "-s", "-z", "--", "internal/fontglyph").Output()
+	if err != nil {
+		return nil, []string{"git ls-files -s internal/fontglyph: " + err.Error()}
+	}
+	return parseTrackedFontglyphEntries(out, false)
+}
+
+func historicalFontglyphEntries() (map[string]trackedFontglyphEntry, []string) {
+	out, err := exec.Command("git", "ls-tree", "-r", "-z", commitG, "--", "internal/fontglyph").Output()
+	if err != nil {
+		return nil, []string{"git ls-tree historical internal/fontglyph: " + err.Error()}
+	}
+	return parseTrackedFontglyphEntries(out, true)
+}
+
+func parseTrackedFontglyphEntries(data []byte, tree bool) (map[string]trackedFontglyphEntry, []string) {
+	entries := make(map[string]trackedFontglyphEntry)
+	var failures []string
+	for _, raw := range bytes.Split(data, []byte{0}) {
+		if len(raw) == 0 {
+			continue
+		}
+		metadata, rawPath, ok := bytes.Cut(raw, []byte{'\t'})
+		fields := strings.Fields(string(metadata))
+		if !ok || len(fields) != 3 || len(rawPath) == 0 {
+			failures = append(failures, "malformed tracked fontglyph entry "+strconv.Quote(string(raw)))
+			continue
+		}
+		path := filepath.ToSlash(string(rawPath))
+		if !strings.HasPrefix(path, "internal/fontglyph/") {
+			failures = append(failures, "tracked fontglyph enumeration escaped protected prefix "+path)
+			continue
+		}
+		entry := trackedFontglyphEntry{mode: fields[0], object: fields[1], stage: fields[2]}
+		if tree {
+			entry.object, entry.stage = fields[2], "0"
+		}
+		if _, duplicate := entries[path]; duplicate {
+			failures = append(failures, "duplicate/conflicted tracked fontglyph entry "+path)
+			continue
+		}
+		entries[path] = entry
+	}
+	return entries, failures
+}
+
+func successorTrackedScopeFindings(pinned map[string]string, historical, current map[string]trackedFontglyphEntry) []string {
+	var failures []string
+	for path := range pinned {
+		if !strings.HasPrefix(filepath.ToSlash(path), "internal/fontglyph/") {
+			continue
+		}
+		entry, present := current[path]
+		if !present {
+			failures = append(failures, "protected tracked path missing or renamed out "+path)
+			continue
+		}
+		prior, historicallyTracked := historical[path]
+		if !historicallyTracked {
+			failures = append(failures, "protected path lacks historical mode pin "+path)
+			continue
+		}
+		if entry.mode != prior.mode {
+			failures = append(failures, fmt.Sprintf("protected tracked mode drift %s=%s want=%s", path, entry.mode, prior.mode))
+		}
+	}
+	for path, entry := range current {
+		if entry.stage != "0" {
+			failures = append(failures, fmt.Sprintf("protected tracked path has nonzero index stage %s=%s", path, entry.stage))
+		}
+		switch entry.mode {
+		case "120000":
+			failures = append(failures, "protected tracked path uses forbidden symlink mode 120000 "+path)
+		case "160000":
+			failures = append(failures, "protected tracked path uses forbidden gitlink mode 160000 "+path)
+		}
+		if pinned[path] != "" {
+			continue
+		}
+		if !strings.HasSuffix(path, ".go") {
+			failures = append(failures, "unpinned non-Go fontglyph path requires explicit guard update "+path)
+			continue
+		}
+		if entry.mode != "100644" {
+			failures = append(failures, fmt.Sprintf("new Go fontglyph path mode=%s want=100644 %s", entry.mode, path))
+		}
+	}
+	return uniqueSorted(failures)
+}
+
+func successorNewGoFindings(path string, source []byte) []string {
+	file, err := parser.ParseFile(token.NewFileSet(), path, source, 0)
+	if err != nil {
+		return []string{"new Go fontglyph path failed full ADR scan " + err.Error()}
+	}
+	failures := slice55cDAGFindings(filepath.ToSlash(path), file)
+	rel := strings.TrimPrefix(filepath.ToSlash(path), "internal/fontglyph/")
+	if filepath.ToSlash(filepath.Dir(rel)) == "." {
+		failures = append(failures, rootRetentionFindings(filepath.ToSlash(path), file)...)
+	}
+	if obsoleteRootSource(path) {
+		failures = append(failures, "new Go fontglyph path resurrects obsolete root authority "+filepath.ToSlash(path))
+	}
+	return uniqueSorted(failures)
 }
 
 var slice55cDAGEdges = map[string]map[string]bool{
@@ -998,7 +1134,7 @@ func checkDAG() []string {
 			failures = append(failures, err.Error())
 			return nil
 		}
-		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
 		file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
@@ -1015,7 +1151,7 @@ func checkDAG() []string {
 	return failures
 }
 
-// slice55cDAGFindings applies ADR-0021 to every production Go file below
+// slice55cDAGFindings applies ADR-0021 to every Go file below
 // internal/fontglyph. The root facade and known subsystems use closed edge
 // allowlists. A future package is additive-safe only when it has no local
 // dependency, preventing sibling and facade back-imports.
@@ -1446,25 +1582,126 @@ func checkGuardSelfTests() []string {
 	pinnedFixture := map[string]string{
 		"internal/fontglyph/backend.go":                         strings.Repeat("a", 64),
 		"internal/fontglyph/raster/testdata/cpal-red-green.bin": strings.Repeat("b", 64),
+		"internal/frontend/glfwgl/app.go":                       strings.Repeat("c", 64),
+		"go.mod":                                                strings.Repeat("d", 64),
+		"go.sum":                                                strings.Repeat("e", 64),
+		"scripts/run-slice55c-linux-wsl.ps1":                    strings.Repeat("f", 64),
 	}
 	presentFixture := map[string]string{
 		"internal/fontglyph/backend.go":                         strings.Repeat("a", 64),
 		"internal/fontglyph/raster/testdata/cpal-red-green.bin": strings.Repeat("b", 64),
-		"internal/fontglyph/future/additive.go":                 strings.Repeat("c", 64),
+		"internal/frontend/glfwgl/app.go":                       strings.Repeat("c", 64),
+		"go.mod":                                                strings.Repeat("d", 64),
+		"go.sum":                                                strings.Repeat("e", 64),
+		"scripts/run-slice55c-linux-wsl.ps1":                    strings.Repeat("f", 64),
+		"internal/safeadditive/additive.go":                     strings.Repeat("0", 64),
 	}
 	if got := comparePinnedManifest("fixture", pinnedFixture, presentFixture); len(got) != 0 {
-		failures = append(failures, "safe additive package fixture rejected: "+strings.Join(got, "; "))
+		failures = append(failures, "safe additive outside fontglyph fixture rejected: "+strings.Join(got, "; "))
 	}
-	for _, path := range []string{"internal/fontglyph/backend.go", "internal/fontglyph/raster/testdata/cpal-red-green.bin"} {
-		mutated := make(map[string]string, len(presentFixture))
-		for name, hash := range presentFixture {
-			mutated[name] = hash
-		}
-		mutated[path] = strings.Repeat("d", 64)
+	for _, path := range []string{
+		"internal/fontglyph/backend.go",
+		"internal/fontglyph/raster/testdata/cpal-red-green.bin",
+		"scripts/run-slice55c-linux-wsl.ps1",
+	} {
+		mutated := cloneManifest(presentFixture)
+		mutated[path] = strings.Repeat("1", 64)
 		if len(comparePinnedManifest("fixture", pinnedFixture, mutated)) == 0 {
-			failures = append(failures, "altered pinned source/fixture escaped: "+path)
+			failures = append(failures, "altered successor-protected source/fixture escaped: "+path)
 		}
 	}
+	for _, path := range []string{"internal/frontend/glfwgl/app.go", "go.mod", "go.sum"} {
+		mutated := cloneManifest(presentFixture)
+		mutated[path] = strings.Repeat("2", 64)
+		if got := comparePinnedManifest("fixture", pinnedFixture, mutated); len(got) != 0 {
+			failures = append(failures, "unrelated successor mutation rejected: "+path+": "+strings.Join(got, "; "))
+		}
+	}
+	missing := cloneManifest(presentFixture)
+	delete(missing, "internal/fontglyph/backend.go")
+	if len(comparePinnedManifest("fixture", pinnedFixture, missing)) == 0 {
+		failures = append(failures, "deleted successor-protected source escaped")
+	}
+	exactMutation := cloneManifest(pinnedFixture)
+	exactMutation["internal/frontend/glfwgl/app.go"] = strings.Repeat("2", 64)
+	if len(compareManifest("fixture", pinnedFixture, exactMutation)) == 0 {
+		failures = append(failures, "exact candidate manifest allowed unrelated mutation")
+	}
+	exactAdditive := cloneManifest(pinnedFixture)
+	exactAdditive["internal/safeadditive/additive.go"] = strings.Repeat("3", 64)
+	if len(compareManifest("fixture", pinnedFixture, exactAdditive)) == 0 {
+		failures = append(failures, "exact candidate manifest allowed additive source")
+	}
+	scopePinned := map[string]string{"internal/fontglyph/backend.go": strings.Repeat("a", 64)}
+	scopeHistorical := map[string]trackedFontglyphEntry{"internal/fontglyph/backend.go": {mode: "100644", object: "old", stage: "0"}}
+	scopeCurrent := map[string]trackedFontglyphEntry{"internal/fontglyph/backend.go": {mode: "100644", object: "new", stage: "0"}}
+	if got := successorTrackedScopeFindings(scopePinned, scopeHistorical, scopeCurrent); len(got) != 0 {
+		failures = append(failures, "exact protected tracked scope fixture rejected: "+strings.Join(got, "; "))
+	}
+	additiveGo := cloneTrackedFontglyphEntries(scopeCurrent)
+	additiveGo["internal/fontglyph/future/additive.go"] = trackedFontglyphEntry{mode: "100644", object: "go", stage: "0"}
+	if got := successorTrackedScopeFindings(scopePinned, scopeHistorical, additiveGo); len(got) != 0 {
+		failures = append(failures, "new scanned Go path fixture rejected: "+strings.Join(got, "; "))
+	}
+	modeDrift := cloneTrackedFontglyphEntries(scopeCurrent)
+	modeDrift["internal/fontglyph/backend.go"] = trackedFontglyphEntry{mode: "100755", object: "new", stage: "0"}
+	if len(successorTrackedScopeFindings(scopePinned, scopeHistorical, modeDrift)) == 0 {
+		failures = append(failures, "protected historical mode drift fixture escaped")
+	}
+	renameOut := cloneTrackedFontglyphEntries(scopeCurrent)
+	delete(renameOut, "internal/fontglyph/backend.go")
+	renameOut["internal/fontglyph/relocated/backend.go"] = trackedFontglyphEntry{mode: "100644", object: "new", stage: "0"}
+	if got := successorTrackedScopeFindings(scopePinned, scopeHistorical, renameOut); len(got) == 0 || !strings.Contains(strings.Join(got, "; "), "renamed out") {
+		failures = append(failures, "protected rename-out fixture escaped")
+	}
+	symlinkRelocation := cloneTrackedFontglyphEntries(scopeCurrent)
+	delete(symlinkRelocation, "internal/fontglyph/backend.go")
+	symlinkRelocation["internal/fontglyph/relocated/backend.go"] = trackedFontglyphEntry{mode: "120000", object: "link", stage: "0"}
+	if got := successorTrackedScopeFindings(scopePinned, scopeHistorical, symlinkRelocation); len(got) == 0 || !strings.Contains(strings.Join(got, "; "), "symlink mode 120000") {
+		failures = append(failures, "protected symlink relocation fixture escaped")
+	}
+	gitlink := cloneTrackedFontglyphEntries(scopeCurrent)
+	gitlink["internal/fontglyph/vendor"] = trackedFontglyphEntry{mode: "160000", object: "commit", stage: "0"}
+	if got := successorTrackedScopeFindings(scopePinned, scopeHistorical, gitlink); len(got) == 0 || !strings.Contains(strings.Join(got, "; "), "gitlink mode 160000") {
+		failures = append(failures, "protected gitlink fixture escaped")
+	}
+	for _, path := range []string{
+		"internal/fontglyph/native/bridge.s",
+		"internal/fontglyph/native/bridge.S",
+		"internal/fontglyph/native/bridge.c",
+		"internal/fontglyph/native/bridge.cc",
+		"internal/fontglyph/native/bridge.cpp",
+		"internal/fontglyph/native/bridge.h",
+		"internal/fontglyph/native/bridge.syso",
+		"internal/fontglyph/fixtures/scope.bin",
+		"internal/fontglyph/LICENSE",
+		"internal/fontglyph/testdata/new.provenance.txt",
+		"internal/fontglyph/Case.GO",
+		"internal/fontglyph/future/nested/case.fixture",
+	} {
+		mutated := cloneTrackedFontglyphEntries(scopeCurrent)
+		mutated[path] = trackedFontglyphEntry{mode: "100644", object: "new", stage: "0"}
+		if len(successorTrackedScopeFindings(scopePinned, scopeHistorical, mutated)) == 0 {
+			failures = append(failures, "unpinned non-Go/alternate-source fixture escaped: "+path)
+		}
+	}
+	newGoScans := []struct {
+		name, path, source string
+		wantFailure        bool
+	}{
+		{"safe additive full scan", "internal/fontglyph/future/additive.go", `package future; import "fmt"; var _ = fmt.Sprintf`, false},
+		{"additive forbidden DAG", "internal/fontglyph/future/additive.go", `package future; import _ "cervterm/internal/fontglyph"`, true},
+		{"additive root retention", "internal/fontglyph/additive.go", `package fontglyph; type hidden = colrParser`, true},
+		{"additive obsolete authority", "internal/fontglyph/bitmap_cbdt.go", `package fontglyph`, true},
+		{"additive invalid syntax", "internal/fontglyph/future/additive.go", `package`, true},
+	}
+	for _, fixture := range newGoScans {
+		got := successorNewGoFindings(fixture.path, []byte(fixture.source))
+		if (len(got) != 0) != fixture.wantFailure {
+			failures = append(failures, "new Go full ADR scan fixture did not enforce "+fixture.name)
+		}
+	}
+
 	dagFixtures := []struct {
 		name, path, source string
 		wantFailure        bool
@@ -1495,6 +1732,14 @@ func checkGuardSelfTests() []string {
 		failures = append(failures, "resurrected cleanup source fixture escaped")
 	}
 	return failures
+}
+
+func cloneTrackedFontglyphEntries(source map[string]trackedFontglyphEntry) map[string]trackedFontglyphEntry {
+	clone := make(map[string]trackedFontglyphEntry, len(source))
+	for path, entry := range source {
+		clone[path] = entry
+	}
+	return clone
 }
 
 type commitFact struct {
