@@ -426,7 +426,7 @@ The performance baseline is immutable pre-slice production `9fe0bd0287ed402fe90b
 - **Effort:** L
 - **Blast radius:** cross-module
 - **Class:** redesign
-- **Status:** **accepted; closure candidate in Slice 3.1 G** — implementation and pre-commit evidence pass, but L3-02 remains open until clean committed-G, rollback rehearsal, maturity, CI, and merged-state gates succeed.
+- **Status:** **closed by Slice 3.1 / PR #229** — clean G, rollback rehearsal, complete local/CI validation, CodeQL, Linux headless qualification, and merged-state verification all passed; merged as `7d753ee1513531d99cf47a9df420eea136222110`.
 - **Depends on:** none
 - **Cross-cut tag:** `T4-ownership-transactions`
 

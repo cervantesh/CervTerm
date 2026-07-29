@@ -64,4 +64,4 @@ All medians are within the `<=3.000000%` regression ceiling and no workload incr
 
 ## Closure
 
-Automated default, GLFW, race, vet, maturity, recovery, fuzz, cross-target compile, exact-history, and performance gates are recorded under `docs/validation/architecture-maturity-slice-3.1/`. Interactive Windows GUI qualification remains separately recorded as `UNRUN`; it does not convert the automated ownership claim into a broad platform claim.
+Automated default, GLFW, race, vet, maturity, recovery, fuzz, cross-target compile, exact-history, and performance gates are recorded under `docs/validation/architecture-maturity-slice-3.1/`. PR #229 passed Windows CI, Linux headless CI, CodeQL, and merged-state verification, and merged as `7d753ee1513531d99cf47a9df420eea136222110`; L3-02 is closed. Interactive Windows GUI qualification remains separately recorded as `UNRUN`; it does not convert the automated ownership claim into a broad platform claim.
