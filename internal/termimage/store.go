@@ -13,17 +13,18 @@ type Store struct {
 	pane    paneBudget
 	now     func() time.Time
 
-	epoch           atomic.Uint64
-	closed          atomic.Bool
+	// lifecycleMu serializes owner publication with standalone reset/close.
+	lifecycleMu     sync.Mutex
+	state           atomic.Pointer[storeState]
 	owner           atomic.Pointer[StoreOwner]
 	ownerGeneration atomic.Uint64
 	resetting       atomic.Bool
-	ownerFault      func(string) error // package-private deterministic fault injection
+	ownerFault      func(string) error // package-private deterministic fault/orchestration injection
+	testReadHook    func(string)       // package-private deterministic read orchestration
 
 	pendingMu             sync.Mutex
 	pending               map[TransferID]*CandidateTransfer
-	state                 *storeState
-	prepared              *PreparedStoreState
+	prepared              atomic.Pointer[PreparedStoreState]
 	preparedClose         atomic.Pointer[PreparedStoreClose]
 	placementMu           sync.Mutex
 	candidateMu           sync.Mutex
@@ -43,9 +44,14 @@ type resource struct {
 	retention     ResourceRetention
 }
 
+// storeState is immutable after publication. The state pointer CAS linearizes
+// resources, generation, epoch, and close. A reader already holding an older
+// snapshot may return its detached old copy; readers loading closed state fail.
 type storeState struct {
 	resources      map[ImageID]*resource
 	nextGeneration ResourceGeneration
+	epoch          StoreEpoch
+	closed         bool
 }
 
 func NewStore(process *ProcessBudget, limits Limits) *Store {
@@ -59,12 +65,11 @@ func NewStore(process *ProcessBudget, limits Limits) *Store {
 		now:                   time.Now,
 		pending:               make(map[TransferID]*CandidateTransfer),
 		candidates:            make(map[*DecodedCandidate]struct{}),
-		state:                 &storeState{resources: make(map[ImageID]*resource)},
 		placements:            make(map[*PlacementReservation]struct{}),
 		nextInternalImage:     MinInternalImageID - 1,
 		nextInternalPlacement: MinInternalPlacementID - 1,
 	}
-	store.epoch.Store(1)
+	store.state.Store(&storeState{resources: make(map[ImageID]*resource), epoch: 1})
 	store.ownerGeneration.Store(1)
 	return store
 }
@@ -110,21 +115,38 @@ type PreparedStoreClose struct {
 }
 
 func (s *Store) ClaimOwner() *StoreOwner {
-	if s == nil || s.closed.Load() || s.resetting.Load() || s.prepared != nil || s.preparedClose.Load() != nil {
+	if s == nil {
 		return nil
 	}
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	state := s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() || s.prepared.Load() != nil || s.preparedClose.Load() != nil || s.owner.Load() != nil {
+		return nil
+	}
+	if s.ownerFault != nil {
+		if err := s.ownerFault("claim"); err != nil {
+			return nil
+		}
+	}
 	runtime.LockOSThread()
+	keepThreadLocked := false
+	defer func() {
+		if !keepThreadLocked {
+			runtime.UnlockOSThread()
+		}
+	}()
 	threadID := currentStoreOwnerThreadID()
 	if threadID == 0 {
-		runtime.UnlockOSThread()
 		return nil
 	}
 	owner := &StoreOwner{store: s, generation: s.ownerGeneration.Load(), threadID: threadID}
 	owner.threadLocked.Store(true)
 	if !s.owner.CompareAndSwap(nil, owner) {
-		runtime.UnlockOSThread()
+		owner.threadLocked.Store(false)
 		return nil
 	}
+	keepThreadLocked = true
 	return owner
 }
 
@@ -143,7 +165,7 @@ func (o *StoreOwner) enterWithPreparedClose(prepared *PreparedStoreClose) (store
 	if o == nil || o.store == nil {
 		return storeMutationScope{}, ErrWrongOwner
 	}
-	if o.released.Load() || o.store.closed.Load() {
+	if o.released.Load() || o.store.Closed() {
 		return storeMutationScope{}, ErrClosed
 	}
 	if o.store.owner.Load() != o {
@@ -342,7 +364,13 @@ func (o *StoreOwner) Close() error {
 	return prepared.Commit()
 }
 
-func (s *Store) Closed() bool { return s == nil || s.closed.Load() }
+func (s *Store) Closed() bool {
+	if s == nil {
+		return true
+	}
+	state := s.state.Load()
+	return state == nil || state.closed
+}
 
 func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 	if s == nil {
@@ -353,7 +381,8 @@ func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 	}
 	s.pendingMu.Lock()
 	defer s.pendingMu.Unlock()
-	if s.closed.Load() || s.resetting.Load() {
+	state := s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() {
 		return nil, ErrClosed
 	}
 	if s.pending[header.Transfer] != nil {
@@ -364,7 +393,7 @@ func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 		return nil, err
 	}
 	transfer := &CandidateTransfer{
-		store: s, header: header, epoch: StoreEpoch(s.epoch.Load()),
+		store: s, header: header, epoch: state.epoch,
 		deadline: s.now().Add(HardTransferLifetime), base: lease, open: true,
 	}
 	s.pending[header.Transfer] = transfer
@@ -411,11 +440,14 @@ func (s *Store) Acquire(ref ResourceRef) (DetachedResource, bool) {
 	if s == nil || ref.Image == 0 || ref.Generation == 0 {
 		return DetachedResource{}, false
 	}
-	resources := s.state.resources
-	if len(resources) == 0 {
+	state := s.state.Load()
+	if state == nil || state.closed {
 		return DetachedResource{}, false
 	}
-	stored := resources[ref.Image]
+	if s.testReadHook != nil {
+		s.testReadHook("acquire-loaded")
+	}
+	stored := state.resources[ref.Image]
 	if stored == nil || stored.ref != ref {
 		return DetachedResource{}, false
 	}
@@ -430,7 +462,14 @@ func (s *Store) ResourceDimensions(ref ResourceRef) (uint32, uint32, bool) {
 	if s == nil || ref.Image == 0 || ref.Generation == 0 {
 		return 0, 0, false
 	}
-	stored := s.state.resources[ref.Image]
+	state := s.state.Load()
+	if state == nil || state.closed {
+		return 0, 0, false
+	}
+	if s.testReadHook != nil {
+		s.testReadHook("dimensions-loaded")
+	}
+	stored := state.resources[ref.Image]
 	if stored == nil || stored.ref != ref {
 		return 0, 0, false
 	}
@@ -438,37 +477,61 @@ func (s *Store) ResourceDimensions(ref ResourceRef) (uint32, uint32, bool) {
 }
 
 // Reset is retained only for detached standalone worker stores. Claimed stores
-
 // must transition through StoreOwner.PrepareReset/PublishPrepared/Commit.
 func (s *Store) Reset() {
-	if s == nil || s.closed.Load() || s.owner.Load() != nil || s.prepared != nil {
+	if s == nil {
 		return
 	}
-	_ = s.resetState(storeMutationScope{})
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	state := s.state.Load()
+	if state == nil || state.closed || s.owner.Load() != nil || s.prepared.Load() != nil || s.preparedClose.Load() != nil || !s.resetting.CompareAndSwap(false, true) {
+		return
+	}
+	if s.ownerFault != nil {
+		if err := s.ownerFault("standalone-reset"); err != nil {
+			s.resetting.Store(false)
+			return
+		}
+	}
+	if err := s.resetState(storeMutationScope{}, false); err != nil {
+		s.resetting.Store(false)
+	}
 }
 
 // Close is retained only for detached standalone worker stores. Claimed stores
-
 // close through StoreOwner so prepared ownership cannot be bypassed.
 func (s *Store) Close() {
-	if s == nil || s.owner.Load() != nil || s.prepared != nil || !s.closed.CompareAndSwap(false, true) {
+	if s == nil {
 		return
 	}
-	_ = s.resetState(storeMutationScope{})
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	state := s.state.Load()
+	if state == nil || state.closed || s.owner.Load() != nil || s.prepared.Load() != nil || s.preparedClose.Load() != nil {
+		return
+	}
+	if s.ownerFault != nil {
+		if err := s.ownerFault("standalone-close"); err != nil {
+			return
+		}
+	}
+	if err := s.resetState(storeMutationScope{}, true); err != nil {
+		return
+	}
 }
 
 func (s *Store) closeOwned(scope storeMutationScope) error {
 	if err := scope.valid(s); err != nil {
 		return err
 	}
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	owner := scope.owner
-	if !s.closed.CompareAndSwap(false, true) {
-		if s.closed.Load() {
-			return nil
-		}
-		return ErrClosed
+	if s.owner.Load() != owner {
+		return ErrWrongOwner
 	}
-	if err := s.resetState(scope); err != nil {
+	if err := s.resetState(scope, true); err != nil {
 		return err
 	}
 	s.ownerGeneration.Add(1)
@@ -478,35 +541,44 @@ func (s *Store) closeOwned(scope storeMutationScope) error {
 	return nil
 }
 
-func (s *Store) resetState(scope storeMutationScope) error {
+func (s *Store) resetState(scope storeMutationScope, closeStore bool) error {
 	if owner := s.owner.Load(); owner != nil {
 		if err := scope.valid(s); err != nil {
 			return err
 		}
 	}
-	s.identityMu.Lock()
-	defer s.identityMu.Unlock()
-	s.closePlacementReservations()
-	if err := s.abortPrepared(scope); err != nil {
+	if err := s.resolvePrepared(scope); err != nil {
 		return err
 	}
+	base := s.state.Load()
+	if base == nil || base.closed {
+		s.resetting.Store(false)
+		return nil
+	}
+	nextEpoch := base.epoch
+	closed := closeStore
+	if base.epoch == StoreEpoch(math.MaxUint64) {
+		closed = true
+	} else {
+		nextEpoch++
+	}
+	next := &storeState{resources: make(map[ImageID]*resource), nextGeneration: base.nextGeneration, epoch: nextEpoch, closed: closed}
+	if !s.state.CompareAndSwap(base, next) {
+		s.resetting.Store(false)
+		return ErrPreparedState
+	}
+	s.identityMu.Lock()
+	s.identityMu.Unlock()
+	s.closePlacementReservations()
 	for _, candidate := range s.takeCandidates() {
 		candidate.Close()
 	}
 	for _, transfer := range s.takePending() {
 		transfer.Close()
 	}
-	for _, stored := range s.state.resources {
+	for _, stored := range base.resources {
 		stored.lease.Close()
 	}
-	s.state = &storeState{resources: make(map[ImageID]*resource), nextGeneration: s.state.nextGeneration}
-	currentEpoch := s.epoch.Load()
-	if currentEpoch == math.MaxUint64 {
-		s.closed.Store(true)
-		s.resetting.Store(false)
-		return nil
-	}
-	s.epoch.Store(currentEpoch + 1)
 	s.resetting.Store(false)
 	return nil
 }
@@ -515,7 +587,11 @@ func (s *Store) Epoch() StoreEpoch {
 	if s == nil {
 		return 0
 	}
-	return StoreEpoch(s.epoch.Load())
+	state := s.state.Load()
+	if state == nil {
+		return 0
+	}
+	return state.epoch
 }
 
 func (s *Store) Usage() Usage {
@@ -529,18 +605,30 @@ func (s *Store) prepareNextRef(image ImageID) (ResourceRef, error) {
 	if image == 0 {
 		return ResourceRef{}, ErrInvalidID
 	}
-	if s.state.nextGeneration == ResourceGeneration(math.MaxUint64) {
+	state := s.state.Load()
+	if state == nil || state.closed {
+		return ResourceRef{}, ErrClosed
+	}
+	if state.nextGeneration == ResourceGeneration(math.MaxUint64) {
 		return ResourceRef{}, ErrGenerationExhausted
 	}
-	return ResourceRef{Image: image, Generation: s.state.nextGeneration + 1}, nil
+	return ResourceRef{Image: image, Generation: state.nextGeneration + 1}, nil
 }
 
 func (s *Store) consumePreparedRef(ref ResourceRef) bool {
-	if ref.Image == 0 || ref.Generation == 0 || ref.Generation != s.state.nextGeneration+1 {
+	if ref.Image == 0 || ref.Generation == 0 {
 		return false
 	}
-	s.state.nextGeneration = ref.Generation
-	return true
+	for {
+		state := s.state.Load()
+		if state == nil || state.closed || ref.Generation != state.nextGeneration+1 {
+			return false
+		}
+		next := &storeState{resources: state.resources, nextGeneration: ref.Generation, epoch: state.epoch}
+		if s.state.CompareAndSwap(state, next) {
+			return true
+		}
+	}
 }
 
 type CandidateTransfer struct {
@@ -673,7 +761,8 @@ func (t *CandidateTransfer) SealedEncodedCopy(store *Store) ([]byte, Header, Sto
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.closing.Load() || t.open || t.store != store || store.closed.Load() || store.resetting.Load() || t.epoch != StoreEpoch(store.epoch.Load()) {
+	state := store.state.Load()
+	if t.closing.Load() || t.open || t.store != store || state == nil || state.closed || store.resetting.Load() || t.epoch != state.epoch {
 		return nil, Header{}, 0, ErrTransferClosed
 	}
 	result := make([]byte, 0, int(t.encoded))

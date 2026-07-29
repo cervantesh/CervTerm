@@ -29,38 +29,44 @@ func (s *Store) prepareCandidateWithRetention(scope storeMutationScope, candidat
 	if err := scope.valid(s); err != nil {
 		return nil, ResourceRef{}, err
 	}
-	if s == nil || s.closed.Load() || s.resetting.Load() || candidate == nil || !candidate.ValidFor(s) {
+	base := s.state.Load()
+	if base == nil || base.closed || s.resetting.Load() || candidate == nil || !candidate.ValidFor(s) {
 		return nil, ResourceRef{}, ErrCandidateInvalid
 	}
 	if !retention.Valid() {
 		candidate.Close()
 		return nil, ResourceRef{}, ErrInvalidRetention
 	}
-	if s.prepared != nil {
+	if s.prepared.Load() != nil {
 		return nil, ResourceRef{}, ErrPreparedState
 	}
-	ref, err := s.prepareNextRef(candidate.image)
-	if err != nil {
+	if base.nextGeneration == ResourceGeneration(^uint64(0)) {
 		candidate.Close()
-		return nil, ResourceRef{}, err
+		return nil, ResourceRef{}, ErrGenerationExhausted
 	}
-	resources := cloneResources(s.state.resources)
+	ref := ResourceRef{Image: candidate.image, Generation: base.nextGeneration + 1}
+	resources := cloneResources(base.resources)
+	prepared := &PreparedStoreState{
+		owner: scope.owner, base: base, epoch: base.epoch,
+		next: &storeState{resources: resources, nextGeneration: ref.Generation, epoch: base.epoch},
+	}
+	if !s.prepared.CompareAndSwap(nil, prepared) {
+		return nil, ResourceRef{}, ErrPreparedState
+	}
 	pixels, lease, ok := candidate.claimOwnership()
 	if !ok {
+		if !s.prepared.CompareAndSwap(prepared, nil) {
+			return nil, ResourceRef{}, ErrPreparedState
+		}
 		return nil, ResourceRef{}, ErrCandidateInvalid
 	}
 	created := &resource{ref: ref, width: candidate.width, height: candidate.height, stride: candidate.stride, rgba: pixels, lease: lease, retention: retention}
 	old := resources[candidate.image]
 	resources[candidate.image] = created
-	prepared := &PreparedStoreState{
-		owner: scope.owner, base: s.state, epoch: StoreEpoch(s.epoch.Load()),
-		next:        &storeState{resources: resources, nextGeneration: ref.Generation},
-		newResource: created,
-	}
+	prepared.newResource = created
 	if old != nil {
 		prepared.retired = append(prepared.retired, old)
 	}
-	s.prepared = prepared
 	return prepared, ref, nil
 }
 
@@ -68,10 +74,11 @@ func (s *Store) prepareResourceRemoval(scope storeMutationScope, refs []Resource
 	if err := scope.valid(s); err != nil {
 		return nil, err
 	}
-	if s == nil || s.closed.Load() || s.resetting.Load() {
+	base := s.state.Load()
+	if base == nil || base.closed || s.resetting.Load() {
 		return nil, ErrClosed
 	}
-	if s.prepared != nil {
+	if s.prepared.Load() != nil {
 		return nil, ErrPreparedState
 	}
 	removeSet := make(map[ImageID]*resource, len(refs))
@@ -79,24 +86,26 @@ func (s *Store) prepareResourceRemoval(scope storeMutationScope, refs []Resource
 		if ref.Image == 0 || ref.Generation == 0 {
 			return nil, ErrInvalidID
 		}
-		stored := s.state.resources[ref.Image]
+		stored := base.resources[ref.Image]
 		if stored != nil && stored.ref == ref {
 			removeSet[ref.Image] = stored
 		}
 	}
-	resources := make(map[ImageID]*resource, len(s.state.resources)-len(removeSet))
+	resources := make(map[ImageID]*resource, len(base.resources)-len(removeSet))
 	prepared := &PreparedStoreState{
-		owner: scope.owner, base: s.state, epoch: StoreEpoch(s.epoch.Load()),
-		next: &storeState{resources: resources, nextGeneration: s.state.nextGeneration},
+		owner: scope.owner, base: base, epoch: base.epoch,
+		next: &storeState{resources: resources, nextGeneration: base.nextGeneration, epoch: base.epoch},
 	}
-	for image, stored := range s.state.resources {
+	for image, stored := range base.resources {
 		if removeSet[image] == stored {
 			prepared.retired = append(prepared.retired, stored)
 			continue
 		}
 		resources[image] = stored
 	}
-	s.prepared = prepared
+	if !s.prepared.CompareAndSwap(nil, prepared) {
+		return nil, ErrPreparedState
+	}
 	return prepared, nil
 }
 
@@ -104,29 +113,34 @@ func (s *Store) prepareReset(scope storeMutationScope) (*PreparedStoreState, err
 	if err := scope.valid(s); err != nil {
 		return nil, err
 	}
-	if s == nil || s.closed.Load() {
+	base := s.state.Load()
+	if base == nil || base.closed {
 		return nil, ErrClosed
 	}
 	if !s.resetting.CompareAndSwap(false, true) {
 		return nil, ErrPreparedState
 	}
-	if err := s.abortPrepared(scope); err != nil {
+	if err := s.resolvePrepared(scope); err != nil {
 		s.resetting.Store(false)
 		return nil, err
 	}
-	currentEpoch := StoreEpoch(s.epoch.Load())
-	if currentEpoch == StoreEpoch(^uint64(0)) {
+	base = s.state.Load()
+	if base == nil || base.closed {
+		s.resetting.Store(false)
+		return nil, ErrClosed
+	}
+	if base.epoch == StoreEpoch(^uint64(0)) {
 		s.resetting.Store(false)
 		return nil, ErrGenerationExhausted
 	}
 	prepared := &PreparedStoreState{
-		owner: scope.owner, base: s.state, epoch: currentEpoch, resetEpoch: currentEpoch + 1,
-		next:           &storeState{resources: make(map[ImageID]*resource), nextGeneration: s.state.nextGeneration},
+		owner: scope.owner, base: base, epoch: base.epoch, resetEpoch: base.epoch + 1,
+		next:           &storeState{resources: make(map[ImageID]*resource), nextGeneration: base.nextGeneration, epoch: base.epoch + 1},
 		nextPending:    make(map[TransferID]*CandidateTransfer),
 		nextPlacements: make(map[*PlacementReservation]struct{}),
 		nextCandidates: make(map[*DecodedCandidate]struct{}),
 	}
-	for _, stored := range s.state.resources {
+	for _, stored := range base.resources {
 		prepared.retired = append(prepared.retired, stored)
 	}
 	s.pendingMu.Lock()
@@ -144,7 +158,10 @@ func (s *Store) prepareReset(scope storeMutationScope) (*PreparedStoreState, err
 		prepared.candidates = append(prepared.candidates, candidate)
 	}
 	s.candidateMu.Unlock()
-	s.prepared = prepared
+	if !s.prepared.CompareAndSwap(nil, prepared) {
+		s.resetting.Store(false)
+		return nil, ErrPreparedState
+	}
 	return prepared, nil
 }
 
@@ -160,15 +177,26 @@ func (s *Store) publishPrepared(scope storeMutationScope, prepared *PreparedStor
 	if err := scope.valid(s); err != nil {
 		return err
 	}
-	if prepared == nil || prepared.owner != scope.owner ||
-		s.prepared != prepared || s.closed.Load() || s.state != prepared.base || StoreEpoch(s.epoch.Load()) != prepared.epoch || prepared.published.Load() {
+	if prepared == nil || prepared.owner != scope.owner || s.prepared.Load() != prepared || prepared.published.Load() {
+		return ErrPreparedState
+	}
+	base := s.state.Load()
+	if base == nil || base.closed || base != prepared.base || base.epoch != prepared.epoch {
+		return ErrPreparedState
+	}
+	// Keep the lifecycle gate installed through publication and finalization. A
+	// failed state CAS therefore leaves an unpublished transition that can be
+	// deterministically aborted instead of relying on a best-effort gate rollback.
+	if s.ownerFault != nil {
+		if err := s.ownerFault("publish-state-cas"); err != nil {
+			return err
+		}
+	}
+	if !s.state.CompareAndSwap(prepared.base, prepared.next) {
 		return ErrPreparedState
 	}
 	prepared.published.Store(true)
-	s.state = prepared.next
-	s.prepared = nil
 	if prepared.resetEpoch != 0 {
-		s.epoch.Store(uint64(prepared.resetEpoch))
 		s.pendingMu.Lock()
 		s.pending = prepared.nextPending
 		s.pendingMu.Unlock()
@@ -221,7 +249,11 @@ func (p *PreparedStoreState) commit(scope storeMutationScope) error {
 	if !p.published.Load() {
 		return ErrPreparedState
 	}
-	if !p.finished.CompareAndSwap(false, true) {
+	finish, err := p.finishLifecycleGate()
+	if err != nil {
+		return err
+	}
+	if !finish {
 		return nil
 	}
 	for _, stored := range p.retired {
@@ -252,17 +284,32 @@ func (p *PreparedStoreState) abort(scope storeMutationScope) error {
 	if p.published.Load() {
 		return ErrPreparedState
 	}
-	if !p.finished.CompareAndSwap(false, true) {
-		return nil
+	finish, err := p.finishLifecycleGate()
+	if err != nil {
+		return err
 	}
-	if p.owner.store.prepared == p {
-		p.owner.store.prepared = nil
+	if !finish {
+		return nil
 	}
 	if p.resetEpoch != 0 {
 		p.owner.store.resetting.Store(false)
 	}
 	p.abortOwnership(scope)
 	return nil
+}
+
+func (p *PreparedStoreState) finishLifecycleGate() (bool, error) {
+	if p.finished.Load() {
+		return false, nil
+	}
+	// A valid owner scope serializes lifecycle transitions. Clear the retained
+	// gate first and only then mark the transition finished, so a failed gate CAS
+	// is reported without an unaccounted finished state or rollback CAS.
+	if !p.owner.store.prepared.CompareAndSwap(p, nil) {
+		return false, ErrPreparedState
+	}
+	p.finished.Store(true)
+	return true, nil
 }
 
 func (p *PreparedStoreState) validateScope(scope storeMutationScope) error {
@@ -289,22 +336,29 @@ func (p *PreparedStoreState) abortOwnership(scope storeMutationScope) {
 	p.retired = nil
 }
 
-func (s *Store) abortPrepared(scope storeMutationScope) error {
-	prepared := s.prepared
+func (s *Store) resolvePrepared(scope storeMutationScope) error {
+	prepared := s.prepared.Load()
 	if prepared == nil {
 		return nil
 	}
 	if err := prepared.validateScope(scope); err != nil {
 		return err
 	}
+	if prepared.published.Load() {
+		return prepared.commit(scope)
+	}
 	return prepared.abort(scope)
 }
 
 func (s *Store) ResourceRef(image ImageID) (ResourceRef, bool) {
-	if s == nil || s.closed.Load() {
+	if s == nil {
 		return ResourceRef{}, false
 	}
-	stored := s.state.resources[image]
+	state := s.state.Load()
+	if state == nil || state.closed {
+		return ResourceRef{}, false
+	}
+	stored := state.resources[image]
 	if stored == nil {
 		return ResourceRef{}, false
 	}
@@ -312,11 +366,15 @@ func (s *Store) ResourceRef(image ImageID) (ResourceRef, bool) {
 }
 
 func (s *Store) ResourceRefs() []ResourceRef {
-	if s == nil || s.closed.Load() {
+	if s == nil {
 		return nil
 	}
-	result := make([]ResourceRef, 0, len(s.state.resources))
-	for _, stored := range s.state.resources {
+	state := s.state.Load()
+	if state == nil || state.closed {
+		return nil
+	}
+	result := make([]ResourceRef, 0, len(state.resources))
+	for _, stored := range state.resources {
 		result = append(result, stored.ref)
 	}
 	return result
@@ -329,7 +387,11 @@ type PlacementReservation struct {
 }
 
 func (s *Store) ReservePlacements(count uint64) (*PlacementReservation, error) {
-	if s == nil || s.closed.Load() || s.resetting.Load() || count == 0 {
+	if s == nil || count == 0 {
+		return nil, ErrInvalidPlacement
+	}
+	state := s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() {
 		return nil, ErrInvalidPlacement
 	}
 	lease, err := reserve(s.process, &s.pane, Usage{Placements: count})
@@ -338,7 +400,8 @@ func (s *Store) ReservePlacements(count uint64) (*PlacementReservation, error) {
 	}
 	reservation := &PlacementReservation{store: s, lease: lease}
 	s.placementMu.Lock()
-	if s.closed.Load() || s.resetting.Load() {
+	state = s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() {
 		s.placementMu.Unlock()
 		lease.Close()
 		return nil, ErrClosed

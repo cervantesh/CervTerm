@@ -126,7 +126,7 @@ func TestInternalIDAllocationRacingCloseFailsBeforeCloseReturns(t *testing.T) {
 		close(closed)
 	}()
 	deadline := time.After(2 * time.Second)
-	for !store.closed.Load() {
+	for !store.Closed() {
 		select {
 		case <-deadline:
 			store.identityMu.Unlock()

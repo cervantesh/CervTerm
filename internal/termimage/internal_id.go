@@ -3,12 +3,17 @@ package termimage
 // AllocateInternalImageID reserves the next high-half pane-local image identity.
 // Identities are monotonic for the Store lifetime and survive reset.
 func (s *Store) AllocateInternalImageID() (ImageID, error) {
-	if s == nil || s.closed.Load() || s.resetting.Load() {
+	if s == nil {
+		return 0, ErrClosed
+	}
+	state := s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() {
 		return 0, ErrClosed
 	}
 	s.identityMu.Lock()
 	defer s.identityMu.Unlock()
-	if s.closed.Load() || s.resetting.Load() {
+	state = s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() {
 		return 0, ErrClosed
 	}
 	if s.nextInternalImage == ImageID(^uint32(0)) {
@@ -21,12 +26,17 @@ func (s *Store) AllocateInternalImageID() (ImageID, error) {
 // AllocateInternalPlacementID reserves the next high-half pane-local placement identity.
 // Identities are monotonic for the Store lifetime and survive reset.
 func (s *Store) AllocateInternalPlacementID() (PlacementID, error) {
-	if s == nil || s.closed.Load() || s.resetting.Load() {
+	if s == nil {
+		return 0, ErrClosed
+	}
+	state := s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() {
 		return 0, ErrClosed
 	}
 	s.identityMu.Lock()
 	defer s.identityMu.Unlock()
-	if s.closed.Load() || s.resetting.Load() {
+	state = s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() {
 		return 0, ErrClosed
 	}
 	if s.nextInternalPlacement == PlacementID(^uint32(0)) {
