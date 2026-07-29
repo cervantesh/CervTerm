@@ -33,7 +33,7 @@ Best-effort support currently targets:
 - default-off terminal notification requests; the native notification adapter is currently Windows-only.
 - controlled testing of the restart-scoped, visible-only, default-off Windows UI Automation adapter.
 - controlled testing of the restart-scoped, default-off direct-data Kitty subset on the GLFW/OpenGL frontend (`t`/`T`/`p`/`d`/`q`; RGB24/RGBA32/PNG; zlib only for raw RGB/RGBA) within documented hard caps.
-- controlled testing of the independent restart-scoped, default-off bounded Sixel DCS and iTerm OSC 1337 direct-inline PNG subsets on the Windows GLFW/OpenGL frontend; manual qualification is unrun and `support_claim` remains `none`.
+- controlled testing of the independent restart-scoped, default-off bounded Sixel DCS and iTerm OSC 1337 direct-inline PNG subsets. Later Phase 15 evidence records a narrow Windows/OpenGL iTerm PNG visual pass and WSLg/X11 Sixel pass; the broader Phase 14 GUI matrix remains unrun and `support_claim` remains `none`.
 
 Not yet guaranteed:
 

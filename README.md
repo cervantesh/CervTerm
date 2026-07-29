@@ -1,225 +1,251 @@
 # CervTerm
 
-CervTerm is an experimental GPU terminal emulator written in Go.
+[![CI](https://github.com/cervantesh/CervTerm/actions/workflows/ci.yml/badge.svg)](https://github.com/cervantesh/CervTerm/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/cervantesh/CervTerm?include_prereleases)](https://github.com/cervantesh/CervTerm/releases/latest)
+[![License](https://img.shields.io/github/license/cervantesh/CervTerm)](LICENSE)
 
-![CervTerm running a local Windows shell](docs/assets/cervterm-preview.png)
+CervTerm is an experimental, Windows-first GPU terminal emulator written in Go. It combines a native in-process multiplexer, Lua/Teal configuration, rich font and appearance controls, retained command UX, and a bounded terminal core behind one GLFW/OpenGL frontend.
 
-## Current status
+![CervTerm with local tabs and split panes on Windows](docs/assets/cervterm-preview.png)
 
-CervTerm is not a finished daily-driver terminal yet, but it already includes:
+*Two tabs, two independent local panes, and window-local status on the qualified Windows frontend.*
 
-- Windows ConPTY backend and Unix PTY backend behind build tags.
-- GLFW/OpenGL frontend.
-- Experimental, default-off, restart-scoped bounded Kitty, Sixel, and iTerm inline-image subsets on the GLFW/OpenGL frontend, with independent protocol flags, shared resource budgets, and no stable support claim.
-- Scrollback, alternate screen, resize reflow, selection/copy/paste, and bracketed paste.
-- Native in-process pane mux with independent PTY/parser/core state per pane, clipped binary row/column splits, draggable dividers, focused input, deterministic close/collapse, and independent per-pane zoom.
-- Scrollback search: `ctrl+shift+f` opens a search bar (Enter jumps to the next match upward, Esc closes); also scriptable via `term:search`.
-- VT parsing for common cursor, erase, color, scroll-region, insert/delete, input-mode, mouse-mode, and title sequences.
-- Keyboard encoding for navigation keys, F1-F12, and Ctrl/Alt/Shift modifiers.
-- SGR mouse press/release/wheel/drag encoding, including modifiers.
-- Lua config loading, Teal check/gen support, atomic runtime reload, and `--print-default-config`.
-- Per-side padding; independent text/background opacity; bounded solid, gradient, and image background layers; configurable scrollbar visibility/stable gutter/fade FPS; and capability-aware native blur.
-- Renderer-neutral OpenType glyph backend with bitmap color fonts, broad COLRv1 paint/composite/variation support, SVG glyph extraction/rasterization, DirectWrite shaping smoke coverage, and shaped color cluster handling.
-- Diagnostics logging via `--log-file` / `CERVTERM_LOG_FILE`, including panic stack capture.
-- Parser fuzz smoke coverage, replay-style VT golden fixtures, and a Windows daily-driver smoke matrix for cmd.exe, git, pager, alternate-screen, resize/reflow, and longer-session paths.
+> **Beta software:** Windows amd64 is the qualified GUI target. Back up important terminal workflows and keep another terminal available. Renderer selection, remote domains, and live session detach/reattach are intentionally unavailable.
 
-- `--doctor` support diagnostics for config/log/environment reporting.
-See:
+## Highlights
 
-- [`docs/wezterm-parity-roadmap.md`](docs/wezterm-parity-roadmap.md)
-- [`docs/parity-baseline.md`](docs/parity-baseline.md)
-- [`docs/parity-support-matrix.json`](docs/parity-support-matrix.json)
-- [`docs/product-roadmap.md`](docs/product-roadmap.md)
-- [`docs/config-roadmap.md`](docs/config-roadmap.md)
-- [`docs/config-compatibility-policy.md`](docs/config-compatibility-policy.md)
-- [`docs/vttest-checklist.md`](docs/vttest-checklist.md)
-- [`docs/vttest-captures.md`](docs/vttest-captures.md)
-- [`docs/emoji-rendering-research.md`](docs/emoji-rendering-research.md)
-- [`docs/shaping-options.md`](docs/shaping-options.md)
-- [`docs/release-packaging.md`](docs/release-packaging.md)
-- [`docs/getting-started.md`](docs/getting-started.md)
-- [`docs/daily-driver-smoke.md`](docs/daily-driver-smoke.md)
-- [`docs/troubleshooting.md`](docs/troubleshooting.md)
-- [`docs/release-trust.md`](docs/release-trust.md)
-- [`SUPPORT.md`](SUPPORT.md)
+- **Independent local panes:** each pane owns its PTY, parser, terminal state, scrollback, focus, geometry, and zoom. Split, resize, move, swap, and close panes without rebuilding sibling state.
+- **Visible tabs, native windows, and workspaces:** retained tab bar, multiple process-owned windows, named local workspaces, cross-window pane/tab movement, and optional layout-only persistence.
+- **Terminal behavior:** scrollback and reflow, alternate screen, selection, bracketed paste, keyboard/mouse protocols, search, BiDi opt-in, OSC 7 working directory, OSC 8 hyperlinks, OSC 52 policy, semantic shell zones, bells, and notifications.
+- **Modern configuration:** strict v2 documents, includes, environments, profiles, CLI overrides, provenance diagnostics, Lua modules, Teal generation, graph-wide watching, atomic activation, and failed-edit recovery.
+- **Typed actions and retained UX:** leader chords, key tables, exact mouse bindings, command palette, Quick Select, launch menu, tab/window/workspace actions, and Lua callbacks with watchdogs.
+- **Fonts and appearance:** ordered descriptors and fallback rules, ligatures/features, fixed-grid metrics, bitmap/COLR/SVG color glyphs, DirectWrite shaping/raster support, per-side padding, independent opacity controls, layered backgrounds, native blur capability, tab bar, and scrollbar policies.
+- **Bounded experimental graphics:** independent default-off Kitty, Sixel, and iTerm inline-image subsets sharing explicit pane/process budgets and the existing OpenGL renderer.
+- **Diagnostics and hardening:** `--doctor`, `--explain-config`, structured logs, panic capture, race coverage, fuzz smoke, replay fixtures, recovery gates, checksums, and GitHub provenance attestations.
 
-## Install beta builds
+### Command palette
 
-Tagged releases publish portable zip artifacts from GitHub Actions:
+![CervTerm command palette listing typed terminal, pane, tab, window, and workspace actions](docs/assets/cervterm-command-palette.png)
 
-- `cervterm-<tag>-windows.zip` contains the GLFW Windows executable, generated default config, bundled `font-sources/NotoColorEmoji.ttf`, README, CHANGELOG, docs, and packaging metadata.
-- `cervterm-<tag>-linux-headless-amd64.zip` contains the headless command for Unix PTY/config/capture smoke coverage before a Linux GUI frontend is packaged.
+Search built-in typed actions and labeled user bindings without sending modal input to the shell.
 
-For a Windows zip install:
+### Quick Select
 
-1. Download and extract the Windows zip from the GitHub release.
-2. Run `cervterm.exe --version`, `cervterm.exe --build-info`, or `cervterm.exe --doctor` to verify the binary and environment.
-3. Generate a starter config with `cervterm.exe --print-default-config > cervterm.lua`.
-4. Launch with `cervterm.exe --config cervterm.lua`.
-5. If diagnosing startup issues, add `--log-file cervterm.log`.
+![CervTerm Quick Select labels over visible URL matches in the active pane](docs/assets/cervterm-quick-select.png)
 
-Portable winget manifest templates live under `packaging/winget/`. Authenticode signing and MSI/WiX publishing are intentionally deferred for now; beta distribution uses unsigned portable zips with SHA256 checksums and GitHub provenance attestations.
+Label visible links and configured matches while preserving pane, viewport, and output identity.
 
-For release authenticity and unsigned beta expectations, see [`docs/release-trust.md`](docs/release-trust.md). For diagnostics, see [`docs/troubleshooting.md`](docs/troubleshooting.md).
+## Platform status
 
-## Pane shortcuts
+| Platform | Status |
+| --- | --- |
+| Windows amd64 | Qualified beta GUI using GLFW/OpenGL and ConPTY. Release zip available. |
+| Linux amd64 | Headless release artifact. A narrow source-built WSLg/X11 GUI integration pass exists, but broad desktop support is not claimed. |
+| macOS | Headless compile evidence only; no packaged or qualified GUI. |
 
-Lua keybindings take precedence over these built-ins:
+See the machine-readable [support matrix](docs/parity-support-matrix.json) and [Phase 15 platform qualification](docs/validation/phase-15-platform-qualification.md) for exact evidence and exclusions.
 
-- `Alt+Shift+=`: split the focused pane into left/right columns.
-- `Alt+Shift+-`: split the focused pane into top/bottom rows.
-- `Alt+Left/Right/Up/Down`: move focus geometrically.
-- `Ctrl+Shift+W`: close the focused pane (or the window when it is the final pane).
-- Drag a divider with the left mouse button to resize adjacent panes.
-- `Ctrl++`, `Ctrl+-`, `Ctrl+0`, and Ctrl+wheel zoom only the focused pane; sibling panes keep their font size and grid.
+## Install a Windows beta
 
-The mux is local and in-process. Pane zoom shares one fixed-size glyph atlas across all active font sizes, so focus changes do not rebuild GPU resources. Visible tabs, detachable/persistent sessions, remote domains and tmux integration are deferred.
+1. Download `cervterm-<tag>-windows.zip` and `SHA256SUMS.txt` from the [latest release](https://github.com/cervantesh/CervTerm/releases/latest).
+2. Verify the archive:
 
+   ```powershell
+   $archive = "cervterm-<tag>-windows.zip"
+   $expected = ((Select-String -Path .\SHA256SUMS.txt -Pattern ([regex]::Escape($archive))).Line -split "\s+")[0]
+   $actual = (Get-FileHash ".\$archive" -Algorithm SHA256).Hash.ToLowerInvariant()
+   if ($actual -ne $expected.ToLowerInvariant()) { throw "SHA256 mismatch" }
+   ```
 
-## Build and test
+3. Extract the zip and inspect the build:
 
-```sh
-go test ./...
-go test -tags glfw ./internal/fontglyph ./internal/frontend/glfwgl ./cmd/cervterm -count=1
-go run ./scripts/capture-parity-baseline.go -count 3
-go build -tags glfw -o cervterm.exe ./cmd/cervterm
-```
+   ```powershell
+   .\cervterm.exe --version
+   .\cervterm.exe --build-info
+   .\cervterm.exe --doctor
+   ```
 
-Run the release/package preflight after creating a local beta zip:
+4. Generate and edit a v2 configuration, then launch:
 
-```cmd
-go run ./scripts/package-beta.go -version <tag> -outdir dist
-go run ./scripts/release-preflight.go -version <tag> -outdir dist -windows-zip dist/cervterm-<tag>-windows.zip
-```
+   ```powershell
+   .\cervterm.exe --print-default-config > cervterm.lua
+   .\cervterm.exe --config .\cervterm.lua
+   ```
 
-Run the Windows daily-driver smoke matrix:
+Beta binaries are currently unsigned. Releases include SHA256 checksums and GitHub provenance attestations; winget files are templates rather than a published package, and MSI/WiX publishing is deferred. Read [release trust](docs/release-trust.md) before distribution.
 
-```sh
-go run ./scripts/daily-driver-smoke.go -workdir dist/daily-driver-smoke -version daily-smoke
-```
+## Configuration v2
 
-
-Cross-compile smoke for the non-GLFW headless command:
-
-```sh
-GOOS=linux GOARCH=amd64 go build -o dist/cervterm-linux-amd64 ./cmd/cervterm
-```
-
-## Run
-
-```sh
-./cervterm.exe
-./cervterm.exe --version
-./cervterm.exe --build-info
-./cervterm.exe --doctor
-./cervterm.exe --print-default-config > cervterm.lua
-./cervterm.exe --config path/to/cervterm.lua
-./cervterm.exe --capture-vt internal/vt/testdata/manual.vt --capture-program vttest --capture-rows 24 --capture-cols 80
-./cervterm.exe --log-file ./cervterm.log
-```
-
-## Lua config example
-
-Generate a complete editable template with `--print-default-config`. The default keeps compatibility behavior while exposing Phase 5 appearance/window controls. A minimal v2 override:
+A compact starting point:
 
 ```lua
+local cervterm = require("cervterm")
+
 return {
   config_version = 2,
-  window = { initial_rows = 30, initial_cols = 100, decorations = "system", titlebar = "dark", opacity = 1.0, text_opacity = 1.0, background_opacity = 1.0, padding_left = 8, padding_right = 8, padding_top = 8, padding_bottom = 8 },
-  colors = { background = "#080B12E6" },
-  scrolling = { history = 2000, wheel_multiplier = 3, hide_cursor_when_scrolled = true },
-  scrollbar = { mode = "scrolling", stable_gutter = true, animation_fps = 30 },
-  tab_bar = { mode = "multiple", position = "top", min_width_px = 96, max_width_px = 220 },
-  render = { max_fps = 0 },
-  shell = { program = "cmd.exe", args = {} },
+
+  window = {
+    initial_rows = 30,
+    initial_cols = 100,
+    decorations = "system",
+    titlebar = "dark",
+    padding_left = 8,
+    padding_right = 8,
+    padding_top = 8,
+    padding_bottom = 8,
+  },
+
+  font = {
+    family = "JetBrainsMono Nerd Font",
+    size = 12.0,
+    ligatures = true,
+  },
+
+  colors = {
+    foreground = "#F7F7FB",
+    background = "#1E1D40",
+    cursor = "#FAD000",
+    accent = "#FAD000FF",
+  },
+
+  tab_bar = { mode = "multiple", position = "top" },
+  scrollbar = { mode = "scrolling", stable_gutter = true },
+
+  keys = {
+    { key = "t", mods = "ctrl+shift", label = "New tab",
+      action = cervterm.action.NewTab },
+    { key = "p", mods = "ctrl+shift", label = "Command palette",
+      action = cervterm.action.ActivateCommandPalette },
+    { key = "q", mods = "ctrl+shift", label = "Quick Select",
+      action = cervterm.action.ActivateQuickSelect },
+  },
 }
 ```
 
-`render.max_fps = 0` means uncapped apart from vsync/event policy; a positive value caps presentation without changing the damage-driven idle policy. Renderer selection is intentionally unavailable: GLFW/OpenGL remains the only supported frontend/backend.
+The generated template documents common settings. The public schema also includes composition and persistence fields that are intentionally not expanded inline; consult the detailed configuration references below. V2 can compose local sources with `includes`, select declared `environments` and `profiles`, and apply repeatable typed CLI overrides:
 
-The selected source is watched with debounce. `ctrl+shift+r` and `term:reload_config()` request a manual atomic reload; invalid edits preserve the last valid runtime. Shell and other startup-only changes are reported as requiring restart.
+```powershell
+.\cervterm.exe --config .\cervterm.lua `
+  --config-override window.background_opacity=0.94
+.\cervterm.exe --config .\cervterm.lua --explain-config
+.\cervterm.exe --config .\cervterm.lua --explain-config-field font.family
+```
 
-## Teal config
+Use `--environment <name>` or `--profile <name>` only after declaring that name in the configuration graph; unknown selections fail closed.
 
-`cervterm.tl` is checked and generated through the external `tl` command before CervTerm loads the generated Lua file. Copy `docs/examples/cervterm.d.tl` beside it for the complete root `cervterm.Config` type, or start from `docs/examples/cervterm.tl`. Lua remains the runtime target, so Teal is optional for users who prefer direct Lua config.
+CervTerm watches the complete active source graph, including discovered local Lua module dependencies. Reload with `Ctrl+Shift+R` or `term:reload_config()`. Invalid edits preserve the active runtime and remain watched for automatic recovery. Application scope is explicit: some fields are live, shell changes apply to new panes, geometry may apply to new windows, and resource changes require restart.
 
-## Diagnostics logging
+See [getting started](docs/getting-started.md), [configuration compatibility](docs/config-compatibility-policy.md), and [scripting/actions](docs/scripting.md).
 
-Runtime diagnostics are written to stderr and to a local log file by default. Override the location with `--log-file path/to/cervterm.log` or `CERVTERM_LOG_FILE`; use `--log-file -` to keep diagnostics on stderr only. Run `--doctor` to print the effective log path, config discovery state, environment hints, and support checklist. Unexpected panics are captured with a stack trace before CervTerm exits.
+## Default shortcuts
 
-## Display scaling and Phase 5 appearance controls
+Lua bindings override ordinary built-ins. Active retained modes and reserved search/reload routes run first.
 
-Per-side logical padding is scaled with DPI and participates in grid sizing and pointer hit testing. The scrollbar supports `always`, `hover`, `scrolling`, and `never`; `stable_gutter` reserves its slot so visibility changes do not resize the PTY, and `animation_fps` bounds fade updates.
+| Shortcut | Action |
+| --- | --- |
+| `Alt+Shift+=` / `Alt+Shift+-` | Split the focused pane right / below |
+| `Alt+Arrow` | Focus the nearest pane geometrically |
+| `Ctrl+Shift+W` | Close the focused pane, or the final window |
+| `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom only the focused pane / reset zoom |
+| `Ctrl+wheel` | Zoom only the focused pane |
+| `Ctrl+Shift+F` | Open scrollback search |
+| `Ctrl+Shift+R` | Atomically reload configuration |
+| `Shift+PageUp/PageDown` | Scroll one page |
+| `Shift+Home/End` | Scroll to history start / live bottom |
+| `Ctrl+V` or `Shift+Insert` | Paste clipboard |
+| `Ctrl+Insert` or `Ctrl+Shift+C` | Copy selection |
+| `Ctrl+Shift+I` | Toggle render statistics |
 
-	The retained tab bar supports `multiple` (default), `always`, and `hidden` visibility plus top/bottom placement. Its bounded tab widths, add/close controls, active-visible overflow, and geometry reservation reload atomically; the default one-tab window remains pixel-compatible with no bar.
+Drag a divider with the left mouse button to resize adjacent panes. Tabs, windows, workspaces, command palette, Quick Select, and launch menu are typed actions but do not claim default chords; bind only the ones you want.
 
-Text opacity and composed background opacity are independent, while `window.opacity` remains whole-window opacity. Validation prevents incompatible simultaneous translucency modes. Background composition is a bounded ordered layer stack: solid colors, linear gradients, and locally decoded images with explicit fit/alignment, decode limits, cache budgets, and asynchronous replacement on resize/reload.
+## Tabs, windows, workspaces, and persistence
 
-Rendering remains damage-driven by default (`render.redraw = "on_demand"`). `render.max_fps` caps presentation when positive; it does not create frames while idle. `render.vsync` still limits swaps to the monitor refresh. There is no renderer selector.
+The default tab bar mode is `multiple`, so it appears when a second tab opens. `always` and `hidden` are also available. Tabs and panes can move between process-owned native windows while retaining stable process-local identities.
 
-Initial terminal geometry can be set with `window.rows`/`window.cols`. `window.decorations` and `window.titlebar` request the supported native startup mode and are recreation-scoped; unsupported platform combinations degrade through capability diagnostics rather than implying cross-platform parity. Phase 5 GUI qualification is Windows-only unless a platform pass is explicitly recorded in [`docs/manual-verification.md`](docs/manual-verification.md).
+Named workspaces change which local windows are visible; switching does not suspend their sessions. Optional persistence saves bounded layout metadata only. Restore creates fresh local shell processes—it does **not** preserve or reattach live processes. Remote SSH/WSL domains and live detach/reattach are excluded.
 
-## Phase 6–7 input and retained UX
+## Shell integration and trusted effects
 
-CervTerm supports bounded leader chords, named key tables, exact typed mouse bindings, and transactional pane resize/swap/move actions. Phase 7 adds retained command palette, quick select, and local launch menu modes. Active modes capture keyboard, character, pointer, wheel, and terminal mouse-reporting paths before the PTY while preserving damage-driven idle rendering.
+CervTerm recognizes OSC 7 working directories, OSC 8 hyperlinks, OSC 133/633 semantic prompt zones, bounded notification sequences, and bell policies. Detected links require a fresh user click and an allowed HTTP(S) target before the platform opener runs. OSC 52 terminal writes default to `off`; reads are denied.
 
-Quick select labels visible HTTP(S) links plus compiled custom rules and rejects stale output/geometry/viewport/focus snapshots before copy/open side effects. Launch targets are declarative executable-plus-argv records; environment values are redacted in provenance, no shell wrapper or interpolation is inserted, and process spawn succeeds before pane topology commits. See [`docs/scripting.md`](docs/scripting.md) for syntax and hard limits.
+Windows native notifications are experimental, consent-gated, and disabled by default. When enabled, terminal-supplied notification titles and bodies are intentionally delivered to the native notification adapter; configuration diagnostics and fallback errors remain value-redacted.
 
-The OpenGL backend keeps an authoritative RGBA offscreen frame image: damaged background pixels replace prior RGBA, while glyphs and overlays blend normally, and the complete image is presented each frame. Blur is routed through a capability-aware `BlurProvider`; providers report `active`, `disabled`, `unsupported`, `incompatible`, or `failed` and degrade without terminating. **The macOS AppKit, KDE/X11, and KDE/Wayland providers are experimental and compile-validated but have not yet completed real-compositor smoke testing.**
+## Experimental opt-ins
 
-The GLFW frontend uses the current monitor content scale to rasterize text and scale window padding and chrome in framebuffer pixels. Moving the window between monitors rebuilds the glyph atlas at the new effective DPI. A GLFW-enabled `--doctor` reports the primary monitor scale and effective DPI; headless builds report that scale detection is unavailable.
+These features are disabled by default, restart-scoped, and do not carry broad support claims:
 
-Glyphs, including color emoji and shaped clusters, share at most two 2048 x 2048 RGBA atlas pages. ASCII is prewarmed; when both pages fill, CervTerm resets the atlas generation and rasterizes visible glyphs again on demand, keeping GPU texture memory bounded.
+| Feature | Current boundary |
+| --- | --- |
+| Windows IME/preedit | Experimental native composition path. Broader real Japanese/Chinese/Korean qualification remains incomplete. |
+| Windows UI Automation | Experimental visible-viewport projection only. Narrator/NVDA support is not claimed. |
+| Kitty graphics | Bounded direct-data subset; independent flag and rollback. |
+| Sixel graphics | Narrow 7-bit DCS subset with explicit grammar and budgets. |
+| iTerm inline images | Narrow inline PNG subset; Windows/OpenGL visual evidence exists. |
 
-Monochrome text coverage is adjusted with `render.text_gamma` (default `1.15`) and `render.text_darken` (default `0.0`) for stronger antialiased edges and stems. Set them to `1.0` and `0.0` to restore the previous rendering. These settings affect monochrome text only; color emoji are left untouched.
-
-Text uses unhinted, typeface-faithful rasterization by default (`render.text_raster = "go"`). On Windows, set `render.text_raster = "auto"` to opt into DirectWrite's grid-fitted hinting for Windows-Terminal-style uniform stems. Set `render.text_raster = "subpixel"` on any OS for a classic-macOS look: unhinted outlines with per-channel antialiasing designed for horizontal-RGB-stripe LCDs. Prefer `"go"` on rotated displays and OLED/PenTile panels. Color emoji and shaped clusters remain on their existing color or grayscale paths; subpixel rendering applies to individual monochrome glyphs, including fallback faces.
-
-`font.family`, `font.size`, and `font.ligatures` remain compatible shorthand. Explicit v2 configuration can instead provide ordered `font.descriptors` with collection, weight, style, stretch, and augment/fixed matching; normal, bold, italic, and bold-italic resolve real faces when available and otherwise use cache-keyed synthetic modes. Unknown or unreadable candidates fail over deterministically, with embedded Go Mono as the final safe fallback.
-
-`font.fallback` and bounded `font.rules` select one face for a whole cluster in authored-rule → primary → ordered-fallback → embedded order. Symbol classes cover emoji, CJK, Nerd Font PUA, Powerline, box drawing, braille, and symbols. Fallback is lazy: ordinary ASCII does not load fallback faces. `font.features` projects validated OpenType tags while the legacy `ligatures` boolean remains shorthand; all font resource fields require restart.
-
-Fixed-grid controls `font.line_height`/`font.cell_width` (0.5–3.0) and `baseline_offset`/`glyph_offset_x`/`glyph_offset_y` (-64..64 px) change the shared cell canvas without changing logical per-glyph advances. Font environments retain at most 64 contexts, parsed font data remains bounded to 128 faces/256 MiB, and each context retains at most 8,192 negative results. `--safe-fonts` restores Go Mono and natural metrics. `--doctor` reports effective metrics, feature capability, concrete path-free primary style metadata, representative Powerline/Nerd/CJK/emoji/rule-tier selections, and capacity limits. Arbitrary active-terminal content selections and live cache counts remain unavailable in diagnostic-only mode.
-
-## Experimental Kitty graphics opt-in
-
-CervTerm implements deliberately narrow Kitty, Sixel, and iTerm inline-image subsets. All three are experimental, disabled by default, restart-scoped, independently enabled, rendered only by the existing GLFW/OpenGL frontend, and carry no stable support claim.
-
-Enable only the protocols you need in an explicit v2 config, then restart CervTerm:
+Example graphics opt-in:
 
 ```lua
 return {
   config_version = 2,
   graphics = {
-    -- Set only the protocol(s) being tested to true.
     kitty = { enabled = false },
     sixel = { enabled = false },
-    iterm = { enabled = false },
+    iterm = { enabled = true },
   },
 }
 ```
 
-The Kitty subset accepts direct-data `t`/`T`/`p`/`d`/`q` actions, RGB24, RGBA32, and PNG; `o=z` applies only to raw RGB/RGBA. Replies are fixed and value-free: `OK`, `EINVAL`, `ENOTSUP`, `ENOSPC`, `ETIME`, `ECANCELED`, `ENOENT`, and `EIO`.
+Operational rollback is independent: disable the affected protocol and restart. External file/URL transports, animation, broad Sixel scrolling/cursor behavior, and full protocol conformance are excluded.
 
-The Phase 14 Sixel subset accepts only 7-bit `ESC P q`, `ESC P 0q`, `ESC P 0;0q`, or `ESC P 0;0;0q`, terminated by ST. It requires exactly one `"1;1;W;H` raster declaration before pixel output and accepts only `?`–`~`, `!N<char>` (`N=1..4096`), `#N`, `#N;2;R;G;B`, `$`, and `-`. The iTerm subset accepts only 7-bit `OSC 1337;File=...:<strict padded base64>` terminated by BEL or ST, with exact `inline=1`, positive decoded `size`, one PNG with exact EOF, and optionally one cell dimension (`width=N` xor `height=N`, `N=1..256`) with absent or exact `preserveAspectRatio=1`.
+## Known limitations and non-goals
 
-Kitty, Sixel, and iTerm share the same lower-only pane/process limits, FIFO scheduler, two process workers, one outstanding job per pane, queue capacity 32, and 250 ms acceptance deadline. Sixel/iTerm use internal high-half IDs (`0x80000000..0xffffffff`), commit cursor-neutral ephemeral resources, retire a resource with its final placement, emit no protocol reply, and reserve no reply slot. Enabled selected image frames are removed by the parser-coupled `PaneOutput` projection before Lua output callbacks; disabled or unselected control strings remain public.
+- GLFW/OpenGL is the only GUI renderer; selectable rendering backends are excluded.
+- Windows is the only packaged and qualified GUI platform.
+- No SSH/WSL domains, tmux integration, or live detach/reattach.
+- Layout persistence restores fresh processes rather than live sessions.
+- Native blur is capability-dependent and degrades when unsupported or incompatible.
+- IME, accessibility, notifications, and inline graphics remain experimental/default-off where noted.
+- Broader installed-font, DirectWrite shaping, SVG text, color-font fixture, and interactive `vttest` qualification continues.
 
-Operational rollback is independent: set the affected `graphics.<protocol>.enabled = false` and restart. This is not a full Kitty, Sixel, or iTerm conformance claim. C1 forms, animation, external file/path/URL/temporary-file/shared-memory/download/write transports, broad iTerm sizing, Sixel scrolling/DECSDM, cursor effects, and non-OpenGL rendering remain excluded. See [`docs/getting-started.md`](docs/getting-started.md) for exact caps, [`docs/manual-verification.md`](docs/manual-verification.md) for the entirely UNRUN Phase 14 real-GUI matrix, and [`docs/troubleshooting.md`](docs/troubleshooting.md) for diagnostics.
+## Build and test
 
-## Known limitations
+Requirements: use the exact Go version declared by `go.mod` (currently Go 1.25.8). Windows GLFW builds require a working C toolchain. Source-built Linux GUI work additionally requires the distribution equivalents of the GLFW, OpenGL, and X11 development headers. Run maturity gates only from a clean, full-history checkout.
 
-Box-drawing and block-element glyphs render procedurally for seamless joins at
-any font or display scale. Diagonal box glyphs still use the configured font,
-and rounded corners use square light-line joins rather than true arcs.
+```sh
+go test ./...
+go test -tags glfw ./internal/fontglyph ./internal/frontend/glfwgl ./cmd/cervterm -count=1
+go run ./scripts/check-maturity-gates.go
+go build -tags glfw -o cervterm.exe ./cmd/cervterm
+```
 
-### Optional BiDi rendering
+Package and validate a local beta:
 
-Set `render = { bidi = true }` to reorder each terminal row visually with the Unicode Bidirectional Algorithm. It is experimental and defaults to off. Terminal storage and selection remain logical: wrapped rows do not share paragraph context, mixed-direction selections may look discontiguous, and Arabic letters are not contextually joined across cells. Wide-cell pairs and combining marks remain attached while visual ordering is applied.
+```sh
+go run ./scripts/package-beta.go -version <tag> -outdir dist
+go run ./scripts/release-preflight.go -version <tag> -outdir dist \
+  -windows-zip dist/cervterm-<tag>-windows.zip
+```
 
-- Real primary style faces, deterministic synthetic fallback, lazy whole-cluster font fallback, feature projection, and metric offsets are implemented; broader installed-font qualification beyond Windows remains ongoing.
-- DirectWrite shaping is implemented on Windows with Arabic/Indic/emoji smoke coverage; broader real-world fixture coverage is still growing.
-- SVG text rasterization has basic layout support; real font selection/outline text remains future work.
-- More redistributable color-font fixture subsets are needed for broad cross-platform emoji validation.
-- A real MSYS2-built `vttest` startup/menu capture is automated; broader interactive `vttest` menu paths remain future coverage.
-- Packaging has CI beta zip artifacts, tag-triggered GitHub release publishing, SHA256 checksums, GitHub provenance attestations, portable winget manifest templates, SVG icon source, generated Windows `.ico`, and CI `goversioninfo` resource embedding for Windows builds. Authenticode signing and MSI/WiX publishing are intentionally deferred.
+The Linux release artifact is currently headless:
+
+```sh
+GOOS=linux GOARCH=amd64 go build -o dist/cervterm-linux-amd64 ./cmd/cervterm
+```
+
+## Documentation
+
+- [Getting started](docs/getting-started.md)
+- [Scripting and typed actions](docs/scripting.md)
+- [Configuration roadmap](docs/config-roadmap.md)
+- [WezTerm parity roadmap](docs/wezterm-parity-roadmap.md)
+- [Support matrix](docs/parity-support-matrix.json)
+- [Architecture](docs/architecture.md)
+- [Manual verification](docs/manual-verification.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Release packaging](docs/release-packaging.md)
+- [Release trust](docs/release-trust.md)
+- [Support policy](SUPPORT.md)
+
+## License
+
+See [LICENSE](LICENSE).
