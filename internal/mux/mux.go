@@ -47,6 +47,7 @@ type PaneView struct {
 }
 
 type Mux struct {
+	owner              *ownerState
 	sessions           *localSessionRegistry
 	sessionIngress     sessionIngressController[sessionIngressRecordAdapter, muxSessionIngressOperationAdapter]
 	protocolScheduling protocolSchedulingController[
