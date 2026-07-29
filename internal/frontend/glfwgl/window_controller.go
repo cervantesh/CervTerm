@@ -5,12 +5,14 @@ package glfwgl
 import (
 	"errors"
 	"fmt"
-	"log"
+	"runtime"
+	"sync/atomic"
 	"time"
 
 	"cervterm/internal/config"
 	"cervterm/internal/ime"
 	termmux "cervterm/internal/mux"
+	"cervterm/internal/ownerthread"
 	"cervterm/internal/script"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -20,15 +22,27 @@ var (
 	errWindowProjectionExists  = errors.New("window projection already exists")
 	errWindowProjectionMissing = errors.New("window projection not found")
 	errWindowLoopInactive      = errors.New("window controller loop is not active")
+	errWindowLoopThread        = errors.New("window controller loop native thread mismatch")
+	errWindowLoopEpoch         = errors.New("window controller loop epoch is stale")
 )
 
-// processServices is the process-owned half of the frontend. During the
-// single-window compatibility stage App retains access aliases, but creation,
-// routing and shutdown are coordinated through this one owner.
+// processServices is the process-owned half of the frontend. App instances never
+// receive either interface; every global operation crosses an explicit
+// windowController method.
 type processServices struct {
-	mux           *termmux.Mux
-	scriptRuntime *script.Runtime
-	runtimeScopes *config.RuntimeScopes
+	commands           processCommandCapability
+	windowCapabilities windowCapabilityFactory
+	scriptRuntime      *script.Runtime
+	runtimeScopes      *config.RuntimeScopes
+}
+
+type windowLoopLease struct{ epoch atomic.Uint64 }
+
+type nativeContextCurrent func(nativeWindowHost) bool
+
+func glfwContextCurrent(host nativeWindowHost) bool {
+	window, ok := host.(*glfw.Window)
+	return ok && window != nil && glfw.GetCurrentContext() == window
 }
 
 type nativeWindowHost interface {
@@ -85,6 +99,7 @@ type nativeProjectionFactory interface {
 
 type windowProjection struct {
 	id       termmux.WindowID
+	identity termmux.WindowIdentity
 	host     nativeWindowHost
 	app      *App
 	handle   func([]termmux.Event) bool
@@ -106,24 +121,46 @@ type windowController struct {
 	runtimeWindows   runtimeWindowLifecycle
 	restoreWindows   restoreWindowLifecycle
 	persistLayout    func() error
+	primary          *App
 	windows          map[termmux.WindowID]*windowProjection
 	pending          map[termmux.WindowID][]termmux.Event
+	boundOrigins     map[termmux.WindowIdentity]*App
 	order            []termmux.WindowID
 	active           termmux.WindowID
 	current          termmux.WindowID
 	inLoop           bool
+	threadSource     ownerthread.Source
+	loopThread       ownerthread.Attestation
+	loopThreadLocked bool
+	loopEpoch        uint64
+	activeLoopEpoch  uint64
+	loopLease        *windowLoopLease
+	contextCurrent   nativeContextCurrent
 	restorePending   *restoreProjectionCandidate
 }
 
 func newWindowController(services processServices, pump nativeEventPump) *windowController {
-	return &windowController{services: services, pump: pump, restoreWindows: services.mux, windows: make(map[termmux.WindowID]*windowProjection), pending: make(map[termmux.WindowID][]termmux.Event)}
+	return &windowController{
+		services: services, pump: pump, runtimeWindows: services.commands, restoreWindows: services.commands,
+		threadSource: ownerthread.Native{}, loopLease: &windowLoopLease{}, contextCurrent: glfwContextCurrent,
+		windows: make(map[termmux.WindowID]*windowProjection), pending: make(map[termmux.WindowID][]termmux.Event),
+	}
 }
 
-func (c *windowController) setServices(services processServices) {
-	c.services = services
-	if services.mux != nil {
-		c.restoreWindows = services.mux
+func (c *windowController) setSharedServices(runtime *script.Runtime, scopes *config.RuntimeScopes) {
+	c.services.scriptRuntime = runtime
+	c.services.runtimeScopes = scopes
+}
+
+func (c *windowController) installProcessServices(commands processCommandCapability, windows windowCapabilityFactory) error {
+	if c == nil || commands == nil || windows == nil || c.services.commands != nil || c.services.windowCapabilities != nil {
+		return errWindowProjectionExists
 	}
+	c.services.commands = commands
+	c.services.windowCapabilities = windows
+	c.runtimeWindows = commands
+	c.restoreWindows = commands
+	return nil
 }
 
 func (c *windowController) setProjectionFactory(factory nativeProjectionFactory) { c.factory = factory }
@@ -185,10 +222,12 @@ func (c *windowController) setTeardown(id termmux.WindowID, teardown func() erro
 }
 
 func (c *windowController) drainMux(limit int) []termmux.Event {
-	if c.services.mux == nil {
+	if c.services.commands == nil {
 		return nil
 	}
-	return c.services.mux.Drain(limit)
+	events, err := c.services.commands.Drain(limit)
+	logControllerError(err)
+	return events
 }
 
 func (c *windowController) attach(id termmux.WindowID, host nativeWindowHost, handle func([]termmux.Event) bool) error {
@@ -202,7 +241,17 @@ func (c *windowController) attachApp(id termmux.WindowID, host nativeWindowHost,
 	if _, exists := c.windows[id]; exists {
 		return errWindowProjectionExists
 	}
-	c.windows[id] = &windowProjection{id: id, host: host, app: app, handle: handle, dirty: true, visible: true}
+	if app != nil && app.windowIdentity != (termmux.WindowIdentity{}) {
+		if bound := c.boundOrigins[app.windowIdentity]; bound != nil && bound != app {
+			return errWindowProjectionMissing
+		}
+		delete(c.boundOrigins, app.windowIdentity)
+	}
+	projection := &windowProjection{id: id, host: host, app: app, handle: handle, dirty: true, visible: true}
+	if app != nil {
+		projection.identity = app.windowIdentity
+	}
+	c.windows[id] = projection
 	c.order = append(c.order, id)
 	if c.active == 0 {
 		c.active = id
@@ -211,18 +260,50 @@ func (c *windowController) attachApp(id termmux.WindowID, host nativeWindowHost,
 }
 
 func (c *windowController) startLoop() error {
-	if c.inLoop {
+	if c == nil || c.inLoop {
 		return fmt.Errorf("window controller loop already active")
 	}
+	runtime.LockOSThread()
+	attestation, ok := ownerthread.Capture(c.threadSource)
+	if !ok {
+		runtime.UnlockOSThread()
+		return errWindowLoopThread
+	}
+	c.loopEpoch++
+	if c.loopEpoch == 0 {
+		runtime.UnlockOSThread()
+		return errWindowLoopEpoch
+	}
+	c.loopThread = attestation
+	c.activeLoopEpoch = c.loopEpoch
+	c.loopLease.epoch.Store(c.loopEpoch)
 	c.inLoop = true
+	c.loopThreadLocked = true
 	return nil
 }
 
-func (c *windowController) stopLoop() { c.inLoop = false }
+func (c *windowController) stopLoop() {
+	if c == nil {
+		return
+	}
+	c.inLoop = false
+	c.activeLoopEpoch = 0
+	c.loopLease.epoch.Store(0)
+	if c.loopThreadLocked && c.loopThread.Current(c.threadSource) {
+		c.loopThreadLocked = false
+		runtime.UnlockOSThread()
+	}
+}
 
 func (c *windowController) requireLoop() error {
-	if !c.inLoop {
+	if c == nil || !c.inLoop {
 		return errWindowLoopInactive
+	}
+	if c.loopEpoch == 0 || c.activeLoopEpoch != c.loopEpoch {
+		return errWindowLoopEpoch
+	}
+	if !c.loopThread.Current(c.threadSource) {
+		return errWindowLoopThread
 	}
 	return nil
 }
@@ -260,6 +341,9 @@ func (c *windowController) projectionApp(id termmux.WindowID) *App {
 func (c *windowController) projectionCount() int { return len(c.windows) }
 
 func (c *windowController) shouldClose(id termmux.WindowID) bool {
+	if c.requireLoop() != nil {
+		return true
+	}
 	projection, ok := c.windows[id]
 	return !ok || projection.closed || projection.host.ShouldClose()
 }
@@ -281,10 +365,21 @@ func (c *windowController) waitEvents(timeout time.Duration) error {
 }
 
 func (c *windowController) withCurrent(id termmux.WindowID, frame func()) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
 	if err := c.activate(id); err != nil {
 		return err
 	}
 	frame()
+	return nil
+}
+
+func (c *windowController) markDamageFrom(origin termmux.WindowIdentity) error {
+	if err := c.requireOrigin(origin); err != nil {
+		return err
+	}
+	c.markDamage(origin.ID)
 	return nil
 }
 
@@ -301,13 +396,15 @@ func (c *windowController) clearDamage(id termmux.WindowID) {
 }
 
 func (c *windowController) dispatch(events []termmux.Event) bool {
-	if !c.inLoop {
+	if c.requireLoop() != nil {
 		return false
 	}
-	if c.services.mux != nil {
-		events = c.services.mux.ResolveEventAddresses(events)
+	if c.services.commands != nil {
+		events = c.services.commands.ResolveEventAddresses(events)
 	}
-	c.applyWorkspaceProjection(events)
+	if err := c.applyWorkspaceProjection(events); err != nil {
+		return false
+	}
 	batches := make(map[termmux.WindowID][]termmux.Event)
 	for id, pending := range c.pending {
 		if _, ok := c.windows[id]; ok {
@@ -369,6 +466,9 @@ func (c *windowController) closeProjection(id termmux.WindowID) error {
 		projection.host.Destroy()
 	}
 	projection.closed = true
+	if projection.app != nil {
+		delete(c.boundOrigins, projection.app.windowIdentity)
+	}
 	delete(c.windows, id)
 	for i, candidate := range c.order {
 		if candidate == id {
@@ -386,101 +486,4 @@ func (c *windowController) closeProjection(id termmux.WindowID) error {
 		}
 	}
 	return teardownErr
-}
-
-const initialWindowID termmux.WindowID = 1
-
-func (a *App) attachInitialWindowController(window *glfw.Window) error {
-	a.controller = newWindowController(processServices{scriptRuntime: a.scriptRT, runtimeScopes: &a.runtimeScopes}, glfwEventPump{})
-	if err := a.controller.attachApp(initialWindowID, window, a, a.applyMuxEvents); err != nil {
-		return err
-	}
-	a.windowID = initialWindowID
-	a.controller.setCandidateProjectionFactory(&glfwProjectionFactory{owner: a})
-	return a.controller.startLoop()
-}
-
-func (a *App) closeInitialWindowController() {
-	if a.controller == nil {
-		return
-	}
-	var joined error
-	for _, id := range a.controller.projectionIDs() {
-		joined = errors.Join(joined, a.controller.closeProjection(id))
-	}
-	logControllerError(joined)
-	a.controller.stopLoop()
-}
-
-func logControllerError(err error) {
-	if err != nil {
-		log.Printf("window controller: %v", err)
-	}
-}
-
-func (a *App) handleMuxEvents(events []termmux.Event) bool { return a.dispatchMuxEvents(events) }
-
-func (a *App) dispatchMuxEvents(events []termmux.Event) bool {
-	if a.controller == nil {
-		return a.applyMuxEvents(events)
-	}
-	return a.controller.dispatch(events)
-}
-
-func (a *App) recordNativeFocus(focused bool) {
-	if focused && a.controller != nil {
-		if err := a.controller.recordRuntimeFocus(a.windowID); err != nil {
-			logControllerError(err)
-		}
-	}
-}
-
-func (a *App) syncProcessServices() {
-	if a.controller != nil {
-		a.controller.setServices(processServices{mux: a.mux, scriptRuntime: a.scriptRT, runtimeScopes: &a.runtimeScopes})
-		if a.mux != nil {
-			a.controller.setRuntimeWindows(a.mux)
-		}
-		a.controller.setCandidateProjectionFactory(&glfwProjectionFactory{owner: a})
-		if a.cfg.LayoutPersistence.Enabled {
-			c := a.controller
-			c.persistLayout = a.persistCurrentLayout
-		} else {
-			a.controller.persistLayout = nil
-		}
-	}
-}
-
-func (a *App) installScriptRuntime(runtime *script.Runtime) {
-	a.scriptRT = runtime
-	a.syncProcessServices()
-}
-
-func (a *App) drainMuxEvents(limit int) []termmux.Event {
-	if a.controller != nil {
-		return a.controller.drainMux(limit)
-	}
-	if a.mux == nil {
-		return nil
-	}
-	return a.mux.Drain(limit)
-}
-
-func (c *windowController) shutdownServices() error {
-	if c.services.mux == nil {
-		return nil
-	}
-	err := c.services.mux.Shutdown()
-	c.services.mux = nil
-	return err
-}
-
-func (a *App) shutdownProcessServices() {
-	if a.controller != nil && a.controller.services.mux != nil {
-		_ = a.controller.shutdownServices()
-		return
-	}
-	if a.mux != nil {
-		_ = a.mux.Shutdown()
-	}
 }

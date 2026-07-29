@@ -20,14 +20,18 @@ func TestPreparedRetentionPublishesAndAbortPreservesOldGeneration(t *testing.T) 
 	if retention, ok := store.ResourceRetention(ref); !ok || retention != ResourceEphemeral {
 		t.Fatalf("retention=%v ok=%v", retention, ok)
 	}
-	prepared.Finalize()
+	if err := prepared.Commit(); err != nil {
+		t.Fatal(err)
+	}
 
 	replacement, _ := store.NewDecodedCandidate(MinInternalImageID, 1, 1)
 	pending, _, err := owner.PrepareCandidateWithRetention(replacement, ResourceDurable)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pending.Abort()
+	if err := pending.Abort(); err != nil {
+		t.Fatal(err)
+	}
 	if retention, ok := store.ResourceRetention(ref); !ok || retention != ResourceEphemeral {
 		t.Fatal("abort changed prior retention")
 	}

@@ -214,10 +214,13 @@ func TestAcquireIsGenerationCheckedAndDetached(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if store.state.nextGeneration != 0 || !store.consumePreparedRef(ref) {
+	if store.state.Load().nextGeneration != 0 || !store.consumePreparedRef(ref) {
 		t.Fatal("prepared generation mutated early or failed publication consumption")
 	}
-	store.state.resources[7] = &resource{ref: ref, width: 1, height: 1, stride: 4, rgba: []byte{1, 2, 3, 4}, lease: lease}
+	state := store.state.Load()
+	resources := cloneResources(state.resources)
+	resources[7] = &resource{ref: ref, width: 1, height: 1, stride: 4, rgba: []byte{1, 2, 3, 4}, lease: lease}
+	store.state.Store(&storeState{resources: resources, nextGeneration: state.nextGeneration, epoch: state.epoch})
 	if _, ok := store.Acquire(ResourceRef{Image: 7, Generation: ref.Generation + 1}); ok {
 		t.Fatal("stale generation acquired")
 	}
@@ -284,13 +287,15 @@ func TestStoreIdentityAndCounterExhaustion(t *testing.T) {
 	if ref1 != ref2 {
 		t.Fatalf("pane-local numeric identities may match: %#v %#v", ref1, ref2)
 	}
-	first.state.nextGeneration = ResourceGeneration(math.MaxUint64)
+	state := first.state.Load()
+	first.state.Store(&storeState{resources: state.resources, nextGeneration: ResourceGeneration(math.MaxUint64), epoch: state.epoch})
 	if _, err := first.prepareNextRef(1); err != ErrGenerationExhausted {
 		t.Fatalf("generation exhaustion error = %v", err)
 	}
-	first.epoch.Store(math.MaxUint64)
+	state = first.state.Load()
+	first.state.Store(&storeState{resources: state.resources, nextGeneration: state.nextGeneration, epoch: StoreEpoch(math.MaxUint64)})
 	first.Reset()
-	if !first.closed.Load() || first.Epoch() != StoreEpoch(math.MaxUint64) {
+	if !first.Closed() || first.Epoch() != StoreEpoch(math.MaxUint64) {
 		t.Fatal("epoch wrapped instead of permanently closing")
 	}
 }

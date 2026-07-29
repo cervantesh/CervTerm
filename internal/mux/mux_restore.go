@@ -18,6 +18,7 @@ type RestoreWindowGeometry struct {
 // RestoreCandidate is an opaque, mux-owned unpublished restore transaction.
 type RestoreCandidate struct {
 	owner       *Mux
+	ownerStamp  ownerStamp
 	model       *Model
 	panes       []*pane
 	windows     []WindowID
@@ -38,19 +39,30 @@ type muxRestorePreparationOperationAdapter struct {
 	mux        *Mux
 	blueprint  layoutrestore.Blueprint
 	geometries []RestoreWindowGeometry
+	scope      mutationScope
 }
 
 type muxRestorePublicationOperationAdapter struct {
-	mux *Mux
+	mux   *Mux
+	scope mutationScope
 }
 
 // PrepareRestore validates and provisions a detached startup restore transaction.
-func (m *Mux) PrepareRestore(blueprint layoutrestore.Blueprint, geometries []RestoreWindowGeometry) (*RestoreCandidate, error) {
-	return m.restoreCoordinator.prepareRestore(muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries})
+func (m *Mux) prepareRestore(scope mutationScope, blueprint layoutrestore.Blueprint, geometries []RestoreWindowGeometry) (*RestoreCandidate, error) {
+	if err := scope.valid(m); err != nil {
+		return nil, err
+	}
+	return m.restoreCoordinator.prepareRestore(muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries, scope: scope})
 }
 
 func (a muxRestorePreparationOperationAdapter) prepareRestore() (*RestoreCandidate, error) {
 	m := a.mux
+	if err := a.scope.valid(m); err != nil {
+		return nil, err
+	}
+	if err := m.retryUnpublishedRollback(a.scope); err != nil {
+		return nil, fmt.Errorf("retry unpublished restore rollback: %w", err)
+	}
 	blueprint := a.blueprint
 	geometries := a.geometries
 	if m.pending != nil {
@@ -61,26 +73,52 @@ func (a muxRestorePreparationOperationAdapter) prepareRestore() (*RestoreCandida
 		return nil, ErrRestorePrecondition
 	}
 
-	build, err := buildRestoreCandidate(m, blueprint.Snapshot(), geometries)
+	build, err := buildRestoreCandidateScoped(a.scope, m, blueprint.Snapshot(), geometries)
 	if err != nil {
 		return nil, err
 	}
 	candidate := build.candidate
+	rollback := newUnpublishedPaneRollback(candidate.panes)
+	preparedCloses, err := retainPaneClosuresWithFault(candidate.panes, func(p *pane) error {
+		return m.transactionFailure("restore-close-preflight", p)
+	})
+	rollback.retainPrepared(preparedCloses)
+	if err != nil {
+		candidate.aborted = true
+		return nil, errors.Join(err, m.rollbackUnpublishedPanes(a.scope, rollback))
+	}
 	m.pending = candidate
-	if err := m.provisionRestore(candidate, build.specs); err != nil {
-		cleanupErr := m.abortRestore(candidate)
+	if err := m.provisionRestore(a.scope, candidate, build.specs, rollback); err != nil {
+		cleanupErr := m.abortRestorePreparation(a.scope, candidate, rollback)
 		return nil, errors.Join(err, cleanupErr)
+	}
+	if abortErr := abortPaneClosuresWithFault(preparedCloses, func(prepared *preparedPaneClose) error {
+		return m.transactionFailure("restore-close-abort", prepared.pane)
+	}); abortErr != nil {
+		cleanupErr := m.abortRestorePreparation(a.scope, candidate, rollback)
+		return nil, errors.Join(abortErr, cleanupErr)
 	}
 	return candidate, nil
 }
 
 // CommitRestore atomically publishes the exact pending restore transaction.
-func (m *Mux) CommitRestore(candidate *RestoreCandidate) ([]Event, error) {
-	return m.restoreCoordinator.commitRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})
+func (m *Mux) commitRestore(scope mutationScope, candidate *RestoreCandidate) ([]Event, error) {
+	if err := scope.valid(m); err != nil {
+		return nil, err
+	}
+	return m.restoreCoordinator.commitRestore(candidate, muxRestorePublicationOperationAdapter{mux: m, scope: scope})
 }
 
 func (a muxRestorePublicationOperationAdapter) commitRestore(candidate *RestoreCandidate) ([]Event, error) {
 	m := a.mux
+	if err := a.scope.valid(m); err != nil {
+		return nil, err
+	}
+	if candidate != nil {
+		if err := candidate.ownerStamp.validPrepared(m); err != nil {
+			return nil, err
+		}
+	}
 	if candidate == nil || candidate.owner != m || m.pending != candidate || candidate.aborted || candidate.committed {
 		return nil, ErrInvalidRestore
 	}
@@ -97,13 +135,13 @@ func (a muxRestorePublicationOperationAdapter) commitRestore(candidate *RestoreC
 	for i, p := range candidate.panes {
 		ids[i] = p.id
 	}
-	launchReaders, err := m.sessions.prepareStarts(ids)
+	launchReaders, err := m.sessions.prepareStartsScoped(a.scope, ids)
 	if err != nil {
-		cleanupErr := m.abortRestore(candidate)
+		cleanupErr := m.abortRestore(a.scope, candidate)
 		return nil, errors.Join(fmt.Errorf("prepare restore readers: %w", err), cleanupErr)
 	}
 	for _, p := range candidate.panes {
-		p.terminal.SetPaletteBase(m.paletteBase)
+		p.terminal.SetPaletteBase(*m.paletteBase)
 	}
 
 	m.model = candidate.model
@@ -143,6 +181,11 @@ func (m *Mux) RestoreWindowIDs(candidate *RestoreCandidate) ([]WindowID, error) 
 
 func (a muxRestorePublicationOperationAdapter) restoreWindowIDs(candidate *RestoreCandidate) ([]WindowID, error) {
 	m := a.mux
+	if candidate != nil {
+		if err := candidate.ownerStamp.validPrepared(m); err != nil {
+			return nil, err
+		}
+	}
 	if candidate == nil || candidate.owner != m || m.pending != candidate || candidate.aborted || candidate.committed {
 		return nil, ErrInvalidRestore
 	}
@@ -150,12 +193,23 @@ func (a muxRestorePublicationOperationAdapter) restoreWindowIDs(candidate *Resto
 }
 
 // AbortRestore idempotently tears down an unpublished restore transaction.
-func (m *Mux) AbortRestore(candidate *RestoreCandidate) error {
-	return m.restoreCoordinator.abortRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})
+func (m *Mux) abortRestoreOwned(scope mutationScope, candidate *RestoreCandidate) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
+	return m.restoreCoordinator.abortRestore(candidate, muxRestorePublicationOperationAdapter{mux: m, scope: scope})
 }
 
 func (a muxRestorePublicationOperationAdapter) abortRestore(candidate *RestoreCandidate) error {
 	m := a.mux
+	if err := a.scope.valid(m); err != nil {
+		return err
+	}
+	if candidate != nil {
+		if err := candidate.ownerStamp.validPrepared(m); err != nil {
+			return err
+		}
+	}
 	if candidate == nil || candidate.owner != m {
 		return ErrInvalidRestore
 	}
@@ -163,69 +217,80 @@ func (a muxRestorePublicationOperationAdapter) abortRestore(candidate *RestoreCa
 		return ErrRestoreCommitted
 	}
 	if candidate.aborted {
-		return nil
+		return m.retryUnpublishedRollback(a.scope)
 	}
 	if m.pending != candidate {
 		return ErrInvalidRestore
 	}
-	return m.abortRestore(candidate)
+	return m.abortRestore(a.scope, candidate)
 }
 
-func (m *Mux) abortRestore(candidate *RestoreCandidate) error {
+func (m *Mux) abortRestore(scope mutationScope, candidate *RestoreCandidate) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
+	preparedCloses, err := preparePaneClosures(candidate.panes)
+	if err != nil {
+		return err
+	}
+	return m.abortRestorePrepared(scope, candidate, preparedCloses)
+}
+
+func (m *Mux) abortRestorePrepared(scope mutationScope, candidate *RestoreCandidate, preparedCloses []*preparedPaneClose) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
+	rollback := newUnpublishedPaneRollback(candidate.panes)
+	rollback.retainPrepared(preparedCloses)
+	for index := range rollback.registered {
+		rollback.registered[index] = true
+	}
+	return m.abortRestorePreparation(scope, candidate, rollback)
+}
+
+func (m *Mux) abortRestorePreparation(scope mutationScope, candidate *RestoreCandidate, rollback *unpublishedPaneRollback) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
 	candidate.aborted = true
 	if m.pending == candidate {
 		m.pending = nil
 	}
-	var cleanup []error
-	for i := len(candidate.panes) - 1; i >= 0; i-- {
-		p := candidate.panes[i]
-		detached := m.sessions.abort(p.id, p)
-		if detached.owned {
-			if err := detached.pane.close(); err != nil {
-				cleanup = append(cleanup, fmt.Errorf("pane %d close: %w", p.id, err))
-			}
-		}
-		if !detached.owned {
-			if err := p.close(); err != nil {
-				cleanup = append(cleanup, fmt.Errorf("pane %d close: %w", p.id, err))
-			}
-		}
-	}
-	return errors.Join(cleanup...)
+	return m.rollbackUnpublishedPanes(scope, rollback)
 }
 
-func (m *Mux) provisionRestore(candidate *RestoreCandidate, specs []SpawnSpec) error {
+func (m *Mux) provisionRestore(scope mutationScope, candidate *RestoreCandidate, specs []SpawnSpec, rollback *unpublishedPaneRollback) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
 	for i, p := range candidate.panes {
 		p.setFreshLaunch(specs[i])
-		if err := m.sessions.reserve(p.id); err != nil {
+		if err := m.sessions.reserveScoped(scope, p.id); err != nil {
 			return fmt.Errorf("reserve restore pane %d: %w", p.id, err)
 		}
 		rows, cols := terminalSize(p.geometry)
-		session, err := m.sessions.spawn(rows, cols, specs[i].Options)
+		session, err := m.sessions.spawnScoped(scope, rows, cols, specs[i].Options)
+		p.session = session
 		if err != nil {
-			m.sessions.release(p.id)
-			if session != nil {
-				if closeErr := session.Close(); closeErr != nil {
-					return errors.Join(fmt.Errorf("spawn restore pane %d: %w", p.id, err), fmt.Errorf("pane %d close: %w", p.id, closeErr))
-				}
-			}
+			m.sessions.releaseScoped(scope, p.id)
 			return fmt.Errorf("spawn restore pane %d: %w", p.id, err)
 		}
-		p.session = session
 		p.state = PaneStateRunning
 		p.desiredSize = pty.Size{Rows: rows, Cols: cols}
 		p.appliedSize = p.desiredSize
 		p.capture()
-		if err := m.sessions.register(p); err != nil {
-			m.sessions.release(p.id)
-			closeErr := p.close()
-			return errors.Join(fmt.Errorf("register restore pane %d: %w", p.id, err), closeErr)
+		if err := m.sessions.registerScoped(scope, p); err != nil {
+			return fmt.Errorf("register restore pane %d: %w", p.id, err)
 		}
+		rollback.markRegistered(p)
 	}
 	return nil
 }
 
-func buildRestoreCandidate(m *Mux, snapshot layoutrestore.Snapshot, geometries []RestoreWindowGeometry) (restoreBuild, error) {
+func buildRestoreCandidateScoped(scope mutationScope, m *Mux, snapshot layoutrestore.Snapshot, geometries []RestoreWindowGeometry) (result restoreBuild, resultErr error) {
+	if err := scope.valid(m); err != nil {
+		return restoreBuild{}, err
+	}
 	if len(snapshot.Workspaces) == 0 || snapshot.ActiveWorkspace < 0 || snapshot.ActiveWorkspace >= len(snapshot.Workspaces) {
 		return restoreBuild{}, ErrInvalidRestore
 	}
@@ -248,18 +313,17 @@ func buildRestoreCandidate(m *Mux, snapshot layoutrestore.Snapshot, geometries [
 	model := &Model{
 		allocatedWorkspaces: make(map[WorkspaceID]struct{}), allocatedWindows: make(map[WindowID]struct{}),
 		allocated: make(map[PaneID]struct{}), allocatedSplits: make(map[SplitID]struct{}), allocatedTabs: make(map[TabID]struct{}),
-		nextWorkspaceID: m.model.nextWorkspaceID, nextWindowID: m.model.nextWindowID, nextTabID: m.model.nextTabID,
+		nextWorkspaceID: m.model.nextWorkspaceID, nextWindowID: m.model.nextWindowID, nextWindowIncarnation: m.model.nextWindowIncarnation, nextTabID: m.model.nextTabID,
 		nextPaneID: m.model.nextPaneID, nextSplitID: m.model.nextSplitID,
 	}
-	candidate := &RestoreCandidate{owner: m, model: model, paneMetrics: make(map[PaneID]CellMetrics), paneWindows: make(map[PaneID]WindowID), paneTabs: make(map[PaneID]TabID)}
+	candidate := &RestoreCandidate{owner: m, ownerStamp: m.currentOwnerStamp(), model: model, paneMetrics: make(map[PaneID]CellMetrics), paneWindows: make(map[PaneID]WindowID), paneTabs: make(map[PaneID]TabID)}
 	built := false
 	defer func() {
 		if built {
 			return
 		}
-		for _, pane := range candidate.panes {
-			_ = pane.close()
-		}
+		candidate.aborted = true
+		resultErr = errors.Join(resultErr, m.rollbackUnpublishedPanes(scope, newUnpublishedPaneRollback(candidate.panes)))
 	}()
 	var specs []SpawnSpec
 	geometryIndex := 0
@@ -280,8 +344,13 @@ func buildRestoreCandidate(m *Mux, snapshot layoutrestore.Snapshot, geometries [
 				return restoreBuild{}, ErrInvalidRestore
 			}
 			windowID := model.nextWindowID
+			incarnation := model.nextWindowIncarnation
+			if incarnation == 0 || incarnation == ^WindowIncarnation(0) {
+				return restoreBuild{}, ErrIDExhausted
+			}
 			model.nextWindowID++
-			window := windowState{id: windowID, workspace: workspaceID, title: sourceWindow.Title, revision: 1}
+			model.nextWindowIncarnation++
+			window := windowState{id: windowID, incarnation: incarnation, workspace: workspaceID, title: sourceWindow.Title, revision: 1}
 			candidate.windows = append(candidate.windows, windowID)
 			model.allocatedWindows[windowID] = struct{}{}
 			workspace.windows = append(workspace.windows, windowID)
@@ -311,8 +380,8 @@ func buildRestoreCandidate(m *Mux, snapshot layoutrestore.Snapshot, geometries [
 					return restoreBuild{}, ErrSplitTooSmall
 				}
 				for _, paneGeometry := range layout.Panes {
-					p := m.createPane(paneGeometry.Pane, paneGeometry.Cols, paneGeometry.Rows)
-					p.terminal.SetPaletteBase(m.paletteBase)
+					p := m.createPane(scope, paneGeometry.Pane, paneGeometry.Cols, paneGeometry.Rows)
+					p.terminal.SetPaletteBase(*m.paletteBase)
 					p.geometry = paneGeometry
 					if m.options.SetClipboard != nil {
 						p.parser.SetClipboard = func(text string) { m.options.SetClipboard(p.id, text) }

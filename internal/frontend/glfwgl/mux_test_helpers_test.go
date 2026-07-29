@@ -12,6 +12,60 @@ import (
 	"cervterm/internal/pty"
 )
 
+var testProcessMuxes sync.Map
+
+func testProcessMuxFor(t *testing.T, app *App) *termmux.Owner {
+	t.Helper()
+	process, ok := testProcessMuxes.Load(app)
+	if !ok {
+		t.Fatal("test App has no process mux")
+	}
+	return process.(*termmux.Owner)
+}
+
+func mustTestWindowMux(t testing.TB, process *termmux.Owner) *termmux.WindowOwner {
+	t.Helper()
+	window, err := process.ForWindow(initialWindowID, func(identity termmux.WindowIdentity) bool {
+		return identity.ID == initialWindowID && identity.Incarnation != 0
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return window
+}
+
+func newEmptyTestWindowMux(t testing.TB) *termmux.WindowOwner {
+	t.Helper()
+	process := termmux.NewOwner(nil, termmux.Options{})
+	t.Cleanup(func() { _ = process.Shutdown() })
+	return mustTestWindowMux(t, process)
+}
+
+func attachTestProcessController(t *testing.T, app *App, process *termmux.Owner) *windowController {
+	t.Helper()
+	var log []string
+	controller := newWindowController(processServices{commands: process, windowCapabilities: process}, fakeNativePump{log: &log})
+	controller.primary = app
+	controller.contextCurrent = func(nativeWindowHost) bool { return true }
+	app.host = controller
+	app.controller = newProjectionMessageRouter(controller)
+	if err := controller.attachApp(app.windowID, &fakeNativeWindow{id: "test", log: &log}, app, app.applyMuxEvents); err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.startLoop(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if controller.inLoop && controller.requireLoop() == nil {
+			for _, id := range controller.projectionIDs() {
+				_ = controller.closeProjection(id)
+			}
+			controller.stopLoop()
+		}
+	})
+	return controller
+}
+
 type failingTestFactory struct{}
 
 func (failingTestFactory) Spawn(rows, cols uint16, options pty.Options) (pty.Session, error) {
@@ -20,16 +74,20 @@ func (failingTestFactory) Spawn(rows, cols uint16, options pty.Options) (pty.Ses
 
 func newMuxTestApp(t *testing.T, cols, rows int) *App {
 	t.Helper()
-	m := termmux.New(failingTestFactory{}, termmux.Options{})
+	process := termmux.NewOwner(failingTestFactory{}, termmux.Options{})
+	m := mustTestWindowMux(t, process)
 	_, pane, events, _ := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: cols, Height: rows}, termmux.CellMetrics{CellWidth: 1, CellHeight: 1})
 	a := &App{
 		mux:               m,
+		windowID:          initialWindowID,
+		windowIdentity:    termmux.WindowIdentity{ID: initialWindowID, Incarnation: 1},
 		focusedPane:       pane,
 		paneUI:            make(map[termmux.PaneID]*paneUIState),
 		pendingPaneScroll: make(map[termmux.PaneID]int),
 		cellW:             1,
 		cellH:             1,
 	}
+	testProcessMuxes.Store(a, process)
 	a.handleMuxEvents(events)
 	a.syncFocusedProjection()
 	resetEvents, resetErr := m.FeedFallback(pane, []byte("\x1bc"))
@@ -37,7 +95,7 @@ func newMuxTestApp(t *testing.T, cols, rows int) *App {
 		t.Fatal(resetErr)
 	}
 	a.handleMuxEvents(resetEvents)
-	t.Cleanup(func() { _ = m.Shutdown() })
+	t.Cleanup(func() { testProcessMuxes.Delete(a); _ = process.Shutdown() })
 	return a
 }
 
@@ -107,17 +165,20 @@ func (f *capturingTestFactory) last() (pty.Options, bool) {
 
 func newRunningMuxTestApp(t *testing.T) *App {
 	t.Helper()
-	m := termmux.New(idleTestFactory{}, termmux.Options{})
+	process := termmux.NewOwner(idleTestFactory{}, termmux.Options{})
+	m := mustTestWindowMux(t, process)
 	_, pane, events, err := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16})
 	if err != nil {
 		t.Fatal(err)
 	}
 	a := &App{
-		mux: m, focusedPane: pane, paneUI: make(map[termmux.PaneID]*paneUIState),
+		mux: m, windowID: initialWindowID, windowIdentity: termmux.WindowIdentity{ID: initialWindowID, Incarnation: 1},
+		focusedPane: pane, paneUI: make(map[termmux.PaneID]*paneUIState),
 		pendingPaneScroll: make(map[termmux.PaneID]int), cellW: 8, cellH: 16,
 	}
+	testProcessMuxes.Store(a, process)
 	a.handleMuxEvents(events)
 	a.syncFocusedProjection()
-	t.Cleanup(func() { _ = m.Shutdown() })
+	t.Cleanup(func() { testProcessMuxes.Delete(a); _ = process.Shutdown() })
 	return a
 }

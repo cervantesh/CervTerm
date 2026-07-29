@@ -10,14 +10,17 @@ import (
 )
 
 func (c *windowController) currentLayoutPlan() (layoutstate.Plan, error) {
-	if c == nil || c.services.mux == nil {
+	if err := c.requireLoop(); err != nil {
+		return layoutstate.Plan{}, err
+	}
+	if c == nil || c.services.commands == nil {
 		return layoutstate.Plan{}, errWindowProjectionMissing
 	}
-	fresh, err := c.services.mux.FreshSessionSnapshot()
+	fresh, err := c.services.commands.FreshSessionSnapshot()
 	if err != nil {
 		return layoutstate.Plan{}, err
 	}
-	views := c.services.mux.Workspaces()
+	views := c.services.commands.Workspaces()
 	if len(views) != len(fresh.Workspaces) {
 		return layoutstate.Plan{}, fmt.Errorf("layout persistence workspace projection mismatch")
 	}

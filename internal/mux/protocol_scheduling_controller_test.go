@@ -488,7 +488,7 @@ func assertProtocolSchedulingMuxWiring(t *testing.T, dir string, fileSet *token.
 				}
 			}
 		case *ast.FuncDecl:
-			if declaration.Name.Name != "New" {
+			if declaration.Name.Name != "newMux" {
 				continue
 			}
 			ast.Inspect(declaration.Body, func(node ast.Node) bool {
@@ -511,11 +511,11 @@ func assertProtocolSchedulingMuxWiring(t *testing.T, dir string, fileSet *token.
 	}
 
 	wantShims := map[string]string{
-		"processKittyOutcomes": "{\n\treturn m.protocolScheduling.dispatchKitty(nil, muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
-		"processSixelOutcomes": "{\n\tm.protocolScheduling.dispatchSixel(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
-		"processITermOutcomes": "{\n\tm.protocolScheduling.dispatchITerm(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
-		"expireImages":         "{\n\treturn m.protocolScheduling.applyExpiry(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now})\n}",
-		"applyImageCompletion": "{\n\treturn m.protocolScheduling.applyCompletion(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: completion})\n}",
+		"processKittyOutcomesScoped": "{\n\tif p == nil || scope.validPaneOrigin(m, p.id) != nil {\n\t\treturn nil\n\t}\n\treturn m.protocolScheduling.dispatchKitty(nil, muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p, scope: scope})\n}",
+		"processSixelOutcomesScoped": "{\n\tif p == nil || scope.validPaneOrigin(m, p.id) != nil {\n\t\treturn\n\t}\n\tm.protocolScheduling.dispatchSixel(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p, scope: scope})\n}",
+		"processITermOutcomesScoped": "{\n\tif p == nil || scope.validPaneOrigin(m, p.id) != nil {\n\t\treturn\n\t}\n\tm.protocolScheduling.dispatchITerm(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p, scope: scope})\n}",
+		"expireImagesScoped":         "{\n\tif err := scope.valid(m); err != nil {\n\t\treturn nil\n\t}\n\treturn m.protocolScheduling.applyExpiry(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now, scope: scope})\n}",
+		"applyImageCompletionScoped": "{\n\tif err := scope.valid(m); err != nil {\n\t\tcompletion.Close()\n\t\treturn nil\n\t}\n\treturn m.protocolScheduling.applyCompletion(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: completion, scope: scope})\n}",
 	}
 	foundShims := make(map[string]int)
 	selectorCalls := make(map[string]int)

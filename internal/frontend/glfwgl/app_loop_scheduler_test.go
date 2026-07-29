@@ -47,11 +47,12 @@ func TestRunProjectionCycleClosesExactWindowAndFramesSurvivingSiblings(t *testin
 
 func TestProductionCandidateFactoryIsInstalledOnLiveController(t *testing.T) {
 	app := &App{}
-	app.controller = newWindowController(processServices{}, fakeNativePump{log: &[]string{}})
+	app.host = newWindowController(processServices{}, fakeNativePump{log: &[]string{}})
+	app.controller = newProjectionMessageRouter(app.host)
 	app.syncProcessServices()
-	factory, ok := app.controller.candidateFactory.(*glfwProjectionFactory)
+	factory, ok := app.host.candidateFactory.(*glfwProjectionFactory)
 	if !ok || factory.owner != app {
-		t.Fatalf("candidate factory=%T owner=%p want=%p", app.controller.candidateFactory, factory.owner, app)
+		t.Fatalf("candidate factory=%T owner=%p want=%p", app.host.candidateFactory, factory.owner, app)
 	}
 }
 

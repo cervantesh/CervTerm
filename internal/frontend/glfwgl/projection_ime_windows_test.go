@@ -121,9 +121,10 @@ func TestInitialProjectionNativeAcquisitionPrecedesAccessibilityAndAdoptionRollb
 		return &fakeProjectionAccessibilityLifecycle{log: &log}, nil
 	}
 	window := new(glfw.Window)
-	app.controller = &windowController{windows: map[termmux.WindowID]*windowProjection{
+	app.host = &windowController{windows: map[termmux.WindowID]*windowProjection{
 		termmux.WindowID(initialWindowID): {id: termmux.WindowID(initialWindowID), host: window, app: app, bundle: &nativeProjectionBundle{}},
 	}}
+	app.controller = newProjectionMessageRouter(app.host)
 	if err := app.adoptInitialProjection(window); !errors.Is(err, errWindowProjectionExists) {
 		t.Fatalf("adoption err=%v", err)
 	}

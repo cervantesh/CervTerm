@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"cervterm/internal/config"
@@ -19,6 +20,61 @@ const (
 	terminalImageSixelMask
 	terminalImageITermMask
 )
+
+func prepareTestProcessApp(t *testing.T, app *App) *windowController {
+	t.Helper()
+	runtime.LockOSThread()
+	t.Cleanup(runtime.UnlockOSThread)
+	var log []string
+	controller := newWindowController(processServices{}, fakeNativePump{log: &log})
+	controller.primary = app
+	controller.contextCurrent = func(nativeWindowHost) bool { return true }
+	app.host = controller
+	app.controller = newProjectionMessageRouter(controller)
+	app.windowID = initialWindowID
+	if err := controller.attachApp(initialWindowID, &fakeNativeWindow{id: "initial", log: &log}, app, app.applyMuxEvents); err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.startLoop(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if controller.inLoop && controller.requireLoop() == nil {
+			for _, id := range controller.projectionIDs() {
+				_ = controller.closeProjection(id)
+			}
+			controller.stopLoop()
+		}
+		if controller.services.commands != nil {
+			_ = controller.shutdownServices(app)
+		}
+	})
+	return controller
+}
+
+func TestRollbackInitializedMuxWrongThreadRetainsPublishedCapabilities(t *testing.T) {
+	app := &App{cfg: terminalImageConfig(terminalImageKittyMask)}
+	controller := prepareTestProcessApp(t, app)
+	if err := app.initMux(); err != nil {
+		t.Fatal(err)
+	}
+	window := app.mux
+	cause := errors.New("startup rollback")
+	result := make(chan error, 1)
+	go func() { result <- app.rollbackInitializedMux(cause) }()
+	if err := <-result; !errors.Is(err, cause) || !errors.Is(err, errWindowLoopThread) {
+		t.Fatalf("wrong-thread rollback=%v", err)
+	}
+	if app.mux != window || controller.processClosed() {
+		t.Fatal("rejected rollback discarded published mux capabilities")
+	}
+	if err := app.rollbackInitializedMux(nil); err != nil {
+		t.Fatal(err)
+	}
+	if app.mux != nil || !controller.processClosed() {
+		t.Fatal("owner-thread rollback did not finalize mux capabilities")
+	}
+}
 
 func terminalImageConfig(mask int) config.Config {
 	cfg := config.Defaults()
@@ -83,6 +139,7 @@ func TestTerminalImageActivationAllProtocolMasks(t *testing.T) {
 			cfg := terminalImageConfig(mask)
 			probe := &terminalImageCacheFactoryProbe{}
 			app := &App{cfg: cfg, r: &glRenderer{}, terminalImageCacheFactory: probe.create}
+			prepareTestProcessApp(t, app)
 			options := app.muxOptions()
 			kitty := mask&terminalImageKittyMask != 0
 			sixel := mask&terminalImageSixelMask != 0
@@ -138,6 +195,7 @@ func TestTerminalImageActivationAllProtocolMasks(t *testing.T) {
 func TestTerminalImageActivationMapsEnabledLimitsIntoOneMux(t *testing.T) {
 	cfg := enabledTerminalImageConfig()
 	app := &App{cfg: cfg}
+	prepareTestProcessApp(t, app)
 	options := app.muxOptions()
 	if !options.KittyEnabled || !options.SixelEnabled || !options.ITermEnabled || options.ImageLimits == nil {
 		t.Fatalf("enabled image options=%#v", options)
@@ -168,6 +226,7 @@ func TestTerminalImageActivationRejectsMuxSetupAtomically(t *testing.T) {
 	cfg := enabledTerminalImageConfig()
 	cfg.Graphics.Limits.EncodedBytesPerPane = 0
 	app := &App{cfg: cfg}
+	prepareTestProcessApp(t, app)
 	if err := app.initMux(); err == nil {
 		t.Fatal("invalid image limits initialized a mux")
 	}
@@ -180,6 +239,7 @@ func TestTerminalImageActivationFailsClosedWithoutRendererCapability(t *testing.
 	for _, test := range isolatedTerminalImageConfigs() {
 		t.Run(test.name, func(t *testing.T) {
 			app := &App{cfg: test.cfg, r: &atlasTestRenderer{}}
+			prepareTestProcessApp(t, app)
 			if err := app.initMux(); err != nil {
 				t.Fatal(err)
 			}
@@ -205,6 +265,7 @@ func TestTerminalImageActivationCreatesInitialChildAndRestoreCaches(t *testing.T
 		cfg: cfg, desiredCfg: future, composedCfg: future,
 		terminalImageCacheFactory: probe.create,
 	}
+	prepareTestProcessApp(t, owner)
 	pendingProjectionBase := future.Clone()
 	owner.projectionBaseConfig = &pendingProjectionBase
 	if err := owner.initMux(); err != nil {
@@ -280,6 +341,7 @@ func TestTerminalImageActivationPendingEnableCannotReachChildOrRestoredProjectio
 		cfg: effective, desiredCfg: pending, composedCfg: pending,
 		terminalImageCacheFactory: probe.create,
 	}
+	prepareTestProcessApp(t, owner)
 	pendingProjectionBase := pending.Clone()
 	owner.projectionBaseConfig = &pendingProjectionBase
 	if err := owner.initMux(); err != nil {
@@ -319,6 +381,7 @@ func TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMu
 			injected := errors.New("injected cache factory failure")
 			probe := &terminalImageCacheFactoryProbe{returnCache: candidate, returnErr: injected}
 			app := &App{cfg: test.cfg, r: &glRenderer{}, terminalImageCacheFactory: probe.create}
+			prepareTestProcessApp(t, app)
 			if err := app.initMux(); err != nil {
 				t.Fatal(err)
 			}
@@ -344,11 +407,18 @@ func TestTerminalImageActivationCommitFailureClosesCacheThenMux(t *testing.T) {
 			injected := errors.New("commit")
 			probe := &terminalImageCacheFactoryProbe{}
 			app := &App{cfg: test.cfg, r: &glRenderer{}, terminalImageCacheFactory: probe.create}
+			controller := prepareTestProcessApp(t, app)
 			if err := app.activateInitialTerminalImages(func() error { return injected }); !errors.Is(err, injected) {
 				t.Fatalf("err=%v", err)
 			}
-			if app.terminalImageCache != nil || app.mux != nil || len(probe.calls) != 1 || probe.calls[0].cache == nil || !probe.calls[0].cache.closed {
-				t.Fatalf("rollback cache=%p mux=%p calls=%#v", app.terminalImageCache, app.mux, probe.calls)
+			if app.terminalImageCache != nil || app.mux == nil || len(probe.calls) != 1 || probe.calls[0].cache == nil || !probe.calls[0].cache.closed || controller.processClosed() {
+				t.Fatalf("cache rollback cache=%p mux=%p processClosed=%v calls=%#v", app.terminalImageCache, app.mux, controller.processClosed(), probe.calls)
+			}
+			if err := app.rollbackInitializedMux(nil); err != nil {
+				t.Fatal(err)
+			}
+			if app.mux != nil || !controller.processClosed() {
+				t.Fatalf("primary shutdown mux=%p processClosed=%v", app.mux, controller.processClosed())
 			}
 		})
 	}

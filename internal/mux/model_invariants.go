@@ -58,6 +58,7 @@ func checkModelInvariants(m *Model) error {
 		return invariantError("window count %d exceeds maximum %d", len(m.windows), MaxWindows)
 	}
 	seenWindows := make(map[WindowID]struct{}, len(m.windows))
+	seenIncarnations := make(map[WindowIncarnation]struct{}, len(m.windows))
 	seenTabs := make(map[TabID]WindowID)
 	seenPanes := make(map[PaneID]TabID)
 	seenSplits := make(map[SplitID]TabID)
@@ -67,6 +68,16 @@ func checkModelInvariants(m *Model) error {
 		w := &m.windows[wi]
 		if w.id == 0 {
 			return invariantError("ordered window %d has zero ID", wi)
+		}
+		if w.incarnation == 0 {
+			return invariantError("window %d has zero incarnation", w.id)
+		}
+		if _, ok := seenIncarnations[w.incarnation]; ok {
+			return invariantError("window incarnation %d appears more than once", w.incarnation)
+		}
+		seenIncarnations[w.incarnation] = struct{}{}
+		if m.nextWindowIncarnation != 0 && w.incarnation >= m.nextWindowIncarnation {
+			return invariantError("window incarnation %d is not below next incarnation %d", w.incarnation, m.nextWindowIncarnation)
 		}
 		if _, ok := seenWindows[w.id]; ok {
 			return invariantError("window %d appears more than once", w.id)

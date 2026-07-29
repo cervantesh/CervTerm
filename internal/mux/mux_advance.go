@@ -1,13 +1,24 @@
 package mux
 
-func (m *Mux) advancePane(p *pane, data []byte) []Event {
+func (m *Mux) advancePaneScoped(scope mutationScope, p *pane, data []byte) []Event {
+	if p == nil || scope.validPaneOrigin(m, p.id) != nil {
+		return nil
+	}
+	p.activeScope = scope
+	defer func() { p.activeScope = mutationScope{} }()
 	oldTitle, oldCWD, oldBell := p.title, p.cwd, p.bellCount
 	public := p.advanceTerminal(data)
 	events := p.kittyEvents
 	p.kittyEvents = nil
-	events = append(events, m.processKittyOutcomes(p)...)
-	m.processSixelOutcomes(p)
-	m.processITermOutcomes(p)
+	if len(p.kittyOutcomes) != 0 {
+		events = append(events, m.processKittyOutcomesScoped(scope, p)...)
+	}
+	if len(p.sixelOutcomes) != 0 {
+		m.processSixelOutcomesScoped(scope, p)
+	}
+	if len(p.itermOutcomes) != 0 {
+		m.processITermOutcomesScoped(scope, p)
+	}
 	events = append(events, p.flushReplies()...)
 	p.capture()
 	events = append(events,

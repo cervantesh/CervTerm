@@ -9,19 +9,26 @@ import (
 )
 
 type muxProtocolSchedulingDispatchOperationAdapter struct {
-	mux  *Mux
-	pane *pane
+	mux   *Mux
+	pane  *pane
+	scope mutationScope
 }
 
-func (m *Mux) processKittyOutcomes(p *pane) []Event {
-	return m.protocolScheduling.dispatchKitty(nil, muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})
+func (m *Mux) processKittyOutcomesScoped(scope mutationScope, p *pane) []Event {
+	if p == nil || scope.validPaneOrigin(m, p.id) != nil {
+		return nil
+	}
+	return m.protocolScheduling.dispatchKitty(nil, muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p, scope: scope})
 }
 
 func (a muxProtocolSchedulingDispatchOperationAdapter) dispatchKitty(events []Event) []Event {
-	return dispatchKittyOperation(events, a.mux, a.pane)
+	return dispatchKittyOperation(a.scope, events, a.mux, a.pane)
 }
 
-func dispatchKittyOperation(events []Event, m *Mux, p *pane) []Event {
+func dispatchKittyOperation(scope mutationScope, events []Event, m *Mux, p *pane) []Event {
+	if p == nil || scope.validPaneOrigin(m, p.id) != nil {
+		return events
+	}
 	outcomes := p.kittyOutcomes
 	p.kittyOutcomes = nil
 	for _, outcome := range outcomes {
@@ -62,14 +69,17 @@ func dispatchKittyOperation(events []Event, m *Mux, p *pane) []Event {
 			p.capture()
 			events = append(events, Event{Kind: PaneDirty, Pane: p.id})
 		default:
-			m.submitKittyDecode(p, outcome)
+			m.submitKittyDecodeScoped(scope, p, outcome)
 		}
 	}
 	events = append(events, p.flushReplies()...)
 	return events
 }
 
-func (m *Mux) submitKittyDecode(p *pane, outcome kitty.Outcome) {
+func (m *Mux) submitKittyDecodeScoped(scope mutationScope, p *pane, outcome kitty.Outcome) {
+	if p == nil || scope.validPaneOrigin(m, p.id) != nil {
+		return
+	}
 	if outcome.Command == nil {
 		return
 	}
@@ -95,9 +105,9 @@ func (m *Mux) submitKittyDecode(p *pane, outcome kitty.Outcome) {
 	ownerCommand.Transfer = nil
 	m.kittyNextToken++
 	anchor := p.terminal.ImageCursorAnchor()
-	owner := kittyDecodeOwner{paneID: p.id, pane: p, generation: p.snapshot.ImageGeneration, reflowGen: p.reflowGen, anchorGen: p.terminal.ImageAnchorGeneration(), token: m.kittyNextToken, replySlot: slot, hasSlot: hasSlot, plan: outcome.Reply, command: ownerCommand, acceptUntil: m.options.Now().Add(termimage.HardAcceptanceDeadline), anchorRow: anchor.Row, anchorCol: anchor.Col}
+	owner := kittyDecodeOwner{paneID: p.id, pane: p, muxOwner: m.currentOwnerStamp(), generation: p.snapshot.ImageGeneration, reflowGen: p.reflowGen, anchorGen: p.terminal.ImageAnchorGeneration(), token: m.kittyNextToken, replySlot: slot, hasSlot: hasSlot, plan: outcome.Reply, command: ownerCommand, acceptUntil: m.options.Now().Add(termimage.HardAcceptanceDeadline), anchorRow: anchor.Row, anchorCol: anchor.Col}
 	work := kittyDecodeWork{owner: owner, job: job}
-	if err := m.imageScheduler.submitKitty(work); err != nil {
+	if err := m.imageScheduler.submitKittyScoped(scope, m, work); err != nil {
 		if hasSlot {
 			p.completeImageReply(slot, outcome.Reply.Encode(kitty.ReplyLimit))
 		}
@@ -110,22 +120,31 @@ type muxProtocolSchedulingApplyOperationAdapter struct {
 	mux        *Mux
 	now        time.Time
 	completion imageDecodeCompletion
+	scope      mutationScope
 }
 
-func (m *Mux) applyImageCompletion(completion imageDecodeCompletion) []Event {
-	return m.protocolScheduling.applyCompletion(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: completion})
+func (m *Mux) applyImageCompletionScoped(scope mutationScope, completion imageDecodeCompletion) []Event {
+	if err := scope.valid(m); err != nil {
+		completion.Close()
+		return nil
+	}
+	return m.protocolScheduling.applyCompletion(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: completion, scope: scope})
 }
 
 func (a muxProtocolSchedulingApplyOperationAdapter) applyCompletion(events []Event) []Event {
-	completed := applyImageCompletionOperation(a.mux, a.completion)
+	completed := applyImageCompletionOperation(a.scope, a.mux, a.completion)
 	if len(events) == 0 {
 		return completed
 	}
 	return append(events, completed...)
 }
 
-func applyImageCompletionOperation(m *Mux, completion imageDecodeCompletion) []Event {
-	defer m.imageScheduler.finish(completion.Key)
+func applyImageCompletionOperation(scope mutationScope, m *Mux, completion imageDecodeCompletion) []Event {
+	if err := scope.valid(m); err != nil {
+		completion.Close()
+		return nil
+	}
+	defer m.imageScheduler.finishScoped(scope, m, completion.Key)
 	switch completion.Owner.protocol {
 	case imageDecodeKitty:
 		kittyCompletion, ok := decodeKittyCompletion(completion)
@@ -133,7 +152,7 @@ func applyImageCompletionOperation(m *Mux, completion imageDecodeCompletion) []E
 			completion.Close()
 			return nil
 		}
-		return m.applyKittyCompletion(kittyCompletion)
+		return m.applyKittyCompletionScoped(scope, kittyCompletion)
 	case imageDecodeSixel:
 		sixelCompletion, ok := decodeSixelCompletion(completion)
 		if !ok {
@@ -150,7 +169,7 @@ func applyImageCompletionOperation(m *Mux, completion imageDecodeCompletion) []E
 			m.emitImageDiagnosticNow(ImageDiagnosticProtocolSixel, ImageDiagnosticReasonFailed, startedAt)
 			return nil
 		}
-		return m.applySixelCompletion(sixelCompletion)
+		return m.applySixelCompletionScoped(scope, sixelCompletion)
 	case imageDecodeITerm:
 		itermCompletion, ok := decodeITermCompletion(completion)
 		if !ok {
@@ -167,16 +186,26 @@ func applyImageCompletionOperation(m *Mux, completion imageDecodeCompletion) []E
 			m.emitImageDiagnosticNow(ImageDiagnosticProtocolITerm, ImageDiagnosticReasonFailed, startedAt)
 			return nil
 		}
-		return m.applyITermCompletion(itermCompletion)
+		return m.applyITermCompletionScoped(scope, itermCompletion)
 	default:
 		completion.Close()
 		return nil
 	}
 }
 
-func (m *Mux) applyKittyCompletion(completion kittyDecodeCompletion) []Event {
+func (m *Mux) applyKittyCompletionScoped(scope mutationScope, completion kittyDecodeCompletion) []Event {
+	if err := scope.validPaneOrigin(m, completion.Owner.paneID); err != nil {
+		completion.Close()
+		return nil
+	}
 	owner := completion.Owner
 	result := completion.Result
+	if err := owner.muxOwner.validPrepared(m); err != nil {
+		if result != nil {
+			result.Close()
+		}
+		return nil
+	}
 	pendingOwner, pending := m.kittyPending[owner.token]
 	if !pending || pendingOwner.pane != owner.pane {
 		if result != nil {
@@ -279,15 +308,21 @@ func (m *Mux) NextImageDeadline() (time.Time, bool) {
 	return earliest, found
 }
 
-func (m *Mux) expireImages(now time.Time) []Event {
-	return m.protocolScheduling.applyExpiry(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now})
+func (m *Mux) expireImagesScoped(scope mutationScope, now time.Time) []Event {
+	if err := scope.valid(m); err != nil {
+		return nil
+	}
+	return m.protocolScheduling.applyExpiry(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now, scope: scope})
 }
 
 func (a muxProtocolSchedulingApplyOperationAdapter) applyExpiry(events []Event) []Event {
-	return applyImageExpiryOperation(events, a.mux, a.now)
+	return applyImageExpiryOperation(a.scope, events, a.mux, a.now)
 }
 
-func applyImageExpiryOperation(events []Event, m *Mux, now time.Time) []Event {
+func applyImageExpiryOperation(scope mutationScope, events []Event, m *Mux, now time.Time) []Event {
+	if err := scope.valid(m); err != nil {
+		return events
+	}
 	if m == nil || m.imageScheduler == nil {
 		return events
 	}
@@ -302,21 +337,21 @@ func applyImageExpiryOperation(events []Event, m *Mux, now time.Time) []Event {
 			outcome := p.kittyAdapter.Expire(now)
 			if outcome.Failure != kitty.ReplyNone {
 				p.kittyOutcomes = append(p.kittyOutcomes, outcome)
-				events = append(events, m.processKittyOutcomes(p)...)
+				events = append(events, m.processKittyOutcomesScoped(scope, p)...)
 			}
 		}
 		if p.sixelAdapter != nil {
 			outcome := p.sixelAdapter.Expire(now)
 			if outcome.Command != nil || outcome.Failure != 0 {
 				p.sixelOutcomes = append(p.sixelOutcomes, outcome)
-				m.processSixelOutcomes(p)
+				m.processSixelOutcomesScoped(scope, p)
 			}
 		}
 		if p.itermAdapter != nil {
 			outcome := p.itermAdapter.Expire(now)
 			if outcome.Command != nil || outcome.Failure != itermimage.FailureNone {
 				p.itermOutcomes = append(p.itermOutcomes, outcome)
-				m.processITermOutcomes(p)
+				m.processITermOutcomesScoped(scope, p)
 			}
 		}
 	}
@@ -362,4 +397,6 @@ func (m *Mux) imageCompletionBefore(paneID PaneID, deadline time.Time) bool {
 }
 
 // expireKitty is retained for focused Phase 13 tests; expiration is now shared.
-func (m *Mux) expireKitty(now time.Time) []Event { return m.expireImages(now) }
+func (m *Mux) expireKittyScoped(scope mutationScope, now time.Time) []Event {
+	return m.expireImagesScoped(scope, now)
+}

@@ -92,21 +92,21 @@ func (a *App) executeActionCommand(envelope termaction.Envelope, context termact
 		if a.controller == nil {
 			return actionExecutionError(command, termaction.ErrorTarget, termaction.ErrTargetUnavailable)
 		}
-		if _, err := a.controller.createRuntimeProjection(); err != nil {
+		if _, err := a.controller.createRuntimeProjection(a.windowIdentity); err != nil {
 			return actionExecutionError(command, termaction.ErrorMux, err)
 		}
 	case termaction.CloseWindow:
 		if err := a.requireWindowTarget(command.WindowID); err != nil {
 			return actionExecutionError(command, termaction.ErrorTarget, err)
 		}
-		if _, err := a.controller.closeRuntimeProjection(termmux.WindowID(command.WindowID)); err != nil {
+		if _, err := a.controller.closeRuntimeProjection(a.windowIdentity, termmux.WindowID(command.WindowID)); err != nil {
 			return actionExecutionError(command, termaction.ErrorMux, err)
 		}
 	case termaction.FocusWindow:
 		if err := a.requireWindowTarget(command.WindowID); err != nil {
 			return actionExecutionError(command, termaction.ErrorTarget, err)
 		}
-		if err := a.controller.activateRuntimeProjection(termmux.WindowID(command.WindowID)); err != nil {
+		if err := a.controller.activateRuntimeProjection(a.windowIdentity, termmux.WindowID(command.WindowID)); err != nil {
 			return actionExecutionError(command, termaction.ErrorMux, err)
 		}
 	case termaction.MoveTabToWindow:

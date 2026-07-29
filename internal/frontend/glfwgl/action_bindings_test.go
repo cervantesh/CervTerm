@@ -114,19 +114,22 @@ func TestNonConsumingRepeatFallsThroughToLaterBuiltin(t *testing.T) {
 func newRecordingActionApp(t *testing.T) (*App, *recordingPaneFactory) {
 	t.Helper()
 	factory := &recordingPaneFactory{}
-	mux := termmux.New(factory, termmux.Options{})
+	process := termmux.NewOwner(factory, termmux.Options{})
+	mux := mustTestWindowMux(t, process)
 	_, pane, events, err := mux.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 80, Height: 24}, termmux.CellMetrics{CellWidth: 1, CellHeight: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	app := &App{
-		mux: mux, focusedPane: pane, paneUI: make(map[termmux.PaneID]*paneUIState),
+		mux: mux, windowID: initialWindowID, windowIdentity: termmux.WindowIdentity{ID: initialWindowID, Incarnation: 1},
+		focusedPane: pane, paneUI: make(map[termmux.PaneID]*paneUIState),
 		pendingPaneScroll: make(map[termmux.PaneID]int), cellW: 1, cellH: 1,
 	}
+	t.Cleanup(func() { _ = process.Shutdown() })
+	attachTestProcessController(t, app, process)
 	app.handleMuxEvents(events)
 	app.syncFocusedProjection()
 	configureActionBindings(t, app)
-	t.Cleanup(func() { _ = mux.Shutdown() })
 	return app, factory
 }
 

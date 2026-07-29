@@ -9,15 +9,21 @@ import (
 	"cervterm/internal/termimage"
 )
 
-func (m *Mux) processITermOutcomes(p *pane) {
-	m.protocolScheduling.dispatchITerm(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})
+func (m *Mux) processITermOutcomesScoped(scope mutationScope, p *pane) {
+	if p == nil || scope.validPaneOrigin(m, p.id) != nil {
+		return
+	}
+	m.protocolScheduling.dispatchITerm(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p, scope: scope})
 }
 
 func (a muxProtocolSchedulingDispatchOperationAdapter) dispatchITerm() {
-	dispatchITermOperation(a.mux, a.pane)
+	dispatchITermOperation(a.scope, a.mux, a.pane)
 }
 
-func dispatchITermOperation(m *Mux, p *pane) {
+func dispatchITermOperation(scope mutationScope, m *Mux, p *pane) {
+	if p == nil || scope.validPaneOrigin(m, p.id) != nil {
+		return
+	}
 	outcomes := p.itermOutcomes
 	p.itermOutcomes = nil
 	for _, outcome := range outcomes {
@@ -29,12 +35,15 @@ func dispatchITermOperation(m *Mux, p *pane) {
 			continue
 		}
 		if outcome.Command != nil {
-			m.submitITermDecode(p, outcome)
+			m.submitITermDecodeScoped(scope, p, outcome)
 		}
 	}
 }
 
-func (m *Mux) submitITermDecode(p *pane, outcome itermimage.Outcome) {
+func (m *Mux) submitITermDecodeScoped(scope mutationScope, p *pane, outcome itermimage.Outcome) {
+	if p == nil || scope.validPaneOrigin(m, p.id) != nil {
+		return
+	}
 	if outcome.Command == nil {
 		return
 	}
@@ -71,20 +80,31 @@ func (m *Mux) submitITermDecode(p *pane, outcome itermimage.Outcome) {
 	m.itermNextToken++
 	owner := itermDecodeOwner{
 		paneID: p.id, pane: p, model: m.model, store: p.imageStore, storeEpoch: p.imageStore.Epoch(),
+		muxOwner:        m.currentOwnerStamp(),
 		imageGeneration: p.terminal.ImageGeneration(), reflowGen: p.reflowGen, anchorGen: p.terminal.ImageAnchorGeneration(),
 		token: m.itermNextToken, metrics: metrics, image: command.Image, placement: command.Placement,
 		metadata: command.Metadata, startedAt: startedAt, acceptUntil: startedAt.Add(termimage.HardAcceptanceDeadline), anchor: p.terminal.ImageCursorAnchor(),
 	}
-	if err := m.imageScheduler.submitITerm(itermDecodeWork{owner: owner, job: job}); err != nil {
+	if err := m.imageScheduler.submitITermScoped(scope, m, itermDecodeWork{owner: owner, job: job}); err != nil {
 		m.emitImageDiagnosticNow(ImageDiagnosticProtocolITerm, ImageDiagnosticReasonBusy, startedAt)
 		return
 	}
 	m.itermPending[owner.token] = owner
 }
 
-func (m *Mux) applyITermCompletion(completion itermDecodeCompletion) []Event {
+func (m *Mux) applyITermCompletionScoped(scope mutationScope, completion itermDecodeCompletion) []Event {
+	if err := scope.validPaneOrigin(m, completion.Owner.paneID); err != nil {
+		completion.Close()
+		return nil
+	}
 	owner := completion.Owner
 	result := completion.Result
+	if err := owner.muxOwner.validPrepared(m); err != nil {
+		if result != nil {
+			result.Close()
+		}
+		return nil
+	}
 	pendingOwner, pending := m.itermPending[owner.token]
 	if !pending || pendingOwner != owner {
 		if result != nil {

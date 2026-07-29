@@ -4,7 +4,10 @@ func (m *Mux) Workspaces() []WorkspaceView { return m.model.Workspaces() }
 
 func (m *Mux) ActiveWorkspace() WorkspaceView { return m.model.ActiveWorkspace() }
 
-func (m *Mux) CreateWorkspace(name string) (WorkspaceView, []Event, error) {
+func (m *Mux) createWorkspace(scope mutationScope, name string) (WorkspaceView, []Event, error) {
+	if err := scope.valid(m); err != nil {
+		return WorkspaceView{}, nil, err
+	}
 	view, err := m.model.CreateWorkspace(name)
 	if err != nil {
 		return WorkspaceView{}, nil, err
@@ -12,7 +15,10 @@ func (m *Mux) CreateWorkspace(name string) (WorkspaceView, []Event, error) {
 	return view, []Event{{Kind: WorkspaceCreated, Workspace: view.ID, Text: view.Name, Revision: view.Revision}}, nil
 }
 
-func (m *Mux) RenameWorkspace(id WorkspaceID, name string) ([]Event, error) {
+func (m *Mux) renameWorkspace(scope mutationScope, id WorkspaceID, name string) ([]Event, error) {
+	if err := scope.valid(m); err != nil {
+		return nil, err
+	}
 	current := m.model.workspaceByID(id)
 	normalized, normalizeErr := normalizeWorkspaceName(name)
 	if current == nil {
@@ -31,7 +37,10 @@ func (m *Mux) RenameWorkspace(id WorkspaceID, name string) ([]Event, error) {
 	return []Event{{Kind: WorkspaceRenamed, Workspace: id, Text: view.name, Revision: view.revision}}, nil
 }
 
-func (m *Mux) SwitchWorkspace(id WorkspaceID) ([]Event, error) {
+func (m *Mux) switchWorkspace(scope mutationScope, id WorkspaceID) ([]Event, error) {
+	if err := scope.valid(m); err != nil {
+		return nil, err
+	}
 	if m.model.activeWorkspace == id {
 		return nil, nil
 	}
@@ -48,7 +57,10 @@ func (m *Mux) SwitchWorkspace(id WorkspaceID) ([]Event, error) {
 	return events, nil
 }
 
-func (m *Mux) MoveWindowToWorkspace(window WindowID, target WorkspaceID) ([]Event, error) {
+func (m *Mux) moveWindowToWorkspace(scope mutationScope, window WindowID, target WorkspaceID) ([]Event, error) {
+	if err := scope.valid(m); err != nil {
+		return nil, err
+	}
 	w := m.model.windowByID(window)
 	if w == nil {
 		return nil, ErrWindowNotFound

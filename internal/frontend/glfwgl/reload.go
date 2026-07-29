@@ -357,8 +357,6 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	oldTabBarPosition := a.cfg.TabBar.Position
 	oldBell := a.cfg.Bell
 	oldNotification := a.cfg.Notification
-	a.mux.SetScrollbackCapacity(next.Scrolling.History)
-	a.mux.SetHideCursorWhenScrolled(next.Scrolling.HideCursorWhenScrolled)
 	a.syncFocusedProjection()
 	a.cfg.Window.Opacity = next.Window.Opacity
 	a.cfg.Window.TextOpacity = next.Window.TextOpacity
@@ -367,7 +365,9 @@ func (a *App) commitLiveConfig(prepared *preparedLiveConfig) {
 	a.cfg.Colors = next.Colors
 	a.cfg.Background = next.Background
 	a.cfg.Background.Layers = next.Clone().Background.Layers
-	a.mux.SetPaletteBase(configuredPaletteBase(a.cfg.Colors))
+	if a.controller != nil {
+		_ = a.controller.updateProcessConfig(a.windowIdentity, configuredPaletteBase(a.cfg.Colors), next.Scrolling.History, next.Scrolling.HideCursorWhenScrolled)
+	}
 	a.cfg.Scrolling = next.Scrolling
 	a.cfg.Scrollbar = next.Scrollbar
 	a.cfg.TabBar = next.TabBar

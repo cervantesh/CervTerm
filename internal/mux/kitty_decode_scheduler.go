@@ -44,6 +44,7 @@ type imageDecodeCompletion = workscheduler.Completion[PaneID, imageDecodeOwner, 
 
 type imageDecodeScheduler struct {
 	inner *workscheduler.Scheduler[PaneID, imageDecodeOwner, workscheduler.Result]
+	owner *Mux
 }
 
 // Kitty alias keeps focused compatibility tests on the shared instance.
@@ -54,6 +55,7 @@ type kittyDecodeScheduler = imageDecodeScheduler
 type kittyDecodeOwner struct {
 	paneID      PaneID
 	pane        *pane
+	muxOwner    ownerStamp
 	generation  uint64
 	reflowGen   uint64
 	anchorGen   uint64
@@ -70,6 +72,7 @@ type kittyDecodeOwner struct {
 type sixelDecodeOwner struct {
 	paneID          PaneID
 	pane            *pane
+	muxOwner        ownerStamp
 	model           *Model
 	store           *termimage.Store
 	storeEpoch      termimage.StoreEpoch
@@ -89,6 +92,7 @@ type sixelDecodeOwner struct {
 type itermDecodeOwner struct {
 	paneID          PaneID
 	pane            *pane
+	muxOwner        ownerStamp
 	model           *Model
 	store           *termimage.Store
 	storeEpoch      termimage.StoreEpoch
@@ -204,7 +208,13 @@ func newKittyDecodeScheduler(wake func(), now ...func() time.Time) *kittyDecodeS
 	return newImageDecodeScheduler(wake, now...)
 }
 
-func (s *imageDecodeScheduler) submitKitty(work kittyDecodeWork) error {
+func (s *imageDecodeScheduler) submitKittyScoped(scope mutationScope, m *Mux, work kittyDecodeWork) error {
+	if err := scope.valid(m); err != nil {
+		if work.job != nil {
+			work.job.Close()
+		}
+		return err
+	}
 	if s == nil {
 		if work.job != nil {
 			work.job.Close()
@@ -220,11 +230,17 @@ func (s *imageDecodeScheduler) submitKitty(work kittyDecodeWork) error {
 	})
 }
 
-func (s *imageDecodeScheduler) submit(work kittyDecodeWork) error {
-	return s.submitKitty(work)
+func (s *imageDecodeScheduler) submitScoped(scope mutationScope, m *Mux, work kittyDecodeWork) error {
+	return s.submitKittyScoped(scope, m, work)
 }
 
-func (s *imageDecodeScheduler) submitSixel(work sixelDecodeWork) error {
+func (s *imageDecodeScheduler) submitSixelScoped(scope mutationScope, m *Mux, work sixelDecodeWork) error {
+	if err := scope.valid(m); err != nil {
+		if work.job != nil {
+			work.job.Close()
+		}
+		return err
+	}
 	if s == nil {
 		if work.job != nil {
 			work.job.Close()
@@ -240,7 +256,13 @@ func (s *imageDecodeScheduler) submitSixel(work sixelDecodeWork) error {
 	})
 }
 
-func (s *imageDecodeScheduler) submitITerm(work itermDecodeWork) error {
+func (s *imageDecodeScheduler) submitITermScoped(scope mutationScope, m *Mux, work itermDecodeWork) error {
+	if err := scope.valid(m); err != nil {
+		if work.job != nil {
+			work.job.Close()
+		}
+		return err
+	}
 	if s == nil {
 		if work.job != nil {
 			work.job.Close()
@@ -263,7 +285,10 @@ func (s *imageDecodeScheduler) ready() <-chan struct{} {
 	return s.inner.Ready()
 }
 
-func (s *imageDecodeScheduler) takeCompletion() (imageDecodeCompletion, bool) {
+func (s *imageDecodeScheduler) takeCompletionScoped(scope mutationScope, m *Mux) (imageDecodeCompletion, bool) {
+	if err := scope.valid(m); err != nil {
+		return imageDecodeCompletion{}, false
+	}
 	if s == nil {
 		return imageDecodeCompletion{}, false
 	}
@@ -315,8 +340,8 @@ func decodeITermCompletion(completion imageDecodeCompletion) (itermDecodeComplet
 	return itermDecodeCompletion{Owner: owner, Result: result, FinishedAt: completion.FinishedAt}, true
 }
 
-func (s *imageDecodeScheduler) finish(paneID PaneID) {
-	if s != nil {
+func (s *imageDecodeScheduler) finishScoped(scope mutationScope, m *Mux, paneID PaneID) {
+	if s != nil && scope.valid(m) == nil {
 		s.inner.Finish(paneID)
 	}
 }
@@ -328,8 +353,8 @@ func (s *imageDecodeScheduler) completionTime(paneID PaneID) (time.Time, bool) {
 	return s.inner.CompletionTime(paneID)
 }
 
-func (s *imageDecodeScheduler) close() {
-	if s != nil {
+func (s *imageDecodeScheduler) closeScoped(scope mutationScope, m *Mux) {
+	if s != nil && scope.valid(m) == nil {
 		s.inner.Close()
 	}
 }

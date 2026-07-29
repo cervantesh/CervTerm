@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"reflect"
-	"runtime"
 	"testing"
 
 	"cervterm/internal/pty"
@@ -37,7 +36,7 @@ func TestMuxSessionIngressDataReplyAndDetachedPublicOutput(t *testing.T) {
 	pane := lookupPaneForTest(t, m.sessions, 1)
 	data := []byte("A\x1b[6n")
 	wantData := append([]byte(nil), data...)
-	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: data}
+	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, data: data}
 
 	events := m.Drain(1)
 	if got, want := sessionIngressKinds(events), []EventKind{PaneOutput, PaneDirty}; !reflect.DeepEqual(got, want) {
@@ -72,7 +71,7 @@ func TestMuxSessionIngressParserReplyFailurePrecedesOutputAndDirty(t *testing.T)
 	t.Cleanup(func() { _ = m.Shutdown() })
 	pane := lookupPaneForTest(t, m.sessions, 1)
 	data := []byte("\x1b[5n")
-	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: data}
+	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, data: data}
 
 	events := m.Drain(1)
 	wantKinds := []EventKind{PaneWriteFailed, PaneOutput, PaneDirty}
@@ -88,7 +87,7 @@ func TestMuxSessionIngressMetadataOrdering(t *testing.T) {
 	m, _, _ := newTestMux(t)
 	pane := lookupPaneForTest(t, m.sessions, 1)
 	data := []byte("\x1b]2;mux-title\x07\x1b]7;file:///srv/project\x07\x07")
-	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: data}
+	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, data: data}
 
 	events := m.Drain(1)
 	wantKinds := []EventKind{PaneOutput, PaneDirty, PaneTitleChanged, PaneCWDChanged, PaneBell}
@@ -116,8 +115,8 @@ func TestMuxSessionIngressDataPrecedesExitAndNormalizesEOF(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			m, _, _ := newTestMux(t)
 			pane := lookupPaneForTest(t, m.sessions, 1)
-			m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: []byte("X")}
-			m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, err: test.err}
+			m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, data: []byte("X")}
+			m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, err: test.err}
 
 			events := m.Drain(2)
 			wantKinds := []EventKind{PaneOutput, PaneDirty, PaneExited, TabRevisionChanged}
@@ -153,14 +152,14 @@ func TestMuxSessionIngressRejectedRecordConsumesDrainLimit(t *testing.T) {
 		{
 			name: "replaced owner",
 			rejected: func(p *pane) ingressRecord {
-				return ingressRecord{pane: p.id, owner: &pane{id: p.id}, data: []byte("replaced")}
+				return ingressRecord{pane: p.id, owner: &pane{id: p.id}, stamp: p.ownerStamp, data: []byte("replaced")}
 			},
 		},
 		{
 			name: "closed owner",
 			rejected: func(p *pane) ingressRecord {
 				p.state = PaneStateClosed
-				return ingressRecord{pane: p.id, owner: p, data: []byte("closed")}
+				return ingressRecord{pane: p.id, owner: p, stamp: p.ownerStamp, data: []byte("closed")}
 			},
 			beforeSecond: func(p *pane) { p.state = PaneStateRunning },
 		},
@@ -169,7 +168,7 @@ func TestMuxSessionIngressRejectedRecordConsumesDrainLimit(t *testing.T) {
 			m, _, _ := newTestMux(t)
 			pane := lookupPaneForTest(t, m.sessions, 1)
 			m.sessions.incoming <- test.rejected(pane)
-			m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: []byte("V")}
+			m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, data: []byte("V")}
 
 			if events := m.Drain(1); len(events) != 0 {
 				t.Fatalf("rejected record emitted events=%#v", events)
@@ -193,26 +192,26 @@ func TestMuxSessionIngressRejectedRecordConsumesDrainLimit(t *testing.T) {
 
 func TestMuxClosePaneDropsAlreadyQueuedSessionIngress(t *testing.T) {
 	m, _, _ := newTestMux(t)
+	owner := testOwnerForMux(m)
 	if m.imageScheduler != nil {
 		t.Fatal("test requires image-disabled mux so Drain selects only queued ingress")
 	}
 	pane := lookupPaneForTest(t, m.sessions, 1)
-	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: []byte("must-not-apply")}
+	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, data: []byte("must-not-apply")}
 
-	closeEvents, err := m.ClosePane(pane.id)
+	closeEvents, err := testWindowOwnerForOwner(owner).ClosePane(pane.id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(closeEvents) == 0 || closeEvents[0].Kind != PaneClosed {
 		t.Fatalf("close events=%#v want PaneClosed first", closeEvents)
 	}
-	// Shutdown joins the reader so any close-induced EOF is queued before the
-	// unbounded drain; both the original data and EOF must be rejected.
-	if err := m.Shutdown(); err != nil {
-		t.Fatal(err)
-	}
-	if events := m.Drain(0); len(events) != 0 {
-		t.Fatalf("queued ingress for closed pane emitted events=%#v", events)
+	// Join the closed pane's reader while the process owner remains live. Any
+	// close-induced EOF is then queued before the authorized unbounded drain;
+	// both the original data and EOF must be rejected exactly.
+	m.sessions.readers.Wait()
+	if events, err := owner.Drain(0); err != nil || len(events) != 0 {
+		t.Fatalf("queued ingress for closed pane events=%#v err=%v", events, err)
 	}
 	if got := len(m.sessions.incoming); got != 0 {
 		t.Fatalf("queued ingress records after joined drain=%d want=0", got)
@@ -231,7 +230,7 @@ func TestMuxSessionIngressPreservesCallbackEnqueue(t *testing.T) {
 		IngressCapacity: 8,
 		SetClipboard: func(id PaneID, text string) {
 			clipboard = text
-			m.sessions.incoming <- ingressRecord{pane: id, owner: pane, data: []byte("B")}
+			m.sessions.incoming <- ingressRecord{pane: id, owner: pane, stamp: pane.ownerStamp, data: []byte("B")}
 		},
 	})
 	if _, _, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16}); err != nil {
@@ -240,7 +239,7 @@ func TestMuxSessionIngressPreservesCallbackEnqueue(t *testing.T) {
 	t.Cleanup(func() { _ = m.Shutdown() })
 	pane = lookupPaneForTest(t, m.sessions, 1)
 	first := []byte("A\x1b]52;c;Qg==\x07")
-	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: first}
+	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, data: first}
 
 	events := m.Drain(2)
 	wantKinds := []EventKind{PaneOutput, PaneDirty, PaneOutput, PaneDirty}
@@ -265,7 +264,7 @@ func TestMuxSessionIngressCallbackArrivalIsRevalidatedAndRejectedWhenStale(t *te
 		IngressCapacity: 8,
 		SetClipboard: func(id PaneID, _ string) {
 			callbackCalls++
-			m.sessions.incoming <- ingressRecord{pane: id, owner: pane, data: []byte("B")}
+			m.sessions.incoming <- ingressRecord{pane: id, owner: pane, stamp: pane.ownerStamp, data: []byte("B")}
 			pane.state = PaneStateClosing
 		},
 	})
@@ -276,7 +275,7 @@ func TestMuxSessionIngressCallbackArrivalIsRevalidatedAndRejectedWhenStale(t *te
 	pane = lookupPaneForTest(t, m.sessions, 1)
 	defer func() { pane.state = PaneStateRunning }()
 	first := []byte("A\x1b]52;c;Qg==\x07")
-	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: first}
+	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, data: first}
 
 	events := m.Drain(2)
 	wantKinds := []EventKind{PaneOutput, PaneDirty}
@@ -301,12 +300,20 @@ func TestMuxSessionIngressCallbackArrivalIsRevalidatedAndRejectedWhenStale(t *te
 }
 
 func drainMuxSessionIngressInlineForAllocationParity(m *Mux, record ingressRecord) []Event {
+	owner, scope, err := testMuxScope(m)
+	if err != nil {
+		return nil
+	}
+	defer owner.leave(scope)
+	if err := scope.valid(m); err != nil {
+		return nil
+	}
 	var events []Event
 	accepted := m.sessions.adaptSessionIngressRecord(record)
 	if !accepted.acceptSessionIngress() {
 		return m.ResolveEventAddresses(events)
 	}
-	operation := muxSessionIngressOperationAdapter{mux: m, pane: accepted.registered}
+	operation := muxSessionIngressOperationAdapter{mux: m, pane: accepted.registered, scope: scope}
 	if len(record.data) > 0 {
 		events = operation.applySessionIngressData(events, record.data)
 	}
@@ -325,6 +332,9 @@ func TestMuxSessionIngressControllerWiringPreservesAllocationParity(t *testing.T
 	activeRecord := ingressRecord{pane: activePane.id, owner: activePane, data: data}
 	baselineRecord := ingressRecord{pane: baselinePane.id, owner: baselinePane, data: data}
 
+	// A missing owner stamp is a stale record after the scope-at-sink migration.
+	// Compare the real scoped Drain rejection with the scoped inline baseline;
+	// accepted route phase ordering/allocation remains guarded by the controller tests.
 	active.sessions.incoming <- activeRecord
 	benchmarkMuxSessionIngressEvents = active.Drain(1)
 	benchmarkMuxSessionIngressEvents = drainMuxSessionIngressInlineForAllocationParity(baseline, baselineRecord)
@@ -340,20 +350,25 @@ func TestMuxSessionIngressControllerWiringPreservesAllocationParity(t *testing.T
 	}
 }
 
-// TestKnownDefect_L3_02_SessionIngressAcceptsDifferentOwnerThread expires Slice 3.1.
-func TestKnownDefect_L3_02_SessionIngressAcceptsDifferentOwnerThread(t *testing.T) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	m, _, _ := newTestMux(t)
-	pane := lookupPaneForTest(t, m.sessions, 1)
-	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: []byte("X")}
-	result := make(chan []Event, 1)
-	go func() { result <- m.Drain(1) }()
-
-	events := <-result
-	if got, want := sessionIngressKinds(events), []EventKind{PaneOutput, PaneDirty}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("different-thread drain order=%v want=%v events=%#v", got, want, events)
+func TestL302SessionIngressRequiresLiveOwnerCapability(t *testing.T) {
+	owner := NewOwner(&fakeFactory{}, Options{IngressCapacity: 8})
+	if _, _, _, err := testWindowOwnerForOwner(owner).Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, CellMetrics{CellWidth: 8, CellHeight: 16}); err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Shutdown()
+	pane := lookupPaneForTest(t, owner.mux.sessions, 1)
+	owner.mux.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, data: []byte("X")}
+	stamp, err := owner.begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.leave(stamp)
+	before := captureL302MuxFingerprint(owner.mux)
+	if events, err := owner.Drain(1); !errors.Is(err, ErrOwnerBusy) || events != nil {
+		t.Fatalf("busy drain events=%#v err=%v", events, err)
+	}
+	if after := captureL302MuxFingerprint(owner.mux); !reflect.DeepEqual(before, after) {
+		t.Fatalf("rejected ingress changed mux: before=%#v after=%#v", before, after)
 	}
 }
 

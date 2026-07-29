@@ -16,6 +16,7 @@ import (
 	"cervterm/internal/layoutrestore"
 	"cervterm/internal/layoutstate"
 	termmux "cervterm/internal/mux"
+	"cervterm/internal/ownerthread"
 	"cervterm/internal/pty"
 	"cervterm/internal/windowbounds"
 )
@@ -72,6 +73,7 @@ func (f *fakeRestoreProjectionFactory) PrepareRestore(index int) (*nativeProject
 func newRestoreProjectionController(t *testing.T, log *[]string) *windowController {
 	t.Helper()
 	controller := newWindowController(processServices{}, fakeNativePump{log: log})
+	controller.threadSource = ownerthread.SourceFunc(func() ownerthread.ID { return 1 })
 	if err := controller.startLoop(); err != nil {
 		t.Fatal(err)
 	}
@@ -363,9 +365,9 @@ func (projectionRestoreSessionFactory) Spawn(uint16, uint16, pty.Options) (pty.S
 
 func TestWindowControllerRestoreStartupWithRealMuxPublishesWorkspaceVisibilityAndFocus(t *testing.T) {
 	var log []string
-	m := termmux.New(projectionRestoreSessionFactory{}, termmux.Options{})
+	m := termmux.NewOwner(projectionRestoreSessionFactory{}, termmux.Options{})
 	defer m.Shutdown()
-	controller := newWindowController(processServices{mux: m}, fakeNativePump{log: &log})
+	controller := newWindowController(processServices{commands: m, windowCapabilities: m}, fakeNativePump{log: &log})
 	if err := controller.startLoop(); err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +391,7 @@ func TestWindowControllerRestoreStartupWithRealMuxPublishesWorkspaceVisibilityAn
 		t.Fatalf("layout document=%#v", document)
 	}
 	path := filepath.Join(t.TempDir(), "layout.json")
-	owner := &App{cfg: config.Defaults(), controller: controller}
+	owner := &App{cfg: config.Defaults(), host: controller, controller: newProjectionMessageRouter(controller)}
 	owner.cfg.LayoutPersistence.Enabled, owner.cfg.LayoutPersistence.Path = true, path
 	if err := owner.persistCurrentLayout(); err != nil {
 		t.Fatal(err)

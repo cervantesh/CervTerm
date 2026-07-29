@@ -59,7 +59,9 @@ func (t *Terminal) commitImage(commit imageCommit) (imageCommitResult, error) {
 	if err != nil {
 		return imageCommitResult{}, err
 	}
-	t.publishPreparedImage(prepared)
+	if err := t.publishPreparedImage(prepared); err != nil {
+		return imageCommitResult{}, err
+	}
 	return result, nil
 }
 
@@ -198,11 +200,11 @@ func (t *Terminal) prepareImageCommit(commit imageCommit, fault imagePrepareFaul
 	if placementSpec != nil {
 		placement, placementErr := termimage.NewPlacement(*placementSpec, ref, width, height)
 		if placementErr != nil { // Validation already succeeded; retain rollback safety.
-			storePrepared.Abort()
+			abortErr := storePrepared.Abort()
 			if newLease != nil {
 				newLease.Close()
 			}
-			return nil, imageCommitResult{}, placementErr
+			return nil, imageCommitResult{}, errors.Join(placementErr, abortErr)
 		}
 		entry := imagePlacement{placement: placement, lease: placementLease}
 		if t.alternateScreen {
@@ -221,74 +223,73 @@ func (t *Terminal) prepareImageCommit(commit imageCommit, fault imagePrepareFaul
 	}, result, nil
 }
 
-func (t *Terminal) publishPreparedImage(prepared *preparedImageMutation) {
+func (t *Terminal) publishPreparedImage(prepared *preparedImageMutation) error {
 	if prepared == nil || prepared.terminal != t || prepared.published {
-		panic(termimage.ErrPreparedState)
+		return termimage.ErrPreparedState
 	}
-	if t.imageStore == nil || t.imageSidecars != prepared.baseSidecars {
-		t.abortPreparedImage(prepared)
-		panic(termimage.ErrPreparedState)
+	if t.imageStore == nil || t.imageOwner == nil || t.imageSidecars != prepared.baseSidecars {
+		return errors.Join(termimage.ErrPreparedState, t.abortPreparedImage(prepared))
 	}
-	t.imageOwner.PublishPrepared(prepared.store)
+	if err := t.imageOwner.PublishPrepared(prepared.store); err != nil {
+		return errors.Join(err, t.abortPreparedImage(prepared))
+	}
 	t.imageSidecars = prepared.sidecars
 	prepared.published = true
-	prepared.store.Finalize()
+	if err := prepared.store.Commit(); err != nil {
+		return err
+	}
 	for _, lease := range prepared.retired {
 		lease.Close()
 	}
+	return nil
 }
 
-func (t *Terminal) abortPreparedImage(prepared *preparedImageMutation) {
+func (t *Terminal) abortPreparedImage(prepared *preparedImageMutation) error {
 	if prepared == nil || prepared.terminal != t || prepared.published {
-		return
+		return nil
 	}
-	prepared.store.Abort()
+	abortErr := prepared.store.Abort()
+	if abortErr != nil {
+		return abortErr
+	}
 	if prepared.newLease != nil {
 		prepared.newLease.Close()
 	}
 	prepared.newLease = nil
+	return nil
 }
 
-func (t *Terminal) resetImages() {
+func (t *Terminal) resetImages() error {
 	if t == nil || t.imageStore == nil {
-		return
+		return nil
 	}
 	if t.imageSidecars != nil && t.imageSidecars.generation == math.MaxUint64 {
-		t.closeImages()
-		return
+		return t.closeImages()
 	}
 	nextGeneration := uint64(1)
 	if t.imageSidecars != nil {
 		nextGeneration = t.imageSidecars.generation + 1
 	}
 	if t.imageOwner == nil {
-		t.closeImages()
-		return
+		return termimage.ErrWrongOwner
 	}
 	storePrepared, err := t.imageOwner.PrepareReset()
 	if err != nil {
-		t.closeImages()
-		return
+		return err
 	}
 	prepared := &preparedImageMutation{
 		terminal: t, store: storePrepared, baseSidecars: t.imageSidecars,
 		sidecars: &imageSidecars{generation: nextGeneration},
 	}
-	t.publishPreparedImage(prepared)
+	return t.publishPreparedImage(prepared)
 }
 
-func (t *Terminal) closeImages() {
-	if t == nil || t.imageStore == nil {
-		return
+func (t *Terminal) closeImages() error {
+	prepared, err := t.PrepareCloseImageStore()
+	if err != nil {
+		return err
 	}
-	if t.imageOwner != nil {
-		t.imageOwner.Close()
-	} else {
-		t.imageStore.Close()
-	}
-	t.imageStore = nil
-	t.imageOwner = nil
-	t.imageSidecars = nil
+	return prepared.Commit()
 }
 
 func (t *Terminal) deleteImages(selector termimage.DeleteSelector) (int, error) {
@@ -296,7 +297,9 @@ func (t *Terminal) deleteImages(selector termimage.DeleteSelector) (int, error) 
 	if err != nil {
 		return 0, err
 	}
-	t.publishPreparedImage(prepared)
+	if err := t.publishPreparedImage(prepared); err != nil {
+		return 0, err
+	}
 	return count, nil
 }
 

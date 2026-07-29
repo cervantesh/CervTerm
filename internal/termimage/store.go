@@ -2,6 +2,7 @@ package termimage
 
 import (
 	"math"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,15 +13,19 @@ type Store struct {
 	pane    paneBudget
 	now     func() time.Time
 
-	epoch     atomic.Uint64
-	closed    atomic.Bool
-	owner     atomic.Pointer[StoreOwner]
-	resetting atomic.Bool
+	// lifecycleMu serializes owner publication with standalone reset/close.
+	lifecycleMu     sync.Mutex
+	state           atomic.Pointer[storeState]
+	owner           atomic.Pointer[StoreOwner]
+	ownerGeneration atomic.Uint64
+	resetting       atomic.Bool
+	ownerFault      func(string) error // package-private deterministic fault/orchestration injection
+	testReadHook    func(string)       // package-private deterministic read orchestration
 
 	pendingMu             sync.Mutex
 	pending               map[TransferID]*CandidateTransfer
-	state                 *storeState
-	prepared              *PreparedStoreState
+	prepared              atomic.Pointer[PreparedStoreState]
+	preparedClose         atomic.Pointer[PreparedStoreClose]
 	placementMu           sync.Mutex
 	candidateMu           sync.Mutex
 	candidates            map[*DecodedCandidate]struct{}
@@ -39,9 +44,14 @@ type resource struct {
 	retention     ResourceRetention
 }
 
+// storeState is immutable after publication. The state pointer CAS linearizes
+// resources, generation, epoch, and close. A reader already holding an older
+// snapshot may return its detached old copy; readers loading closed state fail.
 type storeState struct {
 	resources      map[ImageID]*resource
 	nextGeneration ResourceGeneration
+	epoch          StoreEpoch
+	closed         bool
 }
 
 func NewStore(process *ProcessBudget, limits Limits) *Store {
@@ -55,71 +65,330 @@ func NewStore(process *ProcessBudget, limits Limits) *Store {
 		now:                   time.Now,
 		pending:               make(map[TransferID]*CandidateTransfer),
 		candidates:            make(map[*DecodedCandidate]struct{}),
-		state:                 &storeState{resources: make(map[ImageID]*resource)},
 		placements:            make(map[*PlacementReservation]struct{}),
 		nextInternalImage:     MinInternalImageID - 1,
 		nextInternalPlacement: MinInternalPlacementID - 1,
 	}
-	store.epoch.Store(1)
+	store.state.Store(&storeState{resources: make(map[ImageID]*resource), epoch: 1})
+	store.ownerGeneration.Store(1)
 	return store
 }
 
+type storeOwnerNoCopy struct{}
+
+func (*storeOwnerNoCopy) Lock()   {}
+func (*storeOwnerNoCopy) Unlock() {}
+
 type StoreOwner struct {
-	store    *Store
-	released atomic.Bool
+	_            storeOwnerNoCopy
+	store        *Store
+	generation   uint64
+	threadID     uint64
+	threadLocked atomic.Bool
+	released     atomic.Bool
+	activeScope  atomic.Uint64
+	nextScope    atomic.Uint64
+}
+
+// storeMutationScope is valid for one exact StoreOwner dispatch. Every sink
+
+// revalidates owner identity, generation, nonce, activity, and native thread
+
+// before its first write.
+type storeMutationScope struct {
+	owner      *StoreOwner
+	store      *Store
+	generation uint64
+	nonce      uint64
+	threadID   uint64
+}
+
+// PreparedStoreClose binds close preparation to one owner generation. Commit and
+// Abort acquire a fresh one-dispatch owner scope before validation or mutation.
+type PreparedStoreClose struct {
+	owner      *StoreOwner
+	store      *Store
+	generation uint64
+	active     bool
+	finished   atomic.Bool
+	result     error
 }
 
 func (s *Store) ClaimOwner() *StoreOwner {
-	if s == nil || s.closed.Load() || s.resetting.Load() || s.prepared != nil {
+	if s == nil {
 		return nil
 	}
-	owner := &StoreOwner{store: s}
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	state := s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() || s.prepared.Load() != nil || s.preparedClose.Load() != nil || s.owner.Load() != nil {
+		return nil
+	}
+	if s.ownerFault != nil {
+		if err := s.ownerFault("claim"); err != nil {
+			return nil
+		}
+	}
+	runtime.LockOSThread()
+	keepThreadLocked := false
+	defer func() {
+		if !keepThreadLocked {
+			runtime.UnlockOSThread()
+		}
+	}()
+	threadID := currentStoreOwnerThreadID()
+	if threadID == 0 {
+		return nil
+	}
+	owner := &StoreOwner{store: s, generation: s.ownerGeneration.Load(), threadID: threadID}
+	owner.threadLocked.Store(true)
 	if !s.owner.CompareAndSwap(nil, owner) {
+		owner.threadLocked.Store(false)
 		return nil
 	}
+	keepThreadLocked = true
 	return owner
 }
 
-func (o *StoreOwner) valid() bool {
-	return o != nil && !o.released.Load() && o.store != nil && o.store.owner.Load() == o && !o.store.closed.Load()
+func (o *StoreOwner) enter() (storeMutationScope, error) {
+	return o.enterWithPreparedClose(nil)
+}
+
+func (o *StoreOwner) enterPreparedClose(prepared *PreparedStoreClose) (storeMutationScope, error) {
+	if prepared == nil || o == nil || o.store == nil || o.store.preparedClose.Load() != prepared {
+		return storeMutationScope{}, ErrStaleMutationScope
+	}
+	return o.enterWithPreparedClose(prepared)
+}
+
+func (o *StoreOwner) enterWithPreparedClose(prepared *PreparedStoreClose) (storeMutationScope, error) {
+	if o == nil || o.store == nil {
+		return storeMutationScope{}, ErrWrongOwner
+	}
+	if o.released.Load() || o.store.Closed() {
+		return storeMutationScope{}, ErrClosed
+	}
+	if o.store.owner.Load() != o {
+		return storeMutationScope{}, ErrWrongOwner
+	}
+	if o.store.ownerGeneration.Load() != o.generation {
+		return storeMutationScope{}, ErrStaleOwner
+	}
+	threadID := currentStoreOwnerThreadID()
+	if threadID == 0 || threadID != o.threadID {
+		return storeMutationScope{}, ErrWrongOwnerThread
+	}
+	if current := o.store.preparedClose.Load(); current != nil && current != prepared {
+		return storeMutationScope{}, ErrOwnerBusy
+	}
+	if prepared != nil && o.store.preparedClose.Load() != prepared {
+		return storeMutationScope{}, ErrStaleMutationScope
+	}
+	if o.activeScope.Load() != 0 {
+		return storeMutationScope{}, ErrOwnerBusy
+	}
+	nonce := o.nextScope.Add(1)
+	if nonce == 0 {
+		return storeMutationScope{}, ErrStaleMutationScope
+	}
+	if !o.activeScope.CompareAndSwap(0, nonce) {
+		return storeMutationScope{}, ErrOwnerBusy
+	}
+	scope := storeMutationScope{owner: o, store: o.store, generation: o.generation, nonce: nonce, threadID: threadID}
+	if err := scope.valid(o.store); err != nil {
+		o.activeScope.CompareAndSwap(nonce, 0)
+		return storeMutationScope{}, err
+	}
+	return scope, nil
+}
+
+func (o *StoreOwner) leave(scope storeMutationScope) {
+	if o == nil || scope.owner != o || scope.store != o.store || scope.threadID != o.threadID || scope.nonce == 0 {
+		return
+	}
+	o.activeScope.CompareAndSwap(scope.nonce, 0)
+}
+
+func (s storeMutationScope) valid(store *Store) error {
+	if s.owner == nil || s.store == nil || store == nil || s.store != store || s.owner.store != store || store.owner.Load() != s.owner {
+		return ErrWrongOwner
+	}
+	if s.generation == 0 || s.owner.generation != s.generation || store.ownerGeneration.Load() != s.generation {
+		return ErrStaleOwner
+	}
+	if s.threadID == 0 || s.threadID != s.owner.threadID || currentStoreOwnerThreadID() != s.threadID {
+		return ErrWrongOwnerThread
+	}
+	if s.nonce == 0 || s.owner.activeScope.Load() != s.nonce {
+		return ErrStaleMutationScope
+	}
+	return nil
+}
+
+// PrepareClose verifies that close can commit without retaining a dispatch scope.
+// Commit or Abort must reacquire the exact owner and generation.
+func (o *StoreOwner) PrepareClose(target *Store) (*PreparedStoreClose, error) {
+	if o == nil || o.store == nil || target == nil || target != o.store {
+		return nil, ErrWrongOwner
+	}
+	scope, err := o.enter()
+	if err != nil {
+		return nil, err
+	}
+	defer o.leave(scope)
+	if o.store.ownerFault != nil {
+		if err := o.store.ownerFault("close"); err != nil {
+			return nil, err
+		}
+	}
+	prepared := &PreparedStoreClose{owner: o, store: o.store, generation: o.generation, active: true}
+	if !o.store.preparedClose.CompareAndSwap(nil, prepared) {
+		return nil, ErrOwnerBusy
+	}
+	return prepared, nil
 }
 
 func (o *StoreOwner) PrepareCandidate(candidate *DecodedCandidate) (*PreparedStoreState, ResourceRef, error) {
-	if !o.valid() {
-		return nil, ResourceRef{}, ErrClosed
+	scope, err := o.enter()
+	if err != nil {
+		return nil, ResourceRef{}, err
 	}
-	return o.store.prepareCandidate(candidate)
+	defer o.leave(scope)
+	return o.store.prepareCandidate(scope, candidate)
 }
 
 func (o *StoreOwner) PrepareResourceRemoval(refs []ResourceRef) (*PreparedStoreState, error) {
-	if !o.valid() {
-		return nil, ErrClosed
+	scope, err := o.enter()
+	if err != nil {
+		return nil, err
 	}
-	return o.store.prepareResourceRemoval(refs)
+	defer o.leave(scope)
+	return o.store.prepareResourceRemoval(scope, refs)
 }
 
 func (o *StoreOwner) PrepareReset() (*PreparedStoreState, error) {
-	if !o.valid() {
-		return nil, ErrClosed
+	scope, err := o.enter()
+	if err != nil {
+		return nil, err
 	}
-	return o.store.prepareReset()
+	defer o.leave(scope)
+	return o.store.prepareReset(scope)
 }
 
-func (o *StoreOwner) PublishPrepared(prepared *PreparedStoreState) {
-	if !o.valid() {
-		panic(ErrPreparedState)
+func (o *StoreOwner) PublishPrepared(prepared *PreparedStoreState) error {
+	scope, err := o.enter()
+	if err != nil {
+		return err
 	}
-	o.store.publishPrepared(prepared)
+	defer o.leave(scope)
+	if o.store.ownerFault != nil {
+		if err := o.store.ownerFault("publish"); err != nil {
+			return err
+		}
+	}
+	return o.store.publishPrepared(scope, prepared)
 }
 
-func (o *StoreOwner) Close() {
-	if o == nil || !o.released.CompareAndSwap(false, true) {
-		return
+// Validate reacquires and releases a fresh owner scope without mutating prepared
+// close or store state. It attests the calling owner thread before callers inspect
+// state outside termimage.
+func (p *PreparedStoreClose) Validate() error {
+	if p == nil || p.owner == nil || p.store == nil {
+		return ErrWrongOwner
 	}
-	o.store.closeOwned(o)
+	scope, err := p.owner.enterPreparedClose(p)
+	if err != nil {
+		return err
+	}
+	defer p.owner.leave(scope)
+	if p.generation != p.owner.generation || !p.active {
+		return ErrStaleMutationScope
+	}
+	return nil
 }
 
-func (s *Store) Closed() bool { return s == nil || s.closed.Load() }
+func (p *PreparedStoreClose) Commit() error {
+	if p == nil || p.owner == nil || p.store == nil {
+		return ErrWrongOwner
+	}
+	if p.finished.Load() {
+		return p.result
+	}
+	o := p.owner
+	scope, err := o.enterPreparedClose(p)
+	if err != nil {
+		return err
+	}
+	if p.generation != o.generation || !p.active {
+		o.leave(scope)
+		return ErrStaleMutationScope
+	}
+	p.result = p.store.closeOwned(scope)
+	if p.result != nil {
+		o.leave(scope)
+		return p.result
+	}
+	if !p.store.preparedClose.CompareAndSwap(p, nil) {
+		o.leave(scope)
+		return ErrStaleMutationScope
+	}
+	o.released.Store(true)
+	p.active = false
+	p.finished.Store(true)
+	o.leave(scope)
+	if o.threadLocked.CompareAndSwap(true, false) {
+		runtime.UnlockOSThread()
+	}
+	return nil
+}
+
+func (p *PreparedStoreClose) Abort() error {
+	if p == nil || p.owner == nil || p.store == nil {
+		return ErrWrongOwner
+	}
+	if p.finished.Load() {
+		return p.result
+	}
+	scope, err := p.owner.enterPreparedClose(p)
+	if err != nil {
+		return err
+	}
+	defer p.owner.leave(scope)
+	if p.generation != p.owner.generation || !p.active {
+		return ErrStaleMutationScope
+	}
+	if !p.store.preparedClose.CompareAndSwap(p, nil) {
+		return ErrStaleMutationScope
+	}
+	p.active = false
+	p.finished.Store(true)
+	return nil
+}
+
+// Close abandons an uncommitted close preflight under a fresh owner scope.
+func (p *PreparedStoreClose) Close() error { return p.Abort() }
+
+func (o *StoreOwner) Close() error {
+	if o == nil || o.store == nil {
+		return ErrWrongOwner
+	}
+	if o.released.Load() {
+		return nil
+	}
+	prepared, err := o.PrepareClose(o.store)
+	if err != nil {
+		return err
+	}
+	return prepared.Commit()
+}
+
+func (s *Store) Closed() bool {
+	if s == nil {
+		return true
+	}
+	state := s.state.Load()
+	return state == nil || state.closed
+}
 
 func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 	if s == nil {
@@ -130,7 +399,8 @@ func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 	}
 	s.pendingMu.Lock()
 	defer s.pendingMu.Unlock()
-	if s.closed.Load() || s.resetting.Load() {
+	state := s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() {
 		return nil, ErrClosed
 	}
 	if s.pending[header.Transfer] != nil {
@@ -141,7 +411,7 @@ func (s *Store) BeginTransfer(header Header) (*CandidateTransfer, error) {
 		return nil, err
 	}
 	transfer := &CandidateTransfer{
-		store: s, header: header, epoch: StoreEpoch(s.epoch.Load()),
+		store: s, header: header, epoch: state.epoch,
 		deadline: s.now().Add(HardTransferLifetime), base: lease, open: true,
 	}
 	s.pending[header.Transfer] = transfer
@@ -188,11 +458,14 @@ func (s *Store) Acquire(ref ResourceRef) (DetachedResource, bool) {
 	if s == nil || ref.Image == 0 || ref.Generation == 0 {
 		return DetachedResource{}, false
 	}
-	resources := s.state.resources
-	if len(resources) == 0 {
+	state := s.state.Load()
+	if state == nil || state.closed {
 		return DetachedResource{}, false
 	}
-	stored := resources[ref.Image]
+	if s.testReadHook != nil {
+		s.testReadHook("acquire-loaded")
+	}
+	stored := state.resources[ref.Image]
 	if stored == nil || stored.ref != ref {
 		return DetachedResource{}, false
 	}
@@ -207,65 +480,136 @@ func (s *Store) ResourceDimensions(ref ResourceRef) (uint32, uint32, bool) {
 	if s == nil || ref.Image == 0 || ref.Generation == 0 {
 		return 0, 0, false
 	}
-	stored := s.state.resources[ref.Image]
+	state := s.state.Load()
+	if state == nil || state.closed {
+		return 0, 0, false
+	}
+	if s.testReadHook != nil {
+		s.testReadHook("dimensions-loaded")
+	}
+	stored := state.resources[ref.Image]
 	if stored == nil || stored.ref != ref {
 		return 0, 0, false
 	}
 	return stored.width, stored.height, true
 }
 
+// Reset is retained only for detached standalone worker stores. Claimed stores
+// must transition through StoreOwner.PrepareReset/PublishPrepared/Commit.
 func (s *Store) Reset() {
-	if s == nil || s.closed.Load() || s.owner.Load() != nil {
+	if s == nil {
 		return
 	}
-	s.resetState()
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	state := s.state.Load()
+	if state == nil || state.closed || s.owner.Load() != nil || s.prepared.Load() != nil || s.preparedClose.Load() != nil || !s.resetting.CompareAndSwap(false, true) {
+		return
+	}
+	if s.ownerFault != nil {
+		if err := s.ownerFault("standalone-reset"); err != nil {
+			s.resetting.Store(false)
+			return
+		}
+	}
+	if err := s.resetState(storeMutationScope{}, false); err != nil {
+		s.resetting.Store(false)
+	}
 }
 
+// Close is retained only for detached standalone worker stores. Claimed stores
+// close through StoreOwner so prepared ownership cannot be bypassed.
 func (s *Store) Close() {
-	if s == nil || s.owner.Load() != nil || !s.closed.CompareAndSwap(false, true) {
+	if s == nil {
 		return
 	}
-	s.resetState()
-}
-
-func (s *Store) closeOwned(owner *StoreOwner) {
-	if s == nil || s.owner.Load() != owner || !s.closed.CompareAndSwap(false, true) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	state := s.state.Load()
+	if state == nil || state.closed || s.owner.Load() != nil || s.prepared.Load() != nil || s.preparedClose.Load() != nil {
 		return
 	}
-	s.resetState()
-	s.owner.CompareAndSwap(owner, nil)
+	if s.ownerFault != nil {
+		if err := s.ownerFault("standalone-close"); err != nil {
+			return
+		}
+	}
+	if err := s.resetState(storeMutationScope{}, true); err != nil {
+		return
+	}
 }
 
-func (s *Store) resetState() {
+func (s *Store) closeOwned(scope storeMutationScope) error {
+	if err := scope.valid(s); err != nil {
+		return err
+	}
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	owner := scope.owner
+	if s.owner.Load() != owner {
+		return ErrWrongOwner
+	}
+	if err := s.resetState(scope, true); err != nil {
+		return err
+	}
+	s.ownerGeneration.Add(1)
+	if !s.owner.CompareAndSwap(owner, nil) {
+		return ErrWrongOwner
+	}
+	return nil
+}
+
+func (s *Store) resetState(scope storeMutationScope, closeStore bool) error {
+	if owner := s.owner.Load(); owner != nil {
+		if err := scope.valid(s); err != nil {
+			return err
+		}
+	}
+	if err := s.resolvePrepared(scope); err != nil {
+		return err
+	}
+	base := s.state.Load()
+	if base == nil || base.closed {
+		s.resetting.Store(false)
+		return nil
+	}
+	nextEpoch := base.epoch
+	closed := closeStore
+	if base.epoch == StoreEpoch(math.MaxUint64) {
+		closed = true
+	} else {
+		nextEpoch++
+	}
+	next := &storeState{resources: make(map[ImageID]*resource), nextGeneration: base.nextGeneration, epoch: nextEpoch, closed: closed}
+	if !s.state.CompareAndSwap(base, next) {
+		s.resetting.Store(false)
+		return ErrPreparedState
+	}
 	s.identityMu.Lock()
-	defer s.identityMu.Unlock()
+	s.identityMu.Unlock()
 	s.closePlacementReservations()
-	s.abortPrepared()
 	for _, candidate := range s.takeCandidates() {
 		candidate.Close()
 	}
 	for _, transfer := range s.takePending() {
 		transfer.Close()
 	}
-	for _, stored := range s.state.resources {
+	for _, stored := range base.resources {
 		stored.lease.Close()
 	}
-	s.state = &storeState{resources: make(map[ImageID]*resource), nextGeneration: s.state.nextGeneration}
-	currentEpoch := s.epoch.Load()
-	if currentEpoch == math.MaxUint64 {
-		s.closed.Store(true)
-		s.resetting.Store(false)
-		return
-	}
-	s.epoch.Store(currentEpoch + 1)
 	s.resetting.Store(false)
+	return nil
 }
 
 func (s *Store) Epoch() StoreEpoch {
 	if s == nil {
 		return 0
 	}
-	return StoreEpoch(s.epoch.Load())
+	state := s.state.Load()
+	if state == nil {
+		return 0
+	}
+	return state.epoch
 }
 
 func (s *Store) Usage() Usage {
@@ -279,18 +623,30 @@ func (s *Store) prepareNextRef(image ImageID) (ResourceRef, error) {
 	if image == 0 {
 		return ResourceRef{}, ErrInvalidID
 	}
-	if s.state.nextGeneration == ResourceGeneration(math.MaxUint64) {
+	state := s.state.Load()
+	if state == nil || state.closed {
+		return ResourceRef{}, ErrClosed
+	}
+	if state.nextGeneration == ResourceGeneration(math.MaxUint64) {
 		return ResourceRef{}, ErrGenerationExhausted
 	}
-	return ResourceRef{Image: image, Generation: s.state.nextGeneration + 1}, nil
+	return ResourceRef{Image: image, Generation: state.nextGeneration + 1}, nil
 }
 
 func (s *Store) consumePreparedRef(ref ResourceRef) bool {
-	if ref.Image == 0 || ref.Generation == 0 || ref.Generation != s.state.nextGeneration+1 {
+	if ref.Image == 0 || ref.Generation == 0 {
 		return false
 	}
-	s.state.nextGeneration = ref.Generation
-	return true
+	for {
+		state := s.state.Load()
+		if state == nil || state.closed || ref.Generation != state.nextGeneration+1 {
+			return false
+		}
+		next := &storeState{resources: state.resources, nextGeneration: ref.Generation, epoch: state.epoch}
+		if s.state.CompareAndSwap(state, next) {
+			return true
+		}
+	}
 }
 
 type CandidateTransfer struct {
@@ -423,7 +779,8 @@ func (t *CandidateTransfer) SealedEncodedCopy(store *Store) ([]byte, Header, Sto
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.closing.Load() || t.open || t.store != store || store.closed.Load() || store.resetting.Load() || t.epoch != StoreEpoch(store.epoch.Load()) {
+	state := store.state.Load()
+	if t.closing.Load() || t.open || t.store != store || state == nil || state.closed || store.resetting.Load() || t.epoch != state.epoch {
 		return nil, Header{}, 0, ErrTransferClosed
 	}
 	result := make([]byte, 0, int(t.encoded))

@@ -282,23 +282,22 @@ func TestImageResetAndCloseReleasePreparedAndCommittedPlacements(t *testing.T) {
 	if usage := store.Usage(); usage.Images != 1 || usage.Placements != 1 {
 		t.Fatalf("prepared usage=%#v", usage)
 	}
-	terminal.resetImages()
+	if err := terminal.resetImages(); err != nil {
+		t.Fatal(err)
+	}
 	if store.Usage() != (termimage.Usage{}) || process.Usage() != (termimage.Usage{}) || len(terminal.imageSidecars.primary) != 0 {
 		t.Fatal("reset leaked prepared image ownership")
 	}
-	func() {
-		defer func() {
-			if recover() == nil {
-				t.Fatal("stale core publication did not fail before mutation")
-			}
-		}()
-		terminal.publishPreparedImage(prepared)
-	}()
+	if err := terminal.publishPreparedImage(prepared); !errors.Is(err, termimage.ErrPreparedState) {
+		t.Fatalf("stale core publication error=%v", err)
+	}
 	spec.ID = 2
 	if _, err = terminal.commitImage(imageCommit{candidate: decodedCandidateForTest(t, store, 2, 1, 1), placement: &spec}); err != nil {
 		t.Fatal(err)
 	}
-	terminal.closeImages()
+	if err := terminal.closeImages(); err != nil {
+		t.Fatal(err)
+	}
 	if terminal.imageStore != nil || terminal.imageSidecars != nil || store.Usage() != (termimage.Usage{}) || process.Usage() != (termimage.Usage{}) {
 		t.Fatal("close leaked committed image ownership")
 	}

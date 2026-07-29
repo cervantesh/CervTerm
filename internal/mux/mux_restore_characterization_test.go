@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -295,29 +294,20 @@ func TestMuxRestoreCreatesDistinctImageProtocolAdapters(t *testing.T) {
 	}
 }
 
-// TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread expires Slice 3.1.
-func TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread(t *testing.T) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	m := newRestoreMux(&restoreTestFactory{})
-	defer m.Shutdown()
-	blueprint := blueprintFromSnapshot(t, restoreSnapshot())
-	type result struct {
-		candidate *RestoreCandidate
-		err       error
-	}
-	resultCh := make(chan result, 1)
-	go func() {
-		candidate, err := m.PrepareRestore(blueprint, restoreGeometries())
-		resultCh <- result{candidate: candidate, err: err}
-	}()
-	got := <-resultCh
-	if got.err != nil || got.candidate == nil {
-		t.Fatalf("different-thread restore candidate=%p err=%v", got.candidate, got.err)
-	}
-	if err := m.AbortRestore(got.candidate); err != nil {
+func TestL302RestoreRequiresLiveOwnerCapability(t *testing.T) {
+	owner := NewOwner(&restoreTestFactory{}, Options{IngressCapacity: 64})
+	defer owner.Shutdown()
+	stamp, err := owner.begin()
+	if err != nil {
 		t.Fatal(err)
+	}
+	defer owner.leave(stamp)
+	before := captureL302MuxFingerprint(owner.mux)
+	if candidate, err := owner.PrepareRestore(blueprintFromSnapshot(t, restoreSnapshot()), restoreGeometries()); !errors.Is(err, ErrOwnerBusy) || candidate != nil {
+		t.Fatalf("busy restore candidate=%p err=%v", candidate, err)
+	}
+	if after := captureL302MuxFingerprint(owner.mux); !reflect.DeepEqual(before, after) {
+		t.Fatalf("rejected restore changed mux: before=%#v after=%#v", before, after)
 	}
 }
 

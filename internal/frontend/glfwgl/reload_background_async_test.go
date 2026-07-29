@@ -36,7 +36,7 @@ func newAsyncReloadApp(t *testing.T, path string) *App {
 		configPath:             path,
 		candidateOptions:       loaded.Options,
 		configWatch:            newConfigWatchState(loaded.WatchPaths...),
-		mux:                    termmux.New(nil, termmux.Options{}),
+		mux:                    newEmptyTestWindowMux(t),
 		paneUI:                 make(map[termmux.PaneID]*paneUIState),
 		r:                      &replaceRecordingRenderer{},
 		lastFBW:                8,

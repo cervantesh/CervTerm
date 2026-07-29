@@ -59,31 +59,60 @@ func (a *App) muxOptions() termmux.Options {
 	return options
 }
 
-// initMux publishes the one process mux only after optional image limits have
-// been validated and their process-owned budget/scheduler are usable.
+// initMux creates the process owner locally, then transfers its two narrow
+// interfaces to the process controller. App retains only its attested window
+// capability; restored startup has no projection capability until bind.
 func (a *App) initMux() error {
 	if a == nil {
 		return errors.New("initialize mux: nil app")
 	}
-	if a.mux != nil {
+	if a.host == nil || a.host.services.commands != nil || a.host.services.windowCapabilities != nil || a.mux != nil {
 		return errors.New("initialize mux: already initialized")
 	}
-	candidate := termmux.New(nil, a.muxOptions())
-	if err := candidate.ImageSetupError(); err != nil {
-		return errors.Join(fmt.Errorf("initialize mux images: %w", err), candidate.Shutdown())
+	owner := termmux.NewOwner(nil, a.muxOptions())
+	if err := owner.ImageSetupError(); err != nil {
+		return errors.Join(fmt.Errorf("initialize mux images: %w", err), owner.Shutdown())
 	}
-	candidate.SetPaletteBase(configuredPaletteBase(a.cfg.Colors))
-	a.mux = candidate
+	if err := owner.SetPaletteBase(configuredPaletteBase(a.cfg.Colors)); err != nil {
+		return errors.Join(err, owner.Shutdown())
+	}
+	if err := a.host.installProcessServices(owner, owner); err != nil {
+		return errors.Join(err, owner.Shutdown())
+	}
+	if a.windowID == 0 {
+		return nil
+	}
+	projection := a.host.windows[a.windowID]
+	if projection == nil || projection.app != a {
+		return fmt.Errorf("initialize mux: %w", errWindowProjectionMissing)
+	}
+	window, identity, err := a.host.acquireWindowCapability(a.windowID, a, projection.host)
+	if err != nil {
+		return err
+	}
+	a.mux = window
+	a.windowIdentity = identity
+	delete(a.host.boundOrigins, identity)
 	return nil
 }
 
 func (a *App) rollbackInitializedMux(cause error) error {
-	if a == nil || a.mux == nil {
+	if a == nil || a.host == nil || a.host.services.commands == nil {
 		return cause
 	}
-	candidate := a.mux
-	a.mux = nil
-	return errors.Join(cause, candidate.Shutdown())
+	if a.host.primary != a {
+		return errors.Join(cause, termmux.ErrWrongOwner)
+	}
+	projectionErr := a.host.closeProjectionLoop()
+	if a.host.inLoop {
+		return errors.Join(cause, projectionErr)
+	}
+	shutdownErr := a.host.shutdownServices(a)
+	if a.host.processClosed() {
+		a.mux = nil
+		a.windowIdentity = termmux.WindowIdentity{}
+	}
+	return errors.Join(cause, projectionErr, shutdownErr)
 }
 
 // prepareTerminalImageCache creates one projection/context-local cache. Callers
@@ -103,7 +132,7 @@ func (a *App) prepareTerminalImageCache() error {
 	if !ok {
 		return errors.New("prepare terminal image cache: renderer capability is unavailable")
 	}
-	if a.mux == nil {
+	if a.mux == nil && (a.controller == nil || !a.controller.processReady()) {
 		return errors.New("prepare terminal image cache: mux is not initialized")
 	}
 	limits, err := validateTerminalImageCacheLimits(terminalImageCacheLimits{
@@ -118,6 +147,9 @@ func (a *App) prepareTerminalImageCache() error {
 		factory = defaultTerminalImageCacheFactory
 	}
 	cache, err := factory(renderer, func(key gpu.ImageTextureKey) (termimage.DetachedResource, bool) {
+		if a.mux == nil {
+			return termimage.DetachedResource{}, false
+		}
 		return a.mux.AcquireImageResource(termmux.PaneID(key.PaneObject), key.Resource)
 	}, limits)
 	if err != nil {
@@ -141,11 +173,10 @@ func (a *App) activateInitialTerminalImages(commit func() error) error {
 		return err
 	}
 	if err := a.prepareTerminalImageCache(); err != nil {
-		return a.rollbackInitializedMux(err)
+		return err
 	}
 	if err := commit(); err != nil {
-		closeErr := a.closeTerminalImageCache()
-		return a.rollbackInitializedMux(errors.Join(err, closeErr))
+		return errors.Join(err, a.closeTerminalImageCache())
 	}
 	return nil
 }

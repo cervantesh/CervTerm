@@ -16,27 +16,36 @@ func (m *Mux) resolveMetrics(id PaneID) (CellMetrics, bool) {
 // SetSplitRatio updates one branch and immediately reflows pane grids using
 // stored per-pane metrics while leaving PTY notification to the frontend's
 // drag-settlement boundary.
-func (m *Mux) SetSplitRatio(split SplitID, ratio SplitRatio) ([]Event, error) {
+func (m *Mux) setSplitRatio(scope mutationScope, split SplitID, ratio SplitRatio) ([]Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return nil, err
+	}
 	if err := m.model.SetSplitRatioWithMetrics(split, ratio, m.bounds, m.resolveMetrics); err != nil {
 		return nil, err
 	}
-	return m.ResizeBounds(m.bounds)
+	return m.resizeBounds(scope, m.bounds)
 }
 
 // Resize updates every pane to uniform metrics before attempting PTY resizes.
-func (m *Mux) Resize(content PixelRect, metrics CellMetrics) ([]Event, error) {
-	events, err := m.ResizeGrid(content, metrics)
+func (m *Mux) resize(scope mutationScope, content PixelRect, metrics CellMetrics) ([]Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return nil, err
+	}
+	events, err := m.resizeGrid(scope, content, metrics)
 	if err != nil {
 		return events, err
 	}
-	resizeEvents, resizeErr := m.applyDesiredResizes()
+	resizeEvents, resizeErr := m.applyDesiredResizes(scope)
 	return append(events, resizeEvents...), resizeErr
 }
 
 // ResizeGrid updates pane geometry, terminal grids, snapshots, desired PTY
 // sizes, and all stored pane metrics to one uniform value without notifying
 // sessions. It preserves the compatibility semantics of the original API.
-func (m *Mux) ResizeGrid(content PixelRect, metrics CellMetrics) ([]Event, error) {
+func (m *Mux) resizeGrid(scope mutationScope, content PixelRect, metrics CellMetrics) ([]Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return nil, err
+	}
 	layout, err := m.model.Layout(content, metrics)
 	if err != nil {
 		return nil, err
@@ -45,24 +54,30 @@ func (m *Mux) ResizeGrid(content PixelRect, metrics CellMetrics) ([]Event, error
 	for _, id := range m.model.PaneIDs() {
 		m.paneMetrics[id] = metrics
 	}
-	return m.applyLayout(layout)
+	return m.applyLayout(scope, layout)
 }
 
 // ResizeBounds recomputes layout for new bounds using each pane's stored
 // metrics, preserving per-pane zoom and leaving PTY notification deferred.
-func (m *Mux) ResizeBounds(content PixelRect) ([]Event, error) {
+func (m *Mux) resizeBounds(scope mutationScope, content PixelRect) ([]Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return nil, err
+	}
 	layout, err := m.model.LayoutWithMetrics(content, m.resolveMetrics)
 	if err != nil {
 		return nil, err
 	}
 	m.bounds = content
-	return m.applyLayout(layout)
+	return m.applyLayout(scope, layout)
 }
 
 // ResizePaneGrid updates one pane's stored metrics and recomputes authoritative
 // geometry, terminal grids, snapshots, and desired PTY sizes for the full layout.
 // Sessions are not notified until ApplyResize is called.
-func (m *Mux) ResizePaneGrid(id PaneID, metrics CellMetrics) ([]Event, error) {
+func (m *Mux) resizePaneGrid(scope mutationScope, id PaneID, metrics CellMetrics) ([]Event, error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return nil, err
+	}
 	if _, ok := m.sessions.lookup(id); !m.model.paneExists(id) || !ok {
 		return nil, ErrPaneNotFound
 	}
@@ -80,19 +95,25 @@ func (m *Mux) ResizePaneGrid(id PaneID, metrics CellMetrics) ([]Event, error) {
 		return nil, err
 	}
 	m.paneMetrics[id] = metrics
-	return m.applyLayout(layout)
+	return m.applyLayout(scope, layout)
 }
 
-func (m *Mux) resizeBoundsAndApply(content PixelRect) ([]Event, error) {
-	events, err := m.ResizeBounds(content)
+func (m *Mux) resizeBoundsAndApply(scope mutationScope, content PixelRect) ([]Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return nil, err
+	}
+	events, err := m.resizeBounds(scope, content)
 	if err != nil {
 		return events, err
 	}
-	resizeEvents, resizeErr := m.applyDesiredResizes()
+	resizeEvents, resizeErr := m.applyDesiredResizes(scope)
 	return append(events, resizeEvents...), resizeErr
 }
 
-func (m *Mux) applyLayout(layout Layout) ([]Event, error) {
+func (m *Mux) applyLayout(scope mutationScope, layout Layout) ([]Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return nil, err
+	}
 	events := make([]Event, 0, len(layout.Panes)*2)
 	for _, geometry := range layout.Panes {
 		geometry = effectiveGeometry(geometry)
@@ -118,11 +139,14 @@ func (m *Mux) applyLayout(layout Layout) ([]Event, error) {
 	return events, nil
 }
 
-func (m *Mux) applyDesiredResizes() ([]Event, error) {
+func (m *Mux) applyDesiredResizes(scope mutationScope) ([]Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return nil, err
+	}
 	var events []Event
 	var resizeErrors []error
 	for _, id := range m.model.PaneIDs() {
-		paneEvents, paneErr := m.ApplyResize(id)
+		paneEvents, paneErr := m.applyResize(scope, id)
 		events = append(events, paneEvents...)
 		if paneErr != nil {
 			resizeErrors = append(resizeErrors, paneErr)
@@ -132,7 +156,10 @@ func (m *Mux) applyDesiredResizes() ([]Event, error) {
 }
 
 // ApplyResize notifies one pane session of the latest desired grid size.
-func (m *Mux) ApplyResize(id PaneID) ([]Event, error) {
+func (m *Mux) applyResize(scope mutationScope, id PaneID) ([]Event, error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return nil, err
+	}
 	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return nil, ErrPaneNotFound

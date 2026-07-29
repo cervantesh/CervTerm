@@ -10,6 +10,7 @@ import (
 	"cervterm/internal/config"
 	"cervterm/internal/layoutrestore"
 	"cervterm/internal/layoutstate"
+	termmux "cervterm/internal/mux"
 	"cervterm/internal/windowbounds"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -104,13 +105,19 @@ func (a *App) commitRestoredStartupConfiguration() error {
 	if err := a.commitStartupConfiguration(); err != nil {
 		return err
 	}
-	return a.controller.syncPendingRestoreApps(a)
+	if a.host == nil {
+		return errWindowProjectionMissing
+	}
+	return a.host.syncPendingRestoreApps(a)
 }
 
 func (a *App) tryRunRestoredWindow(blueprint layoutrestore.Blueprint) (bool, error) {
 	freshConfig := a.cfg.Clone()
-	a.controller = newWindowController(processServices{scriptRuntime: a.scriptRT, runtimeScopes: &a.runtimeScopes}, glfwEventPump{})
-	if err := a.controller.startLoop(); err != nil {
+	a.host = newWindowController(processServices{scriptRuntime: a.scriptRT, runtimeScopes: &a.runtimeScopes}, glfwEventPump{})
+	a.controller = newProjectionMessageRouter(a.host)
+	a.host.primary = a
+	if err := a.host.startLoop(); err != nil {
+		a.host = nil
 		a.controller = nil
 		return false, err
 	}
@@ -120,7 +127,7 @@ func (a *App) tryRunRestoredWindow(blueprint layoutrestore.Blueprint) (bool, err
 	}
 	a.syncProcessServices()
 	factory := &glfwRestoreProjectionFactory{owner: a, windows: restoreBlueprintWindows(blueprint)}
-	if err := a.controller.restoreStartupProjectionsBeforeMux(blueprint, factory, a.commitRestoredStartupConfiguration); err != nil {
+	if err := a.host.restoreStartupProjectionsBeforeMux(blueprint, factory, a.commitRestoredStartupConfiguration); err != nil {
 		a.resetFailedRestoreFrontend(freshConfig)
 		return errors.Is(err, errRestoreBeforeMuxHook), err
 	}
@@ -130,12 +137,14 @@ func (a *App) tryRunRestoredWindow(blueprint layoutrestore.Blueprint) (bool, err
 }
 
 func (a *App) resetFailedRestoreFrontend(freshConfig config.Config) {
-	if a.controller != nil {
+	if a.host != nil {
 		a.closeInitialWindowController()
 	}
 	a.shutdownProcessServices()
 	a.controller = nil
+	a.host = nil
 	a.mux = nil
+	a.windowIdentity = termmux.WindowIdentity{}
 	a.window = nil
 	a.windowID = 0
 	a.cfg = freshConfig

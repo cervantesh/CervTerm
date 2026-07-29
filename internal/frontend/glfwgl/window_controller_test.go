@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
 	termmux "cervterm/internal/mux"
+	"cervterm/internal/ownerthread"
 )
 
 type fakeNativeWindow struct {
@@ -44,6 +46,49 @@ type fakeNativePump struct{ log *[]string }
 func (p fakeNativePump) PollEvents() { *p.log = append(*p.log, "poll") }
 func (p fakeNativePump) WaitEventsTimeout(d time.Duration) {
 	*p.log = append(*p.log, "wait:"+d.String())
+}
+
+func TestWindowControllerRequiresExactThreadAndCurrentLoopEpoch(t *testing.T) {
+	var log []string
+	current := ownerthread.ID(17)
+	c := newWindowController(processServices{}, fakeNativePump{log: &log})
+	c.threadSource = ownerthread.SourceFunc(func() ownerthread.ID { return current })
+	if err := c.startLoop(); err != nil {
+		t.Fatal(err)
+	}
+	firstEpoch := c.loopEpoch
+	if err := c.pollEvents(); err != nil {
+		t.Fatal(err)
+	}
+	current = 18
+	before := append([]string(nil), log...)
+	if err := c.pollEvents(); !errors.Is(err, errWindowLoopThread) {
+		t.Fatalf("wrong-thread poll error=%v", err)
+	}
+	if !reflect.DeepEqual(log, before) {
+		t.Fatalf("wrong-thread poll reached native pump: before=%v after=%v", before, log)
+	}
+	current = 17
+	c.activeLoopEpoch = firstEpoch + 1
+	if err := c.pollEvents(); !errors.Is(err, errWindowLoopEpoch) {
+		t.Fatalf("stale-epoch poll error=%v", err)
+	}
+	c.activeLoopEpoch = firstEpoch
+	c.stopLoop()
+	if err := c.pollEvents(); !errors.Is(err, errWindowLoopInactive) {
+		t.Fatalf("closed-loop poll error=%v", err)
+	}
+	if err := c.startLoop(); err != nil {
+		t.Fatal(err)
+	}
+	if c.loopEpoch <= firstEpoch {
+		t.Fatalf("loop epoch rewound: first=%d next=%d", firstEpoch, c.loopEpoch)
+	}
+	c.stopLoop()
+	current = 0
+	if err := c.startLoop(); !errors.Is(err, errWindowLoopThread) {
+		t.Fatalf("zero-thread start error=%v", err)
+	}
 }
 
 func TestWindowControllerSerializesContextEventsFrameAndClose(t *testing.T) {
@@ -225,6 +270,8 @@ func TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublic
 }
 
 func TestWindowControllerCreateFocusCloseLoopsOwnIndependentBundles(t *testing.T) {
+	runtime.LockOSThread()
+	t.Cleanup(runtime.UnlockOSThread)
 	var log []string
 	factory := &fakeProjectionFactory{log: &log, failStage: -1, created: make(map[termmux.WindowID]*fakeNativeWindow), stages: projectionStages()}
 	c := newWindowController(processServices{}, fakeNativePump{log: &log})
@@ -403,5 +450,40 @@ func TestCloseRuntimeProjectionPreservesNativeOnDetachFailure(t *testing.T) {
 	result, err := c.closeRuntimeProjection(2)
 	if !errors.Is(err, runtimeErr) || result.Closed || c.windows[2] == nil || host.destroyed != 0 {
 		t.Fatalf("result=%#v err=%v projection=%#v destroyed=%d", result, err, c.windows[2], host.destroyed)
+	}
+}
+
+func TestWindowControllerRejectsStaleLifecycleOriginWithoutMutation(t *testing.T) {
+	var log []string
+	c := newWindowController(processServices{}, fakeNativePump{log: &log})
+	app := &App{windowID: 1}
+	if err := c.attachApp(1, &fakeNativeWindow{id: "one", log: &log}, app, func([]termmux.Event) bool { return true }); err != nil {
+		t.Fatal(err)
+	}
+	live := termmux.WindowIdentity{ID: 1, Incarnation: 1}
+	app.windowIdentity = live
+	c.windows[1].identity = live
+	if err := c.startLoop(); err != nil {
+		t.Fatal(err)
+	}
+	defer c.stopLoop()
+	c.windows[1].dirty = false
+	beforeLog := append([]string(nil), log...)
+	beforeActive := c.active
+	stale := termmux.WindowIdentity{ID: 1, Incarnation: 2}
+	if err := c.markDamageFrom(stale); !errors.Is(err, termmux.ErrWrongOrigin) {
+		t.Fatalf("mark damage err=%v", err)
+	}
+	if _, err := c.createRuntimeProjectionFrom(stale); !errors.Is(err, termmux.ErrWrongOrigin) {
+		t.Fatalf("create err=%v", err)
+	}
+	if _, err := c.closeRuntimeProjectionFrom(stale, 1); !errors.Is(err, termmux.ErrWrongOrigin) {
+		t.Fatalf("close err=%v", err)
+	}
+	if err := c.activateRuntimeProjectionFrom(stale, 1); !errors.Is(err, termmux.ErrWrongOrigin) {
+		t.Fatalf("activate err=%v", err)
+	}
+	if c.windows[1].dirty || c.active != beforeActive || len(c.windows) != 1 || !reflect.DeepEqual(log, beforeLog) {
+		t.Fatalf("stale request mutated state: dirty=%v active=%d want_active=%d windows=%d log=%v before=%v", c.windows[1].dirty, c.active, beforeActive, len(c.windows), log, beforeLog)
 	}
 }

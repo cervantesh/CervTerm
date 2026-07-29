@@ -16,7 +16,8 @@ import (
 func newLaunchMenuApp(t *testing.T) (*App, *capturingTestFactory) {
 	t.Helper()
 	factory := &capturingTestFactory{}
-	m := termmux.New(factory, termmux.Options{})
+	process := termmux.NewOwner(factory, termmux.Options{})
+	m := mustTestWindowMux(t, process)
 	_, pane, events, err := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16})
 	if err != nil {
 		t.Fatal(err)
@@ -25,7 +26,7 @@ func newLaunchMenuApp(t *testing.T) (*App, *capturingTestFactory) {
 	a.handleMuxEvents(events)
 	a.syncFocusedProjection()
 	factory.reset()
-	t.Cleanup(func() { _ = m.Shutdown() })
+	t.Cleanup(func() { _ = process.Shutdown() })
 	return a, factory
 }
 

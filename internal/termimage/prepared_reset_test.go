@@ -12,7 +12,9 @@ func TestPreparedResetIsOldOrNewAndFinalizesAllOwnedState(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner.PublishPrepared(prepared)
-	prepared.Finalize()
+	if err := prepared.Commit(); err != nil {
+		t.Fatal(err)
+	}
 	transfer, err := store.BeginTransfer(Header{Transfer: 1, Image: 2})
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +47,9 @@ func TestPreparedResetIsOldOrNewAndFinalizesAllOwnedState(t *testing.T) {
 	if _, ok := store.Acquire(ref); !ok || store.Epoch() != oldEpoch {
 		t.Fatal("prepared reset became visible early")
 	}
-	reset.Abort()
+	if err := reset.Abort(); err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := store.Acquire(ref); !ok || store.Usage().Placements != 1 {
 		t.Fatal("aborted reset changed state")
 	}
@@ -63,7 +67,9 @@ func TestPreparedResetIsOldOrNewAndFinalizesAllOwnedState(t *testing.T) {
 	if store.Usage() == (Usage{}) {
 		t.Fatal("ownership released before finalize")
 	}
-	reset.Finalize()
+	if err := reset.Commit(); err != nil {
+		t.Fatal(err)
+	}
 	if loose.ValidFor(store) || loose.RGBA() != nil {
 		t.Fatal("published reset retained loose candidate")
 	}

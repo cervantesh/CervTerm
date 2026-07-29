@@ -4,10 +4,14 @@ import "sync"
 
 // NewDecodedCandidate reserves pane/process residency before allocating pixels.
 func (s *Store) NewDecodedCandidate(image ImageID, width, height uint32) (*DecodedCandidate, error) {
-	if s == nil || s.closed.Load() || s.resetting.Load() {
+	if s == nil {
 		return nil, ErrClosed
 	}
-	epoch := s.epoch.Load()
+	state := s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() {
+		return nil, ErrClosed
+	}
+	epoch := state.epoch
 	if image == 0 {
 		return nil, ErrInvalidID
 	}
@@ -20,7 +24,8 @@ func (s *Store) NewDecodedCandidate(image ImageID, width, height uint32) (*Decod
 		return nil, err
 	}
 	pixels := make([]byte, int(size))
-	if s.closed.Load() || s.epoch.Load() != epoch {
+	state = s.state.Load()
+	if state == nil || state.closed || state.epoch != epoch {
 		lease.Close()
 		return nil, ErrClosed
 	}
@@ -29,7 +34,8 @@ func (s *Store) NewDecodedCandidate(image ImageID, width, height uint32) (*Decod
 		width: width, height: height, stride: stride, rgba: pixels, lease: lease,
 	}
 	s.candidateMu.Lock()
-	if s.closed.Load() || s.resetting.Load() || s.epoch.Load() != epoch {
+	state = s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() || state.epoch != epoch {
 		s.candidateMu.Unlock()
 		lease.Close()
 		return nil, ErrClosed
@@ -113,15 +119,20 @@ type DecodeScratchLease struct {
 }
 
 func (s *Store) ReserveDecodeScratch(bytes uint64) (*DecodeScratchLease, error) {
-	if s == nil || bytes == 0 || s.closed.Load() || s.resetting.Load() {
+	if s == nil || bytes == 0 {
 		return nil, ErrClosed
 	}
-	epoch := s.epoch.Load()
+	state := s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() {
+		return nil, ErrClosed
+	}
+	epoch := state.epoch
 	lease, err := reserve(s.process, &s.pane, Usage{DecodedBytes: bytes})
 	if err != nil {
 		return nil, err
 	}
-	if s.closed.Load() || s.resetting.Load() || s.epoch.Load() != epoch {
+	state = s.state.Load()
+	if state == nil || state.closed || s.resetting.Load() || state.epoch != epoch {
 		lease.Close()
 		return nil, ErrClosed
 	}
@@ -159,7 +170,11 @@ func (c *DecodedCandidate) ValidFor(store *Store) bool {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return !c.closed && !c.claimed && store == c.store && !store.closed.Load() && !store.resetting.Load() && c.epoch == StoreEpoch(store.epoch.Load())
+	if store == nil {
+		return false
+	}
+	state := store.state.Load()
+	return !c.closed && !c.claimed && store == c.store && state != nil && !state.closed && !store.resetting.Load() && c.epoch == state.epoch
 }
 
 func (c *DecodedCandidate) Close() {
