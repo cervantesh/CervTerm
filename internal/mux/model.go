@@ -3,6 +3,15 @@ package mux
 // WindowID is a stable, process-local mux-window identity. Zero is invalid.
 type WindowID uint64
 
+// WindowIncarnation identifies one concrete lifetime of a WindowID. It is never reused.
+type WindowIncarnation uint64
+
+// WindowIdentity binds a stable WindowID to one exact object lifetime.
+type WindowIdentity struct {
+	ID          WindowID
+	Incarnation WindowIncarnation
+}
+
 // WorkspaceID is declared in workspace.go.
 
 // PaneID is a stable, process-local pane identity. Zero is never valid.
@@ -63,30 +72,32 @@ type tabState struct {
 }
 
 type windowState struct {
-	id        WindowID
-	workspace WorkspaceID
-	title     string
-	tabs      []tabState
-	active    TabID
-	revision  uint64
+	id          WindowID
+	incarnation WindowIncarnation
+	workspace   WorkspaceID
+	title       string
+	tabs        []tabState
+	active      TabID
+	revision    uint64
 }
 
 // Model owns pure, ordered mux-window/tab topology, identity, and focus state.
 type Model struct {
-	workspaces          []workspaceState
-	activeWorkspace     WorkspaceID
-	nextWorkspaceID     WorkspaceID
-	allocatedWorkspaces map[WorkspaceID]struct{}
-	windows             []windowState
-	activeWindow        WindowID
-	nextWindowID        WindowID
-	nextTabID           TabID
-	nextPaneID          PaneID
-	nextSplitID         SplitID
-	allocatedWindows    map[WindowID]struct{}
-	allocated           map[PaneID]struct{}
-	allocatedSplits     map[SplitID]struct{}
-	allocatedTabs       map[TabID]struct{}
+	workspaces            []workspaceState
+	activeWorkspace       WorkspaceID
+	nextWorkspaceID       WorkspaceID
+	allocatedWorkspaces   map[WorkspaceID]struct{}
+	windows               []windowState
+	activeWindow          WindowID
+	nextWindowID          WindowID
+	nextWindowIncarnation WindowIncarnation
+	nextTabID             TabID
+	nextPaneID            PaneID
+	nextSplitID           SplitID
+	allocatedWindows      map[WindowID]struct{}
+	allocated             map[PaneID]struct{}
+	allocatedSplits       map[SplitID]struct{}
+	allocatedTabs         map[TabID]struct{}
 }
 
 // NewModel creates the mandatory default workspace and WindowID 1 with the compatibility TabID 1 / PaneID 1.
@@ -95,8 +106,8 @@ func NewModel() *Model {
 	return &Model{
 		workspaces:      []workspaceState{{id: workspace, name: DefaultWorkspaceName, windows: []WindowID{window}, active: window, revision: 1}},
 		activeWorkspace: workspace, nextWorkspaceID: 2, allocatedWorkspaces: map[WorkspaceID]struct{}{workspace: {}},
-		windows:      []windowState{{id: window, workspace: workspace, tabs: []tabState{{id: tab, root: leafNode(pane), focused: pane, revision: 1}}, active: tab, revision: 1}},
-		activeWindow: window, nextWindowID: 2, nextTabID: 2, nextPaneID: 2, nextSplitID: 1,
+		windows:      []windowState{{id: window, incarnation: 1, workspace: workspace, tabs: []tabState{{id: tab, root: leafNode(pane), focused: pane, revision: 1}}, active: tab, revision: 1}},
+		activeWindow: window, nextWindowID: 2, nextWindowIncarnation: 2, nextTabID: 2, nextPaneID: 2, nextSplitID: 1,
 		allocatedWindows: map[WindowID]struct{}{window: {}}, allocated: map[PaneID]struct{}{pane: {}},
 		allocatedSplits: map[SplitID]struct{}{}, allocatedTabs: map[TabID]struct{}{tab: {}},
 	}

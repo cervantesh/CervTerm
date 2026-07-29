@@ -49,6 +49,7 @@ func TestPaneOutputPreservesDisabledProtocolsAndEmptyActivity(t *testing.T) {
 
 func TestMuxUnselectedDCSDoesNotEmitSixelDiagnostic(t *testing.T) {
 	m, _, _ := defaultSixelRuntimeMux(t)
+	owner := testOwnerForMux(m)
 	p, _ := m.sessions.lookup(1)
 	var diagnostics []ImageDiagnostic
 	m.options.ImageDiagnostic = func(diagnostic ImageDiagnostic) {
@@ -56,7 +57,11 @@ func TestMuxUnselectedDCSDoesNotEmitSixelDiagnostic(t *testing.T) {
 	}
 
 	unselected := []byte("\x1bP1qUNSELECTED\x1b\\")
-	events := m.advancePane(p, unselected)
+	m.sessions.incoming <- ingressRecord{pane: p.id, owner: p, stamp: p.ownerStamp, data: unselected}
+	events, err := owner.Drain(1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if output, found := paneOutputForTest(events); !found || !bytes.Equal(output, unselected) {
 		t.Fatalf("unselected output=%q found=%v events=%#v", output, found, events)
 	}
@@ -65,11 +70,14 @@ func TestMuxUnselectedDCSDoesNotEmitSixelDiagnostic(t *testing.T) {
 	}
 
 	for name, cancel := range map[string]byte{"CAN": 0x18, "SUB": 0x1a} {
-		t.Run(name, func(t *testing.T) {
-			diagnostics = nil
-			m.advancePane(p, append([]byte("\x1bPqSELECTED_PARTIAL"), cancel))
-			assertImageDiagnostic(t, diagnostics, ImageDiagnosticProtocolSixel, ImageDiagnosticReasonCancelled)
-		})
+		diagnostics = nil
+		m.sessions.incoming <- ingressRecord{pane: p.id, owner: p, stamp: p.ownerStamp, data: append([]byte("\x1bPqSELECTED_PARTIAL"), cancel)}
+		if _, err := owner.Drain(1); err != nil {
+			t.Fatalf("%s drain: %v", name, err)
+		}
+		if len(diagnostics) != 1 || diagnostics[0].Protocol != ImageDiagnosticProtocolSixel || diagnostics[0].Reason != ImageDiagnosticReasonCancelled {
+			t.Fatalf("%s diagnostics=%#v want exactly one Sixel cancelled diagnostic", name, diagnostics)
+		}
 	}
 }
 
@@ -82,7 +90,7 @@ func TestMuxEOFFlushesUndecidedPublicOutputAndDropsSelectedPartial(t *testing.T)
 	if output, found := paneOutputForTest(events); !found || len(output) != 0 {
 		t.Fatalf("undecided advance output=%q found=%v", output, found)
 	}
-	m.sessions.incoming <- ingressRecord{pane: p.id, owner: p, err: io.EOF}
+	m.sessions.incoming <- ingressRecord{pane: p.id, owner: p, stamp: p.ownerStamp, err: io.EOF}
 	events = m.Drain(8)
 	output, found := paneOutputForTest(events)
 	if !found || !bytes.Equal(output, []byte("\x1bP0;0")) {
@@ -92,7 +100,7 @@ func TestMuxEOFFlushesUndecidedPublicOutputAndDropsSelectedPartial(t *testing.T)
 	m2, _, _ := newITermRuntimeMux(t, true, true, true, &limits, nil)
 	p2, _ := m2.sessions.lookup(1)
 	m2.advancePane(p2, []byte("\x1b_GSELECTED_PARTIAL"))
-	m2.sessions.incoming <- ingressRecord{pane: p2.id, owner: p2, err: io.EOF}
+	m2.sessions.incoming <- ingressRecord{pane: p2.id, owner: p2, stamp: p2.ownerStamp, err: io.EOF}
 	if events := m2.Drain(8); hasNonemptyPaneOutput(events) {
 		t.Fatalf("selected partial leaked at EOF: %#v", events)
 	}

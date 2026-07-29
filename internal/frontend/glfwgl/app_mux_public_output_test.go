@@ -26,9 +26,10 @@ func TestEmptyPaneOutputKeepsActivityButSkipsLuaOutputCallback(t *testing.T) {
 	defer runtime.Close()
 
 	limits := termimage.DefaultLimits()
-	m := termmux.New(failingTestFactory{}, termmux.Options{ImageLimits: &limits, KittyEnabled: true})
+	process := termmux.NewOwner(failingTestFactory{}, termmux.Options{ImageLimits: &limits, KittyEnabled: true})
+	m := mustTestWindowMux(t, process)
 	_, pane, bootstrapEvents, _ := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 20, Height: 4}, termmux.CellMetrics{CellWidth: 1, CellHeight: 1})
-	t.Cleanup(func() { _ = m.Shutdown() })
+	t.Cleanup(func() { _ = process.Shutdown() })
 	app := &App{
 		cfg: cfg, scriptRT: runtime, mux: m, focusedPane: pane,
 		paneUI: make(map[termmux.PaneID]*paneUIState), pendingPaneScroll: make(map[termmux.PaneID]int),

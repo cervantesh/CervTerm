@@ -23,7 +23,7 @@ type glfwProjectionFactory struct {
 }
 
 func (f *glfwProjectionFactory) Prepare() (bundle *nativeProjectionBundle, spec termmux.SpawnSpec, content termmux.PixelRect, metrics termmux.CellMetrics, title string, err error) {
-	if f == nil || f.owner == nil || f.owner.controller == nil || f.owner.mux == nil {
+	if f == nil || f.owner == nil || f.owner.host == nil || f.owner.host.services.commands == nil {
 		return nil, spec, content, metrics, "", errWindowProjectionMissing
 	}
 	child := newProjectionApp(f.owner)
@@ -126,16 +126,19 @@ func (f *glfwProjectionFactory) prepareProjection(child *App, width, height, x, 
 	}}
 	title = "CervTerm"
 	bundle.handle = child.applyMuxEvents
-	capabilities := &childNativeCapabilityAdapter{app: child, window: window, bundle: bundle}
+	capabilities := &childNativeCapabilityAdapter{app: child, host: f.owner.host, window: window, bundle: bundle}
 	if activationErr := newNativeCapabilityController().prepareChild(capabilities); activationErr != nil {
 		return fail(activationErr)
 	}
 	bundle.bind = func(id termmux.WindowID) error {
-		capabilities := &childNativeCapabilityAdapter{app: child, window: window, bundle: bundle}
+		capabilities := &childNativeCapabilityAdapter{app: child, host: f.owner.host, window: window, bundle: bundle}
 		return newNativeCapabilityController().bindChild(capabilities, id)
 	}
 	bundle.unbind = func() error {
+		delete(f.owner.host.boundOrigins, child.windowIdentity)
 		child.windowID = 0
+		child.windowIdentity = termmux.WindowIdentity{}
+		child.mux = nil
 		return nil
 	}
 	return bundle, spec, content, metrics, title, nil
@@ -147,7 +150,7 @@ func newProjectionApp(owner *App) *App {
 		cfg: cfg, desiredCfg: owner.desiredCfg.Clone(), composedCfg: owner.composedCfg.Clone(),
 		safeFonts: owner.safeFonts, composedProvenance: append([]config.ProvenanceRecord(nil), owner.composedProvenance...),
 		configStateInitialized: true, configPath: owner.configPath, candidateOptions: owner.candidateOptions.Clone(),
-		mux: owner.mux, controller: owner.controller, scriptRT: owner.scriptRT, scriptGeneration: owner.scriptGeneration,
+		controller: owner.controller, host: nil, scriptRT: owner.scriptRT, scriptGeneration: owner.scriptGeneration,
 		terminalImageCacheFactory: owner.terminalImageCacheFactory,
 		cellW:                     9, cellH: 16, uiScale: 1, blinkStart: time.Now(),
 		paneUI: make(map[termmux.PaneID]*paneUIState), pendingPaneScroll: make(map[termmux.PaneID]int),

@@ -10,6 +10,8 @@ import (
 
 func TestProjectionAccessibilityCaptureIsVisibleOnlyAndRedacted(t *testing.T) {
 	app := newMuxTestApp(t, 16, 2)
+	process := testProcessMuxFor(t, app)
+	attachTestProcessController(t, app, process)
 	app.windowID = 1
 	feedTestPane(t, app, []byte("visible-secret"))
 	document, ok, err := app.captureAccessibilityDocument(1)
@@ -29,12 +31,12 @@ func TestProjectionAccessibilityCaptureIsVisibleOnlyAndRedacted(t *testing.T) {
 	if strings.Contains(string(encoded), "visible-secret") {
 		t.Fatalf("native-hidden document=%s", encoded)
 	}
-	workspace, events, err := app.mux.CreateWorkspace("hidden")
+	workspace, events, err := process.CreateWorkspace("hidden")
 	if err != nil {
 		t.Fatal(err)
 	}
 	app.handleMuxEvents(events)
-	events, err = app.mux.SwitchWorkspace(workspace.ID)
+	events, err = process.SwitchWorkspace(workspace.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

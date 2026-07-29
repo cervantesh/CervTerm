@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"cervterm/internal/pty"
+	"cervterm/internal/termimage"
 )
 
 func tabMetrics() CellMetrics { return CellMetrics{CellWidth: 8, CellHeight: 16} }
@@ -55,16 +56,194 @@ func TestSpawnTabFailureLeavesEveryIdentityAndOwnerUntouched(t *testing.T) {
 	m, _, _ := newTestMux(t)
 	factory := m.sessions.factory.(*fakeFactory)
 	candidate := newFakeSession()
-	factory.err = errors.New("spawn failed")
+	spawnFailure := errors.New("spawn failed")
+	closeFailure := errors.New("partial session close failed")
+	candidate.closeErr = closeFailure
+	factory.err = spawnFailure
 	factory.sessionOnError = candidate
 	beforeTabs := m.Tabs()
 	beforeTabID, beforePaneID := m.model.nextTabID, m.model.nextPaneID
 	beforePanes := len(m.sessions.panes)
-	if _, _, events, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "bad"); err == nil || len(events) != 0 {
+	_, _, events, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "bad")
+	if !errors.Is(err, spawnFailure) || !errors.Is(err, closeFailure) || len(events) != 0 {
 		t.Fatalf("events=%#v err=%v", events, err)
 	}
 	if !reflect.DeepEqual(m.Tabs(), beforeTabs) || m.model.nextTabID != beforeTabID || m.model.nextPaneID != beforePaneID || len(m.sessions.panes) != beforePanes || candidate.closes() != 1 {
 		t.Fatalf("tabs=%#v ids=%d/%d panes=%d close=%d", m.Tabs(), m.model.nextTabID, m.model.nextPaneID, len(m.sessions.panes), candidate.closes())
+	}
+}
+
+func newImageTabRollbackMux(t *testing.T) (*Mux, *fakeFactory) {
+	t.Helper()
+	limits := termimage.DefaultLimits()
+	factory := &fakeFactory{}
+	m := New(factory, Options{ImageLimits: &limits, KittyEnabled: true})
+	if _, pane, _, err := m.Bootstrap(SpawnSpec{}, PixelRect{Width: 800, Height: 480}, tabMetrics()); err != nil || pane != 1 {
+		t.Fatalf("bootstrap pane=%d err=%v", pane, err)
+	}
+	t.Cleanup(func() { _ = m.Shutdown() })
+	return m, factory
+}
+
+func assertSpawnTabRollbackPristine(t *testing.T, m *Mux, beforeTabs []TabView, failed *pane, failedSession *fakeSession) {
+	t.Helper()
+	panes, reserved, started := m.sessions.activeCounts()
+	if !reflect.DeepEqual(m.Tabs(), beforeTabs) || m.model.nextTabID != 2 || m.model.nextPaneID != 2 || panes != 1 || reserved != 0 || started != 1 {
+		t.Fatalf("rollback tabs=%#v ids=%d/%d counts=%d/%d/%d", m.Tabs(), m.model.nextTabID, m.model.nextPaneID, panes, reserved, started)
+	}
+	if failed == nil || failedSession == nil {
+		t.Fatalf("missing failed pane/session: pane=%#v session=%#v", failed, failedSession)
+	}
+	if failed.state != PaneStateClosed || failed.imageStore != nil || failed.session != failedSession || failedSession.closes() != 1 {
+		t.Fatalf("failed pane=%#v store=%p session=%#v closes=%d", failed, failed.imageStore, failedSession, failedSession.closes())
+	}
+	if _, owned := m.sessions.lookup(2); owned || m.sessions.wasClosed(2) {
+		t.Fatal("failed unpublished pane remained registered or tombstoned")
+	}
+	if _, exists := m.paneMetrics[2]; exists {
+		t.Fatal("failed unpublished pane leaked metrics")
+	}
+	if events := m.Drain(32); len(events) != 0 {
+		t.Fatalf("failed unpublished pane leaked events %#v", events)
+	}
+	if err := m.model.CheckInvariants(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSpawnTabClosePreflightFailureDetachesClosesOnceAndRetries(t *testing.T) {
+	m, factory := newImageTabRollbackMux(t)
+	beforeTabs := m.Tabs()
+	injected := errors.New("injected close preflight failure")
+	closeFailure := errors.New("injected rollback close failure")
+	var failed *pane
+	m.rollbackFault = func(stage string, p *pane) error {
+		if stage != "spawn-tab-close-preflight" {
+			return nil
+		}
+		failed = p
+		p.session.(*fakeSession).closeErr = closeFailure
+		return injected
+	}
+	_, _, events, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "failed")
+	m.rollbackFault = nil
+	if !errors.Is(err, injected) || !errors.Is(err, closeFailure) || len(events) != 0 {
+		t.Fatalf("events=%#v err=%v", events, err)
+	}
+	if len(factory.sessions) != 2 {
+		t.Fatalf("spawned sessions=%d", len(factory.sessions))
+	}
+	assertSpawnTabRollbackPristine(t, m, beforeTabs, failed, factory.sessions[1])
+	tab, paneID, retryEvents, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "retry")
+	if err != nil || tab != 2 || paneID != 2 || len(retryEvents) != 4 {
+		t.Fatalf("retry tab=%d pane=%d events=%#v err=%v", tab, paneID, retryEvents, err)
+	}
+}
+
+func TestSpawnTabRealClosePreflightFailureRetainsBoundedRollbackAndNoReader(t *testing.T) {
+	m, factory := newImageTabRollbackMux(t)
+	beforeTabs := m.Tabs()
+	var failed *pane
+	var held *preparedPaneClose
+	m.rollbackFault = func(stage string, p *pane) error {
+		if stage != "spawn-tab-close-preflight" {
+			return nil
+		}
+		failed = p
+		var err error
+		held, err = p.prepareClose()
+		return err
+	}
+	t.Cleanup(func() {
+		if held != nil && !held.finished {
+			_ = held.abort()
+		}
+	})
+
+	_, _, events, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "blocked")
+	m.rollbackFault = nil
+	if !errors.Is(err, termimage.ErrOwnerBusy) || len(events) != 0 {
+		t.Fatalf("events=%#v err=%v", events, err)
+	}
+	if failed == nil || held == nil || m.unpublishedRollback == nil {
+		t.Fatalf("failed=%p held=%p rollback=%p", failed, held, m.unpublishedRollback)
+	}
+	failedStore := failed.imageStore
+	panes, reserved, started := m.sessions.activeCounts()
+	if panes != 1 || reserved != 0 || started != 1 {
+		t.Fatalf("hidden registry state counts=%d/%d/%d", panes, reserved, started)
+	}
+	if _, registered := m.sessions.lookup(2); registered || m.sessions.wasClosed(2) {
+		t.Fatal("persistently blocked unpublished pane entered registry or tombstones")
+	}
+	if failed.session == nil || failed.session.(*fakeSession).closes() != 0 || failed.session.(*fakeSession).readers() != 0 || failedStore == nil || failedStore.Closed() {
+		t.Fatalf("retained pane state=%v session=%#v closes/readers=%d/%d store=%p closed=%v", failed.state, failed.session, failed.session.(*fakeSession).closes(), failed.session.(*fakeSession).readers(), failedStore, failedStore == nil || failedStore.Closed())
+	}
+	if !reflect.DeepEqual(m.Tabs(), beforeTabs) || m.model.nextTabID != 2 || m.model.nextPaneID != 2 || len(m.Drain(32)) != 0 {
+		t.Fatal("real preflight failure published events or identities")
+	}
+	retainedRollback := m.unpublishedRollback
+	_, _, blockedEvents, blockedErr := m.SpawnTab(SpawnSpec{}, tabMetrics(), "still-blocked")
+	if !errors.Is(blockedErr, termimage.ErrOwnerBusy) || len(blockedEvents) != 0 || m.unpublishedRollback != retainedRollback || len(factory.sessions) != 2 {
+		t.Fatalf("persistent retry events=%#v err=%v rollback=%p sessions=%d", blockedEvents, blockedErr, m.unpublishedRollback, len(factory.sessions))
+	}
+
+	if err := held.abort(); err != nil {
+		t.Fatal(err)
+	}
+	tab, paneID, retryEvents, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "retry")
+	if err != nil || tab != 2 || paneID != 2 || len(retryEvents) != 4 {
+		t.Fatalf("retry tab=%d pane=%d events=%#v err=%v", tab, paneID, retryEvents, err)
+	}
+	if m.unpublishedRollback != nil || failed.state != PaneStateClosed || failed.imageStore != nil || !failedStore.Closed() || failed.session.(*fakeSession).closes() != 1 || failed.session.(*fakeSession).readers() != 0 {
+		t.Fatalf("rollback leak candidate=%p state=%v store=%p closed=%v closes/readers=%d/%d", m.unpublishedRollback, failed.state, failed.imageStore, failedStore.Closed(), failed.session.(*fakeSession).closes(), failed.session.(*fakeSession).readers())
+	}
+	if len(factory.sessions) != 3 {
+		t.Fatalf("spawned sessions=%d want bootstrap+failed+retry", len(factory.sessions))
+	}
+}
+
+func TestSpawnTabCloseAbortAndModelFailuresFullyUnwind(t *testing.T) {
+	for _, stage := range []string{"spawn-tab-close-abort", "spawn-tab-model"} {
+		t.Run(stage, func(t *testing.T) {
+			m, factory := newImageTabRollbackMux(t)
+			beforeTabs := m.Tabs()
+			injected := errors.New("injected " + stage)
+			var failed *pane
+			m.rollbackFault = func(got string, p *pane) error {
+				if got != stage {
+					return nil
+				}
+				failed = p
+				if !reflect.DeepEqual(m.Tabs(), beforeTabs) || m.model.nextTabID != 2 || m.model.nextPaneID != 2 {
+					t.Fatalf("%s observed model publication tabs=%#v ids=%d/%d", stage, m.Tabs(), m.model.nextTabID, m.model.nextPaneID)
+				}
+				probe, probeErr := p.prepareClose()
+				if stage == "spawn-tab-close-abort" {
+					if probe != nil || !errors.Is(probeErr, termimage.ErrOwnerBusy) {
+						t.Fatalf("retained close token probe=%#v err=%v", probe, probeErr)
+					}
+				} else {
+					if probeErr != nil {
+						t.Fatalf("close token was not aborted before model stage: %v", probeErr)
+					}
+					if err := probe.abort(); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return injected
+			}
+			_, _, events, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "failed")
+			m.rollbackFault = nil
+			if !errors.Is(err, injected) || len(events) != 0 || len(factory.sessions) != 2 {
+				t.Fatalf("events=%#v sessions=%d err=%v", events, len(factory.sessions), err)
+			}
+			assertSpawnTabRollbackPristine(t, m, beforeTabs, failed, factory.sessions[1])
+			tab, paneID, _, err := m.SpawnTab(SpawnSpec{}, tabMetrics(), "retry")
+			if err != nil || tab != 2 || paneID != 2 {
+				t.Fatalf("retry tab=%d pane=%d err=%v", tab, paneID, err)
+			}
+		})
 	}
 }
 

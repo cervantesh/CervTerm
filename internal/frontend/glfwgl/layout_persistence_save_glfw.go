@@ -8,10 +8,10 @@ import (
 )
 
 func (a *App) persistCurrentLayout() error {
-	if a == nil || !a.cfg.LayoutPersistence.Enabled || a.controller == nil {
+	if a == nil || !a.cfg.LayoutPersistence.Enabled || a.host == nil {
 		return nil
 	}
-	plan, err := a.controller.currentLayoutPlan()
+	plan, err := a.host.currentLayoutPlan()
 	if err != nil {
 		return err
 	}

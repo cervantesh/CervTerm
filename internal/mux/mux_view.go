@@ -2,7 +2,10 @@ package mux
 
 import "cervterm/internal/core"
 
-func (m *Mux) SearchUpward(id PaneID, query string, hasPrev bool, prevRow int) (row, col int, ok bool, err error) {
+func (m *Mux) searchUpward(scope mutationScope, id PaneID, query string, hasPrev bool, prevRow int) (row, col int, ok bool, err error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return 0, 0, false, err
+	}
 	p, exists := m.sessions.lookup(id)
 	if !exists || !m.model.paneExists(id) {
 		return 0, 0, false, ErrPaneNotFound
@@ -14,7 +17,7 @@ func (m *Mux) SearchUpward(id PaneID, query string, hasPrev bool, prevRow int) (
 	row, col, ok = p.terminal.SearchBackward(query, from)
 	if ok {
 		oldOffset := p.terminal.DisplayOffset()
-		scrollGlobalRowIntoView(p.terminal, row)
+		scrollGlobalRowIntoView(scope, m, id, p.terminal, row)
 		if p.terminal.DisplayOffset() != oldOffset {
 			p.viewportGen++
 		}
@@ -23,7 +26,10 @@ func (m *Mux) SearchUpward(id PaneID, query string, hasPrev bool, prevRow int) (
 	return row, col, ok, nil
 }
 
-func scrollGlobalRowIntoView(t *core.Terminal, row int) {
+func scrollGlobalRowIntoView(scope mutationScope, m *Mux, id PaneID, t *core.Terminal, row int) {
+	if t == nil || scope.validPaneOrigin(m, id) != nil {
+		return
+	}
 	if _, ok := t.GlobalRowToViewport(row); ok {
 		return
 	}
@@ -39,7 +45,10 @@ func (m *Mux) GlobalRowToViewport(id PaneID, row int) (int, bool) {
 	return p.terminal.GlobalRowToViewport(row)
 }
 
-func (m *Mux) SetTitle(id PaneID, title string) (bool, error) {
+func (m *Mux) setTitle(scope mutationScope, id PaneID, title string) (bool, error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return false, err
+	}
 	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return false, ErrPaneNotFound

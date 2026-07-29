@@ -18,7 +18,13 @@ func (m *Mux) TabForPane(pane PaneID) (TabID, bool) {
 }
 
 // SpawnTab prepares and spawns the initial pane before committing any identity.
-func (m *Mux) SpawnTab(spec SpawnSpec, metrics CellMetrics, title string) (TabID, PaneID, []Event, error) {
+func (m *Mux) spawnTab(scope mutationScope, spec SpawnSpec, metrics CellMetrics, title string) (TabID, PaneID, []Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return 0, 0, nil, err
+	}
+	if err := m.retryUnpublishedRollback(scope); err != nil {
+		return 0, 0, nil, fmt.Errorf("retry unpublished pane rollback: %w", err)
+	}
 	if !m.bootstrapped {
 		return 0, 0, nil, ErrEmptyModel
 	}
@@ -33,54 +39,67 @@ func (m *Mux) SpawnTab(spec SpawnSpec, metrics CellMetrics, title string) (TabID
 	if cols < MinPaneCols || rows < MinPaneRows {
 		return 0, 0, nil, ErrSplitTooSmall
 	}
-	if err := m.sessions.reserve(paneID); err != nil {
+	if err := m.sessions.reserveScoped(scope, paneID); err != nil {
 		return 0, 0, nil, err
 	}
-	defer m.sessions.release(paneID)
-	pane := m.createPane(paneID, cols, rows)
+	defer m.sessions.releaseScoped(scope, paneID)
+	pane := m.createPane(scope, paneID, cols, rows)
+	rollback := newSinglePaneRollback(pane)
 	pane.setFreshLaunch(spec)
-	pane.terminal.SetPaletteBase(m.paletteBase)
+	pane.terminal.SetPaletteBase(*m.paletteBase)
 	if m.options.SetClipboard != nil {
 		pane.parser.SetClipboard = func(text string) { m.options.SetClipboard(pane.id, text) }
 	}
 	ptyRows, ptyCols := terminalSize(PaneGeometry{Pane: paneID, Pixels: m.bounds, Cols: cols, Rows: rows})
-	session, spawnErr := m.sessions.spawn(ptyRows, ptyCols, spec.Options)
-	if spawnErr != nil {
-		if session != nil {
-			_ = session.Close()
-		}
-		_ = pane.close()
-		return 0, 0, nil, fmt.Errorf("spawn tab: %w", spawnErr)
-	}
+	session, spawnErr := m.sessions.spawnScoped(scope, ptyRows, ptyCols, spec.Options)
 	pane.session = session
+	if spawnErr != nil {
+		rollbackErr := m.rollbackUnpublishedPanes(scope, rollback)
+		return 0, 0, nil, errors.Join(fmt.Errorf("spawn tab: %w", spawnErr), rollbackErr)
+	}
 	pane.state = PaneStateRunning
 	pane.geometry = effectiveGeometry(PaneGeometry{Pane: paneID, Pixels: m.bounds, Cols: cols, Rows: rows})
 	pane.desiredSize = pty.Size{Rows: ptyRows, Cols: ptyCols}
 	pane.appliedSize = pane.desiredSize
-	if err := m.sessions.register(pane); err != nil {
-		_ = pane.close()
-		return 0, 0, nil, err
+	if err := m.transactionFailure("spawn-tab-close-preflight", pane); err != nil {
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
 	}
-	if err := m.sessions.start(pane.id); err != nil {
-		detached := m.sessions.detach(pane.id)
-		if detached.owned {
-			_ = detached.pane.close()
-		}
-		return 0, 0, nil, err
+	preparedClose, err := pane.prepareClose()
+	if err != nil {
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
+	}
+	rollback.retainPrepared([]*preparedPaneClose{preparedClose})
+	if err := m.sessions.registerScoped(scope, pane); err != nil {
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
+	}
+	rollback.markRegistered(pane)
+	launchReaders, err := m.sessions.prepareStartsScoped(scope, []PaneID{pane.id})
+	if err != nil {
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
+	}
+	abortErr := m.transactionFailure("spawn-tab-close-abort", pane)
+	if abortErr == nil {
+		abortErr = preparedClose.abort()
+	}
+	if abortErr != nil {
+		return 0, 0, nil, errors.Join(abortErr, m.rollbackUnpublishedPanes(scope, rollback))
+	}
+	if err := m.transactionFailure("spawn-tab-model", pane); err != nil {
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
 	}
 	if err := m.model.commitTab(tabID, paneID, title); err != nil {
-		detached := m.sessions.detach(pane.id)
-		if detached.owned {
-			_ = detached.pane.close()
-		}
-		return 0, 0, nil, err
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
 	}
 	m.paneMetrics[paneID] = metrics
 	pane.capture()
+	launchReaders()
 	return tabID, paneID, m.ResolveEventAddresses([]Event{{Kind: TabSpawned, Tab: tabID, Pane: paneID, Text: title, Revision: 1}, {Kind: TabActivated, Tab: tabID, Pane: paneID, Revision: 1}, {Kind: PaneStarted, Tab: tabID, Pane: paneID}, {Kind: PaneFocused, Tab: tabID, Pane: paneID}}), nil
 }
 
-func (m *Mux) ActivateTab(id TabID) ([]Event, error) {
+func (m *Mux) activateTab(scope mutationScope, id TabID) ([]Event, error) {
+	if err := scope.validTabOrigin(m, id); err != nil {
+		return nil, err
+	}
 	tab := m.model.tabByID(id)
 	if tab == nil {
 		return nil, ErrTabNotFound
@@ -94,20 +113,26 @@ func (m *Mux) ActivateTab(id TabID) ([]Event, error) {
 	}
 	focused := m.model.FocusedPane()
 	events := []Event{{Kind: TabActivated, Tab: id, Pane: focused}, {Kind: PaneFocused, Tab: id, Pane: focused}}
-	layoutEvents, err := m.applyLayout(layout)
+	layoutEvents, err := m.applyLayout(scope, layout)
 	for i := range layoutEvents {
 		layoutEvents[i].Tab = id
 	}
 	return m.ResolveEventAddresses(append(events, layoutEvents...)), err
 }
-func (m *Mux) RenameTab(id TabID, title string) ([]Event, error) {
+func (m *Mux) renameTab(scope mutationScope, id TabID, title string) ([]Event, error) {
+	if err := scope.validTabOrigin(m, id); err != nil {
+		return nil, err
+	}
 	if err := m.model.RenameTab(id, title); err != nil {
 		return nil, err
 	}
 	revision := m.model.tabByID(id).revision
 	return m.ResolveEventAddresses([]Event{{Kind: TabRenamed, Tab: id, Text: title, Revision: revision}, {Kind: TabRevisionChanged, Tab: id, Revision: revision}}), nil
 }
-func (m *Mux) MoveTab(id TabID, position int) ([]Event, error) {
+func (m *Mux) moveTab(scope mutationScope, id TabID, position int) ([]Event, error) {
+	if err := scope.validTabOrigin(m, id); err != nil {
+		return nil, err
+	}
 	if err := m.model.MoveTab(id, position); err != nil {
 		return nil, err
 	}
@@ -116,31 +141,46 @@ func (m *Mux) MoveTab(id TabID, position int) ([]Event, error) {
 }
 
 // CloseTab atomically detaches ownership before closing each session once.
-func (m *Mux) CloseTab(id TabID) ([]Event, error) {
+func (m *Mux) closeTab(scope mutationScope, id TabID) ([]Event, error) {
+	if err := scope.validTabOrigin(m, id); err != nil {
+		return nil, err
+	}
 	tab := m.model.tabByID(id)
 	if tab == nil {
 		return nil, ErrTabNotFound
 	}
-	for _, paneID := range paneIDs(tab.root) {
-		if _, owned := m.sessions.lookup(paneID); !owned {
+	paneIDsToClose := paneIDs(tab.root)
+	panes := make([]*pane, 0, len(paneIDsToClose))
+	for _, paneID := range paneIDsToClose {
+		owned, ok := m.sessions.lookup(paneID)
+		if !ok {
 			return nil, invariantError("tab %d pane %d is not registry-owned", id, paneID)
 		}
+		panes = append(panes, owned)
+	}
+	preparedCloses, err := preparePaneClosures(panes)
+	if err != nil {
+		return nil, err
+	}
+	closeByID := make(map[PaneID]*preparedPaneClose, len(panes))
+	for index, owned := range panes {
+		closeByID[owned.id] = preparedCloses[index]
 	}
 	window, _ := m.WindowForTab(id)
 	workspace, _ := m.WorkspaceForWindow(window)
 	detached, err := m.model.detachTab(id)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, abortPaneClosures(preparedCloses))
 	}
 	events := make([]Event, 0, len(detached.panes)+3)
 	var closeErrs []error
 	for _, paneID := range detached.panes {
-		result := m.sessions.detach(paneID)
+		result := m.sessions.detachScoped(scope, paneID)
 		delete(m.paneMetrics, paneID)
-		if !result.owned {
-			return events, invariantError("tab %d pane %d lost registry ownership", id, paneID)
+		if !result.owned || result.pane != closeByID[paneID].pane {
+			return events, errors.Join(invariantError("tab %d pane %d lost registry ownership", id, paneID), abortPaneClosures(preparedCloses))
 		}
-		if err := result.pane.close(); err != nil {
+		if err := closeByID[paneID].commit(); err != nil {
 			closeErrs = append(closeErrs, fmt.Errorf("pane %d close: %w", paneID, err))
 			events = append(events, Event{Kind: PaneCloseFailed, Tab: id, Pane: paneID, Err: err})
 		}
@@ -164,7 +204,16 @@ func (m *Mux) CloseTab(id TabID) ([]Event, error) {
 }
 
 // TransferPane atomically changes tree ownership without spawning, closing, or resizing a PTY.
-func (m *Mux) TransferPane(pane PaneID, destinationTab TabID, destinationPane PaneID, axis SplitAxis) ([]Event, error) {
+func (m *Mux) transferPane(scope mutationScope, pane PaneID, destinationTab TabID, destinationPane PaneID, axis SplitAxis) ([]Event, error) {
+	if err := scope.validPaneOrigin(m, pane); err != nil {
+		return nil, err
+	}
+	if err := scope.validTabOrigin(m, destinationTab); err != nil {
+		return nil, err
+	}
+	if err := scope.validPaneOrigin(m, destinationPane); err != nil {
+		return nil, err
+	}
 	result, err := m.model.TransferPane(pane, destinationTab, destinationPane, axis, DefaultSplitRatio, m.bounds, m.resolveMetrics)
 	if err != nil {
 		return nil, err
@@ -191,7 +240,7 @@ func (m *Mux) TransferPane(pane PaneID, destinationTab TabID, destinationPane Pa
 		activeLayout = result.DestinationLayout
 	}
 	if len(activeLayout.Panes) > 0 {
-		layoutEvents, applyErr := m.applyLayout(activeLayout)
+		layoutEvents, applyErr := m.applyLayout(scope, activeLayout)
 		if applyErr != nil {
 			return m.ResolveEventAddresses(events), applyErr
 		}
@@ -201,8 +250,4 @@ func (m *Mux) TransferPane(pane PaneID, destinationTab TabID, destinationPane Pa
 		events = append(events, layoutEvents...)
 	}
 	return m.ResolveEventAddresses(events), nil
-}
-
-func (m *Mux) Split(target PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
-	return m.SpawnSplit(target, axis, spec)
 }

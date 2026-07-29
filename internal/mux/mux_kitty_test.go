@@ -36,7 +36,7 @@ func TestKittyRuntimeAsyncReplyPrecedesLaterDSRAndCommits(t *testing.T) {
 	m, session, wakes := newKittyRuntimeMux(t, true)
 	pane, _ := m.sessions.lookup(1)
 	input := []byte("\x1b_Ga=t,i=1,s=1,v=1;AQIDBA==\x1b\\\x1b[5n")
-	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, data: input}
+	m.sessions.incoming <- ingressRecord{pane: pane.id, owner: pane, stamp: pane.ownerStamp, data: input}
 	events := m.Drain(1)
 	if len(events) == 0 {
 		t.Fatal("no output events")
@@ -150,7 +150,7 @@ func TestKittyRuntimeEOFDiscardsPartialTransfer(t *testing.T) {
 	m, session, _ := newKittyRuntimeMux(t, true)
 	p, _ := m.sessions.lookup(1)
 	m.advancePane(p, []byte("\x1b_Ga=t,i=1,s=1,v=1,m=1;AQID\x1b\\"))
-	m.sessions.incoming <- ingressRecord{pane: p.id, owner: p, err: io.EOF}
+	m.sessions.incoming <- ingressRecord{pane: p.id, owner: p, stamp: p.ownerStamp, err: io.EOF}
 	_ = m.Drain(8)
 	if got := session.written(); len(got) != 0 {
 		t.Fatalf("unexpected EOF reply=%q", got)

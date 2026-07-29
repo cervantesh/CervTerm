@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"testing"
 
 	"cervterm/internal/termimage"
@@ -318,14 +319,9 @@ func TestImageLifecycleStalePreparedMutationAbortsOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	terminal.eraseImageLiveRect(0, 1, 0, 1)
-	func() {
-		defer func() {
-			if recover() == nil {
-				t.Fatal("stale publish did not panic")
-			}
-		}()
-		terminal.publishPreparedImage(prepared)
-	}()
+	if err := terminal.publishPreparedImage(prepared); !errors.Is(err, termimage.ErrPreparedState) {
+		t.Fatalf("stale publish error=%v", err)
+	}
 	if usage := store.Usage(); usage.Images != 1 || usage.Placements != 0 {
 		t.Fatalf("stale abort usage=%#v", usage)
 	}

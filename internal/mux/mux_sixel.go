@@ -9,15 +9,21 @@ import (
 	"cervterm/internal/termimage"
 )
 
-func (m *Mux) processSixelOutcomes(p *pane) {
-	m.protocolScheduling.dispatchSixel(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})
+func (m *Mux) processSixelOutcomesScoped(scope mutationScope, p *pane) {
+	if p == nil || scope.validPaneOrigin(m, p.id) != nil {
+		return
+	}
+	m.protocolScheduling.dispatchSixel(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p, scope: scope})
 }
 
 func (a muxProtocolSchedulingDispatchOperationAdapter) dispatchSixel() {
-	dispatchSixelOperation(a.mux, a.pane)
+	dispatchSixelOperation(a.scope, a.mux, a.pane)
 }
 
-func dispatchSixelOperation(m *Mux, p *pane) {
+func dispatchSixelOperation(scope mutationScope, m *Mux, p *pane) {
+	if p == nil || scope.validPaneOrigin(m, p.id) != nil {
+		return
+	}
 	outcomes := p.sixelOutcomes
 	p.sixelOutcomes = nil
 	for _, outcome := range outcomes {
@@ -29,12 +35,15 @@ func dispatchSixelOperation(m *Mux, p *pane) {
 			continue
 		}
 		if outcome.Command != nil {
-			m.submitSixelDecode(p, outcome)
+			m.submitSixelDecodeScoped(scope, p, outcome)
 		}
 	}
 }
 
-func (m *Mux) submitSixelDecode(p *pane, outcome sixel.Outcome) {
+func (m *Mux) submitSixelDecodeScoped(scope mutationScope, p *pane, outcome sixel.Outcome) {
+	if p == nil || scope.validPaneOrigin(m, p.id) != nil {
+		return
+	}
 	if outcome.Command == nil {
 		return
 	}
@@ -73,11 +82,12 @@ func (m *Mux) submitSixelDecode(p *pane, outcome sixel.Outcome) {
 	anchor := p.terminal.ImageCursorAnchor()
 	owner := sixelDecodeOwner{
 		paneID: p.id, pane: p, model: m.model, store: p.imageStore, storeEpoch: p.imageStore.Epoch(),
+		muxOwner:        m.currentOwnerStamp(),
 		imageGeneration: p.terminal.ImageGeneration(), reflowGen: p.reflowGen, anchorGen: p.terminal.ImageAnchorGeneration(),
 		token: m.sixelNextToken, metrics: metrics, image: command.Image, placement: command.Placement,
 		raster: command.Raster, startedAt: startedAt, acceptUntil: startedAt.Add(termimage.HardAcceptanceDeadline), anchor: anchor,
 	}
-	if err := m.imageScheduler.submitSixel(sixelDecodeWork{owner: owner, job: job}); err != nil {
+	if err := m.imageScheduler.submitSixelScoped(scope, m, sixelDecodeWork{owner: owner, job: job}); err != nil {
 		m.emitImageDiagnosticNow(ImageDiagnosticProtocolSixel, ImageDiagnosticReasonBusy, startedAt)
 		return
 	}
@@ -96,9 +106,19 @@ func detachedSixelPalette(terminal *core.Terminal) sixel.Palette {
 	return palette
 }
 
-func (m *Mux) applySixelCompletion(completion sixelDecodeCompletion) []Event {
+func (m *Mux) applySixelCompletionScoped(scope mutationScope, completion sixelDecodeCompletion) []Event {
+	if err := scope.validPaneOrigin(m, completion.Owner.paneID); err != nil {
+		completion.Close()
+		return nil
+	}
 	owner := completion.Owner
 	result := completion.Result
+	if err := owner.muxOwner.validPrepared(m); err != nil {
+		if result != nil {
+			result.Close()
+		}
+		return nil
+	}
 	pendingOwner, pending := m.sixelPending[owner.token]
 	if !pending || pendingOwner != owner {
 		if result != nil {

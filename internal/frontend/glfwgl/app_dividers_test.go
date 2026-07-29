@@ -42,8 +42,9 @@ func TestDividerRatioUsesOwningContainer(t *testing.T) {
 
 func TestDividerSettlementRetriesTransientPTYResizeFailure(t *testing.T) {
 	factory := &recordingPaneFactory{}
-	m := termmux.New(factory, termmux.Options{})
-	defer m.Shutdown()
+	process := termmux.NewOwner(factory, termmux.Options{})
+	defer process.Shutdown()
+	m := mustTestWindowMux(t, process)
 	bounds := termmux.PixelRect{Width: 800, Height: 480}
 	metrics := termmux.CellMetrics{CellWidth: 8, CellHeight: 16}
 	if _, first, _, err := m.Bootstrap(termmux.SpawnSpec{}, bounds, metrics); err != nil {
@@ -76,8 +77,9 @@ func TestDividerSettlementRetriesTransientPTYResizeFailure(t *testing.T) {
 
 func TestWindowResizeFailureArmsBoundedPaneRetry(t *testing.T) {
 	factory := &recordingPaneFactory{}
-	m := termmux.New(factory, termmux.Options{})
-	defer m.Shutdown()
+	process := termmux.NewOwner(factory, termmux.Options{})
+	defer process.Shutdown()
+	m := mustTestWindowMux(t, process)
 	if _, pane, _, err := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}); err != nil {
 		t.Fatal(err)
 	} else if events, err := m.ResizeBounds(termmux.PixelRect{Width: 640, Height: 400}); err != nil {
@@ -106,8 +108,9 @@ func TestWindowResizeFailureArmsBoundedPaneRetry(t *testing.T) {
 
 func TestDividerSettlementStopsAfterPersistentPTYResizeFailure(t *testing.T) {
 	factory := &recordingPaneFactory{}
-	m := termmux.New(factory, termmux.Options{})
-	defer m.Shutdown()
+	process := termmux.NewOwner(factory, termmux.Options{})
+	defer process.Shutdown()
+	m := mustTestWindowMux(t, process)
 	bounds := termmux.PixelRect{Width: 800, Height: 480}
 	metrics := termmux.CellMetrics{CellWidth: 8, CellHeight: 16}
 	if _, first, _, err := m.Bootstrap(termmux.SpawnSpec{}, bounds, metrics); err != nil {

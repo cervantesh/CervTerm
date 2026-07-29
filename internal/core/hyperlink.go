@@ -106,6 +106,9 @@ func (t *Terminal) HyperlinkURI(id HyperlinkID) (string, bool) {
 
 func (t *Terminal) ProjectHyperlinks(cells []Cell, dst []Hyperlink) []Hyperlink {
 	dst = dst[:0]
+	if len(t.hyperlinks.entries) == 0 {
+		return dst
+	}
 	seen := make(map[HyperlinkID]struct{})
 	for _, cell := range cells {
 		id := cell.HyperlinkID

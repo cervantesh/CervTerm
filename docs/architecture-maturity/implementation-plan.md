@@ -242,6 +242,7 @@ This is the deliberate risk exception. The owner seam is complex but must preced
 - **Commits:** `T → A → W → G`.
 - **Risk/complexity:** High / L.
 - **Stop:** owner identity remains documentary or requires off-thread GLFW/OpenGL.
+- **Status:** **closure candidate; clean-G verification pending**. The shared ownerthread leaf, exact OS-thread/loop-epoch root, ephemeral process/window scopes, incarnation checks, child typed router, private scoped mux/termimage sinks, atomic close reservation, recursive typed guards, and physical ABBA evidence are implemented. Do not close L3-02 until clean committed-G, rollback rehearsal, maturity, CI, and merged-state gates succeed. Evidence: `docs/validation/architecture-maturity-slice-3.1.md`.
 
 ### Slice 3.2 — L3-04 bootstrap publication transaction
 

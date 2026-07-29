@@ -17,7 +17,7 @@ import (
 func (a *App) requestRedraw() {
 	a.needsRedraw = true
 	if a.controller != nil {
-		a.controller.markDamage(a.windowID)
+		_ = a.controller.markDamage(a.windowIdentity)
 	}
 }
 
@@ -64,47 +64,50 @@ func runProjectionCycle(s projectionCycleScheduler, frame func(termmux.WindowID)
 }
 
 func (a *App) runProcessLoop(continuous bool) error {
-	for a.controller.projectionCount() > 0 {
+	if a.host == nil {
+		return errWindowProjectionMissing
+	}
+	for a.host.projectionCount() > 0 {
 		now := time.Now()
 		if continuous {
-			if err := a.controller.pollEvents(); err != nil {
+			if err := a.host.pollEvents(); err != nil {
 				return err
 			}
-		} else if err := a.controller.waitEvents(a.processNextWakeTimeout(now)); err != nil {
+		} else if err := a.host.waitEvents(a.processNextWakeTimeout(now)); err != nil {
 			return err
 		}
 
-		events := a.controller.drainMux(256)
-		a.controller.dispatch(events)
+		events := a.host.drainMux(256)
+		a.host.dispatch(events)
 		now = time.Now()
-		if activeID := a.controller.active; activeID != 0 {
-			if err := a.controller.withCurrent(activeID, func() {
-				if active := a.controller.activeProjectionApp(); active != nil {
+		if activeID := a.host.active; activeID != 0 {
+			if err := a.host.withCurrent(activeID, func() {
+				if active := a.host.activeProjectionApp(); active != nil {
 					active.fireDueTimers(now)
 				}
 			}); err != nil {
 				return err
 			}
 		}
-		if a.controller.projectionApp(a.windowID) != nil {
-			if err := a.controller.withCurrent(a.windowID, func() { a.pollConfigReload(now); a.applyPendingConfigReload() }); err != nil {
+		if a.host.projectionApp(a.windowID) != nil {
+			if err := a.host.withCurrent(a.windowID, func() { a.pollConfigReload(now); a.applyPendingConfigReload() }); err != nil {
 				return err
 			}
 		}
-		if err := a.controller.syncSharedProjectionState(a); err != nil {
+		if err := a.host.syncSharedProjectionState(a); err != nil {
 			return err
 		}
 
-		if err := runProjectionCycle(a.controller, func(id termmux.WindowID) error {
-			projection := a.controller.projectionApp(id)
+		if err := runProjectionCycle(a.host, func(id termmux.WindowID) error {
+			projection := a.host.projectionApp(id)
 			if projection == nil {
 				return nil
 			}
-			if !a.controller.projectionVisible(id) {
+			if !a.host.projectionVisible(id) {
 				return nil
 			}
 			drew := false
-			if err := a.controller.withCurrent(id, func() {
+			if err := a.host.withCurrent(id, func() {
 				drew = projection.ensureRenderController().renderProjection(continuous)
 			}); err != nil {
 				return err
@@ -121,7 +124,9 @@ func (a *App) runProcessLoop(continuous bool) error {
 }
 
 func (a *App) acknowledgePresentedFrame(id termmux.WindowID, projection *App, presentedAt time.Time) {
-	a.controller.clearDamage(id)
+	if a.host != nil {
+		a.host.clearDamage(id)
+	}
 	projection.presentation.record(presentedAt)
 	projection.meter.AddFrame()
 	projection.needsRedraw = false
@@ -175,9 +180,12 @@ func (a *App) processNextWakeTimeout(now time.Time) time.Duration {
 			}
 		}
 	}
-	for _, id := range a.controller.projectionIDs() {
-		projection := a.controller.projectionApp(id)
-		if projection == nil || !a.controller.projectionVisible(id) {
+	if a.host == nil {
+		return wake
+	}
+	for _, id := range a.host.projectionIDs() {
+		projection := a.host.projectionApp(id)
+		if projection == nil || !a.host.projectionVisible(id) {
 			continue
 		}
 		candidate := projection.nextWakeTimeout(now)

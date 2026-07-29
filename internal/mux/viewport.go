@@ -1,7 +1,10 @@
 package mux
 
 // ScrollViewport moves one pane's viewport and refreshes its immutable snapshot.
-func (m *Mux) ScrollViewport(id PaneID, lines int) (bool, error) {
+func (m *Mux) scrollViewport(scope mutationScope, id PaneID, lines int) (bool, error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return false, err
+	}
 	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return false, ErrPaneNotFound
@@ -14,7 +17,10 @@ func (m *Mux) ScrollViewport(id PaneID, lines int) (bool, error) {
 	return moved, nil
 }
 
-func (m *Mux) ScrollViewportToGlobalRow(id PaneID, globalRow int) (bool, error) {
+func (m *Mux) scrollViewportToGlobalRow(scope mutationScope, id PaneID, globalRow int) (bool, error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return false, err
+	}
 	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return false, ErrPaneNotFound
@@ -29,7 +35,10 @@ func (m *Mux) ScrollViewportToGlobalRow(id PaneID, globalRow int) (bool, error) 
 
 // SetScrollbackCapacity applies a live history-capacity change to every active pane.
 // Mux remains the owner of pane terminals; frontends never reach into pane state.
-func (m *Mux) SetScrollbackCapacity(capacity int) {
+func (m *Mux) setScrollbackCapacity(scope mutationScope, capacity int) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
 	capacityCopy := capacity
 	m.options.ScrollbackCapacity = &capacityCopy
 	for _, id := range m.model.PaneIDs() {
@@ -45,10 +54,14 @@ func (m *Mux) SetScrollbackCapacity(capacity int) {
 		}
 		p.capture()
 	}
+	return nil
 }
 
 // SetHideCursorWhenScrolled updates snapshot policy for active and future panes.
-func (m *Mux) SetHideCursorWhenScrolled(hide bool) {
+func (m *Mux) setHideCursorWhenScrolled(scope mutationScope, hide bool) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
 	hideCopy := hide
 	m.options.HideCursorWhenScrolled = &hideCopy
 	for _, id := range m.model.PaneIDs() {
@@ -59,4 +72,5 @@ func (m *Mux) SetHideCursorWhenScrolled(hide bool) {
 		p.captureOptions.HideCursorWhenScrolled = hide
 		p.capture()
 	}
+	return nil
 }

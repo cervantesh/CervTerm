@@ -4,8 +4,11 @@ import "fmt"
 
 // TransferPaneBetweenWindows is a non-UI transactional ownership foundation.
 // It projects both candidate layouts but deliberately does not resize PTYs.
-func (m *Mux) TransferPaneBetweenWindows(req PaneTransferRequest) ([]Event, error) {
-	if err := m.validateTransferRuntime(req.Resolve); err != nil {
+func (m *Mux) transferPaneBetweenWindows(scope mutationScope, req PaneTransferRequest) ([]Event, error) {
+	if err := scope.valid(m); err != nil {
+		return nil, err
+	}
+	if err := m.validateTransferRuntime(scope, req.Resolve); err != nil {
 		return nil, err
 	}
 	result, err := m.model.TransferPaneBetweenWindows(req)
@@ -37,8 +40,11 @@ func (m *Mux) TransferPaneBetweenWindows(req PaneTransferRequest) ([]Event, erro
 
 // TransferTabBetweenWindows moves an existing tabState as a whole. It allocates
 // no tab, pane, or split identity and deliberately does not resize PTYs.
-func (m *Mux) TransferTabBetweenWindows(req TabTransferRequest) ([]Event, error) {
-	if err := m.validateTransferRuntime(req.Resolve); err != nil {
+func (m *Mux) transferTabBetweenWindows(scope mutationScope, req TabTransferRequest) ([]Event, error) {
+	if err := scope.valid(m); err != nil {
+		return nil, err
+	}
+	if err := m.validateTransferRuntime(scope, req.Resolve); err != nil {
 		return nil, err
 	}
 	result, err := m.model.TransferTabBetweenWindows(req)
@@ -64,7 +70,10 @@ func (m *Mux) TransferTabBetweenWindows(req TabTransferRequest) ([]Event, error)
 	return m.ResolveEventAddresses(events), nil
 }
 
-func (m *Mux) validateTransferRuntime(resolve CellMetricsResolver) error {
+func (m *Mux) validateTransferRuntime(scope mutationScope, resolve CellMetricsResolver) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
 	if resolve == nil {
 		return ErrInvalidGeometry
 	}

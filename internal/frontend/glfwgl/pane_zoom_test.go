@@ -167,8 +167,9 @@ func TestNextWakeUsesEarliestPaneZoomDeadline(t *testing.T) {
 
 func TestApplyPanePTYResizeTargetsOnlyRequestedPane(t *testing.T) {
 	factory := &recordingPaneFactory{}
-	m := termmux.New(factory, termmux.Options{})
-	t.Cleanup(func() { _ = m.Shutdown() })
+	process := termmux.NewOwner(factory, termmux.Options{})
+	t.Cleanup(func() { _ = process.Shutdown() })
+	m := mustTestWindowMux(t, process)
 	_, first, events, err := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16})
 	if err != nil {
 		t.Fatal(err)
@@ -244,8 +245,9 @@ func TestPaneHostFontSizeStaysBoundToOriginPane(t *testing.T) {
 
 func TestSplitInheritsFontAfterCommittedResizeError(t *testing.T) {
 	factory := &recordingPaneFactory{}
-	m := termmux.New(factory, termmux.Options{})
-	t.Cleanup(func() { _ = m.Shutdown() })
+	process := termmux.NewOwner(factory, termmux.Options{})
+	t.Cleanup(func() { _ = process.Shutdown() })
+	m := mustTestWindowMux(t, process)
 	_, first, events, err := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16})
 	if err != nil {
 		t.Fatal(err)
@@ -267,8 +269,9 @@ func TestSplitInheritsFontAfterCommittedResizeError(t *testing.T) {
 
 func TestPendingZoomResizeFailureUsesBoundedRetries(t *testing.T) {
 	factory := &recordingPaneFactory{}
-	m := termmux.New(factory, termmux.Options{})
-	t.Cleanup(func() { _ = m.Shutdown() })
+	process := termmux.NewOwner(factory, termmux.Options{})
+	t.Cleanup(func() { _ = process.Shutdown() })
+	m := mustTestWindowMux(t, process)
 	_, pane, events, err := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16})
 	if err != nil {
 		t.Fatal(err)

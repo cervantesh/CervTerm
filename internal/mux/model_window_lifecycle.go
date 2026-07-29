@@ -2,12 +2,13 @@ package mux
 
 // WindowView is a detached immutable projection of mux-owned window state.
 type WindowView struct {
-	ID        WindowID
-	Workspace WorkspaceID
-	Title     string
-	Tabs      []TabView
-	Active    bool
-	Revision  uint64
+	ID          WindowID
+	Incarnation WindowIncarnation
+	Workspace   WorkspaceID
+	Title       string
+	Tabs        []TabView
+	Active      bool
+	Revision    uint64
 }
 
 // CloseWindowResult reports detached ownership without creating or closing sessions.
@@ -47,22 +48,24 @@ func (m *Model) windowView(w *windowState) WindowView {
 	for i := range w.tabs {
 		tabs[i] = tabView(&w.tabs[i], w.active)
 	}
-	return WindowView{ID: w.id, Workspace: w.workspace, Title: w.title, Tabs: tabs, Active: w.id == m.activeWindow, Revision: w.revision}
+	return WindowView{ID: w.id, Incarnation: w.incarnation, Workspace: w.workspace, Title: w.title, Tabs: tabs, Active: w.id == m.activeWindow, Revision: w.revision}
 }
 
 // WindowCreateToken is a non-published reservation proposal. Preparing and
 // aborting a token do not mutate the model; only CommitWindow consumes IDs.
 type WindowCreateToken struct {
-	window    WindowID
-	workspace WorkspaceID
-	tab       TabID
-	pane      PaneID
-	title     string
+	window      WindowID
+	incarnation WindowIncarnation
+	workspace   WorkspaceID
+	tab         TabID
+	pane        PaneID
+	title       string
 }
 
-func (t WindowCreateToken) WindowID() WindowID { return t.window }
-func (t WindowCreateToken) TabID() TabID       { return t.tab }
-func (t WindowCreateToken) PaneID() PaneID     { return t.pane }
+func (t WindowCreateToken) WindowID() WindowID             { return t.window }
+func (t WindowCreateToken) Incarnation() WindowIncarnation { return t.incarnation }
+func (t WindowCreateToken) TabID() TabID                   { return t.tab }
+func (t WindowCreateToken) PaneID() PaneID                 { return t.pane }
 
 func (m *Model) PrepareWindow(title string) (WindowCreateToken, error) {
 	if err := m.CheckInvariants(); err != nil {
@@ -71,18 +74,21 @@ func (m *Model) PrepareWindow(title string) (WindowCreateToken, error) {
 	if len(m.windows) >= MaxWindows {
 		return WindowCreateToken{}, ErrWindowLimitReached
 	}
-	if m.nextWindowID == 0 || m.nextTabID == 0 || m.nextPaneID == 0 {
+	if m.nextWindowID == 0 || m.nextWindowIncarnation == 0 || m.nextTabID == 0 || m.nextPaneID == 0 {
 		return WindowCreateToken{}, ErrIDExhausted
 	}
-	return WindowCreateToken{window: m.nextWindowID, workspace: m.activeWorkspace, tab: m.nextTabID, pane: m.nextPaneID, title: title}, nil
+	return WindowCreateToken{window: m.nextWindowID, incarnation: m.nextWindowIncarnation, workspace: m.activeWorkspace, tab: m.nextTabID, pane: m.nextPaneID, title: title}, nil
 }
 
 func (m *Model) CommitWindow(token WindowCreateToken) (WindowView, error) {
-	if token.window == 0 || token.tab == 0 || token.pane == 0 {
+	if token.window == 0 || token.incarnation == 0 || token.tab == 0 || token.pane == 0 {
 		return WindowView{}, invariantError("invalid window create token")
 	}
-	if token.window != m.nextWindowID || token.tab != m.nextTabID || token.pane != m.nextPaneID {
+	if token.window != m.nextWindowID || token.incarnation != m.nextWindowIncarnation || token.tab != m.nextTabID || token.pane != m.nextPaneID {
 		return WindowView{}, invariantError("stale window create token")
+	}
+	if m.nextWindowIncarnation == ^WindowIncarnation(0) {
+		return WindowView{}, ErrIDExhausted
 	}
 	if len(m.windows) >= MaxWindows {
 		return WindowView{}, ErrWindowLimitReached
@@ -95,7 +101,7 @@ func (m *Model) CommitWindow(token WindowCreateToken) (WindowView, error) {
 	previousWorkspace := *ws
 	previousWorkspace.windows = append([]WindowID(nil), ws.windows...)
 	m.windows = append(m.windows, windowState{
-		id: token.window, workspace: ws.id, title: token.title, active: token.tab, revision: 1,
+		id: token.window, incarnation: token.incarnation, workspace: ws.id, title: token.title, active: token.tab, revision: 1,
 		tabs: []tabState{{id: token.tab, root: leafNode(token.pane), focused: token.pane, revision: 1}},
 	})
 	ws.windows = append(ws.windows, token.window)
@@ -106,6 +112,7 @@ func (m *Model) CommitWindow(token WindowCreateToken) (WindowView, error) {
 	m.allocatedTabs[token.tab] = struct{}{}
 	m.allocated[token.pane] = struct{}{}
 	m.nextWindowID++
+	m.nextWindowIncarnation++
 	m.nextTabID++
 	m.nextPaneID++
 	if err := m.CheckInvariants(); err != nil {

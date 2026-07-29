@@ -65,6 +65,7 @@ type Event struct {
 type ingressRecord struct {
 	pane  PaneID
 	owner *pane
+	stamp ownerStamp
 	data  []byte
 	err   error
 }

@@ -7,7 +7,10 @@ import (
 	termmux "cervterm/internal/mux"
 )
 
-func (c *windowController) applyWorkspaceProjection(events []termmux.Event) {
+func (c *windowController) applyWorkspaceProjection(events []termmux.Event) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
 	relevant := false
 	focusRequested := false
 	for _, event := range events {
@@ -19,10 +22,10 @@ func (c *windowController) applyWorkspaceProjection(events []termmux.Event) {
 			focusRequested = true
 		}
 	}
-	if !relevant || c.services.mux == nil {
-		return
+	if !relevant || c.services.commands == nil {
+		return nil
 	}
-	workspace := c.services.mux.ActiveWorkspace()
+	workspace := c.services.commands.ActiveWorkspace()
 	visible := make(map[termmux.WindowID]struct{}, len(workspace.Windows))
 	for _, id := range workspace.Windows {
 		visible[id] = struct{}{}
@@ -56,6 +59,7 @@ func (c *windowController) applyWorkspaceProjection(events []termmux.Event) {
 			projection.host.Focus()
 		}
 	}
+	return nil
 }
 
 func (c *windowController) projectionVisible(id termmux.WindowID) bool {

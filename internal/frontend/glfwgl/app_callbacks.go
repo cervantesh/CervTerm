@@ -8,39 +8,54 @@ import (
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
+func (a *App) withCurrentNativeCallback(callback func()) {
+	if a.controller == nil {
+		callback()
+		return
+	}
+	if err := a.controller.withCurrent(a.windowID, callback); err != nil {
+		logControllerError(err)
+	}
+}
+
 func (a *App) installCallbacks() {
 	a.window.SetContentScaleCallback(func(_ *glfw.Window, scaleX, scaleY float32) {
-		a.invalidateCandidateGeometry()
-		a.rebuildForContentScale(scaleX, scaleY)
-		a.requestAccessibilityRedraw()
+		a.withCurrentNativeCallback(func() {
+			a.invalidateCandidateGeometry()
+			a.rebuildForContentScale(scaleX, scaleY)
+			a.requestAccessibilityRedraw()
+		})
 	})
 	a.window.SetFramebufferSizeCallback(func(_ *glfw.Window, _, _ int) {
-		a.invalidateCandidateGeometry()
-		a.requestAccessibilityRedraw()
+		a.withCurrentNativeCallback(func() {
+			a.invalidateCandidateGeometry()
+			a.requestAccessibilityRedraw()
+		})
 	})
 	a.window.SetSizeCallback(func(_ *glfw.Window, _, _ int) {
-		a.invalidateCandidateGeometry()
-		a.requestAccessibilityRedraw()
+		a.withCurrentNativeCallback(func() {
+			a.invalidateCandidateGeometry()
+			a.requestAccessibilityRedraw()
+		})
 	})
 	a.installAccessibilityWindowCallbacks()
 	a.window.SetCharCallback(func(_ *glfw.Window, char rune) {
-		a.routeGLFWChar(char)
+		a.withCurrentNativeCallback(func() { a.routeGLFWChar(char) })
 	})
 	a.window.SetKeyCallback(func(_ *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		a.handleKeyEvent(key, action, mods)
+		a.withCurrentNativeCallback(func() { a.handleKeyEvent(key, action, mods) })
 	})
-
 	a.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
-		a.ensureInputController().handleButton(button, action, mods)
+		a.withCurrentNativeCallback(func() { a.ensureInputController().handleButton(button, action, mods) })
 	})
 	a.window.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
-		a.ensureInputController().handleCursor(x, y)
+		a.withCurrentNativeCallback(func() { a.ensureInputController().handleCursor(x, y) })
 	})
 	a.window.SetScrollCallback(func(_ *glfw.Window, xoff, yoff float64) {
-		a.ensureInputController().handleWheel(xoff, yoff)
+		a.withCurrentNativeCallback(func() { a.ensureInputController().handleWheel(xoff, yoff) })
 	})
 	a.window.SetFocusCallback(func(_ *glfw.Window, focused bool) {
-		a.ensureInputController().handleFocus(focused)
+		a.withCurrentNativeCallback(func() { a.ensureInputController().handleFocus(focused) })
 	})
 }
 

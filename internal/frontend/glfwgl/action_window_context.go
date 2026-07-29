@@ -16,8 +16,8 @@ func (a *App) windowActionRef() termaction.Ref {
 
 func (a *App) refreshFocusedActionContext(context termaction.Context) termaction.Context {
 	projection := a
-	if a.controller != nil {
-		if active := a.controller.activeProjectionApp(); active != nil {
+	if a.host != nil {
+		if active := a.host.activeProjectionApp(); active != nil {
 			projection = active
 		}
 	}
@@ -27,8 +27,8 @@ func (a *App) refreshFocusedActionContext(context termaction.Context) termaction
 }
 
 func (a *App) activeActionRoute() actionExecutionRoute {
-	if a.controller != nil {
-		if active := a.controller.activeProjectionApp(); active != nil {
+	if a.host != nil {
+		if active := a.host.activeProjectionApp(); active != nil {
 			return active.ensureActionController()
 		}
 	}

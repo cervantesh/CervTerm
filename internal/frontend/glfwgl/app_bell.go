@@ -59,7 +59,14 @@ func (a *App) catchUpBellEvents() {
 	if a.mux == nil {
 		return
 	}
-	for _, window := range a.mux.Windows() {
+	if a.controller == nil {
+		return
+	}
+	windows, err := a.controller.processWindows(a.windowIdentity)
+	if err != nil {
+		return
+	}
+	for _, window := range windows {
 		if a.windowID != 0 && window.ID != a.windowID {
 			continue
 		}

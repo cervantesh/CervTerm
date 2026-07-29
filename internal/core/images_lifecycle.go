@@ -29,8 +29,7 @@ func imageRectContains(outer, inner imageCellRect) bool {
 func (t *Terminal) mutateImagePlacements(alternate bool, transform func(termimage.Placement) (termimage.Placement, bool)) bool {
 	changed, err := t.mutateImagePlacementsWithFault(alternate, transform, nil)
 	if err != nil {
-		t.closeImages()
-		return true
+		return t.closeImages() == nil
 	}
 	return changed
 }
@@ -40,8 +39,7 @@ func (t *Terminal) mutateImagePlacementsWithFault(alternate bool, transform func
 		return false, nil
 	}
 	if t.imageSidecars.generation == math.MaxUint64 {
-		t.closeImages()
-		return true, nil
+		return t.closeImages() == nil, nil
 	}
 	source := t.imageSidecars.primary
 	if alternate {
@@ -102,7 +100,9 @@ func (t *Terminal) mutateImagePlacementsWithFault(alternate bool, transform func
 		retired = append(retired, entry.lease)
 	}
 	prepared := &preparedImageMutation{terminal: t, store: storePrepared, sidecars: sidecars, baseSidecars: t.imageSidecars, retired: retired}
-	t.publishPreparedImage(prepared)
+	if err := t.publishPreparedImage(prepared); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 

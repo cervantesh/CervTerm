@@ -32,6 +32,27 @@ func (c *windowController) setRuntimeWindows(runtimeWindows runtimeWindowLifecyc
 	c.runtimeWindows = runtimeWindows
 }
 
+func (c *windowController) createRuntimeProjectionFrom(origin termmux.WindowIdentity) (termmux.WindowID, error) {
+	if err := c.requireOrigin(origin); err != nil {
+		return 0, err
+	}
+	return c.createRuntimeProjection()
+}
+
+func (c *windowController) closeRuntimeProjectionFrom(origin termmux.WindowIdentity, id termmux.WindowID) (termmux.CloseWindowResult, error) {
+	if err := c.requireOrigin(origin); err != nil {
+		return termmux.CloseWindowResult{}, err
+	}
+	return c.closeRuntimeProjection(id)
+}
+
+func (c *windowController) activateRuntimeProjectionFrom(origin termmux.WindowIdentity, id termmux.WindowID) error {
+	if err := c.requireOrigin(origin); err != nil {
+		return err
+	}
+	return c.activateRuntimeProjection(id)
+}
+
 func (c *windowController) createRuntimeProjection() (termmux.WindowID, error) {
 	if err := c.requireLoop(); err != nil {
 		return 0, err
@@ -95,6 +116,9 @@ func (c *windowController) closeRuntimeProjection(id termmux.WindowID) (termmux.
 }
 
 func (c *windowController) activateRuntimeProjection(id termmux.WindowID) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
 	projection, ok := c.windows[id]
 	if !ok || projection.closed || c.runtimeWindows == nil {
 		return errWindowProjectionMissing
@@ -131,10 +155,16 @@ func (c *windowController) recordRuntimeFocus(id termmux.WindowID) error {
 }
 
 func (c *windowController) activeProjectionApp() *App {
+	if c.requireLoop() != nil {
+		return nil
+	}
 	return c.projectionApp(c.active)
 }
 
 func (c *windowController) syncSharedProjectionState(owner *App) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
 	for _, id := range c.projectionIDs() {
 		child := c.projectionApp(id)
 		if child == nil || child == owner || child.scriptGeneration == owner.scriptGeneration {

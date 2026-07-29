@@ -103,6 +103,8 @@ func TestBellCatchUpRecoversDroppedEventsWithoutDuplicates(t *testing.T) {
 	}
 	defer runtime.Close()
 	app := newMuxTestApp(t, 80, 24)
+	process := testProcessMuxFor(t, app)
+	attachTestProcessController(t, app, process)
 	app.cfg, app.scriptRT = cfg, runtime
 	events, err := app.mux.FeedFallback(app.focusedPane, []byte("\a\a\a"))
 	if err != nil {

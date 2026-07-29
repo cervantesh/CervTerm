@@ -17,7 +17,7 @@ func TestInitialDoublePresentationUsesNormalFrameAccounting(t *testing.T) {
 	controller := &windowController{windows: map[termmux.WindowID]*windowProjection{
 		id: {id: id, app: projection, dirty: true},
 	}}
-	owner := &App{controller: controller}
+	owner := &App{host: controller}
 
 	owner.acknowledgePresentedFrame(id, projection, firstPresentedAt)
 	controller.windows[id].dirty = true

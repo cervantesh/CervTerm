@@ -40,6 +40,14 @@ var (
 	ErrRestoreCommitted         = errors.New("mux: restore candidate already committed")
 	ErrSemanticSnapshotStale    = errors.New("mux: semantic snapshot is stale")
 	ErrSemanticRangeUnavailable = errors.New("mux: semantic range is unavailable")
+	ErrOwnerRequired            = errors.New("mux: owner capability required")
+	ErrWrongOwner               = errors.New("mux: wrong owner capability")
+	ErrWrongOwnerThread         = errors.New("mux: owner mutation called from another native thread")
+	ErrWrongOrigin              = errors.New("mux: request origin does not own target")
+	ErrStaleOwner               = errors.New("mux: stale owner generation")
+	ErrOwnerClosed              = errors.New("mux: owner is closed")
+	ErrOwnerBusy                = errors.New("mux: owner mutation already active")
+	ErrStaleMutationScope       = errors.New("mux: mutation scope is not active")
 )
 
 func invariantError(format string, args ...any) error {

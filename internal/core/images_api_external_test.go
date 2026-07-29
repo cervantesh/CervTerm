@@ -97,13 +97,8 @@ func TestAttachImageStoreRejectsDuplicateOwnership(t *testing.T) {
 	if _, ok := store.Acquire(result.Resource); !ok {
 		t.Fatal("external lifecycle retired attached resource")
 	}
-	blocked := apiCandidate(t, store, 9)
-	if _, _, err := store.PrepareCandidate(blocked); !errors.Is(err, termimage.ErrPreparedState) {
-		t.Fatalf("direct prepare error=%v", err)
-	}
-	blocked.Close()
-	if _, err := store.PrepareResourceRemoval([]termimage.ResourceRef{result.Resource}); !errors.Is(err, termimage.ErrPreparedState) {
-		t.Fatalf("direct removal error=%v", err)
+	if owner := store.ClaimOwner(); owner != nil {
+		t.Fatal("attached store exposed a second owner capability")
 	}
 	if err := first.AttachImageStore(store); !errors.Is(err, core.ErrImageStoreAttached) {
 		t.Fatalf("duplicate error=%v", err)
@@ -117,8 +112,12 @@ func TestAttachImageStoreRejectsDuplicateOwnership(t *testing.T) {
 		t.Fatalf("closed error=%v", err)
 	}
 	preparedStore := termimage.NewStore(termimage.NewProcessBudget(), termimage.DefaultLimits())
+	preparedOwner := preparedStore.ClaimOwner()
+	if preparedOwner == nil {
+		t.Fatal("prepared owner unavailable")
+	}
 	preparedCandidate := apiCandidate(t, preparedStore, 10)
-	prepared, _, err := preparedStore.PrepareCandidate(preparedCandidate)
+	prepared, _, err := preparedOwner.PrepareCandidate(preparedCandidate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,9 +125,14 @@ func TestAttachImageStoreRejectsDuplicateOwnership(t *testing.T) {
 	if err = third.AttachImageStore(preparedStore); !errors.Is(err, core.ErrImageStoreAttached) {
 		t.Fatalf("prepared attach error=%v", err)
 	}
-	prepared.Abort()
-	if err = third.AttachImageStore(preparedStore); err != nil {
+	if err := prepared.Abort(); err != nil {
 		t.Fatal(err)
+	}
+	if err := preparedOwner.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = third.AttachImageStore(preparedStore); !errors.Is(err, core.ErrImageStoreUnavailable) {
+		t.Fatalf("closed prepared store attach error=%v", err)
 	}
 }
 

@@ -11,7 +11,10 @@ import (
 // its topology. Every failed proposal leaves model IDs and registry ownership
 // reusable; reader ingress carries owner identity so stale records cannot be
 // delivered to a later pane that receives the same proposed ID.
-func (m *Mux) CreateWindow(spec SpawnSpec, content PixelRect, metrics CellMetrics, title string) (WindowView, []Event, error) {
+func (m *Mux) createWindow(scope mutationScope, spec SpawnSpec, content PixelRect, metrics CellMetrics, title string) (WindowView, []Event, error) {
+	if err := scope.valid(m); err != nil {
+		return WindowView{}, nil, err
+	}
 	if !m.bootstrapped {
 		return WindowView{}, nil, ErrEmptyModel
 	}
@@ -32,79 +35,74 @@ func (m *Mux) CreateWindow(spec SpawnSpec, content PixelRect, metrics CellMetric
 		m.model.AbortWindow(token)
 		return WindowView{}, nil, err
 	}
-	if err := m.sessions.reserve(paneID); err != nil {
+	if err := m.sessions.reserveScoped(scope, paneID); err != nil {
 		m.model.AbortWindow(token)
 		return WindowView{}, nil, err
 	}
 	reserved := true
 	var p *pane
-	rollback := func() {
+	rollback := func() error {
 		if p != nil {
-			if detached := m.sessions.abort(paneID, p); detached.owned {
-				_ = detached.pane.close()
+			var closeErr error
+			if registered, owned := m.sessions.lookup(paneID); owned && registered == p {
+				closeErr = m.detachAndClosePane(scope, paneID, p, false)
+			} else {
+				closeErr = p.close()
 			}
-			_ = p.close()
+			if closeErr != nil {
+				return closeErr
+			}
+			p = nil
 		}
 		if reserved {
-			m.sessions.release(paneID)
+			m.sessions.releaseScoped(scope, paneID)
 		}
 		delete(m.paneMetrics, paneID)
 		m.model.AbortWindow(token)
+		return nil
 	}
 
-	p = m.createPane(paneID, cols, rows)
+	p = m.createPane(scope, paneID, cols, rows)
 	p.setFreshLaunch(spec)
-	p.terminal.SetPaletteBase(m.paletteBase)
+	p.terminal.SetPaletteBase(*m.paletteBase)
 	p.geometry = effectiveGeometry(PaneGeometry{Pane: paneID, Pixels: content, Cols: cols, Rows: rows})
 	if m.options.SetClipboard != nil {
 		p.parser.SetClipboard = func(text string) { m.options.SetClipboard(p.id, text) }
 	}
 	ptyRows, ptyCols := terminalSize(p.geometry)
 	if err := m.windowLifecycleFailure("spawn"); err != nil {
-		rollback()
-		return WindowView{}, nil, err
+		return WindowView{}, nil, errors.Join(err, rollback())
 	}
-	session, spawnErr := m.sessions.spawn(ptyRows, ptyCols, spec.Options)
+	session, spawnErr := m.sessions.spawnScoped(scope, ptyRows, ptyCols, spec.Options)
 	if spawnErr != nil {
 		if session != nil {
 			_ = session.Close()
 		}
-		rollback()
-		return WindowView{}, nil, fmt.Errorf("spawn window pane: %w", spawnErr)
+		return WindowView{}, nil, errors.Join(fmt.Errorf("spawn window pane: %w", spawnErr), rollback())
 	}
 	p.session = session
 	p.state = PaneStateRunning
 	p.desiredSize = pty.Size{Rows: ptyRows, Cols: ptyCols}
 	p.appliedSize = p.desiredSize
 	if err := m.windowLifecycleFailure("register"); err != nil {
-		_ = p.close()
-		p = nil
-		rollback()
-		return WindowView{}, nil, err
+		return WindowView{}, nil, errors.Join(err, rollback())
 	}
-	if err := m.sessions.register(p); err != nil {
-		_ = p.close()
-		p = nil
-		rollback()
-		return WindowView{}, nil, err
+	if err := m.sessions.registerScoped(scope, p); err != nil {
+		return WindowView{}, nil, errors.Join(err, rollback())
 	}
 	reserved = false
 	if err := m.windowLifecycleFailure("start"); err != nil {
-		rollback()
-		return WindowView{}, nil, err
+		return WindowView{}, nil, errors.Join(err, rollback())
 	}
-	if err := m.sessions.start(paneID); err != nil {
-		rollback()
-		return WindowView{}, nil, err
+	if err := m.sessions.startScoped(scope, paneID); err != nil {
+		return WindowView{}, nil, errors.Join(err, rollback())
 	}
 	if err := m.windowLifecycleFailure("commit"); err != nil {
-		rollback()
-		return WindowView{}, nil, err
+		return WindowView{}, nil, errors.Join(err, rollback())
 	}
 	view, err := m.model.CommitWindow(token)
 	if err != nil {
-		rollback()
-		return WindowView{}, nil, err
+		return WindowView{}, nil, errors.Join(err, rollback())
 	}
 	m.paneMetrics[paneID] = metrics
 	p.capture()
@@ -120,7 +118,10 @@ func (m *Mux) CreateWindow(spec SpawnSpec, content PixelRect, metrics CellMetric
 	return view, events, nil
 }
 
-func (m *Mux) ActivateWindow(id WindowID) ([]Event, error) {
+func (m *Mux) activateWindow(scope mutationScope, id WindowID) ([]Event, error) {
+	if err := scope.valid(m); err != nil {
+		return nil, err
+	}
 	if err := m.model.ActivateWindow(id); err != nil {
 		return nil, err
 	}
@@ -131,16 +132,30 @@ func (m *Mux) ActivateWindow(id WindowID) ([]Event, error) {
 // CloseWindow publishes detachment first, then closes each detached session at
 // most once. Repeated closes of an already detached WindowID are successful and
 // produce no events while preserving the current final-window result.
-func (m *Mux) CloseWindow(id WindowID) (CloseWindowResult, []Event, error) {
+func (m *Mux) closeWindow(scope mutationScope, id WindowID) (CloseWindowResult, []Event, error) {
+	if err := scope.valid(m); err != nil {
+		return CloseWindowResult{}, nil, err
+	}
 	view := m.model.windowByID(id)
+	var panes []*pane
 	if view != nil {
 		for i := range view.tabs {
 			for _, paneID := range paneIDs(view.tabs[i].root) {
-				if _, owned := m.sessions.lookup(paneID); !owned {
+				owned, ok := m.sessions.lookup(paneID)
+				if !ok {
 					return CloseWindowResult{}, nil, invariantError("window %d pane %d is not registry-owned", id, paneID)
 				}
+				panes = append(panes, owned)
 			}
 		}
+	}
+	preparedCloses, prepareErr := preparePaneClosures(panes)
+	if prepareErr != nil {
+		return CloseWindowResult{}, nil, prepareErr
+	}
+	closeByID := make(map[PaneID]*preparedPaneClose, len(panes))
+	for index, owned := range panes {
+		closeByID[owned.id] = preparedCloses[index]
 	}
 	workspace := WorkspaceID(0)
 	if view != nil {
@@ -148,18 +163,19 @@ func (m *Mux) CloseWindow(id WindowID) (CloseWindowResult, []Event, error) {
 	}
 	result, err := m.model.CloseWindow(id)
 	if err != nil || !result.Closed {
-		return result, nil, err
+		return result, nil, errors.Join(err, abortPaneClosures(preparedCloses))
 	}
 	events := make([]Event, 0, len(result.Panes)*2+5)
 	var closeErrs []error
 	for _, paneID := range result.Panes {
-		detached := m.sessions.detach(paneID)
+		detached := m.sessions.detachScoped(scope, paneID)
 		delete(m.paneMetrics, paneID)
-		if !detached.owned {
-			return result, events, invariantError("window %d pane %d lost registry ownership", id, paneID)
+		prepared := closeByID[paneID]
+		if !detached.owned || prepared == nil || detached.pane != prepared.pane {
+			return result, events, errors.Join(invariantError("window %d pane %d lost registry ownership", id, paneID), abortPaneClosures(preparedCloses))
 		}
 		tabID, _ := tabForPaneInResult(view, paneID)
-		if closeErr := detached.pane.close(); closeErr != nil {
+		if closeErr := prepared.commit(); closeErr != nil {
 			closeErrs = append(closeErrs, fmt.Errorf("pane %d close: %w", paneID, closeErr))
 			events = append(events, Event{Kind: PaneCloseFailed, Workspace: workspace, Window: id, Tab: tabID, Pane: paneID, Err: closeErr})
 		}
@@ -204,12 +220,16 @@ func (m *Mux) windowLifecycleFailure(stage string) error {
 
 // RollbackWindow aborts a newest runtime window that was never published to a frontend.
 // Unlike CloseWindow it does not tombstone the proposed IDs, so a later candidate may reuse them.
-func (m *Mux) RollbackWindow(id WindowID) error {
+func (m *Mux) rollbackWindow(scope mutationScope, id WindowID) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
 	w := m.model.windowByID(id)
 	if w == nil {
 		return ErrWindowNotFound
 	}
 	panes := make(map[PaneID]*pane)
+	var paneList []*pane
 	for i := range w.tabs {
 		for _, paneID := range paneIDs(w.tabs[i].root) {
 			p, ok := m.sessions.lookup(paneID)
@@ -217,20 +237,30 @@ func (m *Mux) RollbackWindow(id WindowID) error {
 				return invariantError("window %d pane %d is not registry-owned", id, paneID)
 			}
 			panes[paneID] = p
+			paneList = append(paneList, p)
 		}
 	}
-	result, err := m.model.CloseWindow(id)
+	preparedCloses, err := preparePaneClosures(paneList)
 	if err != nil {
 		return err
 	}
+	closeByID := make(map[PaneID]*preparedPaneClose, len(paneList))
+	for index, owned := range paneList {
+		closeByID[owned.id] = preparedCloses[index]
+	}
+	result, err := m.model.CloseWindow(id)
+	if err != nil {
+		return errors.Join(err, abortPaneClosures(preparedCloses))
+	}
 	var closeErrs []error
 	for paneID, p := range panes {
-		detached := m.sessions.abort(paneID, p)
-		if !detached.owned {
-			return invariantError("window %d pane %d rollback lost ownership", id, paneID)
+		detached := m.sessions.abortScoped(scope, paneID, p)
+		prepared := closeByID[paneID]
+		if !detached.owned || prepared == nil || detached.pane != prepared.pane {
+			return errors.Join(invariantError("window %d pane %d rollback lost ownership", id, paneID), abortPaneClosures(preparedCloses))
 		}
 		delete(m.paneMetrics, paneID)
-		if closeErr := detached.pane.close(); closeErr != nil {
+		if closeErr := prepared.commit(); closeErr != nil {
 			closeErrs = append(closeErrs, closeErr)
 		}
 	}

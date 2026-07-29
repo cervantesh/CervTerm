@@ -84,7 +84,7 @@ func TestMuxProtocolSchedulingEOFDispatchOrder(t *testing.T) {
 	p.kittyOutcomes = append(p.kittyOutcomes, kitty.Outcome{Failure: kitty.ReplyFailed})
 	p.sixelOutcomes = append(p.sixelOutcomes, sixel.Outcome{Failure: sixel.FailureFailed})
 	p.itermOutcomes = append(p.itermOutcomes, itermimage.Outcome{Failure: itermimage.FailureFailed})
-	m.sessions.incoming <- ingressRecord{pane: p.id, owner: p, err: io.EOF}
+	m.sessions.incoming <- ingressRecord{pane: p.id, owner: p, stamp: p.ownerStamp, err: io.EOF}
 
 	events := m.Drain(1)
 	if got, want := session.written(), (kitty.ReplyPlan{}).Encode(kitty.ReplyFailed); !bytes.Equal(got, want) {

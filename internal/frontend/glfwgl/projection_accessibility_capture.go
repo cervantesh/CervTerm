@@ -19,18 +19,13 @@ func (app *App) captureAccessibilityDocumentVisibility(generation uint64, native
 	if app == nil || app.mux == nil || app.windowID == 0 || generation == 0 {
 		return accessibility.Document{}, false, errProjectionAccessibilityInvalid
 	}
-	var window termmux.WindowView
-	found := false
-	for _, candidate := range app.mux.Windows() {
-		if candidate.ID == app.windowID {
-			window, found = candidate, true
-			break
-		}
+	if app.controller == nil {
+		return accessibility.Document{}, false, errProjectionAccessibilityInvalid
 	}
-	if !found {
-		return accessibility.Document{}, false, fmt.Errorf("accessibility projection window is unavailable")
+	window, activeWorkspace, err := app.controller.accessibilityWindow(app.windowIdentity)
+	if err != nil {
+		return accessibility.Document{}, false, fmt.Errorf("accessibility projection window is unavailable: %w", err)
 	}
-	activeWorkspace := app.mux.ActiveWorkspace()
 	visible := nativeVisible && activeWorkspace.ID != 0 && window.Workspace == activeWorkspace.ID
 	projection := uint64(window.ID)
 	capture := treeAccessibilityCapture{

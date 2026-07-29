@@ -1,0 +1,45 @@
+schema=slice31-gates-v4
+status=CLEAN_G_PASS_CI_AND_MERGED_STATE_PENDING
+platform_runtime=windows/amd64 AMD Ryzen 9 7940HX with Radeon Graphics
+real_GUI=UNRUN
+base=9fe0bd0287ed402fe90b58a5fba7d6413897c1af
+T=4a9c2800ac2bbd943eb93e892f45abe01a4328bd
+A=cf834b7870e34689c789f38aeaf6de4914b34675
+W=27070f32395be7803b6fc11388a08a5c32d3d3a1
+G=derived-by-unique-subject-and-parent
+
+command=go run ./scripts/check-slice31-owner.go
+result=PASS
+rollback_rehearsal=PASS detached-worktree reverse G,W,A equals retained T
+command=go test ./... -count=1
+result=PASS
+command=go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -count=1
+result=PASS
+command=go test -race ./internal/mux ./internal/termimage ./internal/core ./internal/layoutstate -count=3
+result=PASS
+command=go test -race -tags glfw ./internal/frontend/glfwgl -count=3
+result=PASS
+command=go vet -unsafeptr=false ./...
+result=PASS
+command=go vet -unsafeptr=false -tags glfw ./...
+result=PASS
+command=go run ./scripts/check-phase15-recovery.go -race
+result=PASS
+command=go run ./scripts/check-slice55a-evidence.go
+result=PASS
+command=go run ./scripts/check-slice55b-evidence.go
+result=PASS
+command=fuzz smoke: termimage/layoutstate/kitty/sixel/itermimage, 3s each
+result=PASS
+command=CGO_ENABLED=0 cross-compile mux tests, termimage tests, and cmd/cervterm
+result=PASS targets=linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
+command=go run ./scripts/capture-slice31-evidence.go
+result=PASS physical_processes=120 warmups=12 samples_per_side=10 order=ABBAx5 threshold_percent=3.000000 allocation_increase=none
+command=git diff --check
+result=PASS
+command=go run ./scripts/check-slice55c-evidence.go
+result=PASS clean_committed_G=true
+command=go run ./scripts/check-maturity-gates.go
+result=PASS clean_committed_G=true
+independent_claim_verification=PASS R1,R2,R3,R4,R5 verified
+independent_adversarial_review=PASS no remaining ownership, lifecycle, or rollback blocker
