@@ -59,15 +59,16 @@ func TestCompositionCancelsOnNativeAndProjectionFocusLoss(t *testing.T) {
 
 func TestCompositionCancelsBeforeWorkspaceHide(t *testing.T) {
 	muxApp := newRunningMuxTestApp(t)
-	second, _, err := muxApp.mux.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
+	process := testProcessMuxFor(t, muxApp)
+	second, _, err := process.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspace, _, err := muxApp.mux.CreateWorkspace("work")
+	workspace, _, err := process.CreateWorkspace("work")
 	if err != nil {
 		t.Fatal(err)
 	}
-	moveEvents, err := muxApp.mux.MoveWindowToWorkspace(second.ID, workspace.ID)
+	moveEvents, err := process.MoveWindowToWorkspace(second.ID, workspace.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +76,7 @@ func TestCompositionCancelsBeforeWorkspaceHide(t *testing.T) {
 	firstApp, secondApp := &App{}, &App{}
 	bindStaticComposition(firstApp, ime.Target{Kind: ime.TargetPane, ID: 1, Activation: 1})
 	bindStaticComposition(secondApp, ime.Target{Kind: ime.TargetPane, ID: uint64(second.Tabs[0].Focused), Activation: 1})
-	controller := newWindowController(processServices{mux: muxApp.mux}, fakeNativePump{log: &log})
+	controller := newWindowController(processServices{commands: process, windowCapabilities: process}, fakeNativePump{log: &log})
 	if err := controller.attachApp(1, &fakeNativeWindow{id: "one", log: &log}, firstApp, func([]termmux.Event) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func TestCompositionCancelsBeforeWorkspaceHide(t *testing.T) {
 	if _, err := firstApp.composition.start(); err != nil {
 		t.Fatal(err)
 	}
-	switchEvents, err := muxApp.mux.SwitchWorkspace(workspace.ID)
+	switchEvents, err := process.SwitchWorkspace(workspace.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

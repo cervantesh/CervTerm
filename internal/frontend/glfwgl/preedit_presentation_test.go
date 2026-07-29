@@ -153,13 +153,22 @@ func TestPreeditTrailingCaretStaysInsideClip(t *testing.T) {
 func TestPreeditRedrawMarksOnlyOwningProjection(t *testing.T) {
 	var log []string
 	controller := newWindowController(processServices{}, fakeNativePump{log: &log})
-	first, second := &App{windowID: 1, controller: controller}, &App{windowID: 2, controller: controller}
+	router := newProjectionMessageRouter(controller)
+	first, second := &App{windowID: 1, controller: router}, &App{windowID: 2, controller: router}
 	if err := controller.attachApp(1, &fakeNativeWindow{id: "one", log: &log}, first, func([]termmux.Event) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
 	if err := controller.attachApp(2, &fakeNativeWindow{id: "two", log: &log}, second, func([]termmux.Event) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
+	first.windowIdentity = termmux.WindowIdentity{ID: 1, Incarnation: 1}
+	second.windowIdentity = termmux.WindowIdentity{ID: 2, Incarnation: 1}
+	controller.windows[1].identity = first.windowIdentity
+	controller.windows[2].identity = second.windowIdentity
+	if err := controller.startLoop(); err != nil {
+		t.Fatal(err)
+	}
+	defer controller.stopLoop()
 	controller.clearDamage(1)
 	controller.clearDamage(2)
 	first.initCompositionCoordinator()

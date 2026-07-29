@@ -11,21 +11,22 @@ import (
 
 func TestWindowControllerProjectsWorkspaceVisibilityAndFocus(t *testing.T) {
 	a := newRunningMuxTestApp(t)
-	second, _, err := a.mux.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
+	process := testProcessMuxFor(t, a)
+	second, _, err := process.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspace, _, err := a.mux.CreateWorkspace("work")
+	workspace, _, err := process.CreateWorkspace("work")
 	if err != nil {
 		t.Fatal(err)
 	}
-	moveEvents, err := a.mux.MoveWindowToWorkspace(second.ID, workspace.ID)
+	moveEvents, err := process.MoveWindowToWorkspace(second.ID, workspace.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var log []string
 	one, two := &fakeNativeWindow{id: "one", log: &log}, &fakeNativeWindow{id: "two", log: &log}
-	controller := newWindowController(processServices{mux: a.mux}, fakeNativePump{log: &log})
+	controller := newWindowController(processServices{commands: process, windowCapabilities: process}, fakeNativePump{log: &log})
 	if err := controller.attach(1, one, func([]termmux.Event) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func TestWindowControllerProjectsWorkspaceVisibilityAndFocus(t *testing.T) {
 		t.Fatalf("default visibility active=%d", controller.active)
 	}
 	log = nil
-	switchEvents, err := a.mux.SwitchWorkspace(workspace.ID)
+	switchEvents, err := process.SwitchWorkspace(workspace.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,12 +56,12 @@ func TestWindowControllerProjectsWorkspaceVisibilityAndFocus(t *testing.T) {
 	if !controller.windows[1].dirty || controller.active != 2 || len(log) != 0 {
 		t.Fatalf("hidden damage dirty=%v active=%d log=%v", controller.windows[1].dirty, controller.active, log)
 	}
-	empty, _, err := a.mux.CreateWorkspace("empty")
+	empty, _, err := process.CreateWorkspace("empty")
 	if err != nil {
 		t.Fatal(err)
 	}
 	log = nil
-	events, err := a.mux.SwitchWorkspace(empty.ID)
+	events, err := process.SwitchWorkspace(empty.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,23 +73,24 @@ func TestWindowControllerProjectsWorkspaceVisibilityAndFocus(t *testing.T) {
 
 func TestInactiveWorkspaceCloseDoesNotRefocusActiveProjection(t *testing.T) {
 	a := newRunningMuxTestApp(t)
-	second, _, err := a.mux.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
+	process := testProcessMuxFor(t, a)
+	second, _, err := process.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspace, _, err := a.mux.CreateWorkspace("work")
+	workspace, _, err := process.CreateWorkspace("work")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.mux.MoveWindowToWorkspace(second.ID, workspace.ID); err != nil {
+	if _, err := process.MoveWindowToWorkspace(second.ID, workspace.ID); err != nil {
 		t.Fatal(err)
 	}
-	switchEvents, err := a.mux.SwitchWorkspace(workspace.ID)
+	switchEvents, err := process.SwitchWorkspace(workspace.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var log []string
-	controller := newWindowController(processServices{mux: a.mux}, fakeNativePump{log: &log})
+	controller := newWindowController(processServices{commands: process, windowCapabilities: process}, fakeNativePump{log: &log})
 	if err := controller.attach(1, &fakeNativeWindow{id: "one", log: &log}, func([]termmux.Event) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +102,7 @@ func TestInactiveWorkspaceCloseDoesNotRefocusActiveProjection(t *testing.T) {
 	}
 	controller.dispatch(switchEvents)
 	log = nil
-	result, events, err := a.mux.CloseWindow(1)
+	result, events, err := process.CloseWindow(1)
 	if err != nil {
 		t.Fatal(err)
 	}

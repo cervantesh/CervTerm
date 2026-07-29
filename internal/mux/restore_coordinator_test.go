@@ -417,7 +417,7 @@ func assertRestoreCoordinatorMuxWiring(t *testing.T, dir string, fileSet *token.
 				}
 			}
 		case *ast.FuncDecl:
-			if declaration.Name.Name != "New" {
+			if declaration.Name.Name != "newMux" {
 				continue
 			}
 			ast.Inspect(declaration.Body, func(node ast.Node) bool {
@@ -441,10 +441,10 @@ func assertRestoreCoordinatorMuxWiring(t *testing.T, dir string, fileSet *token.
 
 	wantFacades := map[string]string{
 		"FreshSessionSnapshot": "{\n\treturn m.restoreCoordinator.freshSessionSnapshot(muxRestorePreparationOperationAdapter{mux: m})\n}",
-		"PrepareRestore":       "{\n\treturn m.restoreCoordinator.prepareRestore(muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries})\n}",
+		"prepareRestore":       "{\n\tif err := scope.valid(m); err != nil {\n\t\treturn nil, err\n\t}\n\treturn m.restoreCoordinator.prepareRestore(muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries, scope: scope})\n}",
 		"RestoreWindowIDs":     "{\n\treturn m.restoreCoordinator.restoreWindowIDs(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
-		"CommitRestore":        "{\n\treturn m.restoreCoordinator.commitRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
-		"AbortRestore":         "{\n\treturn m.restoreCoordinator.abortRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
+		"commitRestore":        "{\n\tif err := scope.valid(m); err != nil {\n\t\treturn nil, err\n\t}\n\treturn m.restoreCoordinator.commitRestore(candidate, muxRestorePublicationOperationAdapter{mux: m, scope: scope})\n}",
+		"abortRestoreOwned":    "{\n\tif err := scope.valid(m); err != nil {\n\t\treturn err\n\t}\n\treturn m.restoreCoordinator.abortRestore(candidate, muxRestorePublicationOperationAdapter{mux: m, scope: scope})\n}",
 	}
 	foundFacades := make(map[string]int)
 	selectorCalls := make(map[string]int)
@@ -463,6 +463,9 @@ func assertRestoreCoordinatorMuxWiring(t *testing.T, dir string, fileSet *token.
 		for _, declaration := range production.Decls {
 			function, ok := declaration.(*ast.FuncDecl)
 			if !ok {
+				continue
+			}
+			if strings.Join(renderRestoreCoordinatorFieldTypes(fileSet, function.Recv), "|") != "*Mux" {
 				continue
 			}
 			if want, guarded := wantFacades[function.Name.Name]; guarded {
@@ -489,17 +492,18 @@ func assertRestoreCoordinatorMuxWiring(t *testing.T, dir string, fileSet *token.
 	}
 	for name := range wantFacades {
 		if foundFacades[name] != 1 {
-			t.Errorf("public Mux facade %s declarations=%d want=1", name, foundFacades[name])
+			t.Errorf("Mux restore facade/sink %s declarations=%d want=1", name, foundFacades[name])
 		}
 	}
 	wantSelectorCalls := map[string]int{
 		"freshSessionSnapshot": 2,
-		"prepareRestore":       2,
+		"prepareRestore":       3,
 		"restoreWindowIDs":     2,
-		"commitRestore":        2,
-		// Three existing private cleanup/helper calls remain in addition to the
-		// coordinator-port and public-facade calls.
-		"abortRestore": 5,
+		"commitRestore":        3,
+		// Two private cleanup/helper calls remain in addition to the
+		// coordinator-port and public-facade calls; prepared rollback uses the
+		// retained close transaction helper instead of re-entering abortRestore.
+		"abortRestore": 4,
 	}
 	for name, want := range wantSelectorCalls {
 		if selectorCalls[name] != want {

@@ -227,7 +227,8 @@ return {}`)
 
 func newScriptBenchmarkMuxApp(b *testing.B, cols, rows int) *App {
 	b.Helper()
-	m := termmux.New(failingTestFactory{}, termmux.Options{})
+	process := termmux.NewOwner(failingTestFactory{}, termmux.Options{})
+	m := mustTestWindowMux(b, process)
 	_, pane, events, _ := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: cols, Height: rows}, termmux.CellMetrics{CellWidth: 1, CellHeight: 1})
 	app := &App{
 		mux:               m,
@@ -244,7 +245,7 @@ func newScriptBenchmarkMuxApp(b *testing.B, cols, rows int) *App {
 		b.Fatal(resetErr)
 	}
 	app.handleMuxEvents(resetEvents)
-	b.Cleanup(func() { _ = m.Shutdown() })
+	b.Cleanup(func() { _ = process.Shutdown() })
 	return app
 }
 

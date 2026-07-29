@@ -46,6 +46,8 @@ type PaneView struct {
 	MouseMode         core.MouseMode
 }
 
+var defaultMuxPaletteBase = core.DefaultPaletteBase()
+
 type Mux struct {
 	owner              *ownerState
 	sessions           *localSessionRegistry
@@ -73,12 +75,12 @@ type Mux struct {
 	bootstrapped   bool
 	bounds         PixelRect
 	paneMetrics    map[PaneID]CellMetrics
-	paletteBase    core.PaletteBase
+	paletteBase    *core.PaletteBase
 	windowFault    func(string) error // package-private deterministic failure injection
 	pending        *RestoreCandidate
 }
 
-func New(factory SessionFactory, options Options) *Mux {
+func newMux(factory SessionFactory, options Options) *Mux {
 	if factory == nil {
 		factory = LocalSessionFactory()
 	}
@@ -104,8 +106,9 @@ func New(factory SessionFactory, options Options) *Mux {
 			muxRestorePublicationOperationAdapter,
 		](),
 		options: options, model: NewModel(),
-		paneMetrics: make(map[PaneID]CellMetrics), paletteBase: core.DefaultPaletteBase(),
+		paneMetrics: make(map[PaneID]CellMetrics), paletteBase: &defaultMuxPaletteBase,
 	}
+	sessions.owner = mux
 	if options.ImageLimits != nil {
 		limits, err := termimage.ValidateLimits(*options.ImageLimits)
 		if err != nil {
@@ -114,6 +117,7 @@ func New(factory SessionFactory, options Options) *Mux {
 			mux.imageLimits = limits
 			mux.imageBudget = termimage.NewProcessBudget()
 			mux.imageScheduler = newImageDecodeScheduler(options.Wake, options.Now)
+			mux.imageScheduler.owner = mux
 			if options.KittyEnabled {
 				mux.kittyPending = make(map[uint64]kittyDecodeOwner)
 			}
@@ -128,7 +132,10 @@ func New(factory SessionFactory, options Options) *Mux {
 	return mux
 }
 
-func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) (TabID, PaneID, []Event, error) {
+func (m *Mux) bootstrap(scope mutationScope, spec SpawnSpec, content PixelRect, metrics CellMetrics) (TabID, PaneID, []Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return 0, 0, nil, err
+	}
 	if m.bootstrapped {
 		return 0, 0, nil, ErrAlreadyBootstrapped
 	}
@@ -140,27 +147,26 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 		return 0, 0, nil, invariantError("bootstrap layout has %d panes", len(layout.Panes))
 	}
 	geometry := effectiveGeometry(layout.Panes[0])
-	if err := m.sessions.reserve(geometry.Pane); err != nil {
+	if err := m.sessions.reserveScoped(scope, geometry.Pane); err != nil {
 		return 0, 0, nil, err
 	}
-	defer m.sessions.release(geometry.Pane)
-	p := m.createPane(geometry.Pane, geometry.Cols, geometry.Rows)
+	defer m.sessions.releaseScoped(scope, geometry.Pane)
+	p := m.createPane(scope, geometry.Pane, geometry.Cols, geometry.Rows)
 	p.setFreshLaunch(spec)
-	p.terminal.SetPaletteBase(m.paletteBase)
+	p.terminal.SetPaletteBase(*m.paletteBase)
 	p.geometry = geometry
 	if m.options.SetClipboard != nil {
 		p.parser.SetClipboard = func(text string) { m.options.SetClipboard(p.id, text) }
 	}
-	if err := m.sessions.register(p); err != nil {
-		_ = p.close()
-		return 0, 0, nil, err
+	if err := m.sessions.registerScoped(scope, p); err != nil {
+		return 0, 0, nil, errors.Join(err, p.close())
 	}
 	m.bounds = content
 	m.paneMetrics[p.id] = metrics
 	m.bootstrapped = true
 
 	rows, cols := terminalSize(geometry)
-	session, spawnErr := m.sessions.spawn(rows, cols, spec.Options)
+	session, spawnErr := m.sessions.spawnScoped(scope, rows, cols, spec.Options)
 	if spawnErr != nil {
 		if session != nil {
 			_ = session.Close()
@@ -181,12 +187,8 @@ func (m *Mux) Bootstrap(spec SpawnSpec, content PixelRect, metrics CellMetrics) 
 	p.desiredSize = pty.Size{Rows: rows, Cols: cols}
 	p.appliedSize = p.desiredSize
 	p.capture()
-	if err := m.sessions.start(p.id); err != nil {
-		detached := m.sessions.detach(p.id)
-		if detached.owned {
-			_ = detached.pane.close()
-		}
-		return 0, 0, nil, err
+	if err := m.sessions.startScoped(scope, p.id); err != nil {
+		return 0, 0, nil, errors.Join(err, m.detachAndClosePane(scope, p.id, p, true))
 	}
 	return m.model.TabID(), p.id, []Event{
 		{Kind: PaneStarted, Pane: p.id},
@@ -203,7 +205,27 @@ func (m *Mux) FocusedPane() (PaneID, bool) {
 func (m *Mux) PaneIDs() []PaneID { return m.model.PaneIDs() }
 
 func (m *Mux) Layout() (Layout, error) {
-	return m.model.LayoutWithMetrics(m.bounds, m.resolveMetrics)
+	if err := validateBounds(m.bounds); err != nil {
+		return Layout{}, err
+	}
+	tab := m.model.activeTab()
+	if tab == nil || tab.root == nil {
+		return Layout{}, nil
+	}
+	if !tab.root.isLeaf() {
+		return layoutRoot(tab.root, m.bounds, m.resolveMetrics)
+	}
+	metrics, ok := m.paneMetrics[tab.root.pane]
+	if !ok {
+		return Layout{}, ErrPaneNotFound
+	}
+	if err := validateCellMetrics(metrics); err != nil {
+		return Layout{}, err
+	}
+	cols, rows := cellGeometry(m.bounds, metrics)
+	panes := make([]PaneGeometry, 1)
+	panes[0] = PaneGeometry{Pane: tab.root.pane, Pixels: m.bounds, Cols: cols, Rows: rows}
+	return Layout{Panes: panes, Compressed: cols < MinPaneCols || rows < MinPaneRows}, nil
 }
 
 func (m *Mux) PaneView(id PaneID) (PaneView, bool) {
@@ -225,7 +247,10 @@ func (m *Mux) PaneView(id PaneID) (PaneView, bool) {
 	}
 	return view, true
 }
-func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
+func (m *Mux) spawnSplit(scope mutationScope, origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID, []Event, error) {
+	if err := scope.validPaneOrigin(m, origin); err != nil {
+		return 0, nil, err
+	}
 	target := origin
 	if !m.bootstrapped {
 		return 0, nil, ErrEmptyModel
@@ -259,24 +284,23 @@ func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID,
 	}
 
 	predictedID := m.model.nextPaneID
-	if err := m.sessions.reserve(predictedID); err != nil {
+	if err := m.sessions.reserveScoped(scope, predictedID); err != nil {
 		return 0, nil, err
 	}
-	defer m.sessions.release(predictedID)
-	newPane := m.createPane(predictedID, cols, rows)
+	defer m.sessions.releaseScoped(scope, predictedID)
+	newPane := m.createPane(scope, predictedID, cols, rows)
 	newPane.setFreshLaunch(spec)
-	newPane.terminal.SetPaletteBase(m.paletteBase)
+	newPane.terminal.SetPaletteBase(*m.paletteBase)
 	if m.options.SetClipboard != nil {
 		newPane.parser.SetClipboard = func(text string) { m.options.SetClipboard(newPane.id, text) }
 	}
 	ptyRows, ptyCols := terminalSize(PaneGeometry{Pane: predictedID, Pixels: newRect, Cols: cols, Rows: rows})
-	session, spawnErr := m.sessions.spawn(ptyRows, ptyCols, spec.Options)
+	session, spawnErr := m.sessions.spawnScoped(scope, ptyRows, ptyCols, spec.Options)
 	if spawnErr != nil {
 		if session != nil {
 			_ = session.Close()
 		}
-		_ = newPane.close()
-		return 0, nil, fmt.Errorf("spawn split pane: %w", spawnErr)
+		return 0, nil, errors.Join(fmt.Errorf("spawn split pane: %w", spawnErr), newPane.close())
 	}
 	newPane.session = session
 	newPane.state = PaneStateRunning
@@ -289,49 +313,50 @@ func (m *Mux) SpawnSplit(origin PaneID, axis SplitAxis, spec SpawnSpec) (PaneID,
 		}
 		return m.resolveMetrics(id)
 	}
-	if err := m.sessions.register(newPane); err != nil {
-		_ = newPane.close()
-		return 0, nil, err
+	if err := m.sessions.registerScoped(scope, newPane); err != nil {
+		return 0, nil, errors.Join(err, newPane.close())
 	}
-	if err := m.sessions.start(newPane.id); err != nil {
-		detached := m.sessions.detach(newPane.id)
-		if detached.owned {
-			_ = detached.pane.close()
-		}
-		return 0, nil, err
+	if err := m.sessions.startScoped(scope, newPane.id); err != nil {
+		return 0, nil, errors.Join(err, m.detachAndClosePane(scope, newPane.id, newPane, true))
 	}
 	createdID, err := m.model.SplitWithMetrics(target, axis, m.bounds, resolveSplitMetrics)
 	if err != nil {
-		detached := m.sessions.detach(newPane.id)
-		if detached.owned {
-			_ = detached.pane.close()
-		}
-		return 0, nil, err
+		return 0, nil, errors.Join(err, m.detachAndClosePane(scope, newPane.id, newPane, true))
 	}
 	if createdID != predictedID {
-		_, _ = m.model.Close(createdID)
-		detached := m.sessions.detach(newPane.id)
-		if detached.owned {
-			_ = detached.pane.close()
+		preparedClose, prepareErr := newPane.prepareClose()
+		if prepareErr != nil {
+			return 0, nil, prepareErr
 		}
-		return 0, nil, invariantError("model allocated pane %d after predicting %d", createdID, predictedID)
+		_, modelCloseErr := m.model.Close(createdID)
+		detached := m.sessions.detachScoped(scope, newPane.id)
+		if !detached.owned || detached.pane != newPane {
+			return 0, nil, errors.Join(invariantError("model allocated pane %d after predicting %d", createdID, predictedID), modelCloseErr, preparedClose.abort())
+		}
+		return 0, nil, errors.Join(invariantError("model allocated pane %d after predicting %d", createdID, predictedID), modelCloseErr, preparedClose.commit())
 	}
 	m.paneMetrics[createdID] = targetMetrics
-	resizeEvents, resizeErr := m.resizeBoundsAndApply(m.bounds)
+	resizeEvents, resizeErr := m.resizeBoundsAndApply(scope, m.bounds)
 	newPane.capture()
 	events := []Event{{Kind: PaneStarted, Pane: createdID}, {Kind: PaneFocused, Pane: createdID}}
 	events = append(events, resizeEvents...)
 	return createdID, m.ResolveEventAddresses(events), resizeErr
 }
 
-func (m *Mux) FocusPane(id PaneID) ([]Event, error) {
+func (m *Mux) focusPane(scope mutationScope, id PaneID) ([]Event, error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return nil, err
+	}
 	if err := m.model.Focus(id); err != nil {
 		return nil, err
 	}
 	return m.ResolveEventAddresses([]Event{{Kind: PaneFocused, Pane: id}}), nil
 }
 
-func (m *Mux) FocusDirection(direction Direction) ([]Event, error) {
+func (m *Mux) focusDirection(scope mutationScope, direction Direction) ([]Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return nil, err
+	}
 	id, err := m.model.FocusDirectionWithMetrics(direction, m.bounds, m.resolveMetrics)
 	if err != nil {
 		return nil, err
@@ -339,7 +364,10 @@ func (m *Mux) FocusDirection(direction Direction) ([]Event, error) {
 	return m.ResolveEventAddresses([]Event{{Kind: PaneFocused, Pane: id}}), nil
 }
 
-func (m *Mux) FocusNext(reverse bool) ([]Event, error) {
+func (m *Mux) focusNext(scope mutationScope, reverse bool) ([]Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return nil, err
+	}
 	if reverse {
 		ids := m.model.PaneIDs()
 		if len(ids) == 0 {
@@ -364,7 +392,10 @@ func (m *Mux) FocusNext(reverse bool) ([]Event, error) {
 	return m.ResolveEventAddresses([]Event{{Kind: PaneFocused, Pane: id}}), nil
 }
 
-func (m *Mux) Write(id PaneID, data []byte) ([]Event, error) {
+func (m *Mux) write(scope mutationScope, id PaneID, data []byte) ([]Event, error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return nil, err
+	}
 	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return nil, ErrPaneNotFound
@@ -382,7 +413,10 @@ func (m *Mux) Write(id PaneID, data []byte) ([]Event, error) {
 	return nil, nil
 }
 
-func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
+func (m *Mux) feedFallback(scope mutationScope, id PaneID, data []byte) ([]Event, error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return nil, err
+	}
 	p, ok := m.sessions.lookup(id)
 	if !ok || !m.model.paneExists(id) {
 		return nil, ErrPaneNotFound
@@ -390,21 +424,60 @@ func (m *Mux) FeedFallback(id PaneID, data []byte) ([]Event, error) {
 	if p.state != PaneStateFailed || p.session != nil {
 		return nil, ErrPaneNotRunning
 	}
-	return m.advancePane(p, data), nil
+	return m.advancePaneScoped(scope, p, data), nil
+}
+
+// feedFallbackOwned performs the final live-origin and registry revalidation
+// under one already-attested ephemeral dispatch scope. It deliberately avoids
+// the public Mux path's second topology walk and registry lock.
+func (m *Mux) feedFallbackOwned(scope mutationScope, origin WindowID, id PaneID, data []byte) ([]Event, error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return nil, err
+	}
+	if scope.origin != (WindowIdentity{}) && (scope.origin.ID != origin || scope.origin.Incarnation == 0) {
+		return nil, ErrWrongOrigin
+	}
+	p, ok := m.sessions.lookupOwned(id)
+	if !ok {
+		return nil, ErrPaneNotFound
+	}
+	if p.state != PaneStateFailed || p.session != nil {
+		return nil, ErrPaneNotRunning
+	}
+	return m.advancePaneScoped(scope, p, data), nil
+}
+
+// resizeOwned reuses one native-thread-attested ephemeral dispatch scope and
+// performs the final live active-window check immediately before mutation.
+func (m *Mux) resizeOwned(scope mutationScope, origin WindowID, content PixelRect, metrics CellMetrics) ([]Event, error) {
+	if err := scope.validActiveOrigin(m); err != nil {
+		return nil, err
+	}
+	if scope.origin != (WindowIdentity{}) && scope.origin.ID != origin {
+		return nil, ErrWrongOrigin
+	}
+	return m.resize(scope, content, metrics)
 }
 
 type muxSessionIngressOperationAdapter struct {
-	mux  *Mux
-	pane *pane
+	mux   *Mux
+	pane  *pane
+	scope mutationScope
 }
 
 var _ sessionIngressApplyPort = muxSessionIngressOperationAdapter{}
 
 func (a muxSessionIngressOperationAdapter) applySessionIngressData(events []Event, data []byte) []Event {
-	return append(events, a.mux.advancePane(a.pane, data)...)
+	if err := a.scope.validPaneOrigin(a.mux, a.pane.id); err != nil {
+		return events
+	}
+	return append(events, a.mux.advancePaneScoped(a.scope, a.pane, data)...)
 }
 
 func (a muxSessionIngressOperationAdapter) applySessionIngressEnd(events []Event, err error) []Event {
+	if err := a.scope.validPaneOrigin(a.mux, a.pane.id); err != nil {
+		return events
+	}
 	if a.pane.state == PaneStateRunning {
 		public := a.pane.parser.EndOfInputPublic()
 		if len(public) > 0 {
@@ -424,9 +497,9 @@ func (a muxSessionIngressOperationAdapter) applySessionIngressEnd(events []Event
 		}
 		events = append(events, a.pane.kittyEvents...)
 		a.pane.kittyEvents = nil
-		events = append(events, a.mux.processKittyOutcomes(a.pane)...)
-		a.mux.processSixelOutcomes(a.pane)
-		a.mux.processITermOutcomes(a.pane)
+		events = append(events, a.mux.processKittyOutcomesScoped(a.scope, a.pane)...)
+		a.mux.processSixelOutcomesScoped(a.scope, a.pane)
+		a.mux.processITermOutcomesScoped(a.scope, a.pane)
 		a.pane.state = PaneStateExited
 		tab := a.mux.model.tabForPane(a.pane.id)
 		exit := Event{Kind: PaneExited, Pane: a.pane.id}
@@ -445,9 +518,12 @@ func (a muxSessionIngressOperationAdapter) applySessionIngressEnd(events []Event
 	return events
 }
 
-func (m *Mux) Drain(limit int) []Event {
+func (m *Mux) drain(scope mutationScope, limit int) []Event {
+	if err := scope.valid(m); err != nil {
+		return nil
+	}
 	var events []Event
-	events = append(events, m.expireImages(m.options.Now())...)
+	events = append(events, m.expireImagesScoped(scope, m.options.Now())...)
 	for count := 0; limit <= 0 || count < limit; count++ {
 		var imageReady <-chan struct{}
 		if m.imageScheduler != nil {
@@ -455,14 +531,17 @@ func (m *Mux) Drain(limit int) []Event {
 		}
 		select {
 		case <-imageReady:
-			completion, ok := m.imageScheduler.takeCompletion()
+			completion, ok := m.imageScheduler.takeCompletionScoped(scope, m)
 			if !ok {
 				continue
 			}
-			events = append(events, m.applyImageCompletion(completion)...)
+			events = append(events, m.applyImageCompletionScoped(scope, completion)...)
 		case record := <-m.sessions.incoming:
 			accepted := m.sessions.adaptSessionIngressRecord(record)
-			operation := muxSessionIngressOperationAdapter{mux: m, pane: accepted.registered}
+			if !accepted.found {
+				continue
+			}
+			operation := muxSessionIngressOperationAdapter{mux: m, pane: accepted.registered, scope: scope}
 			events = m.sessionIngress.route(events, accepted, operation, record.data, record.err)
 		default:
 			return m.ResolveEventAddresses(events)
@@ -471,7 +550,10 @@ func (m *Mux) Drain(limit int) []Event {
 	return m.ResolveEventAddresses(events)
 }
 
-func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
+func (m *Mux) closePane(scope mutationScope, id PaneID) ([]Event, error) {
+	if err := scope.validPaneOrigin(m, id); err != nil {
+		return nil, err
+	}
 	p, ok := m.sessions.lookup(id)
 	if !ok {
 		if m.sessions.wasClosed(id) {
@@ -479,18 +561,22 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 		}
 		return nil, ErrPaneNotFound
 	}
+	preparedClose, err := p.prepareClose()
+	if err != nil {
+		return nil, err
+	}
 	window, _ := m.WindowForPane(id)
 	workspace, _ := m.WorkspaceForWindow(window)
 	result, modelErr := m.model.Close(id)
 	if modelErr != nil || !result.Closed {
-		return nil, modelErr
+		return nil, errors.Join(modelErr, preparedClose.abort())
 	}
-	detached := m.sessions.detach(id)
+	detached := m.sessions.detachScoped(scope, id)
 	if !detached.owned || detached.pane != p {
-		return nil, invariantError("pane %d model detached without registry ownership", id)
+		return nil, errors.Join(invariantError("pane %d model detached without registry ownership", id), preparedClose.abort())
 	}
 	delete(m.paneMetrics, id)
-	closeErr := detached.pane.close()
+	closeErr := preparedClose.commit()
 	var events []Event
 	if closeErr != nil {
 		events = append(events, Event{Kind: PaneCloseFailed, Tab: result.Tab, Pane: id, Err: closeErr})
@@ -507,7 +593,7 @@ func (m *Mux) ClosePane(id PaneID) ([]Event, error) {
 		events = append(events, Event{Kind: WindowTabsEmpty, Tab: result.Tab}, Event{Kind: TabEmpty, Tab: result.Tab})
 	} else {
 		var resizeEvents []Event
-		resizeEvents, resizeErr = m.resizeBoundsAndApply(m.bounds)
+		resizeEvents, resizeErr = m.resizeBoundsAndApply(scope, m.bounds)
 		events = append(events, resizeEvents...)
 	}
 	for i := range events {

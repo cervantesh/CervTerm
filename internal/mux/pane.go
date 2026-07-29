@@ -2,6 +2,7 @@ package mux
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"cervterm/internal/core"
@@ -29,6 +30,8 @@ const (
 type pane struct {
 	id             PaneID
 	state          PaneState
+	ownerStamp     ownerStamp
+	activeScope    mutationScope
 	terminal       *core.Terminal
 	parser         vt.Parser
 	imageStore     *termimage.Store
@@ -113,13 +116,13 @@ func (p *pane) launchReader(ctx context.Context, incoming chan<- ingressRecord, 
 		for {
 			n, err := reader.Read(buf)
 			if n > 0 {
-				record := ingressRecord{pane: p.id, owner: p, data: append([]byte(nil), buf[:n]...)}
+				record := ingressRecord{pane: p.id, owner: p, stamp: p.ownerStamp, data: append([]byte(nil), buf[:n]...)}
 				if !enqueueIngress(ctx, p.done, incoming, record, wake) {
 					return
 				}
 			}
 			if err != nil {
-				enqueueIngress(ctx, p.done, incoming, ingressRecord{pane: p.id, owner: p, err: err}, wake)
+				enqueueIngress(ctx, p.done, incoming, ingressRecord{pane: p.id, owner: p, stamp: p.ownerStamp, err: err}, wake)
 				return
 			}
 		}
@@ -140,39 +143,129 @@ func enqueueIngress(ctx context.Context, done <-chan struct{}, incoming chan<- i
 	}
 }
 
-func (p *pane) close() error {
-	p.closeOnce.Do(func() {
-		p.state = PaneStateClosing
-		close(p.done)
-		if p.kittyAdapter != nil {
-			p.kittyAdapter.Close()
+type preparedPaneClose struct {
+	pane     *pane
+	images   *core.PreparedImageStoreClose
+	finished bool
+}
+
+func (p *pane) prepareClose() (*preparedPaneClose, error) {
+	if p == nil || p.terminal == nil {
+		return nil, ErrInvariant
+	}
+	images, err := p.terminal.PrepareCloseImageStore()
+	if err != nil {
+		return nil, err
+	}
+	return &preparedPaneClose{pane: p, images: images}, nil
+}
+
+func (p *preparedPaneClose) abort() error {
+	if p == nil || p.finished {
+		return nil
+	}
+	if err := p.images.Abort(); err != nil {
+		return err
+	}
+	p.finished = true
+	return nil
+}
+
+func (p *preparedPaneClose) commit() error {
+	if p == nil || p.pane == nil {
+		return ErrInvariant
+	}
+	if p.finished {
+		return p.pane.closeErr
+	}
+	if err := p.images.Commit(); err != nil {
+		return err
+	}
+	p.finished = true
+	p.pane.imageStore = nil
+	p.pane.closeOnce.Do(func() {
+		p.pane.state = PaneStateClosing
+		close(p.pane.done)
+		if p.pane.kittyAdapter != nil {
+			p.pane.kittyAdapter.Close()
 		}
-		if p.sixelAdapter != nil {
-			p.sixelAdapter.Close()
+		if p.pane.sixelAdapter != nil {
+			p.pane.sixelAdapter.Close()
 		}
-		if p.itermAdapter != nil {
-			p.itermAdapter.Close()
+		if p.pane.itermAdapter != nil {
+			p.pane.itermAdapter.Close()
 		}
-		for index := range p.sixelOutcomes {
-			if p.sixelOutcomes[index].Command != nil {
-				p.sixelOutcomes[index].Command.Close()
+		for index := range p.pane.sixelOutcomes {
+			if p.pane.sixelOutcomes[index].Command != nil {
+				p.pane.sixelOutcomes[index].Command.Close()
 			}
 		}
-		for index := range p.itermOutcomes {
-			if p.itermOutcomes[index].Command != nil {
-				p.itermOutcomes[index].Command.Close()
+		for index := range p.pane.itermOutcomes {
+			if p.pane.itermOutcomes[index].Command != nil {
+				p.pane.itermOutcomes[index].Command.Close()
 			}
 		}
-		p.kittyOutcomes = nil
-		p.kittyEvents = nil
-		p.sixelOutcomes = nil
-		p.itermOutcomes = nil
-		p.terminal.CloseImageStore()
-		p.clearReplies()
-		if p.session != nil {
-			p.closeErr = p.session.Close()
+		p.pane.kittyOutcomes = nil
+		p.pane.kittyEvents = nil
+		p.pane.sixelOutcomes = nil
+		p.pane.itermOutcomes = nil
+		p.pane.clearReplies()
+		if p.pane.session != nil {
+			p.pane.closeErr = p.pane.session.Close()
 		}
-		p.state = PaneStateClosed
+		p.pane.state = PaneStateClosed
 	})
-	return p.closeErr
+	return p.pane.closeErr
+}
+
+func preparePaneClosures(panes []*pane) ([]*preparedPaneClose, error) {
+	prepared := make([]*preparedPaneClose, 0, len(panes))
+	for _, p := range panes {
+		closeState, err := p.prepareClose()
+		if err != nil {
+			var abortErrors []error
+			for index := len(prepared) - 1; index >= 0; index-- {
+				abortErrors = append(abortErrors, prepared[index].abort())
+			}
+			return nil, errors.Join(err, errors.Join(abortErrors...))
+		}
+		prepared = append(prepared, closeState)
+	}
+	return prepared, nil
+}
+
+func abortPaneClosures(prepared []*preparedPaneClose) error {
+	var abortErrors []error
+	for index := len(prepared) - 1; index >= 0; index-- {
+		abortErrors = append(abortErrors, prepared[index].abort())
+	}
+	return errors.Join(abortErrors...)
+}
+
+func (p *pane) close() error {
+	prepared, err := p.prepareClose()
+	if err != nil {
+		return err
+	}
+	return prepared.commit()
+}
+
+func (m *Mux) detachAndClosePane(scope mutationScope, id PaneID, expected *pane, tombstone bool) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
+	prepared, err := expected.prepareClose()
+	if err != nil {
+		return err
+	}
+	var detached detachResult
+	if tombstone {
+		detached = m.sessions.detachScoped(scope, id)
+	} else {
+		detached = m.sessions.abortScoped(scope, id, expected)
+	}
+	if !detached.owned || detached.pane != expected {
+		return errors.Join(invariantError("pane %d changed ownership before close", id), prepared.abort())
+	}
+	return prepared.commit()
 }

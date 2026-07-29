@@ -16,7 +16,7 @@ func windowEnvelope(action termaction.Action) termaction.Envelope {
 	return termaction.Envelope{Action: action, Target: termaction.TargetFocused}
 }
 
-func muxWindowPaneCount(m *termmux.Mux) int {
+func muxWindowPaneCount(m processCommandCapability) int {
 	total := 0
 	for _, window := range m.Windows() {
 		for _, tab := range window.Tabs {
@@ -30,12 +30,13 @@ func TestWindowActionExecutorCreateFocusCloseAndRejectStale(t *testing.T) {
 	a := newMuxTestApp(t, 80, 24)
 	var log []string
 	controller := newWindowController(processServices{}, fakeNativePump{log: &log})
-	a.controller = controller
+	router := newProjectionMessageRouter(controller)
+	a.host, a.controller = controller, router
 	a.windowID = 1
 	if err := controller.attachApp(1, &fakeNativeWindow{id: "one", log: &log}, a, a.applyMuxEvents); err != nil {
 		t.Fatal(err)
 	}
-	child := &App{controller: controller, windowID: 2}
+	child := &App{controller: router, windowID: 2}
 	factory := &fakeCandidateFactory{log: &log, host: &fakeNativeWindow{id: "two", log: &log}, app: child}
 	runtime := &fakeRuntimeWindows{log: &log}
 	controller.setCandidateFactory(factory)
@@ -50,6 +51,8 @@ func TestWindowActionExecutorCreateFocusCloseAndRejectStale(t *testing.T) {
 	if controller.projectionApp(2) == nil {
 		t.Fatal("new window not published")
 	}
+	child.windowIdentity = termmux.WindowIdentity{ID: 2, Incarnation: 1}
+	controller.windows[2].identity = child.windowIdentity
 	if err := a.executeAction(windowEnvelope(termaction.FocusWindow{WindowID: 2}), ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -85,16 +88,18 @@ func TestWindowActionExecutorCreateFocusCloseAndRejectStale(t *testing.T) {
 
 func TestCrossWindowActionsUseStableOriginAndPreserveSessions(t *testing.T) {
 	a := newRunningMuxTestApp(t)
+	process := testProcessMuxFor(t, a)
 	a.windowID = 1
 	a.lastFBW, a.lastFBH = 800, 480
-	view, events, err := a.mux.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
+	view, events, err := process.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var log []string
-	controller := newWindowController(processServices{mux: a.mux}, fakeNativePump{log: &log})
-	a.controller = controller
-	child := &App{mux: a.mux, controller: controller, windowID: view.ID, lastFBW: 800, lastFBH: 480, cellW: 8, cellH: 16, paneUI: map[termmux.PaneID]*paneUIState{}, pendingPaneScroll: map[termmux.PaneID]int{}, pendingPaneResize: map[termmux.PaneID]termmux.PaneGeometry{}}
+	controller := newWindowController(processServices{commands: process, windowCapabilities: process}, fakeNativePump{log: &log})
+	router := newProjectionMessageRouter(controller)
+	a.host, a.controller = controller, router
+	child := &App{mux: a.mux, controller: router, windowID: view.ID, lastFBW: 800, lastFBH: 480, cellW: 8, cellH: 16, paneUI: map[termmux.PaneID]*paneUIState{}, pendingPaneScroll: map[termmux.PaneID]int{}, pendingPaneResize: map[termmux.PaneID]termmux.PaneGeometry{}}
 	if err := controller.attachApp(1, &fakeNativeWindow{id: "one", log: &log}, a, a.applyMuxEvents); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +110,7 @@ func TestCrossWindowActionsUseStableOriginAndPreserveSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	controller.dispatch(events)
-	before := muxWindowPaneCount(a.mux)
+	before := muxWindowPaneCount(process)
 	ctx := termaction.Context{Source: termaction.SourceScript, Origin: termaction.Ref{Kind: termaction.RefPane, ID: 1}, Focused: termaction.Ref{Kind: termaction.RefPane, ID: 1}, OriginWindow: termaction.Ref{Kind: termaction.RefWindow, ID: 1}, FocusedWindow: termaction.Ref{Kind: termaction.RefWindow, ID: 1}}
 	a.initCompositionCoordinator()
 	if _, err := a.composition.start(); err != nil {
@@ -118,32 +123,33 @@ func TestCrossWindowActionsUseStableOriginAndPreserveSessions(t *testing.T) {
 	if snapshot := a.composition.snapshot(); snapshot.Active || snapshot.LastCancel != ime.CancelTargetChanged {
 		t.Fatalf("source tab composition=%#v", snapshot)
 	}
-	after := muxWindowPaneCount(a.mux)
+	after := muxWindowPaneCount(process)
 	if before != after {
 		t.Fatalf("pane count %d -> %d", before, after)
 	}
-	if owner, ok := a.mux.WindowForPane(1); !ok || owner != view.ID {
+	if owner, ok := process.WindowForPane(1); !ok || owner != view.ID {
 		t.Fatalf("owner=%d ok=%v", owner, ok)
 	}
-	stable := a.mux.Windows()
+	stable := process.Windows()
 	err = a.executeAction(windowEnvelope(termaction.MoveTabToWindow{WindowID: 999, TabID: 1, Position: 0}), ctx)
-	if !errors.Is(err, termaction.ErrTargetUnavailable) || !reflect.DeepEqual(stable, a.mux.Windows()) {
+	if !errors.Is(err, termaction.ErrTargetUnavailable) || !reflect.DeepEqual(stable, process.Windows()) {
 		t.Fatalf("stale destination err=%v", err)
 	}
 	err = a.executeAction(windowEnvelope(termaction.MoveTabToWindow{WindowID: uint64(view.ID), TabID: 999, Position: 0}), ctx)
-	if err == nil || !reflect.DeepEqual(stable, a.mux.Windows()) {
+	if err == nil || !reflect.DeepEqual(stable, process.Windows()) {
 		t.Fatalf("stale tab err=%v", err)
 	}
 }
 
 func TestMovePaneToWindowUsesPerPaneMetricsAndStaleSourceIsAtomic(t *testing.T) {
 	a := newRunningMuxTestApp(t)
+	process := testProcessMuxFor(t, a)
 	a.windowID, a.lastFBW, a.lastFBH = 1, 800, 480
-	view, createEvents, err := a.mux.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
+	view, createEvents, err := process.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
 	if err != nil {
 		t.Fatal(err)
 	}
-	activateEvents, err := a.mux.ActivateWindow(1)
+	activateEvents, err := process.ActivateWindow(1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,9 +158,10 @@ func TestMovePaneToWindowUsesPerPaneMetricsAndStaleSourceIsAtomic(t *testing.T) 
 		t.Fatal(err)
 	}
 	var log []string
-	controller := newWindowController(processServices{mux: a.mux}, fakeNativePump{log: &log})
-	a.controller = controller
-	child := &App{mux: a.mux, controller: controller, windowID: view.ID, lastFBW: 800, lastFBH: 480, cellW: 8, cellH: 16, paneUI: map[termmux.PaneID]*paneUIState{}, pendingPaneScroll: map[termmux.PaneID]int{}, pendingPaneResize: map[termmux.PaneID]termmux.PaneGeometry{}}
+	controller := newWindowController(processServices{commands: process, windowCapabilities: process}, fakeNativePump{log: &log})
+	router := newProjectionMessageRouter(controller)
+	a.host, a.controller = controller, router
+	child := &App{mux: a.mux, controller: router, windowID: view.ID, lastFBW: 800, lastFBH: 480, cellW: 8, cellH: 16, paneUI: map[termmux.PaneID]*paneUIState{}, pendingPaneScroll: map[termmux.PaneID]int{}, pendingPaneResize: map[termmux.PaneID]termmux.PaneGeometry{}}
 	if err := controller.attachApp(1, &fakeNativeWindow{id: "one", log: &log}, a, a.applyMuxEvents); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +185,7 @@ func TestMovePaneToWindowUsesPerPaneMetricsAndStaleSourceIsAtomic(t *testing.T) 
 		t.Fatalf("destination metrics=%#v ok=%v", got, ok)
 	}
 	ctx := termaction.Context{Source: termaction.SourceScript, Origin: termaction.Ref{Kind: termaction.RefPane, ID: uint64(pane)}, Focused: termaction.Ref{Kind: termaction.RefPane, ID: uint64(pane)}, OriginWindow: termaction.Ref{Kind: termaction.RefWindow, ID: 1}, FocusedWindow: termaction.Ref{Kind: termaction.RefWindow, ID: 1}}
-	beforeCount := muxWindowPaneCount(a.mux)
+	beforeCount := muxWindowPaneCount(process)
 	a.initCompositionCoordinator()
 	if _, err := a.composition.start(); err != nil {
 		t.Fatal(err)
@@ -189,16 +196,16 @@ func TestMovePaneToWindowUsesPerPaneMetricsAndStaleSourceIsAtomic(t *testing.T) 
 	if snapshot := a.composition.snapshot(); snapshot.Active || snapshot.LastCancel != ime.CancelTargetChanged {
 		t.Fatalf("source pane composition=%#v", snapshot)
 	}
-	if owner, ok := a.mux.WindowForPane(pane); !ok || owner != view.ID || muxWindowPaneCount(a.mux) != beforeCount {
-		t.Fatalf("owner=%d ok=%v count=%d", owner, ok, muxWindowPaneCount(a.mux))
+	if owner, ok := process.WindowForPane(pane); !ok || owner != view.ID || muxWindowPaneCount(process) != beforeCount {
+		t.Fatalf("owner=%d ok=%v count=%d", owner, ok, muxWindowPaneCount(process))
 	}
 	if _, err := a.composition.start(); err != nil {
 		t.Fatal(err)
 	}
-	before := a.mux.Windows()
+	before := process.Windows()
 	err = a.executeAction(windowEnvelope(termaction.MovePaneToWindow{WindowID: uint64(view.ID), PaneID: 999, Axis: termaction.SplitRows}), ctx)
-	if err == nil || !reflect.DeepEqual(before, a.mux.Windows()) {
-		t.Fatalf("stale err=%v before=%#v after=%#v", err, before, a.mux.Windows())
+	if err == nil || !reflect.DeepEqual(before, process.Windows()) {
+		t.Fatalf("stale err=%v before=%#v after=%#v", err, before, process.Windows())
 	}
 	if snapshot := a.composition.snapshot(); !snapshot.Active {
 		t.Fatalf("failed transfer cancelled composition=%#v", snapshot)

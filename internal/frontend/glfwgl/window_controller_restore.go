@@ -31,10 +31,16 @@ func (c *windowController) setRestoreWindows(windows restoreWindowLifecycle) {
 }
 
 func (c *windowController) restoreStartupProjections(blueprint layoutrestore.Blueprint, factory nativeRestoreProjectionFactory) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
 	return c.restoreStartupProjectionsBeforeMux(blueprint, factory, nil)
 }
 
 func (c *windowController) restoreStartupProjectionsBeforeMux(blueprint layoutrestore.Blueprint, factory nativeRestoreProjectionFactory, beforeMux func() error) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
 	if c.restoreWindows == nil {
 		return errRestoreProjectionTransaction
 	}
@@ -89,6 +95,9 @@ type restoreProjectionCandidate struct {
 }
 
 func (c *windowController) syncPendingRestoreApps(owner *App) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
 	if owner == nil || c.restorePending == nil || !c.validRestoreProjectionCandidate(c.restorePending, false) {
 		return errRestoreProjectionTransaction
 	}
@@ -138,6 +147,9 @@ func (c *windowController) restoreGeometries(candidate *restoreProjectionCandida
 // publishRestoreProjections binds stable mux identities and atomically makes the
 // hidden projections addressable. Abort remains valid until mux restore commits.
 func (c *windowController) publishRestoreProjections(candidate *restoreProjectionCandidate, ids []termmux.WindowID) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
 	if !c.validRestoreProjectionCandidate(candidate, false) {
 		return errRestoreProjectionTransaction
 	}
@@ -172,7 +184,12 @@ func (c *windowController) publishRestoreProjections(candidate *restoreProjectio
 	candidate.ids = append([]termmux.WindowID(nil), ids...)
 	for index, id := range candidate.ids {
 		bundle := candidate.bundles[index]
-		c.windows[id] = &windowProjection{id: id, host: bundle.host, app: bundle.app, handle: bundle.handle, bundle: bundle, dirty: true, visible: false}
+		identity := termmux.WindowIdentity{}
+		if bundle.app != nil {
+			identity = bundle.app.windowIdentity
+			delete(c.boundOrigins, identity)
+		}
+		c.windows[id] = &windowProjection{id: id, identity: identity, host: bundle.host, app: bundle.app, handle: bundle.handle, bundle: bundle, dirty: true, visible: false}
 	}
 	c.order = append(c.order, candidate.ids...)
 	candidate.published = true
@@ -182,6 +199,9 @@ func (c *windowController) publishRestoreProjections(candidate *restoreProjectio
 // activateRestoreProjections finalizes native ownership after mux commit. The
 // commit events select workspace visibility/focus before any restored host is shown.
 func (c *windowController) activateRestoreProjections(candidate *restoreProjectionCandidate, events []termmux.Event) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
 	if !c.validRestoreProjectionCandidate(candidate, true) {
 		return errRestoreProjectionTransaction
 	}
@@ -192,6 +212,9 @@ func (c *windowController) activateRestoreProjections(candidate *restoreProjecti
 }
 
 func (c *windowController) abortRestoreProjections(candidate *restoreProjectionCandidate, partial *nativeProjectionBundle) error {
+	if err := c.requireLoop(); err != nil {
+		return err
+	}
 	if candidate == nil || candidate.owner != c || candidate.committed || candidate.aborted || c.restorePending != candidate {
 		if partial != nil {
 			return errors.Join(errRestoreProjectionTransaction, closeRestoreProjectionBundle(partial))

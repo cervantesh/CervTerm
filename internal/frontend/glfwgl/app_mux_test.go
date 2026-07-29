@@ -135,8 +135,9 @@ func (f *recordingPaneFactory) Spawn(rows, cols uint16, options pty.Options) (pt
 
 func TestPaneHostRemainsBoundToEventOrigin(t *testing.T) {
 	factory := &recordingPaneFactory{}
-	m := termmux.New(factory, termmux.Options{})
-	defer m.Shutdown()
+	process := termmux.NewOwner(factory, termmux.Options{})
+	defer process.Shutdown()
+	m := mustTestWindowMux(t, process)
 	_, first, events, err := m.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16})
 	if err != nil {
 		t.Fatal(err)

@@ -4,12 +4,11 @@ package glfwgl
 
 import (
 	termaction "cervterm/internal/action"
-	"cervterm/internal/ime"
 	termmux "cervterm/internal/mux"
 )
 
 func (a *App) requireWindowTarget(id uint64) error {
-	if id == 0 || a.controller == nil || a.controller.projectionApp(termmux.WindowID(id)) == nil {
+	if id == 0 || a.controller == nil || !a.controller.projectionAvailable(termmux.WindowID(id)) {
 		return termaction.ErrTargetUnavailable
 	}
 	return nil
@@ -19,37 +18,7 @@ func (a *App) transferGeometry(source, destination termmux.WindowID) (termmux.Pi
 	if a.controller == nil {
 		return termmux.PixelRect{}, termmux.PixelRect{}, nil, termaction.ErrTargetUnavailable
 	}
-	src, dst := a.controller.projectionApp(source), a.controller.projectionApp(destination)
-	if src == nil || dst == nil {
-		return termmux.PixelRect{}, termmux.PixelRect{}, nil, termaction.ErrTargetUnavailable
-	}
-	sw, sh := src.lastFBW, src.lastFBH
-	dw, dh := dst.lastFBW, dst.lastFBH
-	if (sw <= 0 || sh <= 0) && src.window != nil {
-		sw, sh = src.window.GetFramebufferSize()
-	}
-	if (dw <= 0 || dh <= 0) && dst.window != nil {
-		dw, dh = dst.window.GetFramebufferSize()
-	}
-	if sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0 {
-		return termmux.PixelRect{}, termmux.PixelRect{}, nil, termaction.ErrTargetUnavailable
-	}
-	resolve := func(id termmux.PaneID) (termmux.CellMetrics, bool) {
-		windowID, ok := a.mux.WindowForPane(id)
-		if !ok {
-			return termmux.CellMetrics{}, false
-		}
-		projection := a.controller.projectionApp(windowID)
-		if projection == nil {
-			return termmux.CellMetrics{}, false
-		}
-		cellW, cellH := projection.cellW, projection.cellH
-		if state := projection.paneUI[id]; state != nil && state.font.cellW > 0 && state.font.cellH > 0 {
-			cellW, cellH = state.font.cellW, state.font.cellH
-		}
-		return termmux.CellMetrics{CellWidth: max(1, int(cellW)), CellHeight: max(1, int(cellH))}, true
-	}
-	return src.muxContentBounds(sw, sh), dst.muxContentBounds(dw, dh), resolve, nil
+	return a.controller.transferProjectionGeometry(a.windowIdentity, source, destination)
 }
 
 func (a *App) executeMoveTabToWindow(context termaction.Context, command termaction.MoveTabToWindow) error {
@@ -61,15 +30,11 @@ func (a *App) executeMoveTabToWindow(context termaction.Context, command termact
 	if err != nil {
 		return err
 	}
-	sourceProjection := a.controller.projectionApp(source)
-	cancelSource := sourceProjection != nil && sourceProjection.compositionTargetsTab(termmux.TabID(command.TabID))
-	events, err := a.mux.TransferTabBetweenWindows(termmux.TabTransferRequest{SourceWindow: source, DestinationWindow: destination, Tab: termmux.TabID(command.TabID), Position: command.Position, SourceBounds: sb, DestinationBounds: db, Resolve: resolve})
+	events, err := a.controller.transferTabBetweenWindows(a.windowIdentity, termmux.TabTransferRequest{SourceWindow: source, DestinationWindow: destination, Tab: termmux.TabID(command.TabID), Position: command.Position, SourceBounds: sb, DestinationBounds: db, Resolve: resolve})
 	if err != nil {
 		return err
 	}
-	if cancelSource {
-		_ = sourceProjection.cancelComposition(ime.CancelTargetChanged)
-	}
+	a.controller.cancelProjectionTabComposition(source, termmux.TabID(command.TabID))
 	a.controller.dispatch(events)
 	return nil
 }
@@ -85,7 +50,11 @@ func (a *App) executeMovePaneToWindow(context termaction.Context, command termac
 	}
 	var active termmux.TabView
 	found := false
-	for _, window := range a.mux.Windows() {
+	windows, err := a.controller.processWindows(a.windowIdentity)
+	if err != nil {
+		return err
+	}
+	for _, window := range windows {
 		if window.ID == destination {
 			for _, tab := range window.Tabs {
 				if tab.Active {
@@ -103,15 +72,11 @@ func (a *App) executeMovePaneToWindow(context termaction.Context, command termac
 	if command.Axis == termaction.SplitRows {
 		axis = termmux.SplitRows
 	}
-	sourceProjection := a.controller.projectionApp(source)
-	cancelSource := sourceProjection != nil && sourceProjection.compositionTargetsPane(termmux.PaneID(command.PaneID))
-	events, err := a.mux.TransferPaneBetweenWindows(termmux.PaneTransferRequest{SourceWindow: source, DestinationWindow: destination, Pane: termmux.PaneID(command.PaneID), DestinationTab: active.ID, DestinationPane: active.Focused, Axis: axis, Ratio: termmux.DefaultSplitRatio, SourceBounds: sb, DestinationBounds: db, Resolve: resolve})
+	events, err := a.controller.transferPaneBetweenWindows(a.windowIdentity, termmux.PaneTransferRequest{SourceWindow: source, DestinationWindow: destination, Pane: termmux.PaneID(command.PaneID), DestinationTab: active.ID, DestinationPane: active.Focused, Axis: axis, Ratio: termmux.DefaultSplitRatio, SourceBounds: sb, DestinationBounds: db, Resolve: resolve})
 	if err != nil {
 		return err
 	}
-	if cancelSource {
-		_ = sourceProjection.cancelComposition(ime.CancelTargetChanged)
-	}
+	a.controller.cancelProjectionPaneComposition(source, termmux.PaneID(command.PaneID))
 	a.controller.dispatch(events)
 	return nil
 }

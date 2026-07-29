@@ -7,12 +7,13 @@ import (
 
 func TestPreparedCandidateRevokesMutationAndClose(t *testing.T) {
 	store := NewStore(NewProcessBudget(), DefaultLimits())
+	owner := claimTestStoreOwner(t, store)
 	candidate, _ := store.NewDecodedCandidate(1, 1, 1)
 	if err := candidate.WriteRGBAAt(0, []byte{3, 4, 5, 6}); err != nil {
 		t.Fatal(err)
 	}
 	alias := candidate.RGBA()
-	prepared, ref, err := store.PrepareCandidate(candidate)
+	prepared, ref, err := owner.PrepareCandidate(candidate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,8 +22,11 @@ func TestPreparedCandidateRevokesMutationAndClose(t *testing.T) {
 	if candidate.RGBA() != nil || candidate.ValidFor(store) || !errors.Is(candidate.WriteRGBAAt(0, []byte{1}), ErrCandidateInvalid) {
 		t.Fatal("claimed candidate remained mutable")
 	}
-	store.PublishPrepared(prepared)
-	prepared.Finalize()
+	if err := owner.PublishPrepared(prepared); err != nil {
+		t.Fatal(err)
+	} else if err := prepared.Commit(); err != nil {
+		t.Fatal(err)
+	}
 	resource, ok := store.Acquire(ref)
 	if !ok || resource.RGBA[0] != 3 {
 		t.Fatalf("retained alias changed publication: %#v", resource.RGBA)
@@ -31,52 +35,68 @@ func TestPreparedCandidateRevokesMutationAndClose(t *testing.T) {
 
 func TestStoreAllowsOnlyOnePreparedStateAndAbortReleasesSlot(t *testing.T) {
 	store := NewStore(NewProcessBudget(), DefaultLimits())
+	owner := claimTestStoreOwner(t, store)
 	first, _ := store.NewDecodedCandidate(1, 1, 1)
-	prepared, _, err := store.PrepareCandidate(first)
+	prepared, _, err := owner.PrepareCandidate(first)
 	if err != nil {
 		t.Fatal(err)
 	}
 	second, _ := store.NewDecodedCandidate(2, 1, 1)
-	if _, _, err = store.PrepareCandidate(second); !errors.Is(err, ErrPreparedState) {
+	if _, _, err = owner.PrepareCandidate(second); !errors.Is(err, ErrPreparedState) {
 		t.Fatalf("overlap error=%v", err)
 	}
 	if !second.ValidFor(store) {
 		t.Fatal("rejected candidate ownership was consumed")
 	}
-	prepared.Abort()
-	if _, _, err = store.PrepareCandidate(second); err != nil {
+	if err := prepared.Abort(); err != nil {
 		t.Fatal(err)
 	}
-	store.abortPrepared()
+	secondPrepared, _, err := owner.PrepareCandidate(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := secondPrepared.Abort(); err != nil {
+		t.Fatal(err)
+	}
 	if store.Usage() != (Usage{}) {
 		t.Fatalf("abort usage=%#v", store.Usage())
 	}
 }
 
-func TestResetAndCloseAbortPreparedWithoutResurrection(t *testing.T) {
+func TestResetAndCloseResolvePreparedWithoutResurrection(t *testing.T) {
 	for _, closeStore := range []bool{false, true} {
 		store := NewStore(NewProcessBudget(), DefaultLimits())
+		owner := claimTestStoreOwner(t, store)
 		candidate, _ := store.NewDecodedCandidate(1, 1, 1)
-		prepared, _, err := store.PrepareCandidate(candidate)
+		prepared, _, err := owner.PrepareCandidate(candidate)
 		if err != nil {
 			t.Fatal(err)
 		}
+		if err := prepared.Abort(); err != nil {
+			t.Fatal(err)
+		}
 		if closeStore {
-			store.Close()
+			if err := owner.Close(); err != nil {
+				t.Fatal(err)
+			}
 		} else {
-			store.Reset()
+			reset, err := owner.PrepareReset()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := owner.PublishPrepared(reset); err != nil {
+				t.Fatal(err)
+			}
+			if err := reset.Commit(); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if store.Usage() != (Usage{}) {
 			t.Fatalf("close=%v usage=%#v", closeStore, store.Usage())
 		}
-		func() {
-			defer func() {
-				if recover() == nil {
-					t.Fatal("stale publication did not panic before swap")
-				}
-			}()
-			store.PublishPrepared(prepared)
-		}()
+		if err := owner.PublishPrepared(prepared); err == nil {
+			t.Fatal("stale publication succeeded")
+		}
 		if store.Usage() != (Usage{}) || len(store.state.resources) != 0 {
 			t.Fatal("stale publication resurrected state")
 		}

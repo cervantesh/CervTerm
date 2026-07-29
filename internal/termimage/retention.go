@@ -1,10 +1,12 @@
 package termimage
 
 func (o *StoreOwner) PrepareCandidateWithRetention(candidate *DecodedCandidate, retention ResourceRetention) (*PreparedStoreState, ResourceRef, error) {
-	if !o.valid() {
-		return nil, ResourceRef{}, ErrClosed
+	scope, err := o.enter()
+	if err != nil {
+		return nil, ResourceRef{}, err
 	}
-	return o.store.prepareCandidateWithRetention(candidate, retention)
+	defer o.leave(scope)
+	return o.store.prepareCandidateWithRetention(scope, candidate, retention)
 }
 
 func (s *Store) ResourceRetention(ref ResourceRef) (ResourceRetention, bool) {

@@ -240,13 +240,14 @@ func TestInitialProjectionTransfersDormantAccessibilityOwnership(t *testing.T) {
 	window := new(glfw.Window)
 	app := &App{cfg: config.Defaults()}
 	app.cfg.Accessibility.Enabled = true
-	app.controller = &windowController{windows: map[termmux.WindowID]*windowProjection{
+	app.host = &windowController{windows: map[termmux.WindowID]*windowProjection{
 		termmux.WindowID(initialWindowID): {id: termmux.WindowID(initialWindowID), host: window, app: app},
 	}}
+	app.controller = newProjectionMessageRouter(app.host)
 	if err := app.adoptInitialProjection(window); err != nil {
 		t.Fatal(err)
 	}
-	bundle := app.controller.windows[termmux.WindowID(initialWindowID)].bundle
+	bundle := app.host.windows[termmux.WindowID(initialWindowID)].bundle
 	if bundle == nil || bundle.beforeUnbind == nil || len(log) != 1 || log[0] != "prepare" {
 		t.Fatalf("bundle=%p log=%v", bundle, log)
 	}

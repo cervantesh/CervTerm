@@ -14,15 +14,17 @@ import (
 
 func TestWorkspaceActionExecutorCRUDMoveAndStaleTargets(t *testing.T) {
 	a := newRunningMuxTestApp(t)
+	process := testProcessMuxFor(t, a)
 	a.windowID = 1
-	second, createEvents, err := a.mux.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
+	second, createEvents, err := process.CreateWindow(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16}, "two")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var log []string
-	controller := newWindowController(processServices{mux: a.mux}, fakeNativePump{log: &log})
-	a.controller = controller
-	child := &App{mux: a.mux, controller: controller, windowID: second.ID, paneUI: map[termmux.PaneID]*paneUIState{}, pendingPaneScroll: map[termmux.PaneID]int{}, pendingPaneResize: map[termmux.PaneID]termmux.PaneGeometry{}}
+	controller := newWindowController(processServices{commands: process, windowCapabilities: process}, fakeNativePump{log: &log})
+	router := newProjectionMessageRouter(controller)
+	a.host, a.controller = controller, router
+	child := &App{mux: a.mux, controller: router, windowID: second.ID, paneUI: map[termmux.PaneID]*paneUIState{}, pendingPaneScroll: map[termmux.PaneID]int{}, pendingPaneResize: map[termmux.PaneID]termmux.PaneGeometry{}}
 	if err := controller.attachApp(1, &fakeNativeWindow{id: "one", log: &log}, a, a.applyMuxEvents); err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +39,7 @@ func TestWorkspaceActionExecutorCRUDMoveAndStaleTargets(t *testing.T) {
 	if err := a.executeAction(windowEnvelope(termaction.CreateWorkspace{Name: "build"}), context); err != nil {
 		t.Fatal(err)
 	}
-	workspaces := a.mux.Workspaces()
+	workspaces := process.Workspaces()
 	if len(workspaces) != 2 {
 		t.Fatalf("workspaces=%#v", workspaces)
 	}
@@ -54,10 +56,10 @@ func TestWorkspaceActionExecutorCRUDMoveAndStaleTargets(t *testing.T) {
 	if err := a.executeAction(windowEnvelope(termaction.SwitchWorkspace{WorkspaceID: uint64(workspace)}), context); err != nil {
 		t.Fatal(err)
 	}
-	if controller.projectionVisible(1) || !controller.projectionVisible(second.ID) || a.mux.ActiveWorkspace().Name != "ops" {
-		t.Fatalf("active=%#v", a.mux.ActiveWorkspace())
+	if controller.projectionVisible(1) || !controller.projectionVisible(second.ID) || process.ActiveWorkspace().Name != "ops" {
+		t.Fatalf("active=%#v", process.ActiveWorkspace())
 	}
-	before := a.mux.Workspaces()
+	before := process.Workspaces()
 	for _, command := range []termaction.Action{
 		termaction.SwitchWorkspace{WorkspaceID: 999},
 		termaction.RenameWorkspace{WorkspaceID: 999, Name: "stale"},
@@ -67,7 +69,7 @@ func TestWorkspaceActionExecutorCRUDMoveAndStaleTargets(t *testing.T) {
 		if err := a.executeAction(windowEnvelope(command), context); err == nil {
 			t.Fatalf("stale action accepted: %#v", command)
 		}
-		if got := a.mux.Workspaces(); !workspaceViewsEqual(got, before) {
+		if got := process.Workspaces(); !workspaceViewsEqual(got, before) {
 			t.Fatalf("state changed after %#v: %#v", command, got)
 		}
 	}
@@ -75,7 +77,9 @@ func TestWorkspaceActionExecutorCRUDMoveAndStaleTargets(t *testing.T) {
 
 func TestWorkspaceSwitcherRetainsIdentityAcrossReload(t *testing.T) {
 	a := newRunningMuxTestApp(t)
-	workspace, _, err := a.mux.CreateWorkspace("build")
+	process := testProcessMuxFor(t, a)
+	attachTestProcessController(t, a, process)
+	workspace, _, err := process.CreateWorkspace("build")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,14 +91,16 @@ func TestWorkspaceSwitcherRetainsIdentityAcrossReload(t *testing.T) {
 	}
 	a.scriptGeneration++
 	a.applyModalIntents(a.modal.Accept())
-	if a.modal.Active() || a.mux.ActiveWorkspace().ID != workspace.ID {
-		t.Fatalf("modal=%#v active=%#v", a.modal.Snapshot(), a.mux.ActiveWorkspace())
+	if a.modal.Active() || process.ActiveWorkspace().ID != workspace.ID {
+		t.Fatalf("modal=%#v active=%#v", a.modal.Snapshot(), process.ActiveWorkspace())
 	}
 }
 
 func TestWorkspaceSwitcherRejectsRevisionDriftAndPreservesModal(t *testing.T) {
 	a := newRunningMuxTestApp(t)
-	workspace, _, err := a.mux.CreateWorkspace("build")
+	process := testProcessMuxFor(t, a)
+	attachTestProcessController(t, a, process)
+	workspace, _, err := process.CreateWorkspace("build")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,18 +110,20 @@ func TestWorkspaceSwitcherRejectsRevisionDriftAndPreservesModal(t *testing.T) {
 	for _, r := range "build" {
 		a.modal.AppendRune(r)
 	}
-	if _, err := a.mux.RenameWorkspace(workspace.ID, "renamed"); err != nil {
+	if _, err := process.RenameWorkspace(workspace.ID, "renamed"); err != nil {
 		t.Fatal(err)
 	}
 	a.applyModalIntents(a.modal.Accept())
 	state := a.modal.Snapshot()
-	if !a.modal.Active() || state.Mode != modal.ModeWorkspaceSwitcher || !strings.Contains(state.Error, "changed while switcher was open") || a.mux.ActiveWorkspace().ID != 1 {
-		t.Fatalf("modal=%#v active=%#v", state, a.mux.ActiveWorkspace())
+	if !a.modal.Active() || state.Mode != modal.ModeWorkspaceSwitcher || !strings.Contains(state.Error, "changed while switcher was open") || process.ActiveWorkspace().ID != 1 {
+		t.Fatalf("modal=%#v active=%#v", state, process.ActiveWorkspace())
 	}
 }
 
 func TestWorkspaceSwitcherRejectsRemovedIdentity(t *testing.T) {
 	a := newRunningMuxTestApp(t)
+	process := testProcessMuxFor(t, a)
+	attachTestProcessController(t, a, process)
 	a.workspaceSwitcher = map[string]workspaceSwitcherActivation{"gone": {workspace: 999, revision: 1}}
 	if err := a.acceptWorkspaceSwitcher(modal.Entry{ID: "missing"}); err == nil {
 		t.Fatal("missing activation accepted")

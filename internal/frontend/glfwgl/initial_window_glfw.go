@@ -54,7 +54,10 @@ func (a *App) runFreshInitialWindow() error {
 			a.blurProvider = newBlurProvider(w)
 			a.configureNativeWindow(w)
 			a.applyWindowAppearance()
-			if err := a.controller.activate(initialWindowID); err != nil {
+			if a.host == nil {
+				return errWindowProjectionMissing
+			}
+			if err := a.host.activate(initialWindowID); err != nil {
 				return err
 			}
 			swapInterval := 1

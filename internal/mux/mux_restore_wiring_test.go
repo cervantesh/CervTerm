@@ -77,13 +77,13 @@ func TestMuxRestoreCoordinatorIndependentCallsRetainCandidateOwnership(t *testin
 		t.Fatalf("initial ownership left=%p/%p right=%p/%p", leftCandidate.owner, left.pending, rightCandidate.owner, right.pending)
 	}
 
-	if _, err = left.RestoreWindowIDs(rightCandidate); !errors.Is(err, ErrInvalidRestore) {
+	if _, err = left.RestoreWindowIDs(rightCandidate); !errors.Is(err, ErrWrongOwner) {
 		t.Fatalf("cross-owner window IDs err=%v", err)
 	}
-	if _, err = left.CommitRestore(rightCandidate); !errors.Is(err, ErrInvalidRestore) {
+	if _, err = left.CommitRestore(rightCandidate); !errors.Is(err, ErrWrongOwner) {
 		t.Fatalf("cross-owner commit err=%v", err)
 	}
-	if err = left.AbortRestore(rightCandidate); !errors.Is(err, ErrInvalidRestore) {
+	if err = left.AbortRestore(rightCandidate); !errors.Is(err, ErrWrongOwner) {
 		t.Fatalf("cross-owner abort err=%v", err)
 	}
 	if left.pending != leftCandidate || right.pending != rightCandidate || leftCandidate.owner != left || rightCandidate.owner != right || leftCandidate.aborted || leftCandidate.committed || rightCandidate.aborted || rightCandidate.committed {

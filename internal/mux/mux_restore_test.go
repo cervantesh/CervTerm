@@ -300,7 +300,7 @@ func TestMuxRestoreAbortCommitMisuseAndStaleIngress(t *testing.T) {
 	}
 	other := newRestoreMux(&restoreTestFactory{})
 	defer other.Shutdown()
-	if _, err := other.CommitRestore(candidate); !errors.Is(err, ErrInvalidRestore) {
+	if _, err := other.CommitRestore(candidate); !errors.Is(err, ErrWrongOwner) {
 		t.Fatalf("commit wrong mux=%v", err)
 	}
 

@@ -45,7 +45,8 @@ type App struct {
 	startupConfigCommitted bool
 	reloadPending          bool
 	tealPublicationOptions config.TealPublicationOptions
-	mux                    *termmux.Mux
+	mux                    windowMuxCapability
+	windowIdentity         termmux.WindowIdentity
 	focusedPane            termmux.PaneID
 	paneUI                 map[termmux.PaneID]*paneUIState
 	pendingMuxEvents       []termmux.Event
@@ -62,7 +63,8 @@ type App struct {
 
 	window                    *glfw.Window
 	windowID                  termmux.WindowID
-	controller                *windowController
+	controller                projectionController
+	host                      *windowController
 	actions                   *actionController
 	input                     *inputController
 	renderFlow                *renderController

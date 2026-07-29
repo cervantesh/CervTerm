@@ -69,7 +69,7 @@ type glfwRestoreProjectionFactory struct {
 }
 
 func (f *glfwRestoreProjectionFactory) PrepareRestore(index int) (*nativeProjectionBundle, termmux.RestoreWindowGeometry, error) {
-	if f == nil || f.owner == nil || f.owner.controller == nil || f.owner.mux == nil || index < 0 || index >= len(f.windows) {
+	if f == nil || f.owner == nil || f.owner.host == nil || f.owner.host.services.commands == nil || index < 0 || index >= len(f.windows) {
 		return nil, termmux.RestoreWindowGeometry{}, errWindowProjectionMissing
 	}
 	windowPlan := f.windows[index]

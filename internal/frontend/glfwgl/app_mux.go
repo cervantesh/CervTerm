@@ -22,7 +22,7 @@ type paneUIState struct {
 }
 
 type muxSearchTerminal struct {
-	mux  *termmux.Mux
+	mux  windowMuxCapability
 	pane termmux.PaneID
 }
 
@@ -358,4 +358,15 @@ func (a *App) sendPaneFocus(id termmux.PaneID, focused bool) {
 func (a *App) writePaneInput(id termmux.PaneID, data []byte) error {
 	_, err := a.mux.Write(id, data)
 	return err
+}
+
+func (a *App) shutdownProcessServices() {
+	if a == nil || a.host == nil || a.host.primary != a {
+		return
+	}
+	_ = a.host.shutdownServices(a)
+	if a.host.processClosed() {
+		a.mux = nil
+		a.windowIdentity = termmux.WindowIdentity{}
+	}
 }

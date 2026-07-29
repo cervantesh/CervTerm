@@ -56,7 +56,9 @@ func (t *Terminal) Clear() {
 }
 
 func (t *Terminal) Reset() {
-	t.ResetImages()
+	if err := t.ResetImages(); err != nil {
+		return
+	}
 	t.Clear()
 	t.ResetAttr()
 	t.ResetScrollRegion()

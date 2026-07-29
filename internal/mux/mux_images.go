@@ -8,8 +8,12 @@ import (
 	"cervterm/internal/vt"
 )
 
-func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
+func (m *Mux) createPane(scope mutationScope, id PaneID, cols, rows int) *pane {
+	if err := scope.valid(m); err != nil {
+		return nil
+	}
 	pane := newPane(id, cols, rows, m.options.ScrollbackCapacity, m.options.HideCursorWhenScrolled)
+	pane.ownerStamp = m.currentOwnerStamp()
 	if m.imageBudget == nil {
 		return pane
 	}
@@ -42,7 +46,7 @@ func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
 				outcome := pane.kittyAdapter.Advance(m.options.Now(), kitty.APCEvent{Data: event.Chunk, Final: event.Final, Cancelled: event.Cancelled, Overflow: event.Overflow})
 				if outcome.Command != nil || outcome.Failure != kitty.ReplyNone {
 					pane.kittyOutcomes = append(pane.kittyOutcomes, outcome)
-					pane.kittyEvents = append(pane.kittyEvents, m.processKittyOutcomes(pane)...)
+					pane.kittyEvents = append(pane.kittyEvents, m.processKittyOutcomesScoped(pane.activeScope, pane)...)
 				}
 			case vt.ControlStringDCS:
 				if pane.sixelAdapter == nil {
@@ -51,7 +55,7 @@ func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
 				outcome := pane.sixelAdapter.Advance(m.options.Now(), sixel.DCSEvent{Data: event.Chunk, Final: event.Final, Cancelled: event.Cancelled, Overflow: event.Overflow})
 				if outcome.Command != nil || outcome.Failure != sixel.FailureNone {
 					pane.sixelOutcomes = append(pane.sixelOutcomes, outcome)
-					m.processSixelOutcomes(pane)
+					m.processSixelOutcomesScoped(pane.activeScope, pane)
 				}
 			case vt.ControlStringOSC1337:
 				if pane.itermAdapter == nil {
@@ -60,7 +64,7 @@ func (m *Mux) createPane(id PaneID, cols, rows int) *pane {
 				outcome := pane.itermAdapter.Advance(m.options.Now(), itermimage.OSCEvent{Data: event.Chunk, Final: event.Final, Cancelled: event.Cancelled, Overflow: event.Overflow})
 				if outcome.Command != nil || outcome.Failure != itermimage.FailureNone {
 					pane.itermOutcomes = append(pane.itermOutcomes, outcome)
-					m.processITermOutcomes(pane)
+					m.processITermOutcomesScoped(pane.activeScope, pane)
 				}
 			}
 		})

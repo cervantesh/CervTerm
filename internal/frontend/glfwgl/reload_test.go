@@ -315,7 +315,7 @@ func TestReloadFailurePreservesConfigAndRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: newEmptyTestWindowMux(t)}
 	defer func() {
 		if app.scriptRT != nil {
 			app.scriptRT.Close()
@@ -358,7 +358,7 @@ func TestReloadKeepsFontFeaturesPendingRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: newEmptyTestWindowMux(t)}
 	app.configWatch = newConfigWatchState(path)
 	writeReloadConfig(t, path, `return {config_version=2,font={features={ss01=2}}}`)
 	if err := app.reloadConfig(); err != nil {
@@ -381,7 +381,7 @@ func TestReloadCommitsLiveFieldsAndRetainsScopedPendingChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: newEmptyTestWindowMux(t)}
 	app.configWatch = newConfigWatchState(path)
 	writeReloadConfig(t, path, `return {
 		window = { opacity = 0.8 },
@@ -468,7 +468,7 @@ func TestRuntimeScopeSurvivesReloadRejectsInvalidCandidateAndClears(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	app := &App{cfg: cfg, scriptRT: rt, configPath: path, mux: newEmptyTestWindowMux(t)}
 	defer func() {
 		if app.scriptRT != nil {
 			app.scriptRT.Close()
@@ -518,12 +518,13 @@ func TestRuntimeScopeSurvivesReloadRejectsInvalidCandidateAndClears(t *testing.T
 
 func TestNewPaneUsesDesiredShellWithoutChangingEffectiveWindowConfig(t *testing.T) {
 	factory := &capturingTestFactory{}
-	mux := termmux.New(factory, termmux.Options{})
+	process := termmux.NewOwner(factory, termmux.Options{})
+	mux := mustTestWindowMux(t, process)
 	_, pane, events, err := mux.Bootstrap(termmux.SpawnSpec{}, termmux.PixelRect{Width: 800, Height: 480}, termmux.CellMetrics{CellWidth: 8, CellHeight: 16})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = mux.Shutdown() }()
+	defer func() { _ = process.Shutdown() }()
 	app := &App{cfg: config.Defaults(), mux: mux, focusedPane: pane, paneUI: make(map[termmux.PaneID]*paneUIState), pendingPaneScroll: make(map[termmux.PaneID]int)}
 	app.handleMuxEvents(events)
 	app.ensureConfigState()
@@ -557,7 +558,7 @@ func TestReloadActivatesExplicitV2BundleAtomically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := &App{cfg: loaded.Config, scriptRT: loaded.Runtime, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	app := &App{cfg: loaded.Config, scriptRT: loaded.Runtime, configPath: path, mux: newEmptyTestWindowMux(t)}
 	app.configWatch = newConfigWatchState(path)
 	writeReloadConfig(t, filepath.Join(dir, "base.lua"), `return {colors={foreground="#AABBCC"}}`)
 	writeReloadConfig(t, path, `local c=require("cervterm"); return {config_version=2,includes={"base.lua"},window={opacity=0.8},colors={background="#080B12"},keys={{key="k",action=c.action.ScrollPage(1)}}}`)
@@ -595,7 +596,7 @@ func TestReloadSelectedIncludedColorSchemeChangesAtomicallyAndInvalidEditPreserv
 	app := &App{
 		cfg: loaded.Config, desiredCfg: loaded.Config, composedCfg: loaded.Config, configStateInitialized: true,
 		scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, candidateOptions: loaded.Options,
-		configPath: primary, configWatch: newConfigWatchState(loaded.WatchPaths...), mux: termmux.New(nil, termmux.Options{}), paneUI: make(map[termmux.PaneID]*paneUIState),
+		configPath: primary, configWatch: newConfigWatchState(loaded.WatchPaths...), mux: newEmptyTestWindowMux(t), paneUI: make(map[termmux.PaneID]*paneUIState),
 	}
 	defer func() {
 		if app.scriptBundle != nil {
@@ -645,7 +646,7 @@ func TestReloadV2PublicationFailurePreservesActiveState(t *testing.T) {
 	if err := os.Remove(published); err != nil {
 		t.Fatal(err)
 	}
-	app := &App{cfg: loaded.Config, scriptRT: loaded.Runtime, configPath: path, mux: termmux.New(nil, termmux.Options{})}
+	app := &App{cfg: loaded.Config, scriptRT: loaded.Runtime, configPath: path, mux: newEmptyTestWindowMux(t)}
 	app.configWatch = newConfigWatchState(path)
 	app.tealPublicationOptions.FaultInjector = func(_ int, step string) error {
 		if step == "marker" {
@@ -694,7 +695,7 @@ func TestReloadV2ToV1PreparationFailureRestoresTealArtifacts(t *testing.T) {
 		loaded.Candidate.Close()
 		t.Fatal(err)
 	}
-	app := &App{cfg: loaded.Config, scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, configPath: path, mux: termmux.New(nil, termmux.Options{}), paneUI: make(map[termmux.PaneID]*paneUIState)}
+	app := &App{cfg: loaded.Config, scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, configPath: path, mux: newEmptyTestWindowMux(t), paneUI: make(map[termmux.PaneID]*paneUIState)}
 	defer app.scriptBundle.Close()
 	app.cfg.Render.TextRaster = "subpixel"
 	app.contentScaleX, app.contentScaleY = 1, 1
@@ -756,7 +757,7 @@ func TestReloadQueuesNewGenerationWhenActiveIncludeChangesDuringEvaluation(t *te
 		loaded.Candidate.Close()
 		t.Fatal(err)
 	}
-	app := &App{cfg: loaded.Config, scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, configPath: primary, mux: termmux.New(nil, termmux.Options{})}
+	app := &App{cfg: loaded.Config, scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, configPath: primary, mux: newEmptyTestWindowMux(t)}
 	defer func() {
 		if app.scriptBundle != nil {
 			app.scriptBundle.Close()
@@ -797,7 +798,7 @@ func TestReloadQueuesNewlyIntroducedIncludeChangedDuringItsEvaluation(t *testing
 		loaded.Candidate.Close()
 		t.Fatal(err)
 	}
-	app := &App{cfg: loaded.Config, scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, configPath: primary, mux: termmux.New(nil, termmux.Options{})}
+	app := &App{cfg: loaded.Config, scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, configPath: primary, mux: newEmptyTestWindowMux(t)}
 	defer func() {
 		if app.scriptBundle != nil {
 			app.scriptBundle.Close()
@@ -974,7 +975,7 @@ func TestReloadRetainsStartupSelectionAndCLIOverrides(t *testing.T) {
 	app := &App{
 		cfg: loaded.Config, desiredCfg: loaded.Config, composedCfg: loaded.Config, configStateInitialized: true,
 		scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, candidateOptions: loaded.Candidate.Options(),
-		configPath: path, configWatch: newConfigWatchState(path), mux: termmux.New(nil, termmux.Options{}), paneUI: make(map[termmux.PaneID]*paneUIState),
+		configPath: path, configWatch: newConfigWatchState(path), mux: newEmptyTestWindowMux(t), paneUI: make(map[termmux.PaneID]*paneUIState),
 	}
 	defer app.scriptBundle.Close()
 	if app.cfg.Window.Opacity != 0.7 {
@@ -1029,7 +1030,7 @@ func TestReloadV1ToV2RetainsAmbientSelectionSnapshot(t *testing.T) {
 	app := &App{
 		cfg: loaded.Config, desiredCfg: loaded.Config, composedCfg: loaded.Config, configStateInitialized: true,
 		scriptRT: loaded.Runtime, candidateOptions: loaded.Options, configPath: path, configWatch: newConfigWatchState(path),
-		mux: termmux.New(nil, termmux.Options{}), paneUI: make(map[termmux.PaneID]*paneUIState),
+		mux: newEmptyTestWindowMux(t), paneUI: make(map[termmux.PaneID]*paneUIState),
 	}
 	defer func() {
 		if app.scriptBundle != nil {
@@ -1114,7 +1115,7 @@ func TestMissingIncludeCreationRecoversWithoutPrimaryEdit(t *testing.T) {
 		loaded.Candidate.Close()
 		t.Fatal(err)
 	}
-	app := &App{cfg: loaded.Config, scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, configPath: primary, candidateOptions: loaded.Options, configWatch: newConfigWatchState(loaded.WatchPaths...), mux: termmux.New(nil, termmux.Options{}), paneUI: make(map[termmux.PaneID]*paneUIState)}
+	app := &App{cfg: loaded.Config, scriptRT: activation.Commit(), scriptBundle: loaded.Candidate, configPath: primary, candidateOptions: loaded.Options, configWatch: newConfigWatchState(loaded.WatchPaths...), mux: newEmptyTestWindowMux(t), paneUI: make(map[termmux.PaneID]*paneUIState)}
 	defer func() {
 		if app.scriptBundle != nil {
 			app.scriptBundle.Close()

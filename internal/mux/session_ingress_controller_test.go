@@ -355,7 +355,7 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 
 	var controllerFields, constructorInitializers int
 	var drainFound, operationValueFound bool
-	var routeCalls, directPhaseCalls, recordAdapterCalls int
+	var routeCalls, directPhaseCalls, recordAdapterCalls, scopeValidationCalls int
 	for _, declaration := range muxFile.Decls {
 		switch declaration := declaration.(type) {
 		case *ast.GenDecl:
@@ -382,7 +382,7 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 			}
 		case *ast.FuncDecl:
 			switch declaration.Name.Name {
-			case "New":
+			case "newMux":
 				ast.Inspect(declaration.Body, func(node ast.Node) bool {
 					keyValue, ok := node.(*ast.KeyValueExpr)
 					if !ok || !isIdentifier(keyValue.Key, "sessionIngress") {
@@ -396,8 +396,11 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 					constructorInitializers++
 					return true
 				})
-			case "Drain":
+			case "drain":
 				drainFound = true
+				if got := renderSessionIngressNode(fileSet, declaration.Type); got != "func(scope mutationScope, limit int) []Event" {
+					t.Errorf("private drain signature=%q want scope-required sink", got)
+				}
 				ast.Inspect(declaration.Body, func(node ast.Node) bool {
 					switch node := node.(type) {
 					case *ast.AssignStmt:
@@ -407,7 +410,11 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 							}
 							literal, ok := node.Rhs[index].(*ast.CompositeLit)
 							if !ok || !isIdentifier(literal.Type, "muxSessionIngressOperationAdapter") {
-								t.Errorf("Drain operation adapter=%T want local value", node.Rhs[index])
+								t.Errorf("drain operation adapter=%T want local value", node.Rhs[index])
+								continue
+							}
+							if got := renderSessionIngressNode(fileSet, literal); got != "muxSessionIngressOperationAdapter{mux: m, pane: accepted.registered, scope: scope}" {
+								t.Errorf("drain operation adapter=%q want exact scoped value", got)
 								continue
 							}
 							operationValueFound = true
@@ -416,6 +423,9 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 						selector, ok := node.Fun.(*ast.SelectorExpr)
 						if !ok {
 							return true
+						}
+						if selector.Sel.Name == "valid" && isIdentifier(selector.X, "scope") {
+							scopeValidationCalls++
 						}
 						switch selector.Sel.Name {
 						case "adaptSessionIngressRecord":
@@ -426,11 +436,11 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 							routeCalls++
 							controller, ok := selector.X.(*ast.SelectorExpr)
 							if !ok || !isIdentifier(controller.X, "m") || controller.Sel.Name != "sessionIngress" {
-								t.Errorf("Drain route receiver=%T want m.sessionIngress", selector.X)
+								t.Errorf("drain route receiver=%T want m.sessionIngress", selector.X)
 							}
 							if len(node.Args) != 5 || !isIdentifier(node.Args[0], "events") || !isIdentifier(node.Args[1], "accepted") ||
 								!isIdentifier(node.Args[2], "operation") || !isSelector(node.Args[3], "record", "data") || !isSelector(node.Args[4], "record", "err") {
-								t.Errorf("Drain route arguments do not preserve events/accepted/operation/data/end wiring")
+								t.Errorf("drain route arguments do not preserve events/accepted/operation/data/end wiring")
 							}
 						}
 					}
@@ -442,8 +452,8 @@ func TestSessionIngressControllerSourceIsPrivateBoundedAndWired(t *testing.T) {
 	if controllerFields != 1 || constructorInitializers != 1 {
 		t.Fatalf("Mux controller fields=%d New initializers=%d want 1/1", controllerFields, constructorInitializers)
 	}
-	if !drainFound || !operationValueFound || recordAdapterCalls != 1 || routeCalls != 1 || directPhaseCalls != 0 {
-		t.Fatalf("Drain wiring: found=%t operationValue=%t registryAdapters=%d routeCalls=%d directPhaseCalls=%d", drainFound, operationValueFound, recordAdapterCalls, routeCalls, directPhaseCalls)
+	if !drainFound || !operationValueFound || scopeValidationCalls != 1 || recordAdapterCalls != 1 || routeCalls != 1 || directPhaseCalls != 0 {
+		t.Fatalf("private drain wiring: found=%t operationValue=%t scopeValidations=%d registryAdapters=%d routeCalls=%d directPhaseCalls=%d", drainFound, operationValueFound, scopeValidationCalls, recordAdapterCalls, routeCalls, directPhaseCalls)
 	}
 }
 

@@ -112,17 +112,102 @@ func (t *Terminal) DeleteImages(selector termimage.DeleteSelector) (int, error) 
 
 // ResetImages atomically advances the store epoch and clears all image ownership.
 // It fails closed if the epoch cannot advance. Owner-thread only.
-func (t *Terminal) ResetImages() {
-	if t != nil {
-		t.resetImages()
+func (t *Terminal) ResetImages() error {
+	if t == nil {
+		return nil
 	}
+	return t.resetImages()
+}
+
+// PreparedImageStoreClose binds the exact store, owner, and sidecar publication
+// observed during close preflight. Commit clears core ownership only after the
+// retained StoreOwner transaction has closed the store.
+type PreparedImageStoreClose struct {
+	terminal *Terminal
+	store    *termimage.Store
+	owner    *termimage.StoreOwner
+	sidecars *imageSidecars
+	prepared *termimage.PreparedStoreClose
+	finished bool
+}
+
+// PrepareCloseImageStore rejects wrong, stale, closed, busy, or wrong-thread
+// ownership before callers detach mux/core state. Every successful preflight
+// must be resolved by Commit or Abort on the owner thread.
+func (t *Terminal) PrepareCloseImageStore() (*PreparedImageStoreClose, error) {
+	prepared := &PreparedImageStoreClose{terminal: t}
+	if t == nil || t.imageStore == nil {
+		return prepared, nil
+	}
+	if t.imageOwner == nil {
+		return nil, termimage.ErrWrongOwner
+	}
+	prepared.store, prepared.owner, prepared.sidecars = t.imageStore, t.imageOwner, t.imageSidecars
+	storeClose, err := t.imageOwner.PrepareClose(t.imageStore)
+	if err != nil {
+		return nil, err
+	}
+	prepared.prepared = storeClose
+	return prepared, nil
+}
+
+func (p *PreparedImageStoreClose) Commit() error {
+	if p == nil {
+		return termimage.ErrWrongOwner
+	}
+	if p.finished {
+		return nil
+	}
+	if p.store == nil {
+		p.finished = true
+		return nil
+	}
+	if p.terminal == nil || p.terminal.imageStore != p.store || p.terminal.imageOwner != p.owner || p.terminal.imageSidecars != p.sidecars {
+		return errors.Join(termimage.ErrPreparedState, p.prepared.Abort())
+	}
+	if err := p.prepared.Commit(); err != nil {
+		return err
+	}
+	p.terminal.imageStore = nil
+	p.terminal.imageOwner = nil
+	p.terminal.imageSidecars = nil
+	p.finished = true
+	return nil
+}
+
+func (p *PreparedImageStoreClose) Abort() error {
+	if p == nil {
+		return termimage.ErrWrongOwner
+	}
+	if p.finished {
+		return nil
+	}
+	if p.prepared != nil {
+		if err := p.prepared.Abort(); err != nil {
+			return err
+		}
+	}
+	p.finished = true
+	return nil
 }
 
 // CloseImageStore releases the terminal's attached image owner exactly once.
-func (t *Terminal) CloseImageStore() {
-	if t != nil {
-		t.closeImages()
+// A rejected close retains the store, sidecars, and owner so it can be retried.
+func (t *Terminal) CloseImageStore() error {
+	if t == nil {
+		return nil
 	}
+	return t.closeImages()
+}
+
+// ValidateCloseImageStore performs and aborts the same retained preflight used
+// by mux close transactions. It never releases image ownership.
+func (t *Terminal) ValidateCloseImageStore() error {
+	prepared, err := t.PrepareCloseImageStore()
+	if err != nil {
+		return err
+	}
+	return prepared.Abort()
 }
 
 // CopyImageProjection replaces detached active-screen metadata using reusable storage.

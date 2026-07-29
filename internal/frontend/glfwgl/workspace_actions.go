@@ -15,19 +15,28 @@ type workspaceSwitcherActivation struct {
 }
 
 func (a *App) executeCreateWorkspace(command termaction.CreateWorkspace) error {
-	_, events, err := a.mux.CreateWorkspace(command.Name)
+	if a.controller == nil {
+		return termaction.ErrTargetUnavailable
+	}
+	_, events, err := a.controller.createWorkspace(a.windowIdentity, command.Name)
 	a.handleMuxEvents(events)
 	return err
 }
 
 func (a *App) executeSwitchWorkspace(command termaction.SwitchWorkspace) error {
-	events, err := a.mux.SwitchWorkspace(termmux.WorkspaceID(command.WorkspaceID))
+	if a.controller == nil {
+		return termaction.ErrTargetUnavailable
+	}
+	events, err := a.controller.switchWorkspace(a.windowIdentity, termmux.WorkspaceID(command.WorkspaceID))
 	a.handleMuxEvents(events)
 	return err
 }
 
 func (a *App) executeRenameWorkspace(command termaction.RenameWorkspace) error {
-	events, err := a.mux.RenameWorkspace(termmux.WorkspaceID(command.WorkspaceID), command.Name)
+	if a.controller == nil {
+		return termaction.ErrTargetUnavailable
+	}
+	events, err := a.controller.renameWorkspace(a.windowIdentity, termmux.WorkspaceID(command.WorkspaceID), command.Name)
 	a.handleMuxEvents(events)
 	return err
 }
@@ -36,7 +45,10 @@ func (a *App) executeMoveWindowToWorkspace(command termaction.MoveWindowToWorksp
 	if err := a.requireWindowTarget(command.WindowID); err != nil {
 		return err
 	}
-	events, err := a.mux.MoveWindowToWorkspace(termmux.WindowID(command.WindowID), termmux.WorkspaceID(command.WorkspaceID))
+	if a.controller == nil {
+		return termaction.ErrTargetUnavailable
+	}
+	events, err := a.controller.moveWindowToWorkspace(a.windowIdentity, termmux.WindowID(command.WindowID), termmux.WorkspaceID(command.WorkspaceID))
 	a.handleMuxEvents(events)
 	return err
 }
@@ -46,7 +58,13 @@ func (a *App) openWorkspaceSwitcher() error {
 	if !ok {
 		return termaction.ErrTargetUnavailable
 	}
-	workspaces := a.mux.Workspaces()
+	if a.controller == nil {
+		return termaction.ErrTargetUnavailable
+	}
+	workspaces, err := a.controller.processWorkspaces(a.windowIdentity)
+	if err != nil {
+		return err
+	}
 	if len(workspaces) == 0 {
 		return fmt.Errorf("workspace switcher has no workspaces")
 	}
@@ -76,7 +94,14 @@ func (a *App) acceptWorkspaceSwitcher(entry modal.Entry) error {
 	}
 	var current termmux.WorkspaceView
 	found := false
-	for _, workspace := range a.mux.Workspaces() {
+	if a.controller == nil {
+		return termaction.ErrTargetUnavailable
+	}
+	workspaces, err := a.controller.processWorkspaces(a.windowIdentity)
+	if err != nil {
+		return err
+	}
+	for _, workspace := range workspaces {
 		if workspace.ID == activation.workspace {
 			current, found = workspace, true
 			break
@@ -88,7 +113,7 @@ func (a *App) acceptWorkspaceSwitcher(entry modal.Entry) error {
 	if current.Revision != activation.revision {
 		return fmt.Errorf("workspace %d changed while switcher was open", activation.workspace)
 	}
-	events, err := a.mux.SwitchWorkspace(activation.workspace)
+	events, err := a.controller.switchWorkspace(a.windowIdentity, activation.workspace)
 	a.handleMuxEvents(events)
 	return err
 }
