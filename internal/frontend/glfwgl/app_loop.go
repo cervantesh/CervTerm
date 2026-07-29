@@ -110,10 +110,7 @@ func (a *App) runProcessLoop(continuous bool) error {
 				return err
 			}
 			if drew {
-				a.controller.clearDamage(id)
-				projection.presentation.record(time.Now())
-				projection.meter.AddFrame()
-				projection.needsRedraw = false
+				a.acknowledgePresentedFrame(id, projection, time.Now())
 			}
 			return nil
 		}); err != nil {
@@ -121,6 +118,13 @@ func (a *App) runProcessLoop(continuous bool) error {
 		}
 	}
 	return nil
+}
+
+func (a *App) acknowledgePresentedFrame(id termmux.WindowID, projection *App, presentedAt time.Time) {
+	a.controller.clearDamage(id)
+	projection.presentation.record(presentedAt)
+	projection.meter.AddFrame()
+	projection.needsRedraw = false
 }
 
 func (a *App) tickRenderProjection() {

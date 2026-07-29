@@ -16,7 +16,6 @@ import (
 	"cervterm/internal/render"
 	"cervterm/internal/script"
 
-	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
@@ -354,76 +353,5 @@ func (a *App) runWindow() error {
 			log.Printf("layout restore failed; starting a fresh window: %v", restoreErr)
 		}
 	}
-	w, err := glfw.CreateWindow(a.cfg.Window.Width, a.cfg.Window.Height, "CervTerm", nil, nil)
-	if err != nil {
-		return err
-	}
-	a.window = w
-	if err := a.attachInitialWindowController(w); err != nil {
-		return err
-	}
-	defer a.closeInitialWindowController()
-	projectionAdopted := false
-	defer func() {
-		if !projectionAdopted {
-			a.closeUnadoptedProjectionResources()
-		}
-	}()
-	a.transparentFramebuffer = w.GetAttrib(glfw.TransparentFramebuffer) == glfw.True
-	a.blurProvider = newBlurProvider(w)
-	a.configureNativeWindow(w)
-	a.applyWindowAppearance()
-	if err := a.controller.activate(initialWindowID); err != nil {
-		return err
-	}
-	swapInterval := 1
-	if !a.cfg.Render.VSync {
-		swapInterval = 0
-	}
-	glfw.SwapInterval(swapInterval)
-	if err := gl.Init(); err != nil {
-		return err
-	}
-	a.r = newGLRenderer(w)
-	if err := a.prepareInitialBackgroundSurface(); err != nil {
-		return err
-	}
-	a.lastFBW, a.lastFBH = -1, -1
-	sx, sy := w.GetContentScale()
-	a.applyScale(sx, sy)
-	stages := defaultFontInstallationStages()
-	plan, err := newStartupFontInstallationPlan(a.cfg, effectiveDPI(sx, sy), a.effectiveTextRaster(), a.safeFonts)
-	if err != nil {
-		return err
-	}
-	prepared, err := prepareFontInstallation(plan, stages)
-	if err != nil {
-		return err
-	}
-	defer prepared.Close()
-	atlas, err := prepared.adopt(a.r, stages)
-	if err != nil {
-		return err
-	}
-	a.atlas = atlas
-	a.ligaturesActive = atlas.supportsLigatures(a.cfg.Font.Ligatures)
-	a.cellW = float32(atlas.cellW)
-	a.cellH = float32(atlas.cellH)
-	if err := a.applyInitialGridWindowPlan(w, sx, sy); err != nil {
-		return err
-	}
-	if err := a.activateInitialTerminalImages(a.commitStartupConfiguration); err != nil {
-		return err
-	}
-	a.syncProcessServices()
-	a.installCallbacks()
-	a.spawnInitialPTY(w)
-
-	if err := a.adoptInitialProjection(w); err != nil {
-		return err
-	}
-	projectionAdopted = true
-	a.needsRedraw = true
-
-	return a.runLoop(w)
+	return a.runFreshInitialWindow()
 }
