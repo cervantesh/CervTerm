@@ -1,5 +1,5 @@
 schema=slice31-gates-v4
-status=CLEAN_G_PASS_CI_AND_MERGED_STATE_PENDING
+status=CLOSED_CI_AND_MERGED_STATE_PASS
 platform_runtime=windows/amd64 AMD Ryzen 9 7940HX with Radeon Graphics
 real_GUI=UNRUN
 base=9fe0bd0287ed402fe90b58a5fba7d6413897c1af
@@ -7,6 +7,11 @@ T=4a9c2800ac2bbd943eb93e892f45abe01a4328bd
 A=cf834b7870e34689c789f38aeaf6de4914b34675
 W=27070f32395be7803b6fc11388a08a5c32d3d3a1
 G=derived-by-unique-subject-and-parent
+pull_request=https://github.com/cervantesh/CervTerm/pull/229
+merge_commit=7d753ee1513531d99cf47a9df420eea136222110
+ci_windows=PASS
+ci_linux_headless=PASS
+codeql=PASS
 
 command=go run ./scripts/check-slice31-owner.go
 result=PASS
@@ -43,3 +48,4 @@ command=go run ./scripts/check-maturity-gates.go
 result=PASS clean_committed_G=true
 independent_claim_verification=PASS R1,R2,R3,R4,R5 verified
 independent_adversarial_review=PASS no remaining ownership, lifecycle, or rollback blocker
+merged_state_verification=PASS origin/main contains unique G and merge commit
