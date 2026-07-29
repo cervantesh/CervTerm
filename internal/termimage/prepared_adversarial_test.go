@@ -97,7 +97,7 @@ func TestResetAndCloseResolvePreparedWithoutResurrection(t *testing.T) {
 		if err := owner.PublishPrepared(prepared); err == nil {
 			t.Fatal("stale publication succeeded")
 		}
-		if store.Usage() != (Usage{}) || len(store.state.resources) != 0 {
+		if store.Usage() != (Usage{}) || len(store.state.Load().resources) != 0 {
 			t.Fatal("stale publication resurrected state")
 		}
 	}

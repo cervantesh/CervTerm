@@ -10,10 +10,14 @@ func (o *StoreOwner) PrepareCandidateWithRetention(candidate *DecodedCandidate, 
 }
 
 func (s *Store) ResourceRetention(ref ResourceRef) (ResourceRetention, bool) {
-	if s == nil || ref.Image == 0 || ref.Generation == 0 || s.closed.Load() {
+	if s == nil || ref.Image == 0 || ref.Generation == 0 {
 		return ResourceDurable, false
 	}
-	stored := s.state.resources[ref.Image]
+	state := s.state.Load()
+	if state == nil || state.closed {
+		return ResourceDurable, false
+	}
+	stored := state.resources[ref.Image]
 	if stored == nil || stored.ref != ref {
 		return ResourceDurable, false
 	}

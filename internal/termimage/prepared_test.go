@@ -17,7 +17,7 @@ func TestPreparedCandidateAbortAndPublishOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if store.state.nextGeneration != 0 {
+	if store.state.Load().nextGeneration != 0 {
 		t.Fatal("preparation consumed generation")
 	}
 	if _, ok := store.Acquire(ref); ok {
