@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"math"
+	"sync"
 
 	"cervterm/internal/termimage"
 )
@@ -121,14 +122,19 @@ func (t *Terminal) ResetImages() error {
 
 // PreparedImageStoreClose binds the exact store, owner, and sidecar publication
 // observed during close preflight. Commit clears core ownership only after the
-// retained StoreOwner transaction has closed the store.
+// retained StoreOwner transaction has closed the store. Resolution is serialized
+// here rather than on Terminal so normal owner-thread terminal paths stay lock-free.
 type PreparedImageStoreClose struct {
+	resolveMu sync.Mutex
+
 	terminal *Terminal
 	store    *termimage.Store
 	owner    *termimage.StoreOwner
 	sidecars *imageSidecars
 	prepared *termimage.PreparedStoreClose
 	finished bool
+
+	afterStoreCommit func() // package-private deterministic transaction seam
 }
 
 // PrepareCloseImageStore rejects wrong, stale, closed, busy, or wrong-thread
@@ -151,22 +157,40 @@ func (t *Terminal) PrepareCloseImageStore() (*PreparedImageStoreClose, error) {
 	return prepared, nil
 }
 
+func (p *PreparedImageStoreClose) matchesTerminalState() bool {
+	if p.terminal == nil {
+		return p.store == nil && p.owner == nil && p.sidecars == nil && p.prepared == nil
+	}
+	return p.terminal.imageStore == p.store &&
+		p.terminal.imageOwner == p.owner &&
+		p.terminal.imageSidecars == p.sidecars
+}
+
 func (p *PreparedImageStoreClose) Commit() error {
 	if p == nil {
 		return termimage.ErrWrongOwner
 	}
+	p.resolveMu.Lock()
+	defer p.resolveMu.Unlock()
+
 	if p.finished {
 		return nil
+	}
+	if !p.matchesTerminalState() {
+		return termimage.ErrPreparedState
 	}
 	if p.store == nil {
 		p.finished = true
 		return nil
 	}
-	if p.terminal == nil || p.terminal.imageStore != p.store || p.terminal.imageOwner != p.owner || p.terminal.imageSidecars != p.sidecars {
-		return errors.Join(termimage.ErrPreparedState, p.prepared.Abort())
+	if p.prepared == nil {
+		return termimage.ErrPreparedState
 	}
 	if err := p.prepared.Commit(); err != nil {
 		return err
+	}
+	if p.afterStoreCommit != nil {
+		p.afterStoreCommit()
 	}
 	p.terminal.imageStore = nil
 	p.terminal.imageOwner = nil
@@ -179,13 +203,24 @@ func (p *PreparedImageStoreClose) Abort() error {
 	if p == nil {
 		return termimage.ErrWrongOwner
 	}
+	p.resolveMu.Lock()
+	defer p.resolveMu.Unlock()
+
 	if p.finished {
 		return nil
 	}
-	if p.prepared != nil {
-		if err := p.prepared.Abort(); err != nil {
-			return err
-		}
+	if !p.matchesTerminalState() {
+		return termimage.ErrPreparedState
+	}
+	if p.store == nil {
+		p.finished = true
+		return nil
+	}
+	if p.prepared == nil {
+		return termimage.ErrPreparedState
+	}
+	if err := p.prepared.Abort(); err != nil {
+		return err
 	}
 	p.finished = true
 	return nil
