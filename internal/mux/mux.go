@@ -60,24 +60,26 @@ type Mux struct {
 		muxRestorePreparationOperationAdapter,
 		muxRestorePublicationOperationAdapter,
 	]
-	options        Options
-	model          *Model
-	imageBudget    *termimage.ProcessBudget
-	imageLimits    termimage.Limits
-	imageSetupErr  error
-	imageScheduler *imageDecodeScheduler
-	kittyPending   map[uint64]kittyDecodeOwner
-	kittyNextToken uint64
-	sixelPending   map[uint64]sixelDecodeOwner
-	sixelNextToken uint64
-	itermPending   map[uint64]itermDecodeOwner
-	itermNextToken uint64
-	bootstrapped   bool
-	bounds         PixelRect
-	paneMetrics    map[PaneID]CellMetrics
-	paletteBase    *core.PaletteBase
-	windowFault    func(string) error // package-private deterministic failure injection
-	pending        *RestoreCandidate
+	options             Options
+	model               *Model
+	imageBudget         *termimage.ProcessBudget
+	imageLimits         termimage.Limits
+	imageSetupErr       error
+	imageScheduler      *imageDecodeScheduler
+	kittyPending        map[uint64]kittyDecodeOwner
+	kittyNextToken      uint64
+	sixelPending        map[uint64]sixelDecodeOwner
+	sixelNextToken      uint64
+	itermPending        map[uint64]itermDecodeOwner
+	itermNextToken      uint64
+	bootstrapped        bool
+	bounds              PixelRect
+	paneMetrics         map[PaneID]CellMetrics
+	paletteBase         *core.PaletteBase
+	windowFault         func(string) error        // package-private deterministic failure injection
+	rollbackFault       func(string, *pane) error // package-private deterministic rollback fault injection
+	pending             *RestoreCandidate
+	unpublishedRollback *unpublishedPaneRollback // at most one bounded never-published transaction
 }
 
 func newMux(factory SessionFactory, options Options) *Mux {
@@ -136,6 +138,9 @@ func (m *Mux) bootstrap(scope mutationScope, spec SpawnSpec, content PixelRect, 
 	if err := scope.validActiveOrigin(m); err != nil {
 		return 0, 0, nil, err
 	}
+	if err := m.retryUnpublishedRollback(scope); err != nil {
+		return 0, 0, nil, fmt.Errorf("retry unpublished pane rollback: %w", err)
+	}
 	if m.bootstrapped {
 		return 0, 0, nil, ErrAlreadyBootstrapped
 	}
@@ -168,9 +173,11 @@ func (m *Mux) bootstrap(scope mutationScope, spec SpawnSpec, content PixelRect, 
 	rows, cols := terminalSize(geometry)
 	session, spawnErr := m.sessions.spawnScoped(scope, rows, cols, spec.Options)
 	if spawnErr != nil {
+		var closeErr error
 		if session != nil {
-			_ = session.Close()
+			closeErr = session.Close()
 		}
+		spawnErr = errors.Join(spawnErr, closeErr)
 		p.state = PaneStateFailed
 		p.parser.Advance(p.terminal, []byte("Local PTY unavailable: "+spawnErr.Error()+"\r\n"))
 		p.contentGen++
@@ -251,6 +258,9 @@ func (m *Mux) spawnSplit(scope mutationScope, origin PaneID, axis SplitAxis, spe
 	if err := scope.validPaneOrigin(m, origin); err != nil {
 		return 0, nil, err
 	}
+	if err := m.retryUnpublishedRollback(scope); err != nil {
+		return 0, nil, fmt.Errorf("retry unpublished pane rollback: %w", err)
+	}
 	target := origin
 	if !m.bootstrapped {
 		return 0, nil, ErrEmptyModel
@@ -289,6 +299,7 @@ func (m *Mux) spawnSplit(scope mutationScope, origin PaneID, axis SplitAxis, spe
 	}
 	defer m.sessions.releaseScoped(scope, predictedID)
 	newPane := m.createPane(scope, predictedID, cols, rows)
+	rollback := newUnpublishedPaneRollback([]*pane{newPane})
 	newPane.setFreshLaunch(spec)
 	newPane.terminal.SetPaletteBase(*m.paletteBase)
 	if m.options.SetClipboard != nil {
@@ -296,13 +307,10 @@ func (m *Mux) spawnSplit(scope mutationScope, origin PaneID, axis SplitAxis, spe
 	}
 	ptyRows, ptyCols := terminalSize(PaneGeometry{Pane: predictedID, Pixels: newRect, Cols: cols, Rows: rows})
 	session, spawnErr := m.sessions.spawnScoped(scope, ptyRows, ptyCols, spec.Options)
-	if spawnErr != nil {
-		if session != nil {
-			_ = session.Close()
-		}
-		return 0, nil, errors.Join(fmt.Errorf("spawn split pane: %w", spawnErr), newPane.close())
-	}
 	newPane.session = session
+	if spawnErr != nil {
+		return 0, nil, errors.Join(fmt.Errorf("spawn split pane: %w", spawnErr), m.rollbackUnpublishedPanes(scope, rollback))
+	}
 	newPane.state = PaneStateRunning
 	newPane.desiredSize = pty.Size{Rows: ptyRows, Cols: ptyCols}
 	newPane.appliedSize = newPane.desiredSize
@@ -314,32 +322,27 @@ func (m *Mux) spawnSplit(scope mutationScope, origin PaneID, axis SplitAxis, spe
 		return m.resolveMetrics(id)
 	}
 	if err := m.sessions.registerScoped(scope, newPane); err != nil {
-		return 0, nil, errors.Join(err, newPane.close())
+		return 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
 	}
-	if err := m.sessions.startScoped(scope, newPane.id); err != nil {
-		return 0, nil, errors.Join(err, m.detachAndClosePane(scope, newPane.id, newPane, true))
+	rollback.markRegistered(newPane)
+	launchReader, err := m.sessions.prepareStartsScoped(scope, []PaneID{newPane.id})
+	if err != nil {
+		return 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
 	}
 	createdID, err := m.model.SplitWithMetrics(target, axis, m.bounds, resolveSplitMetrics)
 	if err != nil {
-		return 0, nil, errors.Join(err, m.detachAndClosePane(scope, newPane.id, newPane, true))
+		return 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
 	}
 	if createdID != predictedID {
-		preparedClose, prepareErr := newPane.prepareClose()
-		if prepareErr != nil {
-			return 0, nil, prepareErr
-		}
 		_, modelCloseErr := m.model.Close(createdID)
-		detached := m.sessions.detachScoped(scope, newPane.id)
-		if !detached.owned || detached.pane != newPane {
-			return 0, nil, errors.Join(invariantError("model allocated pane %d after predicting %d", createdID, predictedID), modelCloseErr, preparedClose.abort())
-		}
-		return 0, nil, errors.Join(invariantError("model allocated pane %d after predicting %d", createdID, predictedID), modelCloseErr, preparedClose.commit())
+		return 0, nil, errors.Join(invariantError("model allocated pane %d after predicting %d", createdID, predictedID), modelCloseErr, m.rollbackUnpublishedPanes(scope, rollback))
 	}
 	m.paneMetrics[createdID] = targetMetrics
 	resizeEvents, resizeErr := m.resizeBoundsAndApply(scope, m.bounds)
 	newPane.capture()
 	events := []Event{{Kind: PaneStarted, Pane: createdID}, {Kind: PaneFocused, Pane: createdID}}
 	events = append(events, resizeEvents...)
+	launchReader()
 	return createdID, m.ResolveEventAddresses(events), resizeErr
 }
 

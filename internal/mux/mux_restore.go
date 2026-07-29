@@ -60,6 +60,9 @@ func (a muxRestorePreparationOperationAdapter) prepareRestore() (*RestoreCandida
 	if err := a.scope.valid(m); err != nil {
 		return nil, err
 	}
+	if err := m.retryUnpublishedRollback(a.scope); err != nil {
+		return nil, fmt.Errorf("retry unpublished restore rollback: %w", err)
+	}
 	blueprint := a.blueprint
 	geometries := a.geometries
 	if m.pending != nil {
@@ -75,17 +78,25 @@ func (a muxRestorePreparationOperationAdapter) prepareRestore() (*RestoreCandida
 		return nil, err
 	}
 	candidate := build.candidate
-	preparedCloses, err := preparePaneClosures(candidate.panes)
+	rollback := newUnpublishedPaneRollback(candidate.panes)
+	preparedCloses, err := retainPaneClosuresWithFault(candidate.panes, func(p *pane) error {
+		return m.transactionFailure("restore-close-preflight", p)
+	})
+	rollback.retainPrepared(preparedCloses)
 	if err != nil {
-		return nil, err
+		candidate.aborted = true
+		return nil, errors.Join(err, m.rollbackUnpublishedPanes(a.scope, rollback))
 	}
 	m.pending = candidate
-	if err := m.provisionRestore(a.scope, candidate, build.specs); err != nil {
-		cleanupErr := m.abortRestorePrepared(a.scope, candidate, preparedCloses)
+	if err := m.provisionRestore(a.scope, candidate, build.specs, rollback); err != nil {
+		cleanupErr := m.abortRestorePreparation(a.scope, candidate, rollback)
 		return nil, errors.Join(err, cleanupErr)
 	}
-	if err := abortPaneClosures(preparedCloses); err != nil {
-		return nil, err
+	if abortErr := abortPaneClosuresWithFault(preparedCloses, func(prepared *preparedPaneClose) error {
+		return m.transactionFailure("restore-close-abort", prepared.pane)
+	}); abortErr != nil {
+		cleanupErr := m.abortRestorePreparation(a.scope, candidate, rollback)
+		return nil, errors.Join(abortErr, cleanupErr)
 	}
 	return candidate, nil
 }
@@ -206,7 +217,7 @@ func (a muxRestorePublicationOperationAdapter) abortRestore(candidate *RestoreCa
 		return ErrRestoreCommitted
 	}
 	if candidate.aborted {
-		return nil
+		return m.retryUnpublishedRollback(a.scope)
 	}
 	if m.pending != candidate {
 		return ErrInvalidRestore
@@ -229,26 +240,26 @@ func (m *Mux) abortRestorePrepared(scope mutationScope, candidate *RestoreCandid
 	if err := scope.valid(m); err != nil {
 		return err
 	}
+	rollback := newUnpublishedPaneRollback(candidate.panes)
+	rollback.retainPrepared(preparedCloses)
+	for index := range rollback.registered {
+		rollback.registered[index] = true
+	}
+	return m.abortRestorePreparation(scope, candidate, rollback)
+}
+
+func (m *Mux) abortRestorePreparation(scope mutationScope, candidate *RestoreCandidate, rollback *unpublishedPaneRollback) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
 	candidate.aborted = true
 	if m.pending == candidate {
 		m.pending = nil
 	}
-	var cleanup []error
-	for i := len(candidate.panes) - 1; i >= 0; i-- {
-		p := candidate.panes[i]
-		detached := m.sessions.abortScoped(scope, p.id, p)
-		m.sessions.releaseScoped(scope, p.id)
-		if detached.owned && detached.pane != p {
-			cleanup = append(cleanup, invariantError("pane %d restore abort changed ownership", p.id))
-		}
-		if err := preparedCloses[i].commit(); err != nil {
-			cleanup = append(cleanup, fmt.Errorf("pane %d close: %w", p.id, err))
-		}
-	}
-	return errors.Join(cleanup...)
+	return m.rollbackUnpublishedPanes(scope, rollback)
 }
 
-func (m *Mux) provisionRestore(scope mutationScope, candidate *RestoreCandidate, specs []SpawnSpec) error {
+func (m *Mux) provisionRestore(scope mutationScope, candidate *RestoreCandidate, specs []SpawnSpec, rollback *unpublishedPaneRollback) error {
 	if err := scope.valid(m); err != nil {
 		return err
 	}
@@ -259,16 +270,11 @@ func (m *Mux) provisionRestore(scope mutationScope, candidate *RestoreCandidate,
 		}
 		rows, cols := terminalSize(p.geometry)
 		session, err := m.sessions.spawnScoped(scope, rows, cols, specs[i].Options)
+		p.session = session
 		if err != nil {
 			m.sessions.releaseScoped(scope, p.id)
-			if session != nil {
-				if closeErr := session.Close(); closeErr != nil {
-					return errors.Join(fmt.Errorf("spawn restore pane %d: %w", p.id, err), fmt.Errorf("pane %d close: %w", p.id, closeErr))
-				}
-			}
 			return fmt.Errorf("spawn restore pane %d: %w", p.id, err)
 		}
-		p.session = session
 		p.state = PaneStateRunning
 		p.desiredSize = pty.Size{Rows: rows, Cols: cols}
 		p.appliedSize = p.desiredSize
@@ -276,6 +282,7 @@ func (m *Mux) provisionRestore(scope mutationScope, candidate *RestoreCandidate,
 		if err := m.sessions.registerScoped(scope, p); err != nil {
 			return fmt.Errorf("register restore pane %d: %w", p.id, err)
 		}
+		rollback.markRegistered(p)
 	}
 	return nil
 }
@@ -315,13 +322,8 @@ func buildRestoreCandidateScoped(scope mutationScope, m *Mux, snapshot layoutres
 		if built {
 			return
 		}
-		var cleanup []error
-		for index := len(candidate.panes) - 1; index >= 0; index-- {
-			if err := candidate.panes[index].close(); err != nil {
-				cleanup = append(cleanup, fmt.Errorf("pane %d close: %w", candidate.panes[index].id, err))
-			}
-		}
-		resultErr = errors.Join(resultErr, errors.Join(cleanup...))
+		candidate.aborted = true
+		resultErr = errors.Join(resultErr, m.rollbackUnpublishedPanes(scope, newUnpublishedPaneRollback(candidate.panes)))
 	}()
 	var specs []SpawnSpec
 	geometryIndex := 0

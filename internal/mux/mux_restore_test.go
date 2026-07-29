@@ -10,6 +10,7 @@ import (
 	"cervterm/internal/layoutrestore"
 	"cervterm/internal/layoutstate"
 	"cervterm/internal/pty"
+	"cervterm/internal/termimage"
 	"cervterm/internal/windowbounds"
 )
 
@@ -36,6 +37,17 @@ func (f *restoreTestFactory) Spawn(rows, cols uint16, options pty.Options) (pty.
 		return nil, errors.New("injected spawn failure")
 	}
 	return s, nil
+}
+
+type restoreCloseOrderSession struct {
+	*fakeSession
+	id    PaneID
+	order *[]PaneID
+}
+
+func (s *restoreCloseOrderSession) Close() error {
+	*s.order = append(*s.order, s.id)
+	return s.fakeSession.Close()
 }
 
 func restorePane(program string) layoutrestore.Node {
@@ -272,6 +284,181 @@ func TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestMuxRestoreClosePreflightFailureClosesBuiltStateInReverseAndRetries(t *testing.T) {
+	limits := termimage.DefaultLimits()
+	factory := &restoreTestFactory{}
+	m := New(factory, Options{IngressCapacity: 64, ImageLimits: &limits, KittyEnabled: true})
+	defer m.Shutdown()
+	before := m.model
+	bounds, metrics := m.bounds, m.paneMetrics
+	injected := errors.New("injected restore close preflight failure")
+	cleanupFailure := errors.New("injected restore cleanup failure")
+	var captured []*pane
+	closeOrder := make([]PaneID, 0, 7)
+	sessions := make(map[PaneID]*restoreCloseOrderSession)
+	m.rollbackFault = func(stage string, p *pane) error {
+		if stage != "restore-close-preflight" {
+			return nil
+		}
+		captured = append(captured, p)
+		if p.id != 8 {
+			return nil
+		}
+		for _, acquired := range captured[:len(captured)-1] {
+			prepared, err := acquired.prepareClose()
+			if prepared != nil || !errors.Is(err, termimage.ErrOwnerBusy) {
+				t.Fatalf("pane %d close preflight was not retained: prepared=%#v err=%v", acquired.id, prepared, err)
+			}
+		}
+		for _, built := range captured {
+			base := newFakeSession()
+			if built.id == 5 {
+				base.closeErr = cleanupFailure
+			}
+			session := &restoreCloseOrderSession{fakeSession: base, id: built.id, order: &closeOrder}
+			sessions[built.id] = session
+			built.session = session
+			built.state = PaneStateRunning
+		}
+		return injected
+	}
+	candidate, err := m.PrepareRestore(blueprintFromSnapshot(t, restoreSnapshot()), restoreGeometries())
+	m.rollbackFault = nil
+	if candidate != nil || !errors.Is(err, injected) || !errors.Is(err, cleanupFailure) {
+		t.Fatalf("candidate=%#v err=%v", candidate, err)
+	}
+	if len(factory.calls) != 0 {
+		t.Fatalf("restore preflight spawned %d factory sessions", len(factory.calls))
+	}
+	if want := []PaneID{8, 7, 6, 5, 4, 3, 2}; !reflect.DeepEqual(closeOrder, want) {
+		t.Fatalf("close order=%v want=%v", closeOrder, want)
+	}
+	if len(captured) != 7 {
+		t.Fatalf("captured panes=%d", len(captured))
+	}
+	for _, built := range captured {
+		if built.state != PaneStateClosed || built.imageStore != nil || sessions[built.id].closes() != 1 || m.sessions.wasClosed(built.id) {
+			t.Fatalf("pane %d state=%v store=%p closes=%d tombstoned=%v", built.id, built.state, built.imageStore, sessions[built.id].closes(), m.sessions.wasClosed(built.id))
+		}
+	}
+	assertPristineRestoreMux(t, m, before, bounds, metrics)
+	if events := m.Drain(64); len(events) != 0 {
+		t.Fatalf("restore preflight failure leaked events %#v", events)
+	}
+	retry, err := m.PrepareRestore(blueprintFromSnapshot(t, restoreSnapshot()), restoreGeometries())
+	if err != nil || len(retry.panes) != 7 || retry.panes[0].id != 2 || retry.panes[6].id != 8 {
+		t.Fatalf("retry candidate=%#v err=%v", retry, err)
+	}
+	if err := m.AbortRestore(retry); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMuxRestoreCloseAbortFailureClosesProvisionedStateAndRetries(t *testing.T) {
+	limits := termimage.DefaultLimits()
+	factory := &restoreTestFactory{}
+	m := New(factory, Options{IngressCapacity: 64, ImageLimits: &limits, KittyEnabled: true})
+	defer m.Shutdown()
+	before := m.model
+	bounds, metrics := m.bounds, m.paneMetrics
+	injected := errors.New("injected restore close abort failure")
+	var captured []*pane
+	m.rollbackFault = func(stage string, p *pane) error {
+		if stage != "restore-close-abort" {
+			return nil
+		}
+		captured = append(captured, p)
+		if p.id != 5 {
+			return nil
+		}
+		probe, err := p.prepareClose()
+		if probe != nil || !errors.Is(err, termimage.ErrOwnerBusy) {
+			t.Fatalf("pane %d close token was not retained: prepared=%#v err=%v", p.id, probe, err)
+		}
+		return injected
+	}
+	candidate, err := m.PrepareRestore(blueprintFromSnapshot(t, restoreSnapshot()), restoreGeometries())
+	m.rollbackFault = nil
+	if candidate != nil || !errors.Is(err, injected) {
+		t.Fatalf("candidate=%#v err=%v", candidate, err)
+	}
+	if want := []PaneID{8, 7, 6, 5, 4, 3, 2}; len(captured) != len(want) {
+		t.Fatalf("abort visits=%d want=%d", len(captured), len(want))
+	} else {
+		for index, p := range captured {
+			if p.id != want[index] {
+				t.Fatalf("abort order=%v want=%v", paneIDsFromPanes(captured), want)
+			}
+		}
+	}
+	if len(factory.sessions) != 7 {
+		t.Fatalf("provisioned sessions=%d", len(factory.sessions))
+	}
+	for index, p := range captured {
+		if p.state != PaneStateClosed || p.imageStore != nil || factory.sessions[index].closes() != 1 || m.sessions.wasClosed(p.id) {
+			t.Fatalf("pane %d state=%v store=%p session %d closes=%d tombstoned=%v", p.id, p.state, p.imageStore, index, factory.sessions[index].closes(), m.sessions.wasClosed(p.id))
+		}
+	}
+	assertPristineRestoreMux(t, m, before, bounds, metrics)
+	if events := m.Drain(64); len(events) != 0 {
+		t.Fatalf("restore abort failure leaked events %#v", events)
+	}
+	retry, err := m.PrepareRestore(blueprintFromSnapshot(t, restoreSnapshot()), restoreGeometries())
+	if err != nil || len(retry.panes) != 7 || retry.panes[0].id != 2 || retry.panes[6].id != 8 {
+		t.Fatalf("retry candidate=%#v err=%v", retry, err)
+	}
+	if err := m.AbortRestore(retry); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMuxRestoreAbortVerifiesExactRegistryDetachAndRetainsRetryOwner(t *testing.T) {
+	factory := &restoreTestFactory{}
+	m := newRestoreMux(factory)
+	defer m.Shutdown()
+	candidate, err := m.PrepareRestore(blueprintFromSnapshot(t, restoreSnapshot()), restoreGeometries())
+	if err != nil {
+		t.Fatal(err)
+	}
+	victim := candidate.panes[len(candidate.panes)-1]
+	intruder := newPane(victim.id, victim.terminal.Cols(), victim.terminal.Rows(), nil, nil)
+	m.sessions.mu.Lock()
+	m.sessions.panes[victim.id] = intruder
+	m.sessions.mu.Unlock()
+
+	err = m.AbortRestore(candidate)
+	if err == nil || m.unpublishedRollback == nil || !candidate.aborted || m.pending != nil {
+		t.Fatalf("abort err=%v rollback=%p aborted=%v pending=%p", err, m.unpublishedRollback, candidate.aborted, m.pending)
+	}
+	if current, ok := m.sessions.lookup(victim.id); !ok || current != intruder {
+		t.Fatalf("registry mismatch was silently detached: current=%p ok=%v", current, ok)
+	}
+	if victim.state != PaneStateRunning || factory.sessions[len(factory.sessions)-1].closes() != 0 {
+		t.Fatalf("victim lost retry ownership state=%v closes=%d", victim.state, factory.sessions[len(factory.sessions)-1].closes())
+	}
+
+	m.sessions.mu.Lock()
+	if m.sessions.panes[victim.id] == intruder {
+		m.sessions.panes[victim.id] = victim
+	}
+	m.sessions.mu.Unlock()
+	if err := m.AbortRestore(candidate); err != nil {
+		t.Fatalf("retry abort=%v", err)
+	}
+	panes, reserved, started := m.sessions.activeCounts()
+	if m.unpublishedRollback != nil || panes != 0 || reserved != 0 || started != 0 || victim.state != PaneStateClosed || factory.sessions[len(factory.sessions)-1].closes() != 1 {
+		t.Fatalf("retry cleanup rollback=%p counts=%d/%d/%d state=%v closes=%d", m.unpublishedRollback, panes, reserved, started, victim.state, factory.sessions[len(factory.sessions)-1].closes())
+	}
+}
+
+func paneIDsFromPanes(panes []*pane) []PaneID {
+	ids := make([]PaneID, len(panes))
+	for index, p := range panes {
+		ids[index] = p.id
+	}
+	return ids
 }
 
 func TestMuxRestoreAbortCommitMisuseAndStaleIngress(t *testing.T) {

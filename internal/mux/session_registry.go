@@ -170,7 +170,10 @@ func (r *localSessionRegistry) registerScoped(scope mutationScope, p *pane) erro
 	return nil
 }
 
-// prepareStarts atomically reserves reader WaitGroup slots without launching any goroutine.
+// prepareStarts validates a future reader launch without publishing started state
+// or reserving WaitGroup work. Mux owner serialization keeps the captured panes
+// stable until the returned closure runs after model publication; discarding the
+// closure therefore provides bounded cancellation for unpublished rollback.
 func (r *localSessionRegistry) prepareStartsScoped(scope mutationScope, ids []PaneID) (func(), error) {
 	if err := r.validateMutation(scope); err != nil {
 		return nil, err
@@ -199,14 +202,19 @@ func (r *localSessionRegistry) prepareStartsScoped(scope mutationScope, ids []Pa
 		}
 		panes[i] = p
 	}
-	for _, p := range panes {
-		r.started[p.id] = struct{}{}
-	}
-	r.readers.Add(len(panes))
+	var once sync.Once
 	return func() {
-		for _, p := range panes {
-			p.launchReader(r.ctx, r.incoming, r.wake, &r.readers)
-		}
+		once.Do(func() {
+			r.mu.Lock()
+			for _, p := range panes {
+				r.started[p.id] = struct{}{}
+			}
+			r.readers.Add(len(panes))
+			r.mu.Unlock()
+			for _, p := range panes {
+				p.launchReader(r.ctx, r.incoming, r.wake, &r.readers)
+			}
+		})
 	}, nil
 }
 

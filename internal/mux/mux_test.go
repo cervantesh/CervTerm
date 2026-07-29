@@ -17,13 +17,14 @@ type fakeSession struct {
 	reader *io.PipeReader
 	writer *io.PipeWriter
 
-	mu         sync.Mutex
-	writes     [][]byte
-	resizes    []pty.Size
-	resizeErr  error
-	closeErr   error
-	closeCount int
-	onResize   func(pty.Size)
+	mu          sync.Mutex
+	writes      [][]byte
+	resizes     []pty.Size
+	resizeErr   error
+	closeErr    error
+	closeCount  int
+	readerCount int
+	onResize    func(pty.Size)
 }
 
 func newFakeSession() *fakeSession {
@@ -31,7 +32,12 @@ func newFakeSession() *fakeSession {
 	return &fakeSession{reader: r, writer: w}
 }
 
-func (s *fakeSession) Reader() io.Reader { return s.reader }
+func (s *fakeSession) Reader() io.Reader {
+	s.mu.Lock()
+	s.readerCount++
+	s.mu.Unlock()
+	return s.reader
+}
 func (s *fakeSession) Write(data []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -71,6 +77,11 @@ func (s *fakeSession) closes() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.closeCount
+}
+func (s *fakeSession) readers() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.readerCount
 }
 func (s *fakeSession) resizeCount() int {
 	s.mu.Lock()

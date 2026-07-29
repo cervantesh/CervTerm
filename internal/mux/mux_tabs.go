@@ -22,6 +22,9 @@ func (m *Mux) spawnTab(scope mutationScope, spec SpawnSpec, metrics CellMetrics,
 	if err := scope.validActiveOrigin(m); err != nil {
 		return 0, 0, nil, err
 	}
+	if err := m.retryUnpublishedRollback(scope); err != nil {
+		return 0, 0, nil, fmt.Errorf("retry unpublished pane rollback: %w", err)
+	}
 	if !m.bootstrapped {
 		return 0, 0, nil, ErrEmptyModel
 	}
@@ -41,6 +44,7 @@ func (m *Mux) spawnTab(scope mutationScope, spec SpawnSpec, metrics CellMetrics,
 	}
 	defer m.sessions.releaseScoped(scope, paneID)
 	pane := m.createPane(scope, paneID, cols, rows)
+	rollback := newSinglePaneRollback(pane)
 	pane.setFreshLaunch(spec)
 	pane.terminal.SetPaletteBase(*m.paletteBase)
 	if m.options.SetClipboard != nil {
@@ -48,39 +52,47 @@ func (m *Mux) spawnTab(scope mutationScope, spec SpawnSpec, metrics CellMetrics,
 	}
 	ptyRows, ptyCols := terminalSize(PaneGeometry{Pane: paneID, Pixels: m.bounds, Cols: cols, Rows: rows})
 	session, spawnErr := m.sessions.spawnScoped(scope, ptyRows, ptyCols, spec.Options)
-	if spawnErr != nil {
-		if session != nil {
-			_ = session.Close()
-		}
-		return 0, 0, nil, errors.Join(fmt.Errorf("spawn tab: %w", spawnErr), pane.close())
-	}
 	pane.session = session
+	if spawnErr != nil {
+		rollbackErr := m.rollbackUnpublishedPanes(scope, rollback)
+		return 0, 0, nil, errors.Join(fmt.Errorf("spawn tab: %w", spawnErr), rollbackErr)
+	}
 	pane.state = PaneStateRunning
 	pane.geometry = effectiveGeometry(PaneGeometry{Pane: paneID, Pixels: m.bounds, Cols: cols, Rows: rows})
 	pane.desiredSize = pty.Size{Rows: ptyRows, Cols: ptyCols}
 	pane.appliedSize = pane.desiredSize
-	if err := m.sessions.registerScoped(scope, pane); err != nil {
-		return 0, 0, nil, errors.Join(err, pane.close())
-	}
-	if err := m.sessions.startScoped(scope, pane.id); err != nil {
-		return 0, 0, nil, errors.Join(err, m.detachAndClosePane(scope, pane.id, pane, true))
+	if err := m.transactionFailure("spawn-tab-close-preflight", pane); err != nil {
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
 	}
 	preparedClose, err := pane.prepareClose()
 	if err != nil {
-		return 0, 0, nil, err
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
+	}
+	rollback.retainPrepared([]*preparedPaneClose{preparedClose})
+	if err := m.sessions.registerScoped(scope, pane); err != nil {
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
+	}
+	rollback.markRegistered(pane)
+	launchReaders, err := m.sessions.prepareStartsScoped(scope, []PaneID{pane.id})
+	if err != nil {
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
+	}
+	abortErr := m.transactionFailure("spawn-tab-close-abort", pane)
+	if abortErr == nil {
+		abortErr = preparedClose.abort()
+	}
+	if abortErr != nil {
+		return 0, 0, nil, errors.Join(abortErr, m.rollbackUnpublishedPanes(scope, rollback))
+	}
+	if err := m.transactionFailure("spawn-tab-model", pane); err != nil {
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
 	}
 	if err := m.model.commitTab(tabID, paneID, title); err != nil {
-		detached := m.sessions.detachScoped(scope, pane.id)
-		if !detached.owned || detached.pane != pane {
-			return 0, 0, nil, errors.Join(err, invariantError("tab %d pane %d changed ownership before rollback", tabID, paneID), preparedClose.abort())
-		}
-		return 0, 0, nil, errors.Join(err, preparedClose.commit())
-	}
-	if err := preparedClose.abort(); err != nil {
-		return 0, 0, nil, err
+		return 0, 0, nil, errors.Join(err, m.rollbackUnpublishedPanes(scope, rollback))
 	}
 	m.paneMetrics[paneID] = metrics
 	pane.capture()
+	launchReaders()
 	return tabID, paneID, m.ResolveEventAddresses([]Event{{Kind: TabSpawned, Tab: tabID, Pane: paneID, Text: title, Revision: 1}, {Kind: TabActivated, Tab: tabID, Pane: paneID, Revision: 1}, {Kind: PaneStarted, Tab: tabID, Pane: paneID}, {Kind: PaneFocused, Tab: tabID, Pane: paneID}}), nil
 }
 

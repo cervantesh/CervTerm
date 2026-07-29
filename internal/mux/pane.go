@@ -3,6 +3,7 @@ package mux
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"cervterm/internal/core"
@@ -219,15 +220,31 @@ func (p *preparedPaneClose) commit() error {
 }
 
 func preparePaneClosures(panes []*pane) ([]*preparedPaneClose, error) {
+	return preparePaneClosuresWithFault(panes, nil)
+}
+
+func preparePaneClosuresWithFault(panes []*pane, before func(*pane) error) ([]*preparedPaneClose, error) {
+	prepared, err := retainPaneClosuresWithFault(panes, before)
+	if err != nil {
+		return prepared, errors.Join(err, abortPaneClosures(prepared))
+	}
+	return prepared, nil
+}
+
+// retainPaneClosuresWithFault leaves every successful preflight retained when a
+// later pane fails so an enclosing rollback owner never has to reacquire after
+// losing its only close capability.
+func retainPaneClosuresWithFault(panes []*pane, before func(*pane) error) ([]*preparedPaneClose, error) {
 	prepared := make([]*preparedPaneClose, 0, len(panes))
 	for _, p := range panes {
+		if before != nil {
+			if err := before(p); err != nil {
+				return prepared, err
+			}
+		}
 		closeState, err := p.prepareClose()
 		if err != nil {
-			var abortErrors []error
-			for index := len(prepared) - 1; index >= 0; index-- {
-				abortErrors = append(abortErrors, prepared[index].abort())
-			}
-			return nil, errors.Join(err, errors.Join(abortErrors...))
+			return prepared, err
 		}
 		prepared = append(prepared, closeState)
 	}
@@ -235,11 +252,161 @@ func preparePaneClosures(panes []*pane) ([]*preparedPaneClose, error) {
 }
 
 func abortPaneClosures(prepared []*preparedPaneClose) error {
+	return abortPaneClosuresWithFault(prepared, nil)
+}
+
+func abortPaneClosuresWithFault(prepared []*preparedPaneClose, before func(*preparedPaneClose) error) error {
 	var abortErrors []error
 	for index := len(prepared) - 1; index >= 0; index-- {
+		if before != nil {
+			if err := before(prepared[index]); err != nil {
+				abortErrors = append(abortErrors, err)
+				continue
+			}
+		}
 		abortErrors = append(abortErrors, prepared[index].abort())
 	}
 	return errors.Join(abortErrors...)
+}
+
+// unpublishedPaneRollback is the single bounded mux-owned recovery candidate for
+// panes that never reached model publication. It retains the pane and any acquired
+// close capability until reverse-order cleanup either completes or can be retried.
+type unpublishedPaneRollback struct {
+	panes      []*pane
+	closes     []*preparedPaneClose
+	registered []bool
+}
+
+func newUnpublishedPaneRollback(panes []*pane) *unpublishedPaneRollback {
+	return &unpublishedPaneRollback{
+		panes:      append([]*pane(nil), panes...),
+		closes:     make([]*preparedPaneClose, len(panes)),
+		registered: make([]bool, len(panes)),
+	}
+}
+
+func newSinglePaneRollback(target *pane) *unpublishedPaneRollback {
+	return newUnpublishedPaneRollback([]*pane{target})
+}
+
+func (r *unpublishedPaneRollback) retainPrepared(prepared []*preparedPaneClose) {
+	if r == nil {
+		return
+	}
+	copy(r.closes, prepared)
+}
+
+func (r *unpublishedPaneRollback) markRegistered(target *pane) {
+	if r == nil {
+		return
+	}
+	for index, owned := range r.panes {
+		if owned == target {
+			r.registered[index] = true
+			return
+		}
+	}
+}
+
+func (r *unpublishedPaneRollback) resolved() bool {
+	if r == nil {
+		return true
+	}
+	for _, p := range r.panes {
+		if p != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Mux) retryUnpublishedRollback(scope mutationScope) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
+	if m.unpublishedRollback == nil {
+		return nil
+	}
+	return m.rollbackUnpublishedPanes(scope, m.unpublishedRollback)
+}
+
+func (m *Mux) rollbackUnpublishedPanes(scope mutationScope, rollback *unpublishedPaneRollback) error {
+	if err := scope.valid(m); err != nil {
+		return err
+	}
+	if rollback == nil {
+		return nil
+	}
+	var rollbackErrors []error
+	for index := len(rollback.panes) - 1; index >= 0; index-- {
+		p := rollback.panes[index]
+		if p == nil {
+			continue
+		}
+		closeState := rollback.closes[index]
+		if closeState == nil || closeState.finished {
+			prepared, err := p.prepareClose()
+			if err != nil {
+				rollbackErrors = append(rollbackErrors, fmt.Errorf("pane %d close preflight: %w", p.id, err))
+				continue
+			}
+			closeState = prepared
+			rollback.closes[index] = prepared
+		}
+
+		if rollback.registered[index] {
+			detached := m.sessions.abortScoped(scope, p.id, p)
+			if !detached.owned || detached.pane != p {
+				rollbackErrors = append(rollbackErrors, invariantError("pane %d unpublished rollback lost registry ownership", p.id))
+				continue
+			}
+			rollback.registered[index] = false
+		} else if current, registered := m.sessions.lookup(p.id); registered {
+			if current != p {
+				rollbackErrors = append(rollbackErrors, invariantError("pane %d unpublished rollback collided with registry ownership", p.id))
+				continue
+			}
+			detached := m.sessions.abortScoped(scope, p.id, p)
+			if !detached.owned || detached.pane != p {
+				rollbackErrors = append(rollbackErrors, invariantError("pane %d hidden registry ownership could not be detached", p.id))
+				continue
+			}
+			rollbackErrors = append(rollbackErrors, invariantError("pane %d had untracked unpublished registry ownership", p.id))
+		}
+
+		m.sessions.releaseScoped(scope, p.id)
+		closeErr := closeState.commit()
+		if closeErr != nil {
+			rollbackErrors = append(rollbackErrors, fmt.Errorf("pane %d close: %w", p.id, closeErr))
+		}
+		if p.state == PaneStateClosed && p.imageStore == nil {
+			rollback.panes[index] = nil
+			rollback.closes[index] = nil
+			continue
+		}
+		if closeErr == nil {
+			rollbackErrors = append(rollbackErrors, invariantError("pane %d close returned without releasing ownership", p.id))
+		}
+	}
+
+	if rollback.resolved() {
+		if m.unpublishedRollback == rollback {
+			m.unpublishedRollback = nil
+		}
+	} else if m.unpublishedRollback == nil || m.unpublishedRollback == rollback {
+		m.unpublishedRollback = rollback
+	} else {
+		rollbackErrors = append(rollbackErrors, invariantError("unpublished rollback candidate bound exceeded"))
+	}
+	return errors.Join(rollbackErrors...)
+}
+
+func (m *Mux) transactionFailure(stage string, p *pane) error {
+	if m.rollbackFault != nil {
+		return m.rollbackFault(stage, p)
+	}
+	return nil
 }
 
 func (p *pane) close() error {
