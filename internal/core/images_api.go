@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"math"
+	"sync"
 
 	"cervterm/internal/termimage"
 )
@@ -67,10 +68,17 @@ func (t *Terminal) AttachImageStore(store *termimage.Store) error {
 	if t.imageStore != nil {
 		return ErrImageStoreAttached
 	}
+	publicationGeneration := t.imagePublicationGeneration.Load()
+	if publicationGeneration == math.MaxUint64 {
+		return termimage.ErrGenerationExhausted
+	}
 	owner := store.ClaimOwner()
 	if owner == nil {
 		return ErrImageStoreAttached
 	}
+	// This atomic store is the publication linearization point. Claiming the
+	// owner is the last fallible step, so publication cannot leave a partial attach.
+	t.imagePublicationGeneration.Store(publicationGeneration + 1)
 	t.imageStore = store
 	t.imageOwner = owner
 	t.imageSidecars = &imageSidecars{}
@@ -121,21 +129,46 @@ func (t *Terminal) ResetImages() error {
 
 // PreparedImageStoreClose binds the exact store, owner, and sidecar publication
 // observed during close preflight. Commit clears core ownership only after the
-// retained StoreOwner transaction has closed the store.
+// retained StoreOwner transaction has closed the store. Value copies share one
+// serialized resolution without adding a lock to Terminal's owner-thread hot path.
 type PreparedImageStoreClose struct {
-	terminal *Terminal
-	store    *termimage.Store
-	owner    *termimage.StoreOwner
-	sidecars *imageSidecars
-	prepared *termimage.PreparedStoreClose
-	finished bool
+	terminal              *Terminal
+	store                 *termimage.Store
+	owner                 *termimage.StoreOwner
+	sidecars              *imageSidecars
+	prepared              *termimage.PreparedStoreClose
+	publicationGeneration uint64
+	resolution            *preparedImageStoreCloseResolution
+}
+
+type preparedImageStoreCloseOutcome uint8
+
+const (
+	preparedImageStoreClosePending preparedImageStoreCloseOutcome = iota
+	preparedImageStoreCloseCommitted
+	preparedImageStoreCloseAborted
+)
+
+type preparedImageStoreCloseResolution struct {
+	mu      sync.Mutex
+	outcome preparedImageStoreCloseOutcome
+
+	afterStoreCommit func() // package-private deterministic transaction seam
 }
 
 // PrepareCloseImageStore rejects wrong, stale, closed, busy, or wrong-thread
 // ownership before callers detach mux/core state. Every successful preflight
 // must be resolved by Commit or Abort on the owner thread.
 func (t *Terminal) PrepareCloseImageStore() (*PreparedImageStoreClose, error) {
-	prepared := &PreparedImageStoreClose{terminal: t}
+	publicationGeneration := uint64(0)
+	if t != nil {
+		publicationGeneration = t.imagePublicationGeneration.Load()
+	}
+	prepared := &PreparedImageStoreClose{
+		terminal:              t,
+		publicationGeneration: publicationGeneration,
+		resolution:            &preparedImageStoreCloseResolution{},
+	}
 	if t == nil || t.imageStore == nil {
 		return prepared, nil
 	}
@@ -151,27 +184,72 @@ func (t *Terminal) PrepareCloseImageStore() (*PreparedImageStoreClose, error) {
 	return prepared, nil
 }
 
+func (p *PreparedImageStoreClose) matchesImagePublication() bool {
+	if p.terminal == nil {
+		return p.publicationGeneration == 0
+	}
+	return p.terminal.imagePublicationGeneration.Load() == p.publicationGeneration
+}
+
+func (p *PreparedImageStoreClose) matchesAttachedTerminalState() bool {
+	return p.terminal != nil &&
+		p.terminal.imageStore == p.store &&
+		p.terminal.imageOwner == p.owner &&
+		p.terminal.imageSidecars == p.sidecars
+}
+
 func (p *PreparedImageStoreClose) Commit() error {
 	if p == nil {
 		return termimage.ErrWrongOwner
 	}
-	if p.finished {
+	resolution := p.resolution
+	if resolution == nil {
+		return termimage.ErrPreparedState
+	}
+	resolution.mu.Lock()
+	defer resolution.mu.Unlock()
+
+	switch resolution.outcome {
+	case preparedImageStoreCloseCommitted:
 		return nil
+	case preparedImageStoreCloseAborted:
+		return termimage.ErrPreparedState
 	}
 	if p.store == nil {
-		p.finished = true
+		if !p.matchesImagePublication() {
+			return termimage.ErrPreparedState
+		}
+		resolution.outcome = preparedImageStoreCloseCommitted
 		return nil
 	}
-	if p.terminal == nil || p.terminal.imageStore != p.store || p.terminal.imageOwner != p.owner || p.terminal.imageSidecars != p.sidecars {
-		return errors.Join(termimage.ErrPreparedState, p.prepared.Abort())
+	if p.prepared == nil {
+		return termimage.ErrPreparedState
+	}
+	// The retained owner capability attests the attached store before any plain
+	// Terminal image field is read.
+	if err := p.prepared.Validate(); err != nil {
+		return err
+	}
+	if !p.matchesImagePublication() {
+		return termimage.ErrPreparedState
+	}
+	if p.publicationGeneration == math.MaxUint64 {
+		return termimage.ErrGenerationExhausted
+	}
+	if !p.matchesAttachedTerminalState() {
+		return termimage.ErrPreparedState
 	}
 	if err := p.prepared.Commit(); err != nil {
 		return err
 	}
+	if resolution.afterStoreCommit != nil {
+		resolution.afterStoreCommit()
+	}
 	p.terminal.imageStore = nil
 	p.terminal.imageOwner = nil
 	p.terminal.imageSidecars = nil
-	p.finished = true
+	p.terminal.imagePublicationGeneration.Store(p.publicationGeneration + 1)
+	resolution.outcome = preparedImageStoreCloseCommitted
 	return nil
 }
 
@@ -179,15 +257,44 @@ func (p *PreparedImageStoreClose) Abort() error {
 	if p == nil {
 		return termimage.ErrWrongOwner
 	}
-	if p.finished {
+	resolution := p.resolution
+	if resolution == nil {
+		return termimage.ErrPreparedState
+	}
+	resolution.mu.Lock()
+	defer resolution.mu.Unlock()
+
+	switch resolution.outcome {
+	case preparedImageStoreCloseAborted:
+		return nil
+	case preparedImageStoreCloseCommitted:
+		return termimage.ErrPreparedState
+	}
+	if p.store == nil {
+		if !p.matchesImagePublication() {
+			return termimage.ErrPreparedState
+		}
+		resolution.outcome = preparedImageStoreCloseAborted
 		return nil
 	}
-	if p.prepared != nil {
-		if err := p.prepared.Abort(); err != nil {
-			return err
-		}
+	if p.prepared == nil {
+		return termimage.ErrPreparedState
 	}
-	p.finished = true
+	// Validate the retained owner capability before reading plain Terminal image
+	// fields; wrong-thread callers therefore fail without racing owner-thread state.
+	if err := p.prepared.Validate(); err != nil {
+		return err
+	}
+	if !p.matchesImagePublication() {
+		return termimage.ErrPreparedState
+	}
+	if !p.matchesAttachedTerminalState() {
+		return termimage.ErrPreparedState
+	}
+	if err := p.prepared.Abort(); err != nil {
+		return err
+	}
+	resolution.outcome = preparedImageStoreCloseAborted
 	return nil
 }
 

@@ -267,6 +267,24 @@ func (o *StoreOwner) PublishPrepared(prepared *PreparedStoreState) error {
 	return o.store.publishPrepared(scope, prepared)
 }
 
+// Validate reacquires and releases a fresh owner scope without mutating prepared
+// close or store state. It attests the calling owner thread before callers inspect
+// state outside termimage.
+func (p *PreparedStoreClose) Validate() error {
+	if p == nil || p.owner == nil || p.store == nil {
+		return ErrWrongOwner
+	}
+	scope, err := p.owner.enterPreparedClose(p)
+	if err != nil {
+		return err
+	}
+	defer p.owner.leave(scope)
+	if p.generation != p.owner.generation || !p.active {
+		return ErrStaleMutationScope
+	}
+	return nil
+}
+
 func (p *PreparedStoreClose) Commit() error {
 	if p == nil || p.owner == nil || p.store == nil {
 		return ErrWrongOwner

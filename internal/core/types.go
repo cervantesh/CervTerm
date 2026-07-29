@@ -1,6 +1,10 @@
 package core
 
-import "cervterm/internal/termimage"
+import (
+	"sync/atomic"
+
+	"cervterm/internal/termimage"
+)
 
 type Attr struct {
 	FG, BG                                LogicalColor
@@ -171,4 +175,6 @@ type Terminal struct {
 	imageOwner              *termimage.StoreOwner
 	imageSidecars           *imageSidecars
 	imageAnchorGeneration   uint64
+
+	imagePublicationGeneration atomic.Uint64
 }

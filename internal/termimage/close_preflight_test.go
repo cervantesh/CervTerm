@@ -75,6 +75,51 @@ func TestPreparedStoreCloseReservesGateAndRejectsLeakedCrossThreadScope(t *testi
 	}
 }
 
+func TestPreparedStoreCloseValidateReacquiresOwnerScopeWithoutMutation(t *testing.T) {
+	store := NewStore(NewProcessBudget(), DefaultLimits())
+	owner := store.ClaimOwner()
+	if owner == nil {
+		t.Fatal("store owner unavailable")
+	}
+	prepared, err := owner.PrepareClose(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := captureL302StoreFingerprint(store)
+
+	wrongThread := make(chan error, 1)
+	go func() { wrongThread <- prepared.Validate() }()
+	if err := <-wrongThread; !errors.Is(err, ErrWrongOwnerThread) {
+		t.Fatalf("cross-thread validation=%v", err)
+	}
+	if owner.activeScope.Load() != 0 || store.preparedClose.Load() != prepared {
+		t.Fatal("cross-thread validation changed close ownership")
+	}
+	if after := captureL302StoreFingerprint(store); !reflect.DeepEqual(before, after) {
+		t.Fatalf("cross-thread validation changed store: before=%#v after=%#v", before, after)
+	}
+
+	beforeNonce := owner.nextScope.Load()
+	if err := prepared.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if owner.nextScope.Load() <= beforeNonce {
+		t.Fatal("validation did not reacquire a fresh owner scope")
+	}
+	if owner.activeScope.Load() != 0 || store.preparedClose.Load() != prepared {
+		t.Fatal("validation retained its owner scope or released the close gate")
+	}
+	if after := captureL302StoreFingerprint(store); !reflect.DeepEqual(before, after) {
+		t.Fatalf("validation changed store: before=%#v after=%#v", before, after)
+	}
+	if err := prepared.Abort(); err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPreparedStoreCloseStaleCommitLeavesGateAndStateForOwnerRecovery(t *testing.T) {
 	store := NewStore(NewProcessBudget(), DefaultLimits())
 	owner := store.ClaimOwner()
