@@ -9,7 +9,16 @@ import (
 
 var l302BenchmarkEvents []Event
 var l302BenchmarkLayout Layout
+var l302BenchmarkFrameChecksum uint64
 var l302BenchmarkSpawnErr = errors.New("benchmark spawn unavailable")
+
+func l302ConsumePaneView(view PaneView) uint64 {
+	sum := uint64(view.Snapshot.Cols + view.Snapshot.Rows + view.ScrollbackLines)
+	for _, cell := range view.Snapshot.Cells {
+		sum += uint64(cell.Rune) + uint64(cell.HyperlinkID)
+	}
+	return sum
+}
 
 func newL302BenchmarkMux(b *testing.B) *Mux {
 	b.Helper()
@@ -44,6 +53,11 @@ func BenchmarkL302HeadlessFrameBaseline(b *testing.B) {
 			b.Fatal(err)
 		}
 		l302BenchmarkLayout = layout
+		view, ok := m.PaneView(1)
+		if !ok {
+			b.Fatal("pane view unavailable")
+		}
+		l302BenchmarkFrameChecksum = l302ConsumePaneView(view)
 	}
 }
 
@@ -72,14 +86,20 @@ func BenchmarkL302OwnerFastPathMutationCandidate(b *testing.B) {
 
 func BenchmarkL302HeadlessFrameCandidate(b *testing.B) {
 	owner := newL302BenchmarkOwner(b)
+	window := testWindowOwnerForOwner(owner)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		layout, err := testWindowOwnerForOwner(owner).Layout()
+		layout, err := window.Layout()
 		if err != nil {
 			b.Fatal(err)
 		}
 		l302BenchmarkLayout = layout
+		view, ok := window.PaneView(1)
+		if !ok {
+			b.Fatal("pane view unavailable")
+		}
+		l302BenchmarkFrameChecksum = l302ConsumePaneView(view)
 	}
 }
 

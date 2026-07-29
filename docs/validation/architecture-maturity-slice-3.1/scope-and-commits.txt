@@ -1,0 +1,16 @@
+schema=slice31-scope-v4
+execution_predecessor=9fe0bd0287ed402fe90b58a5fba7d6413897c1af
+T=4a9c2800ac2bbd943eb93e892f45abe01a4328bd
+A=cf834b7870e34689c789f38aeaf6de4914b34675
+W=27070f32395be7803b6fc11388a08a5c32d3d3a1
+G_subject=refactor(mux): guard executable owner capability
+G_parent=27070f32395be7803b6fc11388a08a5c32d3d3a1
+G_identity=derived-by-unique-subject-and-parent
+branch=arch/l3-02-owner-thread-capability-rebuild
+full_history_required=true
+allowed_paths=158
+allowed_paths_normalized_lf_sha256=9c7d0f77f0f3dd7a950b3c50b82c0533a5394b4b64cfa1d13e0a1bf7fcc779b7
+production_candidate=W
+performance_baseline=9fe0bd0287ed402fe90b58a5fba7d6413897c1af
+real_GUI=UNRUN
+unrelated_dirty_paths=0

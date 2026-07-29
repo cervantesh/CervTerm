@@ -416,15 +416,17 @@ Mux correctly owns aggregate identity/lifecycle, but directly coordinates transp
 
 ### L3-02 — Owner-thread use is not executable
 
-**Evidence:** `internal/mux/mux.go:49-69`; `session_registry.go:14-32`; `termimage/store.go:72-110,187-195`.
+**Evidence:** shared `internal/ownerthread`; `internal/mux/owner.go`, `owner_facade.go`, `owner_window.go`, private scoped mux sinks and recursive typed guards; root/child frontend controller and typed message router guards; `session_registry.go`; scoped termimage prepared/store preflights; `docs/validation/architecture-maturity-slice-3.1.md`.
 
-Locks protect membership and termimage capabilities protect mutation, but public aggregate operations do not detect wrong-thread calls. Introduce an owner capability/assertion or serialized command seam and race-test every mutation family.
+The redesign binds `Owner` to exact OS-thread identity through the shared leaf, issues ephemeral process/window dispatch scopes, binds windows by exact incarnation, and makes the GLFW root controller enforce exact native thread plus loop epoch. Child projections retain a typed message router rather than the root controller or process service locators. Recursive typed actual-source analysis covers mux/core/termimage/frontend/ownerthread mutation closure, atomic/method-value and locator routes, exact private sinks, narrow capability inventories, 6.2 compatibility bodies, and all public owner rejection fingerprints. Prepared termimage transitions reacquire and revalidate exact StoreOwner scopes.
+
+The performance baseline is immutable pre-slice production `9fe0bd0287ed402fe90b58a5fba7d6413897c1af` plus only the hashed benchmark harness; W is rejected because it contains owner production changes. The W production candidate received ten physical samples per side in ABBAx5 order for process/window/pane/image/startup/headless; every median is `<=3%` and no allocation metric increases. Missing guards, validation, exact history, or clean final state would reopen the finding.
 
 - **Severity:** Medium
 - **Effort:** L
 - **Blast radius:** cross-module
 - **Class:** redesign
-- **Status:** **accepted** — promoted by developer triage
+- **Status:** **accepted; closure candidate in Slice 3.1 G** — implementation and pre-commit evidence pass, but L3-02 remains open until clean committed-G, rollback rehearsal, maturity, CI, and merged-state gates succeed.
 - **Depends on:** none
 - **Cross-cut tag:** `T4-ownership-transactions`
 

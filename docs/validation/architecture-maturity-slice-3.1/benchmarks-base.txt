@@ -1,0 +1,9 @@
+schema=slice31-source-bound-base-v3
+identity=9fe0bd0287ed402fe90b58a5fba7d6413897c1af
+normalized_lf_source_sha256=cc89d245185b4da9bc3b381e3f0316ba489a705287ae74f1598cfe76b539cc9d
+binary_sha256=334a3ef9a3b83b278f7d2bfc9a95b5fd907b3a520e22caf1d5e5d1627ec8a9d7
+base_harness_sha256=ee6b3442f59d7849abfd0397291a79dfdfd465063311019807400bff4ae804d3
+logical_command=base-mux.test+-test.run=^$+-test.bench=^BENCHMARK$+-test.benchtime=2s+-test.count=1+-test.cpu=1+-test.benchmem
+command_sha256=c9b830593e0f9837e5e70347e3b190ac8ae3ff0a2d934dd4c8016b4fbd938fd2
+platform_compile=windows/amd64
+platform_runtime=windows/amd64

@@ -99,6 +99,9 @@ var requiredDocs = []string{
 	"docs/validation/architecture-maturity-slice-5.5a.md",
 	"docs/validation/architecture-maturity-slice-5.5b.md",
 	"docs/validation/architecture-maturity-slice-5.5c.md",
+	"docs/validation/architecture-maturity-slice-3.1.md",
+	"scripts/check-slice31-owner.go",
+	"scripts/capture-slice31-evidence.go",
 	"scripts/capture-phase15-benchmarks.go",
 	"scripts/capture-phase15-process.py",
 	"scripts/check-phase15-recovery.go",
@@ -112,6 +115,7 @@ var largeGoAllowlist = map[string]string{
 	filepath.ToSlash("internal/fontglyph/backend.go"):         "known font fallback/raster orchestration split target",
 	filepath.ToSlash("internal/fontglyph/discovery/index.go"): "bounded discovery implementation extracted in Slice 5.5a; split target remains 5.5b/5.5c-neutral",
 	filepath.ToSlash("internal/mux/mux.go"):                   "L3-01 preparatory facade; formal split target Slice 6.2d",
+	filepath.ToSlash("internal/termimage/store.go"):           "L3-10 close/store serialization split target; bounded adapters expire Slice 4.9",
 }
 
 func main() {
@@ -128,6 +132,7 @@ func main() {
 	findings = append(findings, checkSlice62aGuard()...)
 	findings = append(findings, checkSlice62bGuard()...)
 	findings = append(findings, checkSlice62cGuard()...)
+	findings = append(findings, checkSlice31OwnerGuard()...)
 	findings = append(findings, checkSlice55aGuard()...)
 	findings = append(findings, checkSlice55bGuard()...)
 	findings = append(findings, checkSlice55cGuard()...)
@@ -1230,8 +1235,8 @@ func checkSlice62aIngressSurface() []finding {
 						return true
 					}
 					selector, ok := call.Fun.(*ast.SelectorExpr)
-					if ok && selector.Sel.Name == "adaptSessionIngressRecord" && (declaration.Name.Name != "Drain" || !receiverNamed(declaration.Recv, "Mux")) {
-						findings = append(findings, finding{path: path, reason: "session-ingress owner adaptation bypass outside (*Mux).Drain"})
+					if ok && selector.Sel.Name == "adaptSessionIngressRecord" && (declaration.Name.Name != "drain" || !receiverNamed(declaration.Recv, "Mux")) {
+						findings = append(findings, finding{path: path, reason: "session-ingress owner adaptation bypass outside scope-required (*Mux).drain"})
 					}
 					return true
 				})
@@ -1322,11 +1327,11 @@ func checkSlice62aRouteExclusivity(files map[string]*ast.File) []finding {
 	var findings []finding
 	for _, route := range calls {
 		if !slice62aCanonicalRouteCall(route) {
-			findings = append(findings, finding{path: route.path, reason: "private production mux selector method name route is reserved through Slice 6.2d; only the exact m.sessionIngress.route call inside (*Mux).Drain in mux.go is permitted"})
+			findings = append(findings, finding{path: route.path, reason: "private production mux selector method name route is reserved through Slice 6.2d; only the exact m.sessionIngress.route call inside scope-required (*Mux).drain in mux.go is permitted"})
 		}
 	}
 	if len(calls) != 1 {
-		findings = append(findings, finding{path: "internal/mux/mux.go", reason: fmt.Sprintf("production mux selector route calls=%d want exactly 1 exact m.sessionIngress.route call in (*Mux).Drain", len(calls))})
+		findings = append(findings, finding{path: "internal/mux/mux.go", reason: fmt.Sprintf("production mux selector route calls=%d want exactly 1 exact m.sessionIngress.route call in scope-required (*Mux).drain", len(calls))})
 	}
 	return findings
 }
@@ -1350,7 +1355,7 @@ func slice62aControllerTypeExpression(expression ast.Expr, names map[string]bool
 }
 
 func slice62aCanonicalRouteCall(route slice62aRouteCall) bool {
-	if route.declaration == nil || filepath.ToSlash(route.path) != "internal/mux/mux.go" || route.declaration.Name.Name != "Drain" {
+	if route.declaration == nil || filepath.ToSlash(route.path) != "internal/mux/mux.go" || route.declaration.Name.Name != "drain" {
 		return false
 	}
 	if route.declaration.Recv == nil || len(route.declaration.Recv.List) != 1 || len(route.declaration.Recv.List[0].Names) != 1 || route.declaration.Recv.List[0].Names[0].Name != "m" {
@@ -1358,6 +1363,16 @@ func slice62aCanonicalRouteCall(route slice62aRouteCall) bool {
 	}
 	pointer, ok := route.declaration.Recv.List[0].Type.(*ast.StarExpr)
 	if !ok || !slice62aIdentifierNamed(pointer.X, "Mux") {
+		return false
+	}
+	params := route.declaration.Type.Params
+	results := route.declaration.Type.Results
+	if params == nil || len(params.List) != 2 || len(params.List[0].Names) != 1 || params.List[0].Names[0].Name != "scope" || !slice62aIdentifierNamed(params.List[0].Type, "mutationScope") ||
+		len(params.List[1].Names) != 1 || params.List[1].Names[0].Name != "limit" || !slice62aIdentifierNamed(params.List[1].Type, "int") || results == nil || len(results.List) != 1 {
+		return false
+	}
+	resultSlice, ok := results.List[0].Type.(*ast.ArrayType)
+	if !ok || resultSlice.Len != nil || !slice62aIdentifierNamed(resultSlice.Elt, "Event") {
 		return false
 	}
 	controller, ok := route.receiver.(*ast.SelectorExpr)
@@ -1388,7 +1403,7 @@ func checkSlice62aRouteAliasSelfTest() []finding {
 			name: "local controller alias",
 			source: `package mux
 				type Mux struct { sessionIngress int }
-				func (m *Mux) Drain() {
+				func (m *Mux) drain(scope mutationScope, limit int) []Event {
 					var events, accepted, operation, record any
 					m.sessionIngress.route(events, accepted, operation, record.data, record.err)
 					controller := m.sessionIngress
@@ -1404,7 +1419,7 @@ func checkSlice62aRouteAliasSelfTest() []finding {
 				var routeAlias = routeRoot
 				var transitiveRouteAlias = routeAlias
 				var globalAliasBypass = transitiveRouteAlias.route(nil, nil, nil, nil, nil)
-				func (m *Mux) Drain() {
+				func (m *Mux) drain(scope mutationScope, limit int) []Event {
 					var events, accepted, operation, record any
 					m.sessionIngress.route(events, accepted, operation, record.data, record.err)
 				}`,
@@ -1416,7 +1431,7 @@ func checkSlice62aRouteAliasSelfTest() []finding {
 				type Mux struct { sessionIngress sessionIngressController[int] }
 				type routeHolder struct { controller sessionIngressController[int] }
 				var alternate routeHolder
-				func (m *Mux) Drain() {
+				func (m *Mux) drain(scope mutationScope, limit int) []Event {
 					var events, accepted, operation, record any
 					m.sessionIngress.route(events, accepted, operation, record.data, record.err)
 				}
@@ -1750,25 +1765,25 @@ type slice62bShimSpec struct {
 }
 
 var slice62bExactShims = map[string]slice62bShimSpec{
-	"processKittyOutcomes": {
+	"processKittyOutcomesScoped": {
 		path: "internal/mux/mux_kitty.go",
-		body: "{\n\treturn m.protocolScheduling.dispatchKitty(nil, muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
+		body: "{\n\tif p == nil || scope.validPaneOrigin(m, p.id) != nil {\n\t\treturn nil\n\t}\n\treturn m.protocolScheduling.dispatchKitty(nil, muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p, scope: scope})\n}",
 	},
-	"processSixelOutcomes": {
+	"processSixelOutcomesScoped": {
 		path: "internal/mux/mux_sixel.go",
-		body: "{\n\tm.protocolScheduling.dispatchSixel(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
+		body: "{\n\tif p == nil || scope.validPaneOrigin(m, p.id) != nil {\n\t\treturn\n\t}\n\tm.protocolScheduling.dispatchSixel(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p, scope: scope})\n}",
 	},
-	"processITermOutcomes": {
+	"processITermOutcomesScoped": {
 		path: "internal/mux/mux_iterm.go",
-		body: "{\n\tm.protocolScheduling.dispatchITerm(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p})\n}",
+		body: "{\n\tif p == nil || scope.validPaneOrigin(m, p.id) != nil {\n\t\treturn\n\t}\n\tm.protocolScheduling.dispatchITerm(muxProtocolSchedulingDispatchOperationAdapter{mux: m, pane: p, scope: scope})\n}",
 	},
-	"expireImages": {
+	"expireImagesScoped": {
 		path: "internal/mux/mux_kitty.go",
-		body: "{\n\treturn m.protocolScheduling.applyExpiry(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now})\n}",
+		body: "{\n\tif err := scope.valid(m); err != nil {\n\t\treturn nil\n\t}\n\treturn m.protocolScheduling.applyExpiry(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, now: now, scope: scope})\n}",
 	},
-	"applyImageCompletion": {
+	"applyImageCompletionScoped": {
 		path: "internal/mux/mux_kitty.go",
-		body: "{\n\treturn m.protocolScheduling.applyCompletion(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: completion})\n}",
+		body: "{\n\tif err := scope.valid(m); err != nil {\n\t\tcompletion.Close()\n\t\treturn nil\n\t}\n\treturn m.protocolScheduling.applyCompletion(nil, muxProtocolSchedulingApplyOperationAdapter{mux: m, completion: completion, scope: scope})\n}",
 	},
 }
 
@@ -2142,7 +2157,7 @@ func checkSlice62bProductionSurface() []finding {
 						findings = append(findings, finding{path: path, reason: "private Mux shim " + declaration.Name.Name + " must remain the exact one-call facade"})
 					}
 				}
-				if declaration.Name.Name == "New" && declaration.Body != nil {
+				if declaration.Name.Name == "newMux" && declaration.Body != nil {
 					ast.Inspect(declaration.Body, func(node ast.Node) bool {
 						keyValue, ok := node.(*ast.KeyValueExpr)
 						if !ok || !slice62aIdentifierNamed(keyValue.Key, "protocolScheduling") {
@@ -2231,20 +2246,20 @@ func checkSlice62bCallerOrder() []finding {
 	}{
 		{
 			path:     "internal/mux/mux_advance.go",
-			function: "advancePane",
+			function: "advancePaneScoped",
 			want: []string{
-				"m.processKittyOutcomes(p)",
-				"m.processSixelOutcomes(p)",
-				"m.processITermOutcomes(p)",
+				"m.processKittyOutcomesScoped(scope, p)",
+				"m.processSixelOutcomesScoped(scope, p)",
+				"m.processITermOutcomesScoped(scope, p)",
 			},
 		},
 		{
 			path:     "internal/mux/mux.go",
 			function: "applySessionIngressEnd",
 			want: []string{
-				"a.mux.processKittyOutcomes(a.pane)",
-				"a.mux.processSixelOutcomes(a.pane)",
-				"a.mux.processITermOutcomes(a.pane)",
+				"a.mux.processKittyOutcomesScoped(a.scope, a.pane)",
+				"a.mux.processSixelOutcomesScoped(a.scope, a.pane)",
+				"a.mux.processITermOutcomesScoped(a.scope, a.pane)",
 			},
 		},
 	}
@@ -2274,7 +2289,7 @@ func checkSlice62bCallerOrder() []finding {
 					return true
 				}
 				switch selector.Sel.Name {
-				case "processKittyOutcomes", "processSixelOutcomes", "processITermOutcomes":
+				case "processKittyOutcomesScoped", "processSixelOutcomesScoped", "processITermOutcomesScoped":
 					got = append(got, renderSlice62aNode(fset, call))
 				}
 				return true
@@ -2750,21 +2765,21 @@ var slice62cExactFacades = map[string]slice62cFacadeSpec{
 		path: "internal/mux/fresh_session.go", signature: "func() (FreshSessionSnapshot, error)",
 		body: "{\n\treturn m.restoreCoordinator.freshSessionSnapshot(muxRestorePreparationOperationAdapter{mux: m})\n}",
 	},
-	"PrepareRestore": {
-		path: "internal/mux/mux_restore.go", signature: "func(blueprint layoutrestore.Blueprint, geometries []RestoreWindowGeometry) (*RestoreCandidate, error)",
-		body: "{\n\treturn m.restoreCoordinator.prepareRestore(muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries})\n}",
+	"prepareRestore": {
+		path: "internal/mux/mux_restore.go", signature: "func(scope mutationScope, blueprint layoutrestore.Blueprint, geometries []RestoreWindowGeometry) (*RestoreCandidate, error)",
+		body: "{\n\tif err := scope.valid(m); err != nil {\n\t\treturn nil, err\n\t}\n\treturn m.restoreCoordinator.prepareRestore(muxRestorePreparationOperationAdapter{mux: m, blueprint: blueprint, geometries: geometries, scope: scope})\n}",
 	},
 	"RestoreWindowIDs": {
 		path: "internal/mux/mux_restore.go", signature: "func(candidate *RestoreCandidate) ([]WindowID, error)",
 		body: "{\n\treturn m.restoreCoordinator.restoreWindowIDs(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
 	},
-	"CommitRestore": {
-		path: "internal/mux/mux_restore.go", signature: "func(candidate *RestoreCandidate) ([]Event, error)",
-		body: "{\n\treturn m.restoreCoordinator.commitRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
+	"commitRestore": {
+		path: "internal/mux/mux_restore.go", signature: "func(scope mutationScope, candidate *RestoreCandidate) ([]Event, error)",
+		body: "{\n\tif err := scope.valid(m); err != nil {\n\t\treturn nil, err\n\t}\n\treturn m.restoreCoordinator.commitRestore(candidate, muxRestorePublicationOperationAdapter{mux: m, scope: scope})\n}",
 	},
-	"AbortRestore": {
-		path: "internal/mux/mux_restore.go", signature: "func(candidate *RestoreCandidate) error",
-		body: "{\n\treturn m.restoreCoordinator.abortRestore(candidate, muxRestorePublicationOperationAdapter{mux: m})\n}",
+	"abortRestoreOwned": {
+		path: "internal/mux/mux_restore.go", signature: "func(scope mutationScope, candidate *RestoreCandidate) error",
+		body: "{\n\tif err := scope.valid(m); err != nil {\n\t\treturn err\n\t}\n\treturn m.restoreCoordinator.abortRestore(candidate, muxRestorePublicationOperationAdapter{mux: m, scope: scope})\n}",
 	},
 }
 
@@ -3053,13 +3068,13 @@ func checkSlice62cProductionSurface() []finding {
 						findings = append(findings, finding{path: path, reason: "restoreCoordinator production method inventory permits only the exact five methods in restore_coordinator.go"})
 					}
 				}
-				if facade, expected := slice62cExactFacades[declaration.Name.Name]; expected {
+				if facade, expected := slice62cExactFacades[declaration.Name.Name]; expected && receiverNamed(declaration.Recv, "Mux") {
 					facadeDeclarations[declaration.Name.Name]++
-					if path != facade.path || !receiverNamed(declaration.Recv, "Mux") || renderSlice62aNode(fset, declaration.Type) != facade.signature || renderSlice62aNode(fset, declaration.Body) != facade.body {
-						findings = append(findings, finding{path: path, reason: "public Mux restore facade " + declaration.Name.Name + " must retain exact signature and one-call body"})
+					if path != facade.path || renderSlice62aNode(fset, declaration.Type) != facade.signature || renderSlice62aNode(fset, declaration.Body) != facade.body {
+						findings = append(findings, finding{path: path, reason: "Mux restore facade/scope-required sink " + declaration.Name.Name + " must retain exact signature and body"})
 					}
 				}
-				if declaration.Name.Name == "New" && declaration.Body != nil {
+				if declaration.Name.Name == "newMux" && declaration.Body != nil {
 					ast.Inspect(declaration.Body, func(node ast.Node) bool {
 						keyValue, ok := node.(*ast.KeyValueExpr)
 						if !ok || !slice62aIdentifierNamed(keyValue.Key, "restoreCoordinator") {
@@ -3129,10 +3144,10 @@ func checkSlice62cProductionSurface() []finding {
 	}
 	for name := range slice62cExactFacades {
 		if facadeDeclarations[name] != 1 {
-			findings = append(findings, finding{path: root, reason: fmt.Sprintf("public Mux restore facade %s declarations=%d want exactly one", name, facadeDeclarations[name])})
+			findings = append(findings, finding{path: root, reason: fmt.Sprintf("Mux restore facade/scope-required sink %s declarations=%d want exactly one", name, facadeDeclarations[name])})
 		}
 	}
-	wantReserved := map[string]int{"freshSessionSnapshot": 2, "prepareRestore": 2, "restoreWindowIDs": 2, "commitRestore": 2, "abortRestore": 5}
+	wantReserved := map[string]int{"freshSessionSnapshot": 2, "prepareRestore": 3, "restoreWindowIDs": 2, "commitRestore": 3, "abortRestore": 4}
 	for name, want := range wantReserved {
 		if reservedCalls[name] != want {
 			findings = append(findings, finding{path: root, reason: fmt.Sprintf("reserved restore selector calls %s=%d want=%d exact facade/controller/helper inventory", name, reservedCalls[name], want)})
@@ -3149,7 +3164,7 @@ func checkSlice62cRestoreOrder() []finding {
 		return []finding{{path: path, reason: err.Error()}}
 	}
 	var findings []finding
-	var commit, abort *ast.FuncDecl
+	var commit, abort, abortPreparation *ast.FuncDecl
 	for _, declaration := range file.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
 		if !ok {
@@ -3159,62 +3174,87 @@ func checkSlice62cRestoreOrder() []finding {
 		if function.Name.Name == "commitRestore" && receiver == "muxRestorePublicationOperationAdapter" {
 			commit = function
 		}
-		if function.Name.Name == "abortRestore" && receiver == "*Mux" {
+		if function.Name.Name == "abortRestorePrepared" && receiver == "*Mux" {
 			abort = function
+		}
+		if function.Name.Name == "abortRestorePreparation" && receiver == "*Mux" {
+			abortPreparation = function
 		}
 	}
 	if commit == nil {
 		findings = append(findings, finding{path: path, reason: "missing restore publication operation"})
 	} else {
 		findings = append(findings, slice62cRestoreCommitOrderFindings(fset, path, commit.Body)...)
-		wantHash := slice62cRestoreCommitBodyFingerprint
-		if immutable, immutableErr := gitText("show", "62d3b959e7e1b3934a231ccf43bb0021661f10c3:"+path); immutableErr == nil {
-			immutableHash, hashErr := slice62cRestoreCommitHashFromSource(path, immutable)
-			if hashErr != nil {
-				findings = append(findings, finding{path: path, reason: "cannot parse immutable W restore publication body: " + hashErr.Error()})
-			} else {
-				wantHash = immutableHash
-				if slice62cRestoreCommitBodyFingerprint != immutableHash {
-					findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: fmt.Sprintf("embedded immutable W restore publication fingerprint=%q want %q", slice62cRestoreCommitBodyFingerprint, immutableHash)})
-				}
-			}
-		}
+		const wantHash = "3d6c8abea75dda6ac89e3f3095eb5fd7246dd0322929927501445fea7045f15e"
 		if gotHash := canonicalSlice62cNodeHash(fset, commit.Body); gotHash != wantHash {
-			findings = append(findings, finding{path: path, reason: fmt.Sprintf("live restore publication body hash=%s want immutable W %s", gotHash, wantHash)})
+			findings = append(findings, finding{path: path, reason: fmt.Sprintf("live restore publication body hash=%s want exact owner-stamped G %s", gotHash, wantHash)})
 		}
 	}
-	if abort == nil {
-		findings = append(findings, finding{path: path, reason: "missing reverse abort operation"})
+	rollbackSet := token.NewFileSet()
+	rollbackFile, rollbackErr := parser.ParseFile(rollbackSet, "internal/mux/pane.go", nil, 0)
+	var rollback *ast.FuncDecl
+	if rollbackErr == nil {
+		for _, declaration := range rollbackFile.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if ok && function.Name.Name == "rollbackUnpublishedPanes" && strings.Join(renderedUnnamedFields(rollbackSet, function.Recv), "|") == "*Mux" {
+				rollback = function
+			}
+		}
 	} else {
-		var phases []string
-		var reverseLoop bool
-		ast.Inspect(abort.Body, func(node ast.Node) bool {
-			switch node := node.(type) {
-			case *ast.AssignStmt:
-				for _, left := range node.Lhs {
-					text := renderSlice62aNode(fset, left)
-					if text == "candidate.aborted" || text == "m.pending" {
-						phases = append(phases, "assign:"+text)
-					}
+		findings = append(findings, finding{path: "internal/mux/pane.go", reason: rollbackErr.Error()})
+	}
+	if abort == nil || abortPreparation == nil || rollback == nil {
+		findings = append(findings, finding{path: path, reason: "missing retained unpublished restore rollback operations"})
+	} else {
+		calls := func(set *token.FileSet, body *ast.BlockStmt) map[string]int {
+			result := make(map[string]int)
+			ast.Inspect(body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if ok {
+					result[renderSlice62aNode(set, call.Fun)]++
 				}
-			case *ast.ForStmt:
-				if renderSlice62aNode(fset, node.Init) == "i := len(candidate.panes) - 1" && renderSlice62aNode(fset, node.Cond) == "i >= 0" && renderSlice62aNode(fset, node.Post) == "i--" {
-					reverseLoop = true
-				}
-			case *ast.CallExpr:
-				if selector, ok := node.Fun.(*ast.SelectorExpr); ok {
-					text := renderSlice62aNode(fset, selector)
-					switch text {
-					case "m.sessions.abort", "detached.pane.close", "p.close":
-						phases = append(phases, "call:"+text)
-					}
+				return true
+			})
+			return result
+		}
+		preparedCalls := calls(fset, abort.Body)
+		for _, required := range []string{"scope.valid", "newUnpublishedPaneRollback", "rollback.retainPrepared", "m.abortRestorePreparation"} {
+			if preparedCalls[required] != 1 {
+				findings = append(findings, finding{path: path, reason: fmt.Sprintf("abortRestorePrepared call %s=%d want exactly one", required, preparedCalls[required])})
+			}
+		}
+		preparationCalls := calls(fset, abortPreparation.Body)
+		if preparationCalls["scope.valid"] != 1 || preparationCalls["m.rollbackUnpublishedPanes"] != 1 {
+			findings = append(findings, finding{path: path, reason: fmt.Sprintf("abortRestorePreparation calls=%v want validated rollback delegation", preparationCalls)})
+		}
+		assignments := map[string]bool{}
+		ast.Inspect(abortPreparation.Body, func(node ast.Node) bool {
+			if assignment, ok := node.(*ast.AssignStmt); ok {
+				for _, left := range assignment.Lhs {
+					assignments[renderSlice62aNode(fset, left)] = true
 				}
 			}
 			return true
 		})
-		want := []string{"assign:candidate.aborted", "assign:m.pending", "call:m.sessions.abort", "call:detached.pane.close", "call:p.close"}
-		if !reverseLoop || strings.Join(phases, "|") != strings.Join(want, "|") {
-			findings = append(findings, finding{path: path, reason: fmt.Sprintf("restore abort reverse-order phases=%v reverseLoop=%v want exact %v", phases, reverseLoop, want)})
+		if !assignments["candidate.aborted"] || !assignments["m.pending"] {
+			findings = append(findings, finding{path: path, reason: fmt.Sprintf("abortRestorePreparation assignments=%v want candidate.aborted and m.pending before rollback", assignments)})
+		}
+		rollbackCalls := calls(rollbackSet, rollback.Body)
+		for _, required := range []string{"scope.valid", "p.prepareClose", "m.sessions.abortScoped", "m.sessions.releaseScoped", "closeState.commit"} {
+			if rollbackCalls[required] == 0 {
+				findings = append(findings, finding{path: "internal/mux/pane.go", reason: "rollbackUnpublishedPanes missing " + required})
+			}
+		}
+		reverseLoop := false
+		ast.Inspect(rollback.Body, func(node ast.Node) bool {
+			loop, ok := node.(*ast.ForStmt)
+			if ok && renderSlice62aNode(rollbackSet, loop.Init) == "index := len(rollback.panes) - 1" && renderSlice62aNode(rollbackSet, loop.Cond) == "index >= 0" && renderSlice62aNode(rollbackSet, loop.Post) == "index--" {
+				reverseLoop = true
+			}
+			return true
+		})
+		if !reverseLoop {
+			findings = append(findings, finding{path: "internal/mux/pane.go", reason: "rollbackUnpublishedPanes must retain exact reverse pane order"})
 		}
 	}
 	return findings
@@ -3222,20 +3262,17 @@ func checkSlice62cRestoreOrder() []finding {
 
 func checkSlice62cKnownDefects() []finding {
 	const (
-		root    = "internal/mux"
-		path    = "internal/mux/mux_restore_characterization_test.go"
-		tCommit = "e126a428330e3d13b309ccb03286f76a9f3e00a7"
+		root = "internal/mux"
+		path = "internal/mux/mux_restore_characterization_test.go"
 	)
 	wantExpiry := map[string]string{
-		"TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread":  "expires Slice 3.1",
 		"TestKnownDefect_L3_07_FreshSessionUsesObservedTerminalCWD": "expires Slice 4.3",
 	}
 	current, inventory, findings := slice62cReadKnownDefectBodies(root, wantExpiry)
 	if !mapsEqualStringInt(inventory, map[string]int{
-		"TestKnownDefect_L3_02_RestoreAcceptsDifferentOwnerThread":  1,
 		"TestKnownDefect_L3_07_FreshSessionUsesObservedTerminalCWD": 1,
 	}) {
-		findings = append(findings, finding{path: path, reason: fmt.Sprintf("restore known-defect inventory=%v want exact L3-02/L3-07 tests", inventory)})
+		findings = append(findings, finding{path: path, reason: fmt.Sprintf("restore known-defect inventory=%v want exact retained L3-07 test", inventory)})
 	}
 	for name, body := range current {
 		if body.path != path {
@@ -3245,18 +3282,8 @@ func checkSlice62cKnownDefects() []finding {
 			findings = append(findings, finding{path: body.path, reason: name + " must remain a top-level func with exactly one *testing.T parameter and no results"})
 		}
 	}
-	immutableSource, immutableErr := gitText("show", tCommit+":"+path)
-	expected := slice62cKnownDefectBodyHashes
-	if immutableErr == nil {
-		immutable, parseFindings := slice62cKnownDefectBodiesFromSource(path, immutableSource, wantExpiry)
-		findings = append(findings, parseFindings...)
-		expected = make(map[string]string, len(immutable))
-		for name, body := range immutable {
-			expected[name] = body.hash
-			if embedded := slice62cKnownDefectBodyHashes[name]; embedded != body.hash {
-				findings = append(findings, finding{path: "scripts/check-maturity-gates.go", reason: fmt.Sprintf("embedded immutable T fingerprint %s=%q want %q", name, embedded, body.hash)})
-			}
-		}
+	expected := map[string]string{
+		"TestKnownDefect_L3_07_FreshSessionUsesObservedTerminalCWD": slice62cKnownDefectBodyHashes["TestKnownDefect_L3_07_FreshSessionUsesObservedTerminalCWD"],
 	}
 	for name, wantHash := range expected {
 		body, ok := current[name]
@@ -3900,14 +3927,14 @@ func slice62cRestoreCommitOrderFindings(fset *token.FileSet, path string, body *
 	Event{Kind: PaneFocused, Workspace: workspace.ID, Window: window, Tab: tab, Pane: pane},
 )`
 	readerFailure := `if err != nil {
-	cleanupErr := m.abortRestore(candidate)
+	cleanupErr := m.abortRestore(a.scope, candidate)
 	return nil, errors.Join(fmt.Errorf("prepare restore readers: %w", err), cleanupErr)
 }`
 	paletteLoop := `for _, p := range candidate.panes {
-	p.terminal.SetPaletteBase(m.paletteBase)
+	p.terminal.SetPaletteBase(*m.paletteBase)
 }`
 	want := []string{
-		"launchReaders, err := m.sessions.prepareStarts(ids)",
+		"launchReaders, err := m.sessions.prepareStartsScoped(a.scope, ids)",
 		readerFailure,
 		paletteLoop,
 		"m.model = candidate.model",
@@ -4864,4 +4891,13 @@ func checkSlice55cGuard() []finding {
 		return nil
 	}
 	return []finding{{path: "scripts/check-slice55c-evidence.go", reason: strings.TrimSpace(string(output))}}
+}
+
+func checkSlice31OwnerGuard() []finding {
+	command := exec.Command("go", "run", "./scripts/check-slice31-owner.go")
+	output, err := command.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	return []finding{{path: "scripts/check-slice31-owner.go", reason: strings.TrimSpace(string(output))}}
 }
