@@ -50,6 +50,49 @@ jobs:
             dist\*.zip
             dist\daily-driver-smoke\*
 
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Environment
+        run: |
+          sw_vers
+          uname -m
+          go version
+      - name: Maturity gates
+        run: go run ./scripts/check-maturity-gates.go
+      - name: Test
+        run: go test ./...
+      - name: Vet
+        run: go vet -unsafeptr=false ./...
+      - name: VT parser fuzz smoke
+        run: go test ./internal/vt -run '^$' -fuzz=FuzzParserAdvanceDoesNotPanic -fuzztime=2s
+      - name: GLFW tests
+        run: go test -tags glfw ./internal/frontend/glfwgl ./cmd/cervterm -count=1
+      - name: Build headless
+        run: go build -o dist/cervterm-headless ./cmd/cervterm
+      - name: Doctor
+        run: ./dist/cervterm-headless --doctor
+      - name: zsh PTY capture smoke
+        run: |
+          ./dist/cervterm-headless --capture-vt dist/zsh.vt --capture-program /bin/zsh --capture-arg=-c --capture-arg='printf mac-pty-ok'
+          grep -q 'mac-pty-ok' dist/zsh.vt
+      - name: Build GLFW app binary
+        run: go build -tags glfw -o dist/cervterm ./cmd/cervterm
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: cervterm-macos-dist
+          path: |
+            dist/cervterm
+            dist/cervterm-headless
+            dist/zsh.vt
+
   linux-headless:
     runs-on: ubuntu-latest
     steps:

@@ -89,15 +89,14 @@ func normalizeWatchPaths(paths []string) []string {
 	return result
 }
 
-// watchPathIdentity coalesces Windows case and 8.3 parent-directory aliases
-// without resolving the final path component. Keeping that component intact is
-// required so two declarative symlink aliases remain independently watched for
-// retargeting.
+// watchPathIdentity coalesces parent-directory aliases (Windows 8.3 short
+// names, and OS-level symlinks such as macOS's /var -> /private/var and
+// /tmp -> /private/tmp) without resolving the final path component. Keeping
+// that component intact is required so two declarative symlink aliases
+// remain independently watched for retargeting. Case-folding is Windows-only
+// since other supported platforms have case-sensitive filesystems.
 func watchPathIdentity(path string) string {
 	clean := filepath.Clean(path)
-	if runtime.GOOS != "windows" {
-		return clean
-	}
 	if absolute, err := filepath.Abs(clean); err == nil {
 		clean = absolute
 	}
@@ -105,7 +104,11 @@ func watchPathIdentity(path string) string {
 	if canonicalDirectory, err := filepath.EvalSymlinks(directory); err == nil {
 		clean = filepath.Join(canonicalDirectory, filepath.Base(clean))
 	}
-	return strings.ToLower(filepath.Clean(clean))
+	clean = filepath.Clean(clean)
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(clean)
+	}
+	return clean
 }
 
 func watchExpectations(paths []string) []config.SourceWatchExpectation {
