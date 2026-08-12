@@ -65,6 +65,21 @@ The workflow decodes the PFX into the runner temp directory, runs `signtool sign
 
 `packaging/wix/CervTerm.wxs` is a WiX v4 starter template for a possible future full MSI installer. It installs the executable, generated default config, README, CHANGELOG, and a Start Menu shortcut. It is intentionally not enabled in CI; portable zip releases are the current distribution target.
 
+## macOS app bundle
+
+`packaging/macos/` carries the macOS bundle metadata:
+
+- `Info.plist.template`: Go `text/template` source for `Contents/Info.plist` (bundle id `dev.cervterm.CervTerm`, `NSHighResolutionCapable`, `LSMinimumSystemVersion` 12.0, developer-tools category). CervTerm registers no document types or URL schemes today, so none are declared.
+- `AppIcon.icns`: generated from `packaging/assets/cervterm.svg` via `rsvg-convert` (10 sizes, 16px-1024px) and `iconutil -c icns`; regenerate with the same two tools if the source SVG changes.
+
+`go run ./scripts/package-macos.go -version <tag> -outdir dist` builds the GLFW binary, assembles `dist/CervTerm.app` (`Contents/MacOS/cervterm`, `Contents/Resources/{AppIcon.icns,README.md,CHANGELOG.md,SUPPORT.md,LICENSE,docs/}`), and zips it to `dist/cervterm-<tag>-macos.zip`. This was built and launched successfully on real macOS 15.7.7/x86_64 hardware; see [`docs/manual-verification.md`](manual-verification.md) for the recorded evidence.
+
+**Signing status: ad-hoc only, verified partially.** By default the script ad-hoc signs the bundle (`codesign --sign -`, no certificate required) after stripping extended attributes with `xattr -cr` — macOS (Sequoia and later) stamps a `com.apple.provenance` xattr on written files that `codesign` otherwise rejects as "resource fork, Finder information, or similar detritus." On the machine used for this validation pass, `com.apple.provenance` could not be cleared even directly (`xattr -d` reports success but the attribute persists — consistent with a managed/MDM or endpoint-security layer enforcing it), so ad-hoc signing could not be verified end-to-end there; pass `-adhoc-sign=false` to skip signing if you hit the same block. This is expected to work cleanly on an unmanaged Mac or a stock GitHub-hosted `macos-latest` runner, but that has not been confirmed — the CI job added in this pass does not yet build/sign the `.app` (see #106 CI notes).
+
+**Gatekeeper on an unsigned bundle (verified):** simulating a browser download (`xattr -w com.apple.quarantine "0083;<epoch-hex>;Safari;" dist/CervTerm.app`) and asking Gatekeeper for its assessment (`spctl -a -vv dist/CervTerm.app`) returns `rejected / source=no usable signature` — an unsigned, quarantined `.app` is blocked from a normal double-click launch, as expected. Only Developer ID signing + notarization removes that prompt/rejection for downloaded copies.
+
+**Explicitly out of scope here:** Developer ID signing, hardened runtime/entitlements, and Apple notarization all require an Apple Developer Program membership and certificate that this pass has no access to and is not authorized to purchase (see the source issue's own note on this). `scripts/sign-windows-exe.go` is the Windows analog for reference if that groundwork is added later; there is no `sign-macos.go` yet.
+
 ## Verification commands
 
 ```sh
