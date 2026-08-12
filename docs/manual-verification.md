@@ -2,6 +2,13 @@
 
 Use this checklist after building `dist/cervterm.exe`.
 
+For a real-hardware macOS validation pass (automated test/build evidence,
+two macOS-only bugs found and fixed, and an explicit list of what still
+needs a human/more hardware/a certificate), see
+[`docs/validation/macos-platform-validation-2026-08-12.md`](validation/macos-platform-validation-2026-08-12.md).
+The phase rows below remain UNRUN/unqualified for macOS GUI behavior
+pending that follow-up work — this pass did not attempt to reclassify them.
+
 ## Build
 
 ```sh

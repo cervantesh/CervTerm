@@ -1,0 +1,45 @@
+=== RUN   TestNativeBlurProviderApply
+=== RUN   TestNativeBlurProviderApply/disabled_removes_material
+=== RUN   TestNativeBlurProviderApply/disabled_ignores_translucent_background
+=== RUN   TestNativeBlurProviderApply/opaque_background_enables_material
+=== RUN   TestNativeBlurProviderApply/translucent_background_preserves_alpha
+--- PASS: TestNativeBlurProviderApply (0.00s)
+    --- PASS: TestNativeBlurProviderApply/disabled_removes_material (0.00s)
+    --- PASS: TestNativeBlurProviderApply/disabled_ignores_translucent_background (0.00s)
+    --- PASS: TestNativeBlurProviderApply/opaque_background_enables_material (0.00s)
+    --- PASS: TestNativeBlurProviderApply/translucent_background_preserves_alpha (0.00s)
+=== RUN   TestNativeBlurProviderFailureAndClose
+=== RUN   TestNativeBlurProviderFailureAndClose/enable_failure
+=== RUN   TestNativeBlurProviderFailureAndClose/disable_failure
+=== RUN   TestNativeBlurProviderFailureAndClose/incompatible_material_removal_failure
+=== RUN   TestNativeBlurProviderFailureAndClose/unsupported_native_attribute
+--- PASS: TestNativeBlurProviderFailureAndClose (0.00s)
+    --- PASS: TestNativeBlurProviderFailureAndClose/enable_failure (0.00s)
+    --- PASS: TestNativeBlurProviderFailureAndClose/disable_failure (0.00s)
+    --- PASS: TestNativeBlurProviderFailureAndClose/incompatible_material_removal_failure (0.00s)
+    --- PASS: TestNativeBlurProviderFailureAndClose/unsupported_native_attribute (0.00s)
+=== RUN   TestUnsupportedBlurProvider
+--- PASS: TestUnsupportedBlurProvider (0.00s)
+=== RUN   TestTransparentCompositorBlurProvider
+=== RUN   TestTransparentCompositorBlurProvider/disabled_removes_compositor_effect
+=== RUN   TestTransparentCompositorBlurProvider/opaque_background_is_incompatible
+=== RUN   TestTransparentCompositorBlurProvider/missing_transparent_framebuffer_is_incompatible
+=== RUN   TestTransparentCompositorBlurProvider/translucent_background_activates_compositor_effect
+--- PASS: TestTransparentCompositorBlurProvider (0.00s)
+    --- PASS: TestTransparentCompositorBlurProvider/disabled_removes_compositor_effect (0.00s)
+    --- PASS: TestTransparentCompositorBlurProvider/opaque_background_is_incompatible (0.00s)
+    --- PASS: TestTransparentCompositorBlurProvider/missing_transparent_framebuffer_is_incompatible (0.00s)
+    --- PASS: TestTransparentCompositorBlurProvider/translucent_background_activates_compositor_effect (0.00s)
+=== RUN   TestFailedBlurProvider
+--- PASS: TestFailedBlurProvider (0.00s)
+=== RUN   TestBlurStatusString
+--- PASS: TestBlurStatusString (0.00s)
+=== RUN   TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder
+=== RUN   TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder/focus
+=== RUN   TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder/blur
+--- PASS: TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder (0.00s)
+    --- PASS: TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder/focus (0.00s)
+    --- PASS: TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder/blur (0.00s)
+PASS
+ok  	cervterm/internal/frontend/glfwgl	1.084s
+exit: 0

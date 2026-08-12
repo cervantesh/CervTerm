@@ -81,6 +81,42 @@ func TestDetectColorTablesInvalidData(t *testing.T) {
 	}
 }
 
+func TestDetectColorTablesUnwrapsTrueTypeCollection(t *testing.T) {
+	// Apple Color Emoji.ttc (and other macOS system fonts) ship as TrueType
+	// Collections: a "ttcf" header followed by one or more wrapped sfnt
+	// faces. Detection must unwrap to the first face's own table directory
+	// rather than misreading the ttcf header as a table directory.
+	face := fakeSFNT("head", "sbix")
+	ttc := fakeTTC(face)
+	tables, err := DetectColorTables(ttc)
+	if err != nil {
+		t.Fatalf("DetectColorTables: %v", err)
+	}
+	if !tables.HasSbix {
+		t.Fatalf("expected sbix table detected inside TTC wrapper, got %#v", tables)
+	}
+}
+
+func TestDetectColorTablesRejectsTruncatedTTCHeader(t *testing.T) {
+	_, err := DetectColorTables([]byte("ttcf\x00\x01\x00\x00\x00\x00\x00\x01"))
+	if !errors.Is(err, ErrInvalidFontData) {
+		t.Fatalf("expected ErrInvalidFontData, got %v", err)
+	}
+}
+
+// fakeTTC wraps a single fake sfnt face in a minimal TrueType Collection
+// header pointing at its first (only) face.
+func fakeTTC(face []byte) []byte {
+	const headerLen = 16
+	data := make([]byte, headerLen, headerLen+len(face))
+	copy(data[0:4], []byte("ttcf"))
+	binary.BigEndian.PutUint16(data[4:6], 1)
+	binary.BigEndian.PutUint16(data[6:8], 0)
+	binary.BigEndian.PutUint32(data[8:12], 1)
+	binary.BigEndian.PutUint32(data[12:16], headerLen)
+	return append(data, face...)
+}
+
 func fakeSFNT(tags ...string) []byte {
 	data := make([]byte, 12+len(tags)*16)
 	copy(data[0:4], []byte{0x00, 0x01, 0x00, 0x00})

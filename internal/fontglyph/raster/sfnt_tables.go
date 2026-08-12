@@ -8,17 +8,48 @@ type sfntTable struct {
 	Length uint32
 }
 
-func listSFNTTables(fontData []byte) ([]sfntTable, error) {
+// sfntDirectoryOffset returns the byte offset of the sfnt table directory,
+// unwrapping a TrueType Collection ("ttcf") header to its first face when
+// present. macOS system fonts such as Apple Color Emoji.ttc are shipped as
+// TTC files; without this, table offsets below would be read from the TTC
+// header itself instead of the wrapped font's own directory.
+func sfntDirectoryOffset(fontData []byte) (int, error) {
 	if len(fontData) < 12 {
+		return 0, ErrInvalidFontData
+	}
+	if string(fontData[0:4]) != "ttcf" {
+		return 0, nil
+	}
+	if len(fontData) < 16 {
+		return 0, ErrInvalidFontData
+	}
+	numFonts := binary.BigEndian.Uint32(fontData[8:12])
+	if numFonts == 0 {
+		return 0, ErrInvalidFontData
+	}
+	offset := binary.BigEndian.Uint32(fontData[12:16])
+	if uint64(offset)+12 > uint64(len(fontData)) {
+		return 0, ErrInvalidFontData
+	}
+	return int(offset), nil
+}
+
+func listSFNTTables(fontData []byte) ([]sfntTable, error) {
+	base, err := sfntDirectoryOffset(fontData)
+	if err != nil {
+		return nil, err
+	}
+	if base+12 > len(fontData) {
 		return nil, ErrInvalidFontData
 	}
-	numTables := int(binary.BigEndian.Uint16(fontData[4:6]))
-	dirEnd := 12 + numTables*16
+	numTables := int(binary.BigEndian.Uint16(fontData[base+4 : base+6]))
+	dirStart := base + 12
+	dirEnd := dirStart + numTables*16
 	if numTables < 0 || dirEnd > len(fontData) {
 		return nil, ErrInvalidFontData
 	}
 	tables := make([]sfntTable, 0, numTables)
-	for offset := 12; offset < dirEnd; offset += 16 {
+	for offset := dirStart; offset < dirEnd; offset += 16 {
 		tableOffset := binary.BigEndian.Uint32(fontData[offset+8 : offset+12])
 		tableLength := binary.BigEndian.Uint32(fontData[offset+12 : offset+16])
 		if uint64(tableOffset)+uint64(tableLength) > uint64(len(fontData)) {
