@@ -6,6 +6,15 @@ real-hardware data point, not a full qualification: see "Not verified" below
 for what still needs a human tester, additional hardware, or an Apple
 Developer certificate.
 
+> **⚠️ THIS BRANCH CANNOT GO GREEN WITHOUT A MAINTAINER DECISION. ⚠️**
+> The maturity gate fails on **every** CI job (Windows, macOS, Linux), not
+> just the new macOS one, because this diff edits two files whose content is
+> hash-pinned to closed Slice 5.5c. Nothing in the code is wrong; the pin is
+> doing exactly what it was built to do. It cannot be resolved from inside
+> this pass — see
+> [Blocking: pinned-evidence maturity gate](#blocking-pinned-evidence-maturity-gate)
+> for the verified remedy and exact digests.
+
 ## Environment
 
 - Mac: Intel, `x86_64`
@@ -23,14 +32,74 @@ against real macOS system fonts and real macOS temp-directory symlinks.
 1. **Apple Color Emoji never rendered in color** (`internal/fontglyph/raster/sfnt_tables.go`). The sfnt table-directory parser assumed every font file starts with a plain single-face table directory. `/System/Library/Fonts/Apple Color Emoji.ttc` is a TrueType Collection (`ttcf` header + per-face directories), so the parser silently read garbage table entries and reported zero color tables, and `sbix` bitmap extraction (already implemented for the render path) never activated. Fixed by unwrapping the `ttcf` header to the first face's own table directory before scanning. Added a synthetic-fixture regression test (`TestDetectColorTablesUnwrapsTrueTypeCollection`) so this doesn't require a real font file to catch a regression. `TestSystemColorEmojiRasterizesKnownGlyph`/`TestSystemColorEmojiRasterizesRepresentativeGlyphs`/`TestSystemColorEmojiFixtureDetection` (previously failing on this Mac) now pass.
 2. **Config/background watch-set falsely duplicated entries on macOS** (`internal/frontend/glfwgl/config_watch.go`). `watchPathIdentity` only canonicalized parent-directory symlink aliases on Windows (an 8.3-short-name/case concern). macOS's `/var` → `/private/var` and `/tmp` → `/private/tmp` system symlinks hit the exact same class of problem, so a config/background-image path observed both before and after canonicalization elsewhere in the pipeline was treated as two different files — breaking the `-tags glfw ./internal/frontend/glfwgl` reload/background test suite outright (6 failing tests). Fixed by running the same parent-directory `EvalSymlinks` canonicalization on all platforms, keeping case-folding Windows-only (other platforms are case-sensitive). All 6 previously-failing tests now pass.
 
-**Note for whoever merges this:** both files are referenced by this
-repository's `scripts/check-maturity-gates.go` pinned-evidence guards
-(Slice 3.1's `check-slice31-owner.go` allowlist and Slice 5.5c's
-`source-manifest-candidate.txt` hash pin). The maturity gate will fail on
-this diff until those manifests are regenerated/extended — that's the
-gate's own historical-slice governance working as designed, not a new
-problem introduced here. I did not touch the pinned manifests myself since
-re-declaring a closed slice's evidence is a maintainer decision.
+## Blocking: pinned-evidence maturity gate
+
+**This branch fails `go run ./scripts/check-maturity-gates.go` and cannot be
+made to pass without a maintainer governance decision. Do not merge assuming
+CI will go green.**
+
+Fix #1 above edits `internal/fontglyph/raster/sfnt_tables.go` and
+`internal/fontglyph/raster/color_tables_test.go`. Both are content-hash-pinned
+by closed Slice 5.5c via
+`docs/validation/architecture-maturity-slice-5.5c/source-manifest-candidate.txt`,
+enforced by `comparePinnedManifest` in `scripts/check-slice55c-evidence.go`
+(protected scope: every path under `internal/fontglyph/`). Editing them is
+therefore *guaranteed* to trip the gate.
+
+Verified, not assumed:
+
+- `main` at `1216cef`: `maturity gates ok` (exit 0).
+- This branch at `4881480`: exit 1, with exactly two failures — the two files
+  above. Nothing else in the gate is broken.
+- The check is **not** platform-gated. `.github/workflows/ci.yml` runs it in
+  the `windows`, `macos`, and `linux-headless` jobs alike, and the manifest
+  digests are LF-normalized, so CRLF checkout changes nothing. **All three
+  jobs fail identically.** The new macOS job did not cause this and is not
+  uniquely affected.
+- Correction to an earlier draft of this note: `scripts/check-slice31-owner.go`
+  is **not** involved. It contains zero references to `fontglyph`, its
+  allowlist derives from a fixed committed commit range rather than from HEAD,
+  and `go run ./scripts/check-slice31-owner.go` still reports
+  `Slice 3.1 owner guards ok` on this branch.
+
+### What a maintainer would have to do
+
+No fabricated history is required — every lineage constant the guard checks
+(`baseCommit`/T/A/M/W/G) is a real commit already in `main`, and `checkHistory`
+explicitly permits arbitrary descendant commits. What *is* required is
+re-declaring a closed slice's pinned evidence, which is a governance call:
+
+1. Update the two lines in `source-manifest-candidate.txt` to the post-fix
+   digests:
+   - `internal/fontglyph/raster/color_tables_test.go` →
+     `0c2ec0e95cbf5bc04a47bd48d8094c30ff225306b4de1d17a8a8326be3747813`
+   - `internal/fontglyph/raster/sfnt_tables.go` →
+     `480a67792049caaf63cee82b0b696c1d99afb23cbb7609c9f3f52b4938129f88`
+2. Update `artifactHashes["source-manifest-candidate.txt"]` in
+   `scripts/check-slice55c-evidence.go` (currently
+   `3225257f40be27a13a9022e253ed4c1b0995bf08679b1ad312e68a6b19e5d268`) to the
+   manifest's new digest,
+   `b5b3f43ad693144e35415f2d9628138391480b9f803414cfac7ea6474942a095`.
+   That value was verified by applying the two-line patch in a throwaway
+   worktree; it is only valid if the two pinned files are byte-identical to
+   this branch's versions. Any further edit to either file invalidates it.
+
+**Do not use the guard's own `-write-candidate-manifest` flag for this.** It
+regenerates the entire manifest from the present working tree, which was
+measured to rewrite **272 lines (161+/111-)** — only 2 of which are in the
+enforced `internal/fontglyph/` scope. The other 268 are unrelated repo
+evolution since Slice 5.5c closed, and rewriting them would silently destroy
+the historical snapshot the slice's evidence exists to preserve.
+
+An alternative with closer precedent: rather than re-declaring content hashes,
+narrow the guard's scope — the post-G commits `0d6895f`
+("fix(ci): scope font extraction successor pins") and `38486b2` established
+that *amending the guard's scope* is an accepted pattern, whereas rewriting a
+pinned content hash has no precedent in this repo's history.
+
+Nothing in this pass touched any pinned manifest, allowlist, or guard script.
+That was deliberate: making the gate pass is a maintainer's decision to make
+explicitly, not a side effect of a bug fix.
 
 ## Automated evidence (commands run, real output)
 
@@ -55,6 +124,10 @@ zsh/bash PTY capture, UTF-8/CJK/emoji byte round-trip
 correctly — no corruption, no leaked processes.
 
 ## Findings that are not bugs to fix, but worth the maintainer's attention
+
+Lower-severity audit findings that were reviewed and deliberately deferred
+(with the reasoning for each) are logged in
+[`macos-platform-validation-2026-08-12-p2-log.md`](macos-platform-validation-2026-08-12-p2-log.md).
 
 - **`--doctor` config discovery does not follow `~/Library` convention.** It reports candidates under `~/.config/cervterm/` (XDG-style), matching Linux rather than native macOS (`~/Library/Application Support/CervTerm`). This is a product decision (XDG-on-macOS is a legitimate, common choice for cross-platform CLI-adjacent tools), not something this pass changed unilaterally.
 - **Emoji-coverage startup warnings are platform-blind.** On every macOS launch, the log unconditionally prints "NotoColorEmoji.ttf not found" and "Segoe UI Emoji not found" — fonts that are Linux/Windows-specific and were never expected to exist on macOS. Not incorrect, just noisy; worth gating by platform if someone wants to clean it up.

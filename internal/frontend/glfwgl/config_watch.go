@@ -95,6 +95,24 @@ func normalizeWatchPaths(paths []string) []string {
 // that component intact is required so two declarative symlink aliases
 // remain independently watched for retargeting. Case-folding is Windows-only
 // since other supported platforms have case-sensitive filesystems.
+//
+// Known limitation (pre-existing on Windows, now shared by every platform):
+// collapsing the parent directory is deliberately lossy. Two *distinct*
+// symlinked directories that resolve to the same real directory (/a -> /real
+// and /b -> /real, each containing config.lua) produce one identity, so
+// normalizeWatchPaths keeps only whichever alias it saw first and drops the
+// other. If the dropped alias is later retargeted to a different directory,
+// that retarget is not observed. The guarantee this function does uphold is
+// the final-component one exercised by
+// TestWatchHashesKeepEveryDeclarativeSymlinkAlias: sibling symlink *files*
+// in the same directory stay independently watched. The motivating macOS
+// case (/var, /tmp) is unaffected because those system symlinks never
+// retarget. Fixing this properly means tracking every original path per
+// canonical identity rather than deduplicating to one; that is tracked as a
+// separate improvement rather than folded into the macOS support pass.
+//
+// Also note: EvalSymlinks fails for a parent directory that does not exist
+// yet, in which case no canonicalization happens and aliases stay distinct.
 func watchPathIdentity(path string) string {
 	clean := filepath.Clean(path)
 	if absolute, err := filepath.Abs(clean); err == nil {
