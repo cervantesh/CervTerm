@@ -1,0 +1,12 @@
+=== environment ===
+ProductName:		macOS
+ProductVersion:		15.7.7
+BuildVersion:		24G720
+x86_64
+go version go1.26.5 darwin/amd64
+9fa1ca10482228de715cf3ea2e2839877b3a3a3b
+9fa1ca10482228de715cf3ea2e2839877b3a3a3b release(macOS): wire package-macos.go into the tagged-release workflow
+
+=== build ===
+go build ./... OK
+go vet OK
