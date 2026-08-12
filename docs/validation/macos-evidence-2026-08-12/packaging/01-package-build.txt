@@ -1,0 +1,31 @@
+=== package-macos.go: ad-hoc signing attempted (default) ===
+$ go run ./scripts/package-macos.go -version v0.9.1-macos-evidence -outdir dist
+warning: version "v0.9.1-macos-evidence" is not a dotted-integer version; using "0.9.1" for CFBundleVersion/CFBundleShortVersionString
+dist/CervTerm.app: resource fork, Finder information, or similar detritus not allowed
+ad-hoc codesign: exit status 1
+exit status 1
+exit: 1 -- FAILS on this machine, documented and expected (see docs/release-packaging.md's com.apple.provenance note)
+
+=== bundle structure (assembled before the signing step failed) ===
+dist/CervTerm.app
+dist/CervTerm.app/Contents
+dist/CervTerm.app/Contents/Info.plist
+dist/CervTerm.app/Contents/MacOS
+dist/CervTerm.app/Contents/MacOS/cervterm
+dist/CervTerm.app/Contents/Resources
+dist/CervTerm.app/Contents/Resources/AppIcon.icns
+dist/CervTerm.app/Contents/Resources/CHANGELOG.md
+dist/CervTerm.app/Contents/Resources/LICENSE
+dist/CervTerm.app/Contents/Resources/README.md
+dist/CervTerm.app/Contents/Resources/SUPPORT.md
+dist/CervTerm.app/Contents/Resources/docs
+
+=== Info.plist: version normalization proof (v0.9.1-macos-evidence -> 0.9.1) ===
+  "CFBundleShortVersionString" => "0.9.1"
+  "CFBundleVersion" => "0.9.1"
+  "LSMinimumSystemVersion" => "12.0"
+dist/CervTerm.app/Contents/Info.plist: OK
+
+=== executable, launched from inside the bundle (full raw version preserved here) ===
+dist/CervTerm.app/Contents/MacOS/cervterm: Mach-O 64-bit executable x86_64
+CervTerm v0.9.1-macos-evidence (darwin/amd64, go1.26.5)

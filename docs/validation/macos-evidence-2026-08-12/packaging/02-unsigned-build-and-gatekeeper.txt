@@ -1,0 +1,35 @@
+=== same version, signing disabled, to reach the zip step ===
+$ go run ./scripts/package-macos.go -version v0.9.1-macos-evidence -outdir dist -adhoc-sign=false
+(eval):25: no matches found: dist/*.zip
+warning: version "v0.9.1-macos-evidence" is not a dotted-integer version; using "0.9.1" for CFBundleVersion/CFBundleShortVersionString
+Wrote dist/cervterm-v0.9.1-macos-evidence-macos-amd64.zip
+exit: 0
+
+=== zip contents: file count and first/last entries ===
+ 17971703                     284 files
+Archive:  dist/cervterm-v0.9.1-macos-evidence-macos-amd64.zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  08-12-2026 18:32   CervTerm.app/
+        0  08-12-2026 18:32   CervTerm.app/Contents/
+     1041  08-12-2026 18:32   CervTerm.app/Contents/Info.plist
+        0  08-12-2026 18:32   CervTerm.app/Contents/MacOS/
+ 14472192  08-12-2026 18:32   CervTerm.app/Contents/MacOS/cervterm
+        0  08-12-2026 18:32   CervTerm.app/Contents/Resources/
+   293782  08-12-2026 18:32   CervTerm.app/Contents/Resources/AppIcon.icns
+    10387  08-12-2026 18:32   CervTerm.app/Contents/Resources/CHANGELOG.md
+     1073  08-12-2026 18:32   CervTerm.app/Contents/Resources/LICENSE
+    12841  08-12-2026 18:32   CervTerm.app/Contents/Resources/README.md
+  ... (252 docs files omitted for brevity) ...
+    30353  08-12-2026 18:32   CervTerm.app/Contents/Resources/docs/wezterm-parity-roadmap.md
+---------                     -------
+ 17971703                     284 files
+
+=== zip integrity ===
+No errors detected in compressed data of dist/cervterm-v0.9.1-macos-evidence-macos-amd64.zip.
+
+=== Gatekeeper on unsigned bundle, simulated browser-download quarantine ===
+com.apple.quarantine: 0083;6a7cf481;Safari;
+dist/CervTerm.app: rejected
+source=no usable signature
+spctl exit: 3  (rejected/no-usable-signature is the expected, documented state for an unsigned bundle)
