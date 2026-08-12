@@ -1,7 +1,6 @@
 module cervterm
 
-go 1.25.8
-
+go 1.26.5
 require (
 	github.com/ActiveState/termtest/conpty v0.5.0
 	github.com/clipperhouse/uax29/v2 v2.7.0
