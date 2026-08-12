@@ -45,7 +45,12 @@ func packageMacOS(version, outDir string, adHocSign bool) error {
 		return err
 	}
 	appDir := filepath.Join(outDir, "CervTerm.app")
-	zipPath := filepath.Join(outDir, "cervterm-"+version+"-macos.zip")
+	// The build below produces a host-native binary (no cross-compilation),
+	// and GitHub-hosted "macos-latest" runners are Apple Silicon (arm64), not
+	// Intel. An architecture-neutral filename would let an Intel user
+	// download an incompatible arm64 zip with no indication why it won't
+	// run, so the architecture is always part of the name.
+	zipPath := filepath.Join(outDir, "cervterm-"+version+"-macos-"+runtime.GOARCH+".zip")
 
 	if err := os.RemoveAll(appDir); err != nil {
 		return err
