@@ -94,9 +94,36 @@ than a dropped one. Noted in the function's doc comment.
 
 ---
 
+---
+
+## P2-5 — `package-macos.go`: concurrent runs race on shared staging path
+
+**File:** `scripts/package-macos.go`, `packageMacOS`
+
+Every invocation targeting a given `-outdir` builds and signs at the same
+`<outdir>/CervTerm.app` path and removes it on start. Two concurrent runs
+(different versions, or CI + a local run) can delete or mutate the bundle
+mid-build of the other, producing a mismatched or corrupted archive.
+
+**Confirmed real, deferred rather than fixed.** This is new code (no pinned-
+manifest cost to fixing it), but the credible remedies — a unique per-run temp
+staging directory with an atomic rename into `-outdir`, or a lock file — both
+touch the path that the manually-verified `xattr -cr`/`codesign` steps operate
+on, and add stale-lock/cleanup semantics. Poor trade for a script one
+operator or one CI job runs at a time today. Tracked as a proposal issue (see
+the companion document) rather than fixed in this pass.
+
+---
+
 ## Not in this log
 
-The audit's P1 (parent-directory alias collapsing can drop a real reload
-dependency) was confirmed as genuine and is documented as a known limitation in
-`watchPathIdentity`'s doc comment, with a follow-up improvement proposed
-separately. It is not a P2 and is not deferred silently.
+The audit's P1 findings on both branches were confirmed as genuine and handled
+outside this log, not deferred silently:
+
+- **CI/fixes branch:** parent-directory alias collapsing (`watchPathIdentity`)
+  can drop a real reload dependency — documented as a known limitation in the
+  function's doc comment, with a follow-up improvement proposed separately.
+- **Packaging branch:** invalid `CFBundleVersion`/`CFBundleShortVersionString`,
+  missing `runtime.GOOS` guard, and discarded zip-close errors — all three were
+  fixed in code (see `scripts/package-macos.go`'s `fix(macOS): valid plist
+  versions, GOOS guard, propagated zip errors` commit).
