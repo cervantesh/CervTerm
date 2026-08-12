@@ -17,6 +17,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -30,6 +32,15 @@ func main() {
 }
 
 func packageMacOS(version, outDir string, adHocSign bool) error {
+	// The build step below produces a host-native binary, and the bundle is
+	// only meaningful with a Mach-O executable inside it. Without this guard a
+	// run on Linux or Windows would emit a plausible-looking
+	// cervterm-<version>-macos.zip containing a non-Darwin binary. Cross
+	// compiling is not a goal here: the GLFW build needs cgo against the macOS
+	// system frameworks, and the xattr/codesign steps are macOS-only tools.
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("package-macos must run on macOS: GOOS is %q, want %q", runtime.GOOS, "darwin")
+	}
 	if err := validatePackageVersion(version); err != nil {
 		return err
 	}
@@ -116,14 +127,82 @@ func writeInfoPlist(dst, version string) error {
 		return err
 	}
 	var buf bytes.Buffer
-	shortVersion := version
-	if idx := strings.IndexAny(version, "-+"); idx >= 0 {
-		shortVersion = version[:idx]
+	plistVersion, exact := normalizePlistVersion(version)
+	if !exact {
+		fmt.Fprintf(os.Stderr, "warning: version %q is not a dotted-integer version; using %q for CFBundleVersion/CFBundleShortVersionString\n", version, plistVersion)
 	}
-	if err := tmpl.Execute(&buf, plistData{Version: version, ShortVersion: shortVersion}); err != nil {
+	if err := tmpl.Execute(&buf, plistData{Version: plistVersion, ShortVersion: plistVersion}); err != nil {
 		return err
 	}
 	return os.WriteFile(dst, buf.Bytes(), 0o644)
+}
+
+// fallbackPlistVersion is emitted when a version string cannot be reduced to
+// the form Apple requires. A known-valid placeholder is better than a value
+// the platform rejects: macOS parses these keys numerically, so a malformed
+// one degrades version comparison and is rejected outright at notarization.
+const fallbackPlistVersion = "0.0.0"
+
+// normalizePlistVersion reduces a release version to the form Apple requires
+// for CFBundleVersion and CFBundleShortVersionString: one to three
+// period-separated integers. It strips a leading "v" and any SemVer
+// prerelease/build suffix, so this repo's tag convention "v0.2.0-beta.1"
+// becomes "0.2.0". Components are canonicalized as integers ("1.02" -> "1.2"),
+// which is how macOS compares them anyway. More than three components are
+// truncated to three. Anything left that is not dotted-integer form yields
+// fallbackPlistVersion.
+//
+// The second result reports whether the input was already a clean
+// dotted-integer version, so the caller can warn when a value was substituted.
+//
+// Only the two plist keys are constrained this way. The full unmodified
+// version string is still what gets stamped into the binary via
+// -X buildinfo.Version and into the release zip filename, so prerelease
+// identity is preserved everywhere it is legal to keep it.
+func normalizePlistVersion(version string) (string, bool) {
+	trimmed := strings.TrimSpace(version)
+	exact := trimmed == version
+	if rest := strings.TrimPrefix(trimmed, "v"); rest != trimmed {
+		trimmed, exact = rest, false
+	} else if rest := strings.TrimPrefix(trimmed, "V"); rest != trimmed {
+		trimmed, exact = rest, false
+	}
+	// Cut the SemVer prerelease ("-beta.1") and build metadata ("+abc123")
+	// suffixes. This also removes any stray sign character, so the digit check
+	// below sees only unsigned components.
+	if idx := strings.IndexAny(trimmed, "-+"); idx >= 0 {
+		trimmed, exact = trimmed[:idx], false
+	}
+	parts := strings.Split(trimmed, ".")
+	if len(parts) > 3 {
+		parts, exact = parts[:3], false
+	}
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		// Bound the length so the Atoi below stays well inside int range and
+		// absurd components are rejected rather than silently accepted.
+		if part == "" || len(part) > 9 {
+			return fallbackPlistVersion, false
+		}
+		for _, r := range part {
+			if r < '0' || r > '9' {
+				return fallbackPlistVersion, false
+			}
+		}
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return fallbackPlistVersion, false
+		}
+		canonical := strconv.Itoa(n)
+		if canonical != part {
+			exact = false
+		}
+		normalized = append(normalized, canonical)
+	}
+	if len(normalized) == 0 {
+		return fallbackPlistVersion, false
+	}
+	return strings.Join(normalized, "."), exact
 }
 
 func validatePackageVersion(version string) error {
@@ -143,6 +222,19 @@ func validatePackageVersion(version string) error {
 }
 
 func copyDir(src, dst string) error {
+	// dst inside src means the walk would descend into its own output: with
+	// -outdir docs the bundle stages at docs/CervTerm.app, so copying docs/
+	// into that bundle's Resources/docs walks the growing copy back into
+	// itself. There is no legitimate case for the overlap here, so reject it
+	// outright rather than emitting a bundle that contains a partial copy of
+	// itself.
+	nested, err := isWithin(src, dst)
+	if err != nil {
+		return err
+	}
+	if nested {
+		return fmt.Errorf("refusing to copy %s into %s: destination is inside the source tree", src, dst)
+	}
 	return filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -160,6 +252,29 @@ func copyDir(src, dst string) error {
 		}
 		return copyFile(path, target)
 	})
+}
+
+// isWithin reports whether child is parent itself or nested underneath it.
+// Both paths are resolved to absolute form first so a relative source ("docs")
+// and an absolute destination compare correctly.
+func isWithin(parent, child string) (bool, error) {
+	absParent, err := filepath.Abs(parent)
+	if err != nil {
+		return false, err
+	}
+	absChild, err := filepath.Abs(child)
+	if err != nil {
+		return false, err
+	}
+	rel, err := filepath.Rel(absParent, absChild)
+	if err != nil {
+		// Unrelated roots (different volumes on Windows) are not nested.
+		return false, nil
+	}
+	if rel == "." {
+		return true, nil
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)), nil
 }
 
 func copyFile(src, dst string) error {
@@ -186,14 +301,25 @@ func copyFile(src, dst string) error {
 	return os.Chmod(dst, info.Mode())
 }
 
-func zipDirContents(baseDir, srcDir, zipPath string) error {
+func zipDirContents(baseDir, srcDir, zipPath string) (err error) {
 	out, err := os.Create(zipPath)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 	zw := zip.NewWriter(out)
-	defer zw.Close()
+	// zip.Writer.Close writes the central directory and os.File.Close flushes
+	// it, so both can fail late (disk full, IO error) on an archive whose
+	// entries all wrote cleanly. Discarding those errors would leave a
+	// truncated, unreadable zip while the caller reports success, so propagate
+	// them -- but never let them mask an earlier failure.
+	defer func() {
+		if closeErr := zw.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("finalize zip %s: %w", zipPath, closeErr)
+		}
+		if outErr := out.Close(); err == nil && outErr != nil {
+			err = fmt.Errorf("close zip %s: %w", zipPath, outErr)
+		}
+	}()
 	return filepath.WalkDir(srcDir, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
