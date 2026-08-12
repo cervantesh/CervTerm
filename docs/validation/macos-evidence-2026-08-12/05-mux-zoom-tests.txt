@@ -1,0 +1,423 @@
+=== RUN   TestLayoutAxesRemainderAndHalfOpenRectangles
+=== RUN   TestLayoutAxesRemainderAndHalfOpenRectangles/columns_give_horizontal_residue_to_second_child
+=== RUN   TestLayoutAxesRemainderAndHalfOpenRectangles/rows_give_vertical_residue_to_second_child
+--- PASS: TestLayoutAxesRemainderAndHalfOpenRectangles (0.00s)
+    --- PASS: TestLayoutAxesRemainderAndHalfOpenRectangles/columns_give_horizontal_residue_to_second_child (0.00s)
+    --- PASS: TestLayoutAxesRemainderAndHalfOpenRectangles/rows_give_vertical_residue_to_second_child (0.00s)
+=== RUN   TestLayoutNestedVisualDFSAndCellGeometry
+--- PASS: TestLayoutNestedVisualDFSAndCellGeometry (0.00s)
+=== RUN   TestLayoutCellMetricsPaddingAndCompressedExistingTopology
+--- PASS: TestLayoutCellMetricsPaddingAndCompressedExistingTopology (0.00s)
+=== RUN   TestLayoutRejectsInvalidValueGeometry
+=== RUN   TestLayoutRejectsInvalidValueGeometry/negative_extent
+=== RUN   TestLayoutRejectsInvalidValueGeometry/zero_cell_width
+=== RUN   TestLayoutRejectsInvalidValueGeometry/negative_padding
+--- PASS: TestLayoutRejectsInvalidValueGeometry (0.00s)
+    --- PASS: TestLayoutRejectsInvalidValueGeometry/negative_extent (0.00s)
+    --- PASS: TestLayoutRejectsInvalidValueGeometry/zero_cell_width (0.00s)
+    --- PASS: TestLayoutRejectsInvalidValueGeometry/negative_padding (0.00s)
+=== RUN   TestLayoutWithMetricsResolvesEqualPixelRectanglesPerPane
+--- PASS: TestLayoutWithMetricsResolvesEqualPixelRectanglesPerPane (0.00s)
+=== RUN   TestMuxCrossWindowPaneTransferPreservesRegistrySessionAndIngress
+--- PASS: TestMuxCrossWindowPaneTransferPreservesRegistrySessionAndIngress (0.00s)
+=== RUN   TestMuxCrossWindowWholeTabMoveDoesNotTouchSessions
+--- PASS: TestMuxCrossWindowWholeTabMoveDoesNotTouchSessions (0.00s)
+=== RUN   TestMuxWholeTabTransferPreservesInternalImageIDAllocator
+--- PASS: TestMuxWholeTabTransferPreservesInternalImageIDAllocator (0.00s)
+=== RUN   TestMuxImageStoresAreOptionalAndPaneLocal
+--- PASS: TestMuxImageStoresAreOptionalAndPaneLocal (0.00s)
+=== RUN   TestMuxAcquireImageResourceChecksPaneAndGenerationAndDetaches
+--- PASS: TestMuxAcquireImageResourceChecksPaneAndGenerationAndDetaches (0.00s)
+=== RUN   TestMuxShutdownReleasesSharedImageBudget
+--- PASS: TestMuxShutdownReleasesSharedImageBudget (0.00s)
+=== RUN   TestMuxInvalidImageLimitsFailClosed
+--- PASS: TestMuxInvalidImageLimitsFailClosed (0.00s)
+=== RUN   TestMuxAllDisabledIgnoresLimitsWithoutWakeOrImageAllocation
+--- PASS: TestMuxAllDisabledIgnoresLimitsWithoutWakeOrImageAllocation (0.01s)
+=== RUN   TestMuxCrossWindowTransferPreservesImageStoreAndResource
+--- PASS: TestMuxCrossWindowTransferPreservesImageStoreAndResource (0.00s)
+=== RUN   TestMuxCrossWindowTabTransferPreservesEveryImageStoreAndResource
+--- PASS: TestMuxCrossWindowTabTransferPreservesEveryImageStoreAndResource (0.00s)
+=== RUN   TestMuxRestoreAbortClosesEveryDetachedPaneStore
+--- PASS: TestMuxRestoreAbortClosesEveryDetachedPaneStore (0.00s)
+=== RUN   TestMuxEmitsDetachedNotificationRequest
+--- PASS: TestMuxEmitsDetachedNotificationRequest (0.00s)
+=== RUN   TestMuxReportsBoundedNotificationOverflow
+--- PASS: TestMuxReportsBoundedNotificationOverflow (0.00s)
+=== RUN   TestMuxProtocolSchedulingDispatchOrderAroundReplyAndEvents
+--- PASS: TestMuxProtocolSchedulingDispatchOrderAroundReplyAndEvents (0.00s)
+=== RUN   TestMuxProtocolSchedulingEOFDispatchOrder
+--- PASS: TestMuxProtocolSchedulingEOFDispatchOrder (0.00s)
+=== RUN   TestMuxProtocolSchedulingUnknownCompletionClosesWithoutEvents
+--- PASS: TestMuxProtocolSchedulingUnknownCompletionClosesWithoutEvents (0.00s)
+=== RUN   TestMuxProtocolSchedulingDeadlineMinimumAndInclusiveBoundary
+--- PASS: TestMuxProtocolSchedulingDeadlineMinimumAndInclusiveBoundary (0.00s)
+=== RUN   TestMuxProtocolSchedulingAllDisabledIdle
+--- PASS: TestMuxProtocolSchedulingAllDisabledIdle (0.00s)
+=== RUN   TestMuxProtocolSchedulingIndependentSingleProtocolCalls
+=== RUN   TestMuxProtocolSchedulingIndependentSingleProtocolCalls/kitty
+=== RUN   TestMuxProtocolSchedulingIndependentSingleProtocolCalls/sixel
+=== RUN   TestMuxProtocolSchedulingIndependentSingleProtocolCalls/iterm
+--- PASS: TestMuxProtocolSchedulingIndependentSingleProtocolCalls (0.00s)
+    --- PASS: TestMuxProtocolSchedulingIndependentSingleProtocolCalls/kitty (0.00s)
+    --- PASS: TestMuxProtocolSchedulingIndependentSingleProtocolCalls/sixel (0.00s)
+    --- PASS: TestMuxProtocolSchedulingIndependentSingleProtocolCalls/iterm (0.00s)
+=== RUN   TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity
+=== RUN   TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity/kitty
+=== RUN   TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity/sixel
+=== RUN   TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity/iterm
+=== RUN   TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity/expiry
+=== RUN   TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity/completion
+--- PASS: TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity (0.01s)
+    --- PASS: TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity/kitty (0.00s)
+    --- PASS: TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity/sixel (0.00s)
+    --- PASS: TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity/iterm (0.00s)
+    --- PASS: TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity/expiry (0.00s)
+    --- PASS: TestMuxProtocolSchedulingControllerWiringPreservesAllocationParity/completion (0.00s)
+=== RUN   TestKnownDefect_L3_09_MuxClockDoesNotReachTermimageStore
+--- PASS: TestKnownDefect_L3_09_MuxClockDoesNotReachTermimageStore (0.00s)
+=== RUN   TestMuxUnselectedDCSDoesNotEmitSixelDiagnostic
+--- PASS: TestMuxUnselectedDCSDoesNotEmitSixelDiagnostic (0.00s)
+=== RUN   TestMuxEOFFlushesUndecidedPublicOutputAndDropsSelectedPartial
+--- PASS: TestMuxEOFFlushesUndecidedPublicOutputAndDropsSelectedPartial (0.00s)
+=== RUN   TestMuxRestoreSpawnsBeforePublicationAndReadersObserveWholeCommit
+--- PASS: TestMuxRestoreSpawnsBeforePublicationAndReadersObserveWholeCommit (0.01s)
+=== RUN   TestMuxRestoreReaderPreparationFailureReverseAbortsPristineAndRetriesIDs
+--- PASS: TestMuxRestoreReaderPreparationFailureReverseAbortsPristineAndRetriesIDs (0.00s)
+=== RUN   TestMuxRestoreAbortClosesInReverseAndJoinsEveryCloseError
+--- PASS: TestMuxRestoreAbortClosesInReverseAndJoinsEveryCloseError (0.00s)
+=== RUN   TestMuxRestoreEventsCharacterizeRevisionsFocusAndAddresses
+--- PASS: TestMuxRestoreEventsCharacterizeRevisionsFocusAndAddresses (0.00s)
+=== RUN   TestMuxRestoreCreatesDistinctImageProtocolAdapters
+--- PASS: TestMuxRestoreCreatesDistinctImageProtocolAdapters (0.00s)
+=== RUN   TestMuxRestoreCommitPublishesExactTopologySpawnsAndFinalEvents
+--- PASS: TestMuxRestoreCommitPublishesExactTopologySpawnsAndFinalEvents (0.00s)
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/A-nil
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/B-nil
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/C-nil
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/D-nil
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/E-nil
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/F-nil
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/G-nil
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/A-session
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/B-session
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/C-session
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/D-session
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/E-session
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/F-session
+=== RUN   TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/G-session
+--- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne (0.03s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/A-nil (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/B-nil (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/C-nil (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/D-nil (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/E-nil (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/F-nil (0.01s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/G-nil (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/A-session (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/B-session (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/C-session (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/D-session (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/E-session (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/F-session (0.00s)
+    --- PASS: TestMuxRestoreSpawnFailuresRollbackExactlyAndRetryFromOne/G-session (0.00s)
+=== RUN   TestMuxRestoreClosePreflightFailureClosesBuiltStateInReverseAndRetries
+--- PASS: TestMuxRestoreClosePreflightFailureClosesBuiltStateInReverseAndRetries (0.00s)
+=== RUN   TestMuxRestoreCloseAbortFailureClosesProvisionedStateAndRetries
+--- PASS: TestMuxRestoreCloseAbortFailureClosesProvisionedStateAndRetries (0.00s)
+=== RUN   TestMuxRestoreAbortVerifiesExactRegistryDetachAndRetainsRetryOwner
+--- PASS: TestMuxRestoreAbortVerifiesExactRegistryDetachAndRetainsRetryOwner (0.00s)
+=== RUN   TestMuxRestoreAbortCommitMisuseAndStaleIngress
+--- PASS: TestMuxRestoreAbortCommitMisuseAndStaleIngress (0.00s)
+=== RUN   TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn
+=== RUN   TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn/geometry-count
+=== RUN   TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn/invalid-geometry
+=== RUN   TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn/compressed
+=== RUN   TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn/invalid-tree
+=== RUN   TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn/active-empty
+--- PASS: TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn (0.00s)
+    --- PASS: TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn/geometry-count (0.00s)
+    --- PASS: TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn/invalid-geometry (0.00s)
+    --- PASS: TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn/compressed (0.00s)
+    --- PASS: TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn/invalid-tree (0.00s)
+    --- PASS: TestMuxRestoreRejectsInvalidBlueprintAndGeometryBeforeSpawn/active-empty (0.00s)
+=== RUN   TestMuxRestorePrepareDoesNotStartReaders
+--- PASS: TestMuxRestorePrepareDoesNotStartReaders (0.05s)
+=== RUN   TestMuxRestoreCoordinatorEagerInitializationMatchesZeroValue
+--- PASS: TestMuxRestoreCoordinatorEagerInitializationMatchesZeroValue (0.00s)
+=== RUN   TestMuxRestoreCoordinatorDetachedAliasesRemainDetached
+--- PASS: TestMuxRestoreCoordinatorDetachedAliasesRemainDetached (0.00s)
+=== RUN   TestMuxRestoreCoordinatorIndependentCallsRetainCandidateOwnership
+--- PASS: TestMuxRestoreCoordinatorIndependentCallsRetainCandidateOwnership (0.01s)
+=== RUN   TestMuxRestoreCoordinatorWiringPreservesAllocationParity
+=== RUN   TestMuxRestoreCoordinatorWiringPreservesAllocationParity/fresh-invalid
+=== RUN   TestMuxRestoreCoordinatorWiringPreservesAllocationParity/prepare-pending
+=== RUN   TestMuxRestoreCoordinatorWiringPreservesAllocationParity/window-ids
+=== RUN   TestMuxRestoreCoordinatorWiringPreservesAllocationParity/commit-invalid
+=== RUN   TestMuxRestoreCoordinatorWiringPreservesAllocationParity/abort-invalid
+--- PASS: TestMuxRestoreCoordinatorWiringPreservesAllocationParity (0.02s)
+    --- PASS: TestMuxRestoreCoordinatorWiringPreservesAllocationParity/fresh-invalid (0.01s)
+    --- PASS: TestMuxRestoreCoordinatorWiringPreservesAllocationParity/prepare-pending (0.00s)
+    --- PASS: TestMuxRestoreCoordinatorWiringPreservesAllocationParity/window-ids (0.00s)
+    --- PASS: TestMuxRestoreCoordinatorWiringPreservesAllocationParity/commit-invalid (0.00s)
+    --- PASS: TestMuxRestoreCoordinatorWiringPreservesAllocationParity/abort-invalid (0.00s)
+=== RUN   TestMuxSessionIngressDataReplyAndDetachedPublicOutput
+--- PASS: TestMuxSessionIngressDataReplyAndDetachedPublicOutput (0.00s)
+=== RUN   TestMuxSessionIngressParserReplyFailurePrecedesOutputAndDirty
+--- PASS: TestMuxSessionIngressParserReplyFailurePrecedesOutputAndDirty (0.00s)
+=== RUN   TestMuxSessionIngressMetadataOrdering
+--- PASS: TestMuxSessionIngressMetadataOrdering (0.00s)
+=== RUN   TestMuxSessionIngressDataPrecedesExitAndNormalizesEOF
+=== RUN   TestMuxSessionIngressDataPrecedesExitAndNormalizesEOF/EOF
+=== RUN   TestMuxSessionIngressDataPrecedesExitAndNormalizesEOF/non-EOF
+--- PASS: TestMuxSessionIngressDataPrecedesExitAndNormalizesEOF (0.00s)
+    --- PASS: TestMuxSessionIngressDataPrecedesExitAndNormalizesEOF/EOF (0.00s)
+    --- PASS: TestMuxSessionIngressDataPrecedesExitAndNormalizesEOF/non-EOF (0.00s)
+=== RUN   TestMuxSessionIngressRejectedRecordConsumesDrainLimit
+=== RUN   TestMuxSessionIngressRejectedRecordConsumesDrainLimit/stale
+=== RUN   TestMuxSessionIngressRejectedRecordConsumesDrainLimit/replaced_owner
+=== RUN   TestMuxSessionIngressRejectedRecordConsumesDrainLimit/closed_owner
+--- PASS: TestMuxSessionIngressRejectedRecordConsumesDrainLimit (0.00s)
+    --- PASS: TestMuxSessionIngressRejectedRecordConsumesDrainLimit/stale (0.00s)
+    --- PASS: TestMuxSessionIngressRejectedRecordConsumesDrainLimit/replaced_owner (0.00s)
+    --- PASS: TestMuxSessionIngressRejectedRecordConsumesDrainLimit/closed_owner (0.00s)
+=== RUN   TestMuxClosePaneDropsAlreadyQueuedSessionIngress
+--- PASS: TestMuxClosePaneDropsAlreadyQueuedSessionIngress (0.00s)
+=== RUN   TestMuxSessionIngressPreservesCallbackEnqueue
+--- PASS: TestMuxSessionIngressPreservesCallbackEnqueue (0.00s)
+=== RUN   TestMuxSessionIngressCallbackArrivalIsRevalidatedAndRejectedWhenStale
+--- PASS: TestMuxSessionIngressCallbackArrivalIsRevalidatedAndRejectedWhenStale (0.00s)
+=== RUN   TestMuxSessionIngressControllerWiringPreservesAllocationParity
+--- PASS: TestMuxSessionIngressControllerWiringPreservesAllocationParity (0.01s)
+=== RUN   TestMuxBootstrapDrainSnapshotAndParserReply
+--- PASS: TestMuxBootstrapDrainSnapshotAndParserReply (0.00s)
+=== RUN   TestMuxWriteResizeOrderingAndRetryState
+--- PASS: TestMuxWriteResizeOrderingAndRetryState (0.00s)
+=== RUN   TestMuxSetScrollbackCapacityAppliesToAllPanes
+--- PASS: TestMuxSetScrollbackCapacityAppliesToAllPanes (0.00s)
+=== RUN   TestMuxSetHideCursorWhenScrolledAppliesToActiveAndFuturePanes
+--- PASS: TestMuxSetHideCursorWhenScrolledAppliesToActiveAndFuturePanes (0.00s)
+=== RUN   TestMuxEOFRetainsPaneAndCloseIsIdempotent
+--- PASS: TestMuxEOFRetainsPaneAndCloseIsIdempotent (0.00s)
+=== RUN   TestMuxSpawnFailurePreservesDiagnosticLeaf
+--- PASS: TestMuxSpawnFailurePreservesDiagnosticLeaf (0.00s)
+=== RUN   TestMuxSplitRoutesIndependentSessionsAndCollapses
+--- PASS: TestMuxSplitRoutesIndependentSessionsAndCollapses (0.01s)
+=== RUN   TestMuxSetSplitRatioReflowsBeforeSettledPTYResize
+--- PASS: TestMuxSetSplitRatioReflowsBeforeSettledPTYResize (0.01s)
+=== RUN   TestMuxSpawnSplitFailureIsAtomicAndSilent
+--- PASS: TestMuxSpawnSplitFailureIsAtomicAndSilent (0.00s)
+=== RUN   TestMuxSpawnSplitTransportsExactOptionsWithoutShellWrapper
+--- PASS: TestMuxSpawnSplitTransportsExactOptionsWithoutShellWrapper (0.00s)
+=== RUN   TestMuxBootstrapClosesPartialSessionOnSpawnError
+--- PASS: TestMuxBootstrapClosesPartialSessionOnSpawnError (0.00s)
+=== RUN   TestMuxCompressedGeometryMatchesSnapshotMinimum
+--- PASS: TestMuxCompressedGeometryMatchesSnapshotMinimum (0.00s)
+=== RUN   TestMuxResizePaneGridIsTargetedAndResizeBoundsPreservesMetrics
+--- PASS: TestMuxResizePaneGridIsTargetedAndResizeBoundsPreservesMetrics (0.01s)
+=== RUN   TestMuxSplitInheritsAndCloseRemovesPaneMetrics
+--- PASS: TestMuxSplitInheritsAndCloseRemovesPaneMetrics (0.00s)
+=== RUN   TestMuxResizePaneGridValidationIsAtomic
+--- PASS: TestMuxResizePaneGridValidationIsAtomic (0.00s)
+=== RUN   TestMuxPaletteBaseQueriesAndPaneLocalOverrides
+--- PASS: TestMuxPaletteBaseQueriesAndPaneLocalOverrides (0.00s)
+=== RUN   TestMuxTransferPanePreservesSessionAndDefersPTYResize
+--- PASS: TestMuxTransferPanePreservesSessionAndDefersPTYResize (0.04s)
+=== RUN   TestMuxTransferFinalActiveSourceEmitsNoCloseOrEmpty
+--- PASS: TestMuxTransferFinalActiveSourceEmitsNoCloseOrEmpty (0.00s)
+=== RUN   TestMuxTransferFailureLeavesViewsSessionsAndCountersUntouched
+--- PASS: TestMuxTransferFailureLeavesViewsSessionsAndCountersUntouched (0.00s)
+=== RUN   TestMuxCreateActivateCloseWindowOwnsRuntimeExactlyOnce
+--- PASS: TestMuxCreateActivateCloseWindowOwnsRuntimeExactlyOnce (0.00s)
+=== RUN   TestMuxCreateWindowFailureRestoresModelAndRegistry
+=== RUN   TestMuxCreateWindowFailureRestoresModelAndRegistry/reserve
+=== RUN   TestMuxCreateWindowFailureRestoresModelAndRegistry/spawn
+=== RUN   TestMuxCreateWindowFailureRestoresModelAndRegistry/register
+=== RUN   TestMuxCreateWindowFailureRestoresModelAndRegistry/start
+=== RUN   TestMuxCreateWindowFailureRestoresModelAndRegistry/commit
+--- PASS: TestMuxCreateWindowFailureRestoresModelAndRegistry (0.00s)
+    --- PASS: TestMuxCreateWindowFailureRestoresModelAndRegistry/reserve (0.00s)
+    --- PASS: TestMuxCreateWindowFailureRestoresModelAndRegistry/spawn (0.00s)
+    --- PASS: TestMuxCreateWindowFailureRestoresModelAndRegistry/register (0.00s)
+    --- PASS: TestMuxCreateWindowFailureRestoresModelAndRegistry/start (0.00s)
+    --- PASS: TestMuxCreateWindowFailureRestoresModelAndRegistry/commit (0.00s)
+=== RUN   TestMuxCloseFinalWindowReportsProcessEmptiness
+--- PASS: TestMuxCloseFinalWindowReportsProcessEmptiness (0.00s)
+=== RUN   TestMuxRollbackWindowReusesUnpublishedIDs
+--- PASS: TestMuxRollbackWindowReusesUnpublishedIDs (0.00s)
+=== RUN   TestMuxPaneTabWindowAndShutdownClosePreflightPreservesOwnership
+=== RUN   TestMuxPaneTabWindowAndShutdownClosePreflightPreservesOwnership/pane
+=== RUN   TestMuxPaneTabWindowAndShutdownClosePreflightPreservesOwnership/tab
+=== RUN   TestMuxPaneTabWindowAndShutdownClosePreflightPreservesOwnership/window
+=== RUN   TestMuxPaneTabWindowAndShutdownClosePreflightPreservesOwnership/shutdown
+--- PASS: TestMuxPaneTabWindowAndShutdownClosePreflightPreservesOwnership (0.02s)
+    --- PASS: TestMuxPaneTabWindowAndShutdownClosePreflightPreservesOwnership/pane (0.01s)
+    --- PASS: TestMuxPaneTabWindowAndShutdownClosePreflightPreservesOwnership/tab (0.00s)
+    --- PASS: TestMuxPaneTabWindowAndShutdownClosePreflightPreservesOwnership/window (0.00s)
+    --- PASS: TestMuxPaneTabWindowAndShutdownClosePreflightPreservesOwnership/shutdown (0.00s)
+=== RUN   TestMuxRollbackClosePreflightPreservesPublishedWindowAndRegistry
+--- PASS: TestMuxRollbackClosePreflightPreservesPublishedWindowAndRegistry (0.01s)
+=== RUN   TestMuxRestoreAbortClosePreflightPreservesCandidateAndRegistry
+--- PASS: TestMuxRestoreAbortClosePreflightPreservesCandidateAndRegistry (0.00s)
+=== RUN   TestL302RecursiveProductionMuxMutationCallsCannotBypassOwnerFacade
+--- PASS: TestL302RecursiveProductionMuxMutationCallsCannotBypassOwnerFacade (0.09s)
+=== RUN   TestL302NoConcreteMuxServiceLocatorAndNarrowCapabilityInventories
+--- PASS: TestL302NoConcreteMuxServiceLocatorAndNarrowCapabilityInventories (1.04s)
+=== RUN   TestMuxSinglePaneLayoutMatchesModelProjection
+--- PASS: TestMuxSinglePaneLayoutMatchesModelProjection (0.00s)
+=== RUN   TestOwnerCapabilityMisusePreservesMuxState
+--- PASS: TestOwnerCapabilityMisusePreservesMuxState (0.00s)
+=== RUN   TestMuxWorkspaceSwitchNeverSuspendsSessions
+--- PASS: TestMuxWorkspaceSwitchNeverSuspendsSessions (0.00s)
+PASS
+ok  	cervterm/internal/mux	2.763s
+=== RUN   TestAccessibilityMuxIntentTruthTableAndPayloadExclusion
+--- PASS: TestAccessibilityMuxIntentTruthTableAndPayloadExclusion (0.00s)
+=== RUN   TestHitDividerUsesExpandedNearestTarget
+--- PASS: TestHitDividerUsesExpandedNearestTarget (0.00s)
+=== RUN   TestDividerRatioUsesOwningContainer
+--- PASS: TestDividerRatioUsesOwningContainer (0.00s)
+=== RUN   TestDividerSettlementRetriesTransientPTYResizeFailure
+--- PASS: TestDividerSettlementRetriesTransientPTYResizeFailure (0.01s)
+=== RUN   TestDividerSettlementStopsAfterPersistentPTYResizeFailure
+--- PASS: TestDividerSettlementStopsAfterPersistentPTYResizeFailure (0.02s)
+=== RUN   TestClearDividerCursorResetsStateWithoutWindow
+--- PASS: TestClearDividerCursorResetsStateWithoutWindow (0.00s)
+=== RUN   TestMuxBindingsSplitFocusCloseAndPaneUIIsolation
+--- PASS: TestMuxBindingsSplitFocusCloseAndPaneUIIsolation (0.02s)
+=== RUN   TestMuxRowSplitCreatesIndependentGeometry
+--- PASS: TestMuxRowSplitCreatesIndependentGeometry (0.01s)
+=== RUN   TestMuxContentBoundsReserveScrollbarGutter
+--- PASS: TestMuxContentBoundsReserveScrollbarGutter (0.00s)
+=== RUN   TestZoomCoalescesAndCompoundsPerPane
+--- PASS: TestZoomCoalescesAndCompoundsPerPane (0.01s)
+=== RUN   TestZoomArmsPaneDebounceWithoutApplyingLiveSize
+--- PASS: TestZoomArmsPaneDebounceWithoutApplyingLiveSize (0.00s)
+=== RUN   TestAtlasDescriptorKeysPreserveOrderAndLegacyIdentity
+--- PASS: TestAtlasDescriptorKeysPreserveOrderAndLegacyIdentity (0.00s)
+=== RUN   TestAtlasFontModelIdentityIncludesFallbackRules
+--- PASS: TestAtlasFontModelIdentityIncludesFallbackRules (0.00s)
+=== RUN   TestAtlasDescriptorContextUsesStyledResolvedFace
+--- PASS: TestAtlasDescriptorContextUsesStyledResolvedFace (0.00s)
+=== RUN   TestAtlasFontKeyAndFixedPoolConstants
+--- PASS: TestAtlasFontKeyAndFixedPoolConstants (0.00s)
+=== RUN   TestAtlasSpecSwitchNamespacesAndReusesEntries
+--- PASS: TestAtlasSpecSwitchNamespacesAndReusesEntries (0.00s)
+=== RUN   TestAtlasNegativeLigatureCacheIsSpecNamespaced
+--- PASS: TestAtlasNegativeLigatureCacheIsSpecNamespaced (0.00s)
+=== RUN   TestAtlasCloseDeduplicatesSharedBackend
+--- PASS: TestAtlasCloseDeduplicatesSharedBackend (0.00s)
+=== RUN   TestAtlasPrewarmCapacityMissDoesNotReset
+2026/08/12 18:26:18 glyph atlas generation reset: generation=2
+--- PASS: TestAtlasPrewarmCapacityMissDoesNotReset (0.00s)
+=== RUN   TestAtlasRetainsInactiveBackendContextsWithinBudget
+--- PASS: TestAtlasRetainsInactiveBackendContextsWithinBudget (0.00s)
+=== RUN   TestAtlasCapacityFailureResetsAtMostOncePerGeneration
+2026/08/12 18:26:18 glyph atlas generation reset: generation=2
+--- PASS: TestAtlasCapacityFailureResetsAtMostOncePerGeneration (0.00s)
+=== RUN   TestFeatureIdentitySeparatesPositiveAndNegativeAtlasEntries
+--- PASS: TestFeatureIdentitySeparatesPositiveAndNegativeAtlasEntries (0.00s)
+=== RUN   TestAtlasMetricProjectionChangesEnvironmentAndProjectedRaster
+--- PASS: TestAtlasMetricProjectionChangesEnvironmentAndProjectedRaster (0.00s)
+=== RUN   TestAtlasRejectsSixtyFifthPinnedContextTransactionally
+--- PASS: TestAtlasRejectsSixtyFifthPinnedContextTransactionally (0.02s)
+=== RUN   TestAtlasEvictsDeterministicInactiveLRUAtContextBudget
+--- PASS: TestAtlasEvictsDeterministicInactiveLRUAtContextBudget (0.02s)
+=== RUN   TestAtlasContextAdmissionAbortIsMutationFree
+--- PASS: TestAtlasContextAdmissionAbortIsMutationFree (0.00s)
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_open
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_close
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_replace
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/search_open
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/search_close
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_focus
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_close
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_transfer
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/window_empty
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/unrelated_lifecycle_preserves_composition
+--- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation (0.01s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_open (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_close (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_replace (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/search_open (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/search_close (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_focus (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_close (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_transfer (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/window_empty (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/unrelated_lifecycle_preserves_composition (0.00s)
+=== RUN   TestHUDLayoutEmpty
+--- PASS: TestHUDLayoutEmpty (0.00s)
+=== RUN   TestHUDLayoutNoticeOnly
+--- PASS: TestHUDLayoutNoticeOnly (0.00s)
+=== RUN   TestHUDLayoutStatsOnly
+--- PASS: TestHUDLayoutStatsOnly (0.00s)
+=== RUN   TestHUDLayoutStatsPlusNotice
+--- PASS: TestHUDLayoutStatsPlusNotice (0.00s)
+=== RUN   TestHUDLayoutRuneWidth
+--- PASS: TestHUDLayoutRuneWidth (0.00s)
+=== RUN   TestHUDLayoutUIScale
+--- PASS: TestHUDLayoutUIScale (0.00s)
+=== RUN   TestDescriptorFontInstallationRetainsEnvironmentAcrossAdoptionAndZoom
+--- PASS: TestDescriptorFontInstallationRetainsEnvironmentAcrossAdoptionAndZoom (0.00s)
+=== RUN   TestFrontendRetainsOnlyNarrowMuxCapabilities
+--- PASS: TestFrontendRetainsOnlyNarrowMuxCapabilities (0.00s)
+=== RUN   TestPerPaneZoomStateIsIndependent
+--- PASS: TestPerPaneZoomStateIsIndependent (0.00s)
+=== RUN   TestZoomResetTargetsConfiguredBaseForFocusedPane
+--- PASS: TestZoomResetTargetsConfiguredBaseForFocusedPane (0.00s)
+=== RUN   TestPendingZoomRemainsAttachedAfterFocusChange
+--- PASS: TestPendingZoomRemainsAttachedAfterFocusChange (0.00s)
+=== RUN   TestNextWakeUsesEarliestPaneZoomDeadline
+--- PASS: TestNextWakeUsesEarliestPaneZoomDeadline (0.00s)
+=== RUN   TestPendingZoomResizeFailureUsesBoundedRetries
+--- PASS: TestPendingZoomResizeFailureUsesBoundedRetries (0.00s)
+=== RUN   TestProjectionAccessibilitySuppressesRepaintOnlyMuxEvents
+--- PASS: TestProjectionAccessibilitySuppressesRepaintOnlyMuxEvents (0.00s)
+=== RUN   TestStyledAtlasSeparatesPositiveAndNegativeKeys
+--- PASS: TestStyledAtlasSeparatesPositiveAndNegativeKeys (0.00s)
+=== RUN   TestStyledAtlasSeparatesInsertionNegatives
+--- PASS: TestStyledAtlasSeparatesInsertionNegatives (0.00s)
+=== RUN   TestAtlasUsesContentResolvedFaceKeys
+--- PASS: TestAtlasUsesContentResolvedFaceKeys (0.00s)
+=== RUN   TestAtlasBoundsAndCachesRasterNegatives
+--- PASS: TestAtlasBoundsAndCachesRasterNegatives (0.03s)
+=== RUN   TestTabBarLayoutKeepsActiveVisibleAndHitsDisjoint
+--- PASS: TestTabBarLayoutKeepsActiveVisibleAndHitsDisjoint (0.00s)
+=== RUN   TestTabBarLayoutIsDeterministicAndDoesNotMutateInput
+--- PASS: TestTabBarLayoutIsDeterministicAndDoesNotMutateInput (0.00s)
+=== RUN   TestRollbackInitializedMuxWrongThreadRetainsPublishedCapabilities
+--- PASS: TestRollbackInitializedMuxWrongThreadRetainsPublishedCapabilities (0.00s)
+=== RUN   TestTerminalImageActivationMapsEnabledLimitsIntoOneMux
+--- PASS: TestTerminalImageActivationMapsEnabledLimitsIntoOneMux (0.00s)
+=== RUN   TestTerminalImageActivationRejectsMuxSetupAtomically
+--- PASS: TestTerminalImageActivationRejectsMuxSetupAtomically (0.00s)
+=== RUN   TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux
+=== RUN   TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux/sixel-only
+=== RUN   TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux/iterm-only
+--- PASS: TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux (0.00s)
+    --- PASS: TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux/sixel-only (0.00s)
+    --- PASS: TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux/iterm-only (0.00s)
+=== RUN   TestTerminalImageActivationCommitFailureClosesCacheThenMux
+=== RUN   TestTerminalImageActivationCommitFailureClosesCacheThenMux/sixel-only
+=== RUN   TestTerminalImageActivationCommitFailureClosesCacheThenMux/iterm-only
+--- PASS: TestTerminalImageActivationCommitFailureClosesCacheThenMux (0.00s)
+    --- PASS: TestTerminalImageActivationCommitFailureClosesCacheThenMux/sixel-only (0.00s)
+    --- PASS: TestTerminalImageActivationCommitFailureClosesCacheThenMux/iterm-only (0.00s)
+=== RUN   TestWindowControllerRestoreStartupCoordinatesNativeAndMuxTransactions
+--- PASS: TestWindowControllerRestoreStartupCoordinatesNativeAndMuxTransactions (0.00s)
+=== RUN   TestWindowControllerRestoreStartupWithRealMuxPublishesWorkspaceVisibilityAndFocus
+--- PASS: TestWindowControllerRestoreStartupWithRealMuxPublishesWorkspaceVisibilityAndFocus (0.06s)
+=== RUN   TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack
+=== RUN   TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack/success
+=== RUN   TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack/failure
+--- PASS: TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack (0.00s)
+    --- PASS: TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack/success (0.00s)
+    --- PASS: TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack/failure (0.00s)
+=== RUN   TestWindowControllerRuntimeCreateRollsBackMuxBeforeNativeOnBindFailure
+--- PASS: TestWindowControllerRuntimeCreateRollsBackMuxBeforeNativeOnBindFailure (0.00s)
+PASS
+ok  	cervterm/internal/frontend/glfwgl	1.522s
+exit: 0

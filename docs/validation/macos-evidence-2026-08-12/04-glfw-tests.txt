@@ -1,0 +1,1626 @@
+=== RUN   TestAccessibilityMuxIntentTruthTableAndPayloadExclusion
+--- PASS: TestAccessibilityMuxIntentTruthTableAndPayloadExclusion (0.00s)
+=== RUN   TestAccessibilityInputRevisionIntent
+--- PASS: TestAccessibilityInputRevisionIntent (0.00s)
+=== RUN   TestTerminalAccessibilityInputDetachesVisibleValuesAndExcludesMetadata
+--- PASS: TestTerminalAccessibilityInputDetachesVisibleValuesAndExcludesMetadata (0.00s)
+=== RUN   TestTerminalAccessibilityInputPreservesCombiningWideAndBiDiValues
+--- PASS: TestTerminalAccessibilityInputPreservesCombiningWideAndBiDiValues (0.00s)
+=== RUN   TestTerminalAccessibilityInputRejectsNonDetachedSnapshotShape
+--- PASS: TestTerminalAccessibilityInputRejectsNonDetachedSnapshotShape (0.00s)
+=== RUN   TestTerminalAccessibilityInputMirrorsMetadataAwareTrailingSpaceTextWithoutLeakingMetadata
+--- PASS: TestTerminalAccessibilityInputMirrorsMetadataAwareTrailingSpaceTextWithoutLeakingMetadata (0.00s)
+=== RUN   TestTreeAccessibilityInputTraversesOnlyActiveWorkspaceTab
+--- PASS: TestTreeAccessibilityInputTraversesOnlyActiveWorkspaceTab (0.00s)
+=== RUN   TestTreeAccessibilityInputHiddenWorkspaceDoesNotRequirePaneCaptures
+--- PASS: TestTreeAccessibilityInputHiddenWorkspaceDoesNotRequirePaneCaptures (0.00s)
+=== RUN   TestAccessibilityFocusInputsUseStableActivationsAndGraphemeOffsets
+--- PASS: TestAccessibilityFocusInputsUseStableActivationsAndGraphemeOffsets (0.00s)
+=== RUN   TestAccessibilityPreeditMatchesModalAndSearchTargets
+--- PASS: TestAccessibilityPreeditMatchesModalAndSearchTargets (0.00s)
+=== RUN   TestAccessibilitySearchIdentityTracksActivationNotRevision
+--- PASS: TestAccessibilitySearchIdentityTracksActivationNotRevision (0.00s)
+=== RUN   TestAccessibilityPreeditRejectsInactiveWrongProjectionAndMalformedSpans
+--- PASS: TestAccessibilityPreeditRejectsInactiveWrongProjectionAndMalformedSpans (0.00s)
+=== RUN   TestTypedBuiltinsPreservePressRepeatPolicies
+--- PASS: TestTypedBuiltinsPreservePressRepeatPolicies (0.00s)
+=== RUN   TestTypedBuiltinsPreserveModifierMatching
+--- PASS: TestTypedBuiltinsPreserveModifierMatching (0.01s)
+=== RUN   TestReservedActionsPreserveSearchAndReloadPrecedence
+--- PASS: TestReservedActionsPreserveSearchAndReloadPrecedence (0.00s)
+=== RUN   TestNonConsumingRepeatFallsThroughToLaterBuiltin
+--- PASS: TestNonConsumingRepeatFallsThroughToLaterBuiltin (0.01s)
+=== RUN   TestKeyPipelineKeepsCtrlCInterruptWithoutSelection
+--- PASS: TestKeyPipelineKeepsCtrlCInterruptWithoutSelection (0.01s)
+=== RUN   TestKeyPipelineRoutesSelectionCopyBeforeTerminalAndConsumesRepeats
+--- PASS: TestKeyPipelineRoutesSelectionCopyBeforeTerminalAndConsumesRepeats (0.00s)
+=== RUN   TestPressOnlyStatsRepeatPreservesLegacyFallthrough
+--- PASS: TestPressOnlyStatsRepeatPreservesLegacyFallthrough (0.00s)
+=== RUN   TestKeyPipelinePreservesReservedAndScriptPrecedence
+--- PASS: TestKeyPipelinePreservesReservedAndScriptPrecedence (0.01s)
+=== RUN   TestKeyPipelineRouteOrderAndShortCircuit
+--- PASS: TestKeyPipelineRouteOrderAndShortCircuit (0.01s)
+=== RUN   TestKeyPipelineExecutesTypedLuaActions
+--- PASS: TestKeyPipelineExecutesTypedLuaActions (0.01s)
+=== RUN   TestLegacyCallbackRepeatAndCharacterSuppressionRemainExact
+--- PASS: TestLegacyCallbackRepeatAndCharacterSuppressionRemainExact (0.01s)
+=== RUN   TestKeyPipelineClipboardRepeatsDoNotLeakToPTY
+--- PASS: TestKeyPipelineClipboardRepeatsDoNotLeakToPTY (0.00s)
+=== RUN   TestKnownDefect_L4_05_UnboundCtrlVIsDropped
+--- PASS: TestKnownDefect_L4_05_UnboundCtrlVIsDropped (0.00s)
+=== RUN   TestKeyPipelineRuntimeConfigCallbackUsesPaneHost
+--- PASS: TestKeyPipelineRuntimeConfigCallbackUsesPaneHost (0.01s)
+=== RUN   TestActionControllerRejectsInvalidEnvelopeAndContextBeforePorts
+=== RUN   TestActionControllerRejectsInvalidEnvelopeAndContextBeforePorts/envelope
+=== RUN   TestActionControllerRejectsInvalidEnvelopeAndContextBeforePorts/context
+--- PASS: TestActionControllerRejectsInvalidEnvelopeAndContextBeforePorts (0.00s)
+    --- PASS: TestActionControllerRejectsInvalidEnvelopeAndContextBeforePorts/envelope (0.00s)
+    --- PASS: TestActionControllerRejectsInvalidEnvelopeAndContextBeforePorts/context (0.00s)
+=== RUN   TestActionControllerResolvesPaneTargetsAndDelegatesTypedCommand
+=== RUN   TestActionControllerResolvesPaneTargetsAndDelegatesTypedCommand/origin
+=== RUN   TestActionControllerResolvesPaneTargetsAndDelegatesTypedCommand/focused
+--- PASS: TestActionControllerResolvesPaneTargetsAndDelegatesTypedCommand (0.00s)
+    --- PASS: TestActionControllerResolvesPaneTargetsAndDelegatesTypedCommand/origin (0.00s)
+    --- PASS: TestActionControllerResolvesPaneTargetsAndDelegatesTypedCommand/focused (0.00s)
+=== RUN   TestActionControllerRejectsWrongKindAndMissingPaneTargets
+=== RUN   TestActionControllerRejectsWrongKindAndMissingPaneTargets/wrong_kind
+=== RUN   TestActionControllerRejectsWrongKindAndMissingPaneTargets/missing_pane
+--- PASS: TestActionControllerRejectsWrongKindAndMissingPaneTargets (0.00s)
+    --- PASS: TestActionControllerRejectsWrongKindAndMissingPaneTargets/wrong_kind (0.00s)
+    --- PASS: TestActionControllerRejectsWrongKindAndMissingPaneTargets/missing_pane (0.00s)
+=== RUN   TestActionControllerNonPaneCommandSkipsPaneLookup
+--- PASS: TestActionControllerNonPaneCommandSkipsPaneLookup (0.00s)
+=== RUN   TestActionControllerNonPaneRouteDoesNotAllocate
+--- PASS: TestActionControllerNonPaneRouteDoesNotAllocate (0.00s)
+=== RUN   TestActionControllerMultipleRefreshesActiveProjectionPerChildAndStopsOnFirstError
+--- PASS: TestActionControllerMultipleRefreshesActiveProjectionPerChildAndStopsOnFirstError (0.00s)
+=== RUN   TestActionControllerMultipleFallsBackToLocalRouteAndCarriesRefreshedContext
+--- PASS: TestActionControllerMultipleFallsBackToLocalRouteAndCarriesRefreshedContext (0.00s)
+=== RUN   TestActionExecutorSplitFocusAndCloseSequence
+--- PASS: TestActionExecutorSplitFocusAndCloseSequence (0.02s)
+=== RUN   TestActionExecutorResolvesOriginPerPane
+--- PASS: TestActionExecutorResolvesOriginPerPane (0.00s)
+=== RUN   TestActionExecutorReportsUnavailableTarget
+--- PASS: TestActionExecutorReportsUnavailableTarget (0.00s)
+=== RUN   TestActionExecutorGlobalAndDeferredActions
+--- PASS: TestActionExecutorGlobalAndDeferredActions (0.00s)
+=== RUN   TestActionExecutorReportsSearchActivationExhaustion
+--- PASS: TestActionExecutorReportsSearchActivationExhaustion (0.00s)
+=== RUN   TestActionExecutorScrollsTargetPane
+--- PASS: TestActionExecutorScrollsTargetPane (0.00s)
+=== RUN   TestActionExecutorSequenceStopsOnFirstError
+--- PASS: TestActionExecutorSequenceStopsOnFirstError (0.00s)
+=== RUN   TestActionExecutorTopologyActionsTargetOriginAndPreserveFailure
+--- PASS: TestActionExecutorTopologyActionsTargetOriginAndPreserveFailure (0.03s)
+=== RUN   TestActionExecutorScrollsBetweenSemanticPrompts
+--- PASS: TestActionExecutorScrollsBetweenSemanticPrompts (0.00s)
+=== RUN   TestActionExecutorPromptNavigationFailsWithoutMetadata
+--- PASS: TestActionExecutorPromptNavigationFailsWithoutMetadata (0.00s)
+=== RUN   TestCopySemanticZoneCopiesCurrentCycleInputAndOutput
+--- PASS: TestCopySemanticZoneCopiesCurrentCycleInputAndOutput (0.00s)
+=== RUN   TestCopySemanticZoneFailsWithoutCurrentCycle
+--- PASS: TestCopySemanticZoneFailsWithoutCurrentCycle (0.00s)
+=== RUN   TestSelectSemanticZoneProjectsCurrentInputIntoViewport
+--- PASS: TestSelectSemanticZoneProjectsCurrentInputIntoViewport (0.00s)
+=== RUN   TestSelectSemanticZoneCrossViewportFailsWithoutPartialMutation
+--- PASS: TestSelectSemanticZoneCrossViewportFailsWithoutPartialMutation (0.00s)
+=== RUN   TestSelectSemanticZoneCopyMatchesSoftWrappedSemanticText
+--- PASS: TestSelectSemanticZoneCopyMatchesSoftWrappedSemanticText (0.00s)
+=== RUN   TestTypedTabActionsRetainStableTargetsAndOriginOwnership
+--- PASS: TestTypedTabActionsRetainStableTargetsAndOriginOwnership (0.01s)
+=== RUN   TestMovePaneToTabActionUsesExplicitDestination
+--- PASS: TestMovePaneToTabActionUsesExplicitDestination (0.01s)
+=== RUN   TestWindowActionExecutorCreateFocusCloseAndRejectStale
+--- PASS: TestWindowActionExecutorCreateFocusCloseAndRejectStale (0.00s)
+=== RUN   TestCrossWindowActionsUseStableOriginAndPreserveSessions
+--- PASS: TestCrossWindowActionsUseStableOriginAndPreserveSessions (0.00s)
+=== RUN   TestMovePaneToWindowUsesPerPaneMetricsAndStaleSourceIsAtomic
+--- PASS: TestMovePaneToWindowUsesPerPaneMetricsAndStaleSourceIsAtomic (0.01s)
+=== RUN   TestBellEffectsAreFocusAwareAndThrottled
+--- PASS: TestBellEffectsAreFocusAwareAndThrottled (0.00s)
+=== RUN   TestBellEffectsRouteAudibleAndVisual
+--- PASS: TestBellEffectsRouteAudibleAndVisual (0.00s)
+=== RUN   TestVisualBellSchedulesOneExpiryRepaint
+--- PASS: TestVisualBellSchedulesOneExpiryRepaint (0.00s)
+=== RUN   TestDisabledBellStillDeliversEveryLuaCallback
+--- PASS: TestDisabledBellStillDeliversEveryLuaCallback (0.01s)
+=== RUN   TestBellCatchUpRecoversDroppedEventsWithoutDuplicates
+--- PASS: TestBellCatchUpRecoversDroppedEventsWithoutDuplicates (0.01s)
+=== RUN   TestCursorDamageBufferAge
+--- PASS: TestCursorDamageBufferAge (0.00s)
+=== RUN   TestPreeditRevisionDamagesOnlyOnMutation
+--- PASS: TestPreeditRevisionDamagesOnlyOnMutation (0.00s)
+=== RUN   TestKnownDefect_L1_06_GlobalDamageExcludesPaneIdentity
+--- PASS: TestKnownDefect_L1_06_GlobalDamageExcludesPaneIdentity (0.00s)
+=== RUN   TestHitDividerUsesExpandedNearestTarget
+--- PASS: TestHitDividerUsesExpandedNearestTarget (0.00s)
+=== RUN   TestDividerRatioUsesOwningContainer
+--- PASS: TestDividerRatioUsesOwningContainer (0.00s)
+=== RUN   TestDividerSettlementRetriesTransientPTYResizeFailure
+--- PASS: TestDividerSettlementRetriesTransientPTYResizeFailure (0.01s)
+=== RUN   TestWindowResizeFailureArmsBoundedPaneRetry
+--- PASS: TestWindowResizeFailureArmsBoundedPaneRetry (0.00s)
+=== RUN   TestDividerSettlementStopsAfterPersistentPTYResizeFailure
+--- PASS: TestDividerSettlementStopsAfterPersistentPTYResizeFailure (0.01s)
+=== RUN   TestClearDividerCursorResetsStateWithoutWindow
+--- PASS: TestClearDividerCursorResetsStateWithoutWindow (0.00s)
+=== RUN   TestCancelMouseCaptureClearsPaneAndProjection
+--- PASS: TestCancelMouseCaptureClearsPaneAndProjection (0.00s)
+=== RUN   TestDrawFinishesCandidateGeometryFrameOnPanic
+--- PASS: TestDrawFinishesCandidateGeometryFrameOnPanic (0.00s)
+=== RUN   TestRunProjectionCycleClosesExactWindowAndFramesSurvivingSiblings
+--- PASS: TestRunProjectionCycleClosesExactWindowAndFramesSurvivingSiblings (0.00s)
+=== RUN   TestProductionCandidateFactoryIsInstalledOnLiveController
+--- PASS: TestProductionCandidateFactoryIsInstalledOnLiveController (0.00s)
+=== RUN   TestInitialProjectionBundleTransfersResourceOwnershipOnce
+--- PASS: TestInitialProjectionBundleTransfersResourceOwnershipOnce (0.00s)
+=== RUN   TestEmptyPaneOutputKeepsActivityButSkipsLuaOutputCallback
+--- PASS: TestEmptyPaneOutputKeepsActivityButSkipsLuaOutputCallback (0.00s)
+=== RUN   TestMuxBindingsSplitFocusCloseAndPaneUIIsolation
+--- PASS: TestMuxBindingsSplitFocusCloseAndPaneUIIsolation (0.01s)
+=== RUN   TestMuxRowSplitCreatesIndependentGeometry
+--- PASS: TestMuxRowSplitCreatesIndependentGeometry (0.00s)
+=== RUN   TestPaneHostRemainsBoundToEventOrigin
+--- PASS: TestPaneHostRemainsBoundToEventOrigin (0.00s)
+=== RUN   TestNotificationPolicyRequiresConsentFreshnessFocusAndRate
+--- PASS: TestNotificationPolicyRequiresConsentFreshnessFocusAndRate (0.00s)
+=== RUN   TestNotificationAdapterErrorsAreRedacted
+--- PASS: TestNotificationAdapterErrorsAreRedacted (0.00s)
+=== RUN   TestNotificationDisableClosesNativeSinkAndRetainsFailedOwnership
+--- PASS: TestNotificationDisableClosesNativeSinkAndRetainsFailedOwnership (0.00s)
+=== RUN   TestPendingNotificationLosesFreshness
+--- PASS: TestPendingNotificationLosesFreshness (0.00s)
+=== RUN   TestDeferredScriptLifecycleProjectsResizeBeforeScrollThenStatusAndOverlay
+--- PASS: TestDeferredScriptLifecycleProjectsResizeBeforeScrollThenStatusAndOverlay (0.01s)
+=== RUN   TestDeferredScriptLifecycleWithoutRuntimeClearsPendingMaps
+--- PASS: TestDeferredScriptLifecycleWithoutRuntimeClearsPendingMaps (0.00s)
+=== RUN   TestScriptTimerDeadlineFiresThroughActiveProjectionOnly
+--- PASS: TestScriptTimerDeadlineFiresThroughActiveProjectionOnly (0.01s)
+=== RUN   TestScriptOutputFiltersEmptyAndUnwantedChunksAndPreservesExactErrorNotice
+--- PASS: TestScriptOutputFiltersEmptyAndUnwantedChunksAndPreservesExactErrorNotice (0.01s)
+=== RUN   TestKnownDefect_L1_02_SiblingRuntimeConfigDiverges
+--- PASS: TestKnownDefect_L1_02_SiblingRuntimeConfigDiverges (0.00s)
+=== RUN   TestKnownDefect_L2_04_TimerAndStatusRegistrationsAreUnbounded
+--- PASS: TestKnownDefect_L2_04_TimerAndStatusRegistrationsAreUnbounded (0.05s)
+=== RUN   TestPaneHostRealFireOutputAddsNoAllocationBeyondWarmedBaseline
+--- PASS: TestPaneHostRealFireOutputAddsNoAllocationBeyondWarmedBaseline (0.01s)
+=== RUN   TestScrollRowsFromWheelDelta
+=== RUN   TestScrollRowsFromWheelDelta/zero
+=== RUN   TestScrollRowsFromWheelDelta/fraction_up
+=== RUN   TestScrollRowsFromWheelDelta/fraction_down
+=== RUN   TestScrollRowsFromWheelDelta/unit_up
+=== RUN   TestScrollRowsFromWheelDelta/unit_down
+=== RUN   TestScrollRowsFromWheelDelta/large_up
+--- PASS: TestScrollRowsFromWheelDelta (0.00s)
+    --- PASS: TestScrollRowsFromWheelDelta/zero (0.00s)
+    --- PASS: TestScrollRowsFromWheelDelta/fraction_up (0.00s)
+    --- PASS: TestScrollRowsFromWheelDelta/fraction_down (0.00s)
+    --- PASS: TestScrollRowsFromWheelDelta/unit_up (0.00s)
+    --- PASS: TestScrollRowsFromWheelDelta/unit_down (0.00s)
+    --- PASS: TestScrollRowsFromWheelDelta/large_up (0.00s)
+=== RUN   TestScrollRowsUsesConfiguredMultiplier
+--- PASS: TestScrollRowsUsesConfiguredMultiplier (0.00s)
+=== RUN   TestGridSizeReservesScrollbarSlot
+--- PASS: TestGridSizeReservesScrollbarSlot (0.00s)
+=== RUN   TestMuxContentBoundsReserveScrollbarGutter
+--- PASS: TestMuxContentBoundsReserveScrollbarGutter (0.00s)
+=== RUN   TestGridSizeUsesAsymmetricOuterInsets
+--- PASS: TestGridSizeUsesAsymmetricOuterInsets (0.00s)
+=== RUN   TestZoomCoalescesAndCompoundsPerPane
+--- PASS: TestZoomCoalescesAndCompoundsPerPane (0.01s)
+=== RUN   TestZoomArmsPaneDebounceWithoutApplyingLiveSize
+--- PASS: TestZoomArmsPaneDebounceWithoutApplyingLiveSize (0.00s)
+=== RUN   TestKeyPipelineScrollBindingsRequireShiftOnly
+--- PASS: TestKeyPipelineScrollBindingsRequireShiftOnly (0.01s)
+=== RUN   TestAtlasDescriptorKeysPreserveOrderAndLegacyIdentity
+--- PASS: TestAtlasDescriptorKeysPreserveOrderAndLegacyIdentity (0.00s)
+=== RUN   TestAtlasFontModelIdentityIncludesFallbackRules
+--- PASS: TestAtlasFontModelIdentityIncludesFallbackRules (0.00s)
+=== RUN   TestAtlasDescriptorContextUsesStyledResolvedFace
+--- PASS: TestAtlasDescriptorContextUsesStyledResolvedFace (0.00s)
+=== RUN   TestAtlasFontKeyAndFixedPoolConstants
+--- PASS: TestAtlasFontKeyAndFixedPoolConstants (0.00s)
+=== RUN   TestAtlasSpecSwitchNamespacesAndReusesEntries
+--- PASS: TestAtlasSpecSwitchNamespacesAndReusesEntries (0.00s)
+=== RUN   TestAtlasNegativeLigatureCacheIsSpecNamespaced
+--- PASS: TestAtlasNegativeLigatureCacheIsSpecNamespaced (0.00s)
+=== RUN   TestAtlasCloseDeduplicatesSharedBackend
+--- PASS: TestAtlasCloseDeduplicatesSharedBackend (0.00s)
+=== RUN   TestAtlasPrewarmCapacityMissDoesNotReset
+2026/08/12 18:26:02 glyph atlas generation reset: generation=2
+--- PASS: TestAtlasPrewarmCapacityMissDoesNotReset (0.00s)
+=== RUN   TestAtlasRetainsInactiveBackendContextsWithinBudget
+--- PASS: TestAtlasRetainsInactiveBackendContextsWithinBudget (0.00s)
+=== RUN   TestAtlasCapacityFailureResetsAtMostOncePerGeneration
+2026/08/12 18:26:02 glyph atlas generation reset: generation=2
+--- PASS: TestAtlasCapacityFailureResetsAtMostOncePerGeneration (0.00s)
+=== RUN   TestFeatureIdentitySeparatesPositiveAndNegativeAtlasEntries
+--- PASS: TestFeatureIdentitySeparatesPositiveAndNegativeAtlasEntries (0.00s)
+=== RUN   TestExplicitFeatureEnablesRunCollectionWithoutLigatureShorthand
+--- PASS: TestExplicitFeatureEnablesRunCollectionWithoutLigatureShorthand (0.00s)
+=== RUN   TestAtlasMetricProjectionChangesEnvironmentAndProjectedRaster
+--- PASS: TestAtlasMetricProjectionChangesEnvironmentAndProjectedRaster (0.00s)
+=== RUN   TestAtlasRejectsSixtyFifthPinnedContextTransactionally
+--- PASS: TestAtlasRejectsSixtyFifthPinnedContextTransactionally (0.02s)
+=== RUN   TestAtlasEvictsDeterministicInactiveLRUAtContextBudget
+--- PASS: TestAtlasEvictsDeterministicInactiveLRUAtContextBudget (0.02s)
+=== RUN   TestAtlasContextAdmissionAbortIsMutationFree
+--- PASS: TestAtlasContextAdmissionAbortIsMutationFree (0.00s)
+=== RUN   TestShelfPacker
+=== RUN   TestShelfPacker/fills_shelf
+=== RUN   TestShelfPacker/exact_fit
+=== RUN   TestShelfPacker/overflow
+=== RUN   TestShelfPacker/reset_reuse
+--- PASS: TestShelfPacker (0.00s)
+    --- PASS: TestShelfPacker/fills_shelf (0.00s)
+    --- PASS: TestShelfPacker/exact_fit (0.00s)
+    --- PASS: TestShelfPacker/overflow (0.00s)
+    --- PASS: TestShelfPacker/reset_reuse (0.00s)
+=== RUN   TestEntryGenerationInvalidation
+=== RUN   TestEntryGenerationInvalidation/current
+=== RUN   TestEntryGenerationInvalidation/evicted
+--- PASS: TestEntryGenerationInvalidation (0.00s)
+    --- PASS: TestEntryGenerationInvalidation/current (0.00s)
+    --- PASS: TestEntryGenerationInvalidation/evicted (0.00s)
+=== RUN   TestBackgroundResourcePoolPinsSharedSourceAndReleasesCompositions
+--- PASS: TestBackgroundResourcePoolPinsSharedSourceAndReleasesCompositions (0.01s)
+=== RUN   TestBackgroundResourcePoolConcurrentGenerationsAreBoundedAndRaceSafe
+--- PASS: TestBackgroundResourcePoolConcurrentGenerationsAreBoundedAndRaceSafe (0.01s)
+=== RUN   TestPrepareBackgroundCPUResolvesRelativeImagesAndWatchesDigest
+--- PASS: TestPrepareBackgroundCPUResolvesRelativeImagesAndWatchesDigest (0.01s)
+=== RUN   TestBackgroundLayerBaseUsesWinningSource
+--- PASS: TestBackgroundLayerBaseUsesWinningSource (0.00s)
+=== RUN   TestLayeredBackgroundResizePublishesNewestGeneration
+--- PASS: TestLayeredBackgroundResizePublishesNewestGeneration (0.01s)
+=== RUN   TestBackgroundGPUTransferBudgetCountsActiveAndCandidate
+--- PASS: TestBackgroundGPUTransferBudgetCountsActiveAndCandidate (0.00s)
+=== RUN   TestInitialBackgroundDependenciesJoinStartupFreshnessAndWatchSet
+--- PASS: TestInitialBackgroundDependenciesJoinStartupFreshnessAndWatchSet (0.01s)
+=== RUN   TestNativeBlurProviderApply
+=== RUN   TestNativeBlurProviderApply/disabled_removes_material
+=== RUN   TestNativeBlurProviderApply/disabled_ignores_translucent_background
+=== RUN   TestNativeBlurProviderApply/opaque_background_enables_material
+=== RUN   TestNativeBlurProviderApply/translucent_background_preserves_alpha
+--- PASS: TestNativeBlurProviderApply (0.00s)
+    --- PASS: TestNativeBlurProviderApply/disabled_removes_material (0.00s)
+    --- PASS: TestNativeBlurProviderApply/disabled_ignores_translucent_background (0.00s)
+    --- PASS: TestNativeBlurProviderApply/opaque_background_enables_material (0.00s)
+    --- PASS: TestNativeBlurProviderApply/translucent_background_preserves_alpha (0.00s)
+=== RUN   TestNativeBlurProviderFailureAndClose
+=== RUN   TestNativeBlurProviderFailureAndClose/enable_failure
+=== RUN   TestNativeBlurProviderFailureAndClose/disable_failure
+=== RUN   TestNativeBlurProviderFailureAndClose/incompatible_material_removal_failure
+=== RUN   TestNativeBlurProviderFailureAndClose/unsupported_native_attribute
+--- PASS: TestNativeBlurProviderFailureAndClose (0.00s)
+    --- PASS: TestNativeBlurProviderFailureAndClose/enable_failure (0.00s)
+    --- PASS: TestNativeBlurProviderFailureAndClose/disable_failure (0.00s)
+    --- PASS: TestNativeBlurProviderFailureAndClose/incompatible_material_removal_failure (0.00s)
+    --- PASS: TestNativeBlurProviderFailureAndClose/unsupported_native_attribute (0.00s)
+=== RUN   TestUnsupportedBlurProvider
+--- PASS: TestUnsupportedBlurProvider (0.00s)
+=== RUN   TestTransparentCompositorBlurProvider
+=== RUN   TestTransparentCompositorBlurProvider/disabled_removes_compositor_effect
+=== RUN   TestTransparentCompositorBlurProvider/opaque_background_is_incompatible
+=== RUN   TestTransparentCompositorBlurProvider/missing_transparent_framebuffer_is_incompatible
+=== RUN   TestTransparentCompositorBlurProvider/translucent_background_activates_compositor_effect
+--- PASS: TestTransparentCompositorBlurProvider (0.00s)
+    --- PASS: TestTransparentCompositorBlurProvider/disabled_removes_compositor_effect (0.00s)
+    --- PASS: TestTransparentCompositorBlurProvider/opaque_background_is_incompatible (0.00s)
+    --- PASS: TestTransparentCompositorBlurProvider/missing_transparent_framebuffer_is_incompatible (0.00s)
+    --- PASS: TestTransparentCompositorBlurProvider/translucent_background_activates_compositor_effect (0.00s)
+=== RUN   TestFailedBlurProvider
+--- PASS: TestFailedBlurProvider (0.00s)
+=== RUN   TestBlurStatusString
+--- PASS: TestBlurStatusString (0.00s)
+=== RUN   TestCandidateGeometryLifecycleClearsOnCompositionEnd
+--- PASS: TestCandidateGeometryLifecycleClearsOnCompositionEnd (0.00s)
+=== RUN   TestCandidateGeometryClearFailureRetriesOnRequestedFrame
+--- PASS: TestCandidateGeometryClearFailureRetriesOnRequestedFrame (0.00s)
+=== RUN   TestCandidateGeometryActiveCompositionWithoutPresenterClearsStaleRect
+--- PASS: TestCandidateGeometryActiveCompositionWithoutPresenterClearsStaleRect (0.00s)
+=== RUN   TestProjectCandidateRectUsesIndependentAxesAndClamps
+--- PASS: TestProjectCandidateRectUsesIndependentAxesAndClamps (0.00s)
+=== RUN   TestProjectCandidateRectRejectsDegenerateAndOverflow
+=== RUN   TestProjectCandidateRectRejectsDegenerateAndOverflow/zero_framebuffer
+=== RUN   TestProjectCandidateRectRejectsDegenerateAndOverflow/zero_window
+=== RUN   TestProjectCandidateRectRejectsDegenerateAndOverflow/nan
+=== RUN   TestProjectCandidateRectRejectsDegenerateAndOverflow/infinite_edge
+=== RUN   TestProjectCandidateRectRejectsDegenerateAndOverflow/outside
+--- PASS: TestProjectCandidateRectRejectsDegenerateAndOverflow (0.00s)
+    --- PASS: TestProjectCandidateRectRejectsDegenerateAndOverflow/zero_framebuffer (0.00s)
+    --- PASS: TestProjectCandidateRectRejectsDegenerateAndOverflow/zero_window (0.00s)
+    --- PASS: TestProjectCandidateRectRejectsDegenerateAndOverflow/nan (0.00s)
+    --- PASS: TestProjectCandidateRectRejectsDegenerateAndOverflow/infinite_edge (0.00s)
+    --- PASS: TestProjectCandidateRectRejectsDegenerateAndOverflow/outside (0.00s)
+=== RUN   TestPreeditCaretFramebufferRectUsesVisualCaretAndMetrics
+--- PASS: TestPreeditCaretFramebufferRectUsesVisualCaretAndMetrics (0.00s)
+=== RUN   TestCandidateGeometryPublisherPublishesOnlyChangesAndRetriesFailure
+--- PASS: TestCandidateGeometryPublisherPublishesOnlyChangesAndRetriesFailure (0.00s)
+=== RUN   TestCandidateGeometryPublisherClearsOldSinkBeforeReplacement
+--- PASS: TestCandidateGeometryPublisherClearsOldSinkBeforeReplacement (0.00s)
+=== RUN   TestBindingSuppressionConsumesExactlyOneCharacter
+--- PASS: TestBindingSuppressionConsumesExactlyOneCharacter (0.00s)
+=== RUN   TestIMEEchoSuppressionMatchesFullSequenceAndDeadline
+--- PASS: TestIMEEchoSuppressionMatchesFullSequenceAndDeadline (0.00s)
+=== RUN   TestIMEEchoSuppressionBoundsAndClearPaths
+--- PASS: TestIMEEchoSuppressionBoundsAndClearPaths (0.00s)
+=== RUN   TestResolveChromeColorsDefaultsAndCustomValues
+--- PASS: TestResolveChromeColorsDefaultsAndCustomValues (0.00s)
+=== RUN   TestCollectRenderClusterCombiningMark
+--- PASS: TestCollectRenderClusterCombiningMark (0.00s)
+=== RUN   TestCollectRenderClusterZWJEmojiSequence
+--- PASS: TestCollectRenderClusterZWJEmojiSequence (0.00s)
+=== RUN   TestCollectRenderClusterEmojiModifier
+--- PASS: TestCollectRenderClusterEmojiModifier (0.00s)
+=== RUN   TestCollectRenderClusterSingleEmoji
+--- PASS: TestCollectRenderClusterSingleEmoji (0.00s)
+=== RUN   TestCollectRenderClusterRegionalIndicatorPair
+--- PASS: TestCollectRenderClusterRegionalIndicatorPair (0.00s)
+=== RUN   TestCollectRenderClusterKeycapUsesClusterWidth
+--- PASS: TestCollectRenderClusterKeycapUsesClusterWidth (0.00s)
+=== RUN   TestCollectRenderClusterTagFlag
+--- PASS: TestCollectRenderClusterTagFlag (0.00s)
+=== RUN   TestCollectRenderClusterRejectsPlainASCII
+--- PASS: TestCollectRenderClusterRejectsPlainASCII (0.00s)
+=== RUN   TestCollectRenderClusterFastPathsBareASCII
+--- PASS: TestCollectRenderClusterFastPathsBareASCII (0.00s)
+=== RUN   TestCommandPaletteSnapshotIsBoundedDiscoverableAndSorted
+--- PASS: TestCommandPaletteSnapshotIsBoundedDiscoverableAndSorted (0.00s)
+=== RUN   TestCommandPaletteDiscoversSafeWindowActionsOnly
+--- PASS: TestCommandPaletteDiscoversSafeWindowActionsOnly (0.00s)
+=== RUN   TestCommandPaletteOpensAndSuccessfulActionCloses
+--- PASS: TestCommandPaletteOpensAndSuccessfulActionCloses (0.00s)
+=== RUN   TestCommandPaletteReloadInvalidationPreservesModalErrorState
+--- PASS: TestCommandPaletteReloadInvalidationPreservesModalErrorState (0.00s)
+=== RUN   TestModalDrawListContainsRetainedChromeAndSelection
+--- PASS: TestModalDrawListContainsRetainedChromeAndSelection (0.00s)
+=== RUN   TestCommittedTextRoutesWholeUTF8ToCapturedPaneOnce
+--- PASS: TestCommittedTextRoutesWholeUTF8ToCapturedPaneOnce (0.00s)
+=== RUN   TestCommittedTextRoutesByStableModalAndSearchActivation
+--- PASS: TestCommittedTextRoutesByStableModalAndSearchActivation (0.00s)
+=== RUN   TestCommittedTextRejectsInvalidInputAtomically
+--- PASS: TestCommittedTextRejectsInvalidInputAtomically (0.00s)
+=== RUN   TestCharSuppressionRunsBeforeModalRouting
+--- PASS: TestCharSuppressionRunsBeforeModalRouting (0.00s)
+=== RUN   TestCommittedTextQuickSelectConsumesOnceAndRetainsSideEffectError
+--- PASS: TestCommittedTextQuickSelectConsumesOnceAndRetainsSideEffectError (0.00s)
+=== RUN   TestCommittedTextMissingPaneFailsWithoutFallback
+--- PASS: TestCommittedTextMissingPaneFailsWithoutFallback (0.00s)
+=== RUN   TestCommittedTextClassifiesModalAndSearchCapacityAtomically
+--- PASS: TestCommittedTextClassifiesModalAndSearchCapacityAtomically (0.00s)
+=== RUN   TestCompositionCoordinatorCommitsOnceAndNeverWritesPreedit
+--- PASS: TestCompositionCoordinatorCommitsOnceAndNeverWritesPreedit (0.00s)
+=== RUN   TestCompositionCoordinatorMalformedPayloadCancelsAtomically
+--- PASS: TestCompositionCoordinatorMalformedPayloadCancelsAtomically (0.00s)
+=== RUN   TestCompositionCoordinatorReconcileAndDeliveryGate
+--- PASS: TestCompositionCoordinatorReconcileAndDeliveryGate (0.00s)
+=== RUN   TestCompositionCommitReportsRouteFailureWithoutRetry
+--- PASS: TestCompositionCommitReportsRouteFailureWithoutRetry (0.00s)
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_open
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_close
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_replace
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/search_open
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/search_close
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_focus
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_close
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_transfer
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/window_empty
+=== RUN   TestCompositionLifecycleModalSearchFocusAndMuxCancellation/unrelated_lifecycle_preserves_composition
+--- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation (0.01s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_open (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_close (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/modal_replace (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/search_open (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/search_close (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_focus (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_close (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/pane_transfer (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/window_empty (0.00s)
+    --- PASS: TestCompositionLifecycleModalSearchFocusAndMuxCancellation/unrelated_lifecycle_preserves_composition (0.00s)
+=== RUN   TestCompositionBeforeUnbindRunsExactOrderOnce
+--- PASS: TestCompositionBeforeUnbindRunsExactOrderOnce (0.00s)
+=== RUN   TestCompositionBeforeUnbindSurvivesRestoreStyleEarlyUnbind
+--- PASS: TestCompositionBeforeUnbindSurvivesRestoreStyleEarlyUnbind (0.00s)
+=== RUN   TestCompositionCancelsOnNativeAndProjectionFocusLoss
+=== RUN   TestCompositionCancelsOnNativeAndProjectionFocusLoss/native_focus
+=== RUN   TestCompositionCancelsOnNativeAndProjectionFocusLoss/projection_focus
+--- PASS: TestCompositionCancelsOnNativeAndProjectionFocusLoss (0.00s)
+    --- PASS: TestCompositionCancelsOnNativeAndProjectionFocusLoss/native_focus (0.00s)
+    --- PASS: TestCompositionCancelsOnNativeAndProjectionFocusLoss/projection_focus (0.00s)
+=== RUN   TestCompositionCancelsBeforeWorkspaceHide
+--- PASS: TestCompositionCancelsBeforeWorkspaceHide (0.00s)
+=== RUN   TestProjectionCloseCancelsAndDeactivatesComposition
+--- PASS: TestProjectionCloseCancelsAndDeactivatesComposition (0.00s)
+=== RUN   TestConfigColor
+--- PASS: TestConfigColor (0.00s)
+=== RUN   TestCursorThicknessPixels
+--- PASS: TestCursorThicknessPixels (0.00s)
+=== RUN   TestTransparentBackgroundDisablesSubpixelRaster
+--- PASS: TestTransparentBackgroundDisablesSubpixelRaster (0.00s)
+=== RUN   TestHUDLayoutEmpty
+--- PASS: TestHUDLayoutEmpty (0.00s)
+=== RUN   TestHUDLayoutNoticeOnly
+--- PASS: TestHUDLayoutNoticeOnly (0.00s)
+=== RUN   TestHUDLayoutStatsOnly
+--- PASS: TestHUDLayoutStatsOnly (0.00s)
+=== RUN   TestHUDLayoutStatsPlusNotice
+--- PASS: TestHUDLayoutStatsPlusNotice (0.00s)
+=== RUN   TestHUDLayoutRuneWidth
+--- PASS: TestHUDLayoutRuneWidth (0.00s)
+=== RUN   TestHUDLayoutUIScale
+--- PASS: TestHUDLayoutUIScale (0.00s)
+=== RUN   TestSearchBarInactive
+--- PASS: TestSearchBarInactive (0.00s)
+=== RUN   TestSearchBarEmptyQuery
+--- PASS: TestSearchBarEmptyQuery (0.00s)
+=== RUN   TestSearchBarQueryHasMatch
+--- PASS: TestSearchBarQueryHasMatch (0.00s)
+=== RUN   TestSearchBarQueryNoMatch
+--- PASS: TestSearchBarQueryNoMatch (0.00s)
+=== RUN   TestStatusBandEmpty
+--- PASS: TestStatusBandEmpty (0.00s)
+=== RUN   TestStatusBandNormal
+--- PASS: TestStatusBandNormal (0.00s)
+=== RUN   TestStatusBandFullWidth
+--- PASS: TestStatusBandFullWidth (0.00s)
+=== RUN   TestEffectiveStartupConfigSafeFontsIsIsolated
+--- PASS: TestEffectiveStartupConfigSafeFontsIsIsolated (0.00s)
+=== RUN   TestStartupFontInstallationPlanRoutesDescriptorsAndSafeMode
+--- PASS: TestStartupFontInstallationPlanRoutesDescriptorsAndSafeMode (0.00s)
+=== RUN   TestFontInstallationFailuresReleaseOwnedBackend
+=== RUN   TestFontInstallationFailuresReleaseOwnedBackend/plan
+=== RUN   TestFontInstallationFailuresReleaseOwnedBackend/reserve
+=== RUN   TestFontInstallationFailuresReleaseOwnedBackend/load
+=== RUN   TestFontInstallationFailuresReleaseOwnedBackend/metrics
+=== RUN   TestFontInstallationFailuresReleaseOwnedBackend/context
+--- PASS: TestFontInstallationFailuresReleaseOwnedBackend (0.00s)
+    --- PASS: TestFontInstallationFailuresReleaseOwnedBackend/plan (0.00s)
+    --- PASS: TestFontInstallationFailuresReleaseOwnedBackend/reserve (0.00s)
+    --- PASS: TestFontInstallationFailuresReleaseOwnedBackend/load (0.00s)
+    --- PASS: TestFontInstallationFailuresReleaseOwnedBackend/metrics (0.00s)
+    --- PASS: TestFontInstallationFailuresReleaseOwnedBackend/context (0.00s)
+=== RUN   TestFontInstallationAdoptionTransfersOwnershipOnce
+--- PASS: TestFontInstallationAdoptionTransfersOwnershipOnce (0.00s)
+=== RUN   TestFontInstallationAdoptFailureRemainsCandidateOwned
+--- PASS: TestFontInstallationAdoptFailureRemainsCandidateOwned (0.00s)
+=== RUN   TestDescriptorFontInstallationRetainsEnvironmentAcrossAdoptionAndZoom
+--- PASS: TestDescriptorFontInstallationRetainsEnvironmentAcrossAdoptionAndZoom (0.00s)
+=== RUN   TestDescriptorFontInstallationPlanValidatesIdentityBounds
+--- PASS: TestDescriptorFontInstallationPlanValidatesIdentityBounds (0.00s)
+=== RUN   TestDescriptorFontInstallationAbortClosesCandidateBackend
+--- PASS: TestDescriptorFontInstallationAbortClosesCandidateBackend (0.00s)
+=== RUN   TestFontInstallationRejectsInvalidMetricsAndIncompleteStages
+--- PASS: TestFontInstallationRejectsInvalidMetricsAndIncompleteStages (0.00s)
+=== RUN   TestFallbackFontInstallationPlanCarriesCompleteModel
+--- PASS: TestFallbackFontInstallationPlanCarriesCompleteModel (0.00s)
+=== RUN   TestFontInstallationProjectsConfiguredMetricsBeforeAdoption
+--- PASS: TestFontInstallationProjectsConfiguredMetricsBeforeAdoption (0.00s)
+=== RUN   TestGridMetricsCellAt
+=== RUN   TestGridMetricsCellAt/top-left_of_grid_maps_to_0,0
+=== RUN   TestGridMetricsCellAt/inside_cell_(2,2)
+=== RUN   TestGridMetricsCellAt/pixels_above/left_of_the_grid_clamp_to_0,0
+=== RUN   TestGridMetricsCellAt/pixels_past_the_grid_clamp_to_the_last_cell
+=== RUN   TestGridMetricsCellAt/right_edge_column_clamps
+=== RUN   TestGridMetricsCellAt/bottom_edge_row_clamps
+--- PASS: TestGridMetricsCellAt (0.00s)
+    --- PASS: TestGridMetricsCellAt/top-left_of_grid_maps_to_0,0 (0.00s)
+    --- PASS: TestGridMetricsCellAt/inside_cell_(2,2) (0.00s)
+    --- PASS: TestGridMetricsCellAt/pixels_above/left_of_the_grid_clamp_to_0,0 (0.00s)
+    --- PASS: TestGridMetricsCellAt/pixels_past_the_grid_clamp_to_the_last_cell (0.00s)
+    --- PASS: TestGridMetricsCellAt/right_edge_column_clamps (0.00s)
+    --- PASS: TestGridMetricsCellAt/bottom_edge_row_clamps (0.00s)
+=== RUN   TestGridMetricsRejectsReservedGutter
+--- PASS: TestGridMetricsRejectsReservedGutter (0.00s)
+=== RUN   TestInitialDoublePresentationUsesNormalFrameAccounting
+--- PASS: TestInitialDoublePresentationUsesNormalFrameAccounting (0.00s)
+=== RUN   TestInitialWindowLifecycleCloaksVisiblePresentationBeforeRevealAndFocus
+--- PASS: TestInitialWindowLifecycleCloaksVisiblePresentationBeforeRevealAndFocus (0.00s)
+=== RUN   TestInitialWindowLifecycleUnsupportedRevealUsesOrderedFallback
+--- PASS: TestInitialWindowLifecycleUnsupportedRevealUsesOrderedFallback (0.00s)
+=== RUN   TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses
+=== RUN   TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/prepare
+=== RUN   TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/first_present
+=== RUN   TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/conceal
+=== RUN   TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/visible_present
+=== RUN   TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/compositor
+=== RUN   TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/restore_rollback
+=== RUN   TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/restore_rollback_double_failure
+--- PASS: TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses (0.00s)
+    --- PASS: TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/prepare (0.00s)
+    --- PASS: TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/first_present (0.00s)
+    --- PASS: TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/conceal (0.00s)
+    --- PASS: TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/visible_present (0.00s)
+    --- PASS: TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/compositor (0.00s)
+    --- PASS: TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/restore_rollback (0.00s)
+    --- PASS: TestInitialWindowLifecycleFailureHidesAfterShowAndNeverFocuses/restore_rollback_double_failure (0.00s)
+=== RUN   TestInitialWindowLifecycleUnsupportedFailureHidesImmediately
+--- PASS: TestInitialWindowLifecycleUnsupportedFailureHidesImmediately (0.00s)
+=== RUN   TestCreateWindowHiddenScopesVisibilityAndFocusHints
+=== RUN   TestCreateWindowHiddenScopesVisibilityAndFocusHints/success
+=== RUN   TestCreateWindowHiddenScopesVisibilityAndFocusHints/failure
+--- PASS: TestCreateWindowHiddenScopesVisibilityAndFocusHints (0.00s)
+    --- PASS: TestCreateWindowHiddenScopesVisibilityAndFocusHints/success (0.00s)
+    --- PASS: TestCreateWindowHiddenScopesVisibilityAndFocusHints/failure (0.00s)
+=== RUN   TestInputControllerKeyboardOrderAndEveryConsumptionPath
+=== RUN   TestInputControllerKeyboardOrderAndEveryConsumptionPath/modal-key
+=== RUN   TestInputControllerKeyboardOrderAndEveryConsumptionPath/search-key
+=== RUN   TestInputControllerKeyboardOrderAndEveryConsumptionPath/reload-key
+=== RUN   TestInputControllerKeyboardOrderAndEveryConsumptionPath/script-table-key
+=== RUN   TestInputControllerKeyboardOrderAndEveryConsumptionPath/script-key
+=== RUN   TestInputControllerKeyboardOrderAndEveryConsumptionPath/builtin-key
+=== RUN   TestInputControllerKeyboardOrderAndEveryConsumptionPath/selection-copy-key
+=== RUN   TestInputControllerKeyboardOrderAndEveryConsumptionPath/terminal
+--- PASS: TestInputControllerKeyboardOrderAndEveryConsumptionPath (0.00s)
+    --- PASS: TestInputControllerKeyboardOrderAndEveryConsumptionPath/modal-key (0.00s)
+    --- PASS: TestInputControllerKeyboardOrderAndEveryConsumptionPath/search-key (0.00s)
+    --- PASS: TestInputControllerKeyboardOrderAndEveryConsumptionPath/reload-key (0.00s)
+    --- PASS: TestInputControllerKeyboardOrderAndEveryConsumptionPath/script-table-key (0.00s)
+    --- PASS: TestInputControllerKeyboardOrderAndEveryConsumptionPath/script-key (0.00s)
+    --- PASS: TestInputControllerKeyboardOrderAndEveryConsumptionPath/builtin-key (0.00s)
+    --- PASS: TestInputControllerKeyboardOrderAndEveryConsumptionPath/selection-copy-key (0.00s)
+    --- PASS: TestInputControllerKeyboardOrderAndEveryConsumptionPath/terminal (0.00s)
+=== RUN   TestInputControllerKeyboardReleaseRepeatAndUnencodablePaths
+=== RUN   TestInputControllerKeyboardReleaseRepeatAndUnencodablePaths/release_still_offers_modal_first
+=== RUN   TestInputControllerKeyboardReleaseRepeatAndUnencodablePaths/repeat_reaches_terminal_with_repeat_semantics
+=== RUN   TestInputControllerKeyboardReleaseRepeatAndUnencodablePaths/unencodable_key_stops_after_builtin_routes
+--- PASS: TestInputControllerKeyboardReleaseRepeatAndUnencodablePaths (0.00s)
+    --- PASS: TestInputControllerKeyboardReleaseRepeatAndUnencodablePaths/release_still_offers_modal_first (0.00s)
+    --- PASS: TestInputControllerKeyboardReleaseRepeatAndUnencodablePaths/repeat_reaches_terminal_with_repeat_semantics (0.00s)
+    --- PASS: TestInputControllerKeyboardReleaseRepeatAndUnencodablePaths/unencodable_key_stops_after_builtin_routes (0.00s)
+=== RUN   TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup
+=== RUN   TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/modal-button
+=== RUN   TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/tab-button
+=== RUN   TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/reported-configured-button
+=== RUN   TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/active-divider-button
+=== RUN   TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/begin-divider-button
+=== RUN   TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/scrollbar-button
+=== RUN   TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/selection
+--- PASS: TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup (0.00s)
+    --- PASS: TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/modal-button (0.00s)
+    --- PASS: TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/tab-button (0.00s)
+    --- PASS: TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/reported-configured-button (0.00s)
+    --- PASS: TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/active-divider-button (0.00s)
+    --- PASS: TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/begin-divider-button (0.00s)
+    --- PASS: TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/scrollbar-button (0.00s)
+    --- PASS: TestInputControllerButtonOrderEveryConsumptionAndModalBeforeCursorLookup/selection (0.00s)
+=== RUN   TestInputControllerCursorOrderAndEveryConsumptionPath
+=== RUN   TestInputControllerCursorOrderAndEveryConsumptionPath/modal-cursor
+=== RUN   TestInputControllerCursorOrderAndEveryConsumptionPath/tab-cursor
+=== RUN   TestInputControllerCursorOrderAndEveryConsumptionPath/captured-cursor
+=== RUN   TestInputControllerCursorOrderAndEveryConsumptionPath/configured-drag
+=== RUN   TestInputControllerCursorOrderAndEveryConsumptionPath/divider-drag
+=== RUN   TestInputControllerCursorOrderAndEveryConsumptionPath/scrollbar-cursor
+=== RUN   TestInputControllerCursorOrderAndEveryConsumptionPath/divider-cursor
+=== RUN   TestInputControllerCursorOrderAndEveryConsumptionPath/selection
+=== RUN   TestInputControllerCursorOrderAndEveryConsumptionPath/terminal_report_still_updates_divider_cursor_before_consuming
+--- PASS: TestInputControllerCursorOrderAndEveryConsumptionPath (0.00s)
+    --- PASS: TestInputControllerCursorOrderAndEveryConsumptionPath/modal-cursor (0.00s)
+    --- PASS: TestInputControllerCursorOrderAndEveryConsumptionPath/tab-cursor (0.00s)
+    --- PASS: TestInputControllerCursorOrderAndEveryConsumptionPath/captured-cursor (0.00s)
+    --- PASS: TestInputControllerCursorOrderAndEveryConsumptionPath/configured-drag (0.00s)
+    --- PASS: TestInputControllerCursorOrderAndEveryConsumptionPath/divider-drag (0.00s)
+    --- PASS: TestInputControllerCursorOrderAndEveryConsumptionPath/scrollbar-cursor (0.00s)
+    --- PASS: TestInputControllerCursorOrderAndEveryConsumptionPath/divider-cursor (0.00s)
+    --- PASS: TestInputControllerCursorOrderAndEveryConsumptionPath/selection (0.00s)
+    --- PASS: TestInputControllerCursorOrderAndEveryConsumptionPath/terminal_report_still_updates_divider_cursor_before_consuming (0.00s)
+=== RUN   TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup
+=== RUN   TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/modal-wheel
+=== RUN   TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/tab-wheel
+=== RUN   TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/reported-configured-wheel
+=== RUN   TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/zoom-wheel
+=== RUN   TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/scrollbar-wheel
+=== RUN   TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/terminal
+--- PASS: TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup (0.00s)
+    --- PASS: TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/modal-wheel (0.00s)
+    --- PASS: TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/tab-wheel (0.00s)
+    --- PASS: TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/reported-configured-wheel (0.00s)
+    --- PASS: TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/zoom-wheel (0.00s)
+    --- PASS: TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/scrollbar-wheel (0.00s)
+    --- PASS: TestInputControllerWheelOrderEveryConsumptionAndModalBeforeCursorLookup/terminal (0.00s)
+=== RUN   TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder
+=== RUN   TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder/focus
+=== RUN   TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder/blur
+--- PASS: TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder (0.00s)
+    --- PASS: TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder/focus (0.00s)
+    --- PASS: TestInputControllerFocusPreservesBlurCleanupScriptTerminalOrder/blur (0.00s)
+=== RUN   TestInputControllerUnboundTerminalKeyRouteDoesNotAllocate
+--- PASS: TestInputControllerUnboundTerminalKeyRouteDoesNotAllocate (0.00s)
+=== RUN   TestAppControllersAreProjectionLocalLazyAndIdempotent
+--- PASS: TestAppControllersAreProjectionLocalLazyAndIdempotent (0.00s)
+=== RUN   TestAppControllerRoutesDoNotAllocateAfterWarmup
+--- PASS: TestAppControllerRoutesDoNotAllocateAfterWarmup (0.00s)
+=== RUN   TestControllerPortsStayNarrowAndControllerFieldsAvoidFacadePointers
+--- PASS: TestControllerPortsStayNarrowAndControllerFieldsAvoidFacadePointers (0.00s)
+=== RUN   TestKeyTableStateLeaderRepeatTimeoutMismatchAndEscape
+--- PASS: TestKeyTableStateLeaderRepeatTimeoutMismatchAndEscape (0.00s)
+=== RUN   TestKeyTableStateTransitionsPersistentRefreshAndOneShot
+--- PASS: TestKeyTableStateTransitionsPersistentRefreshAndOneShot (0.00s)
+=== RUN   TestKeyTableStateCancelIsIdempotent
+--- PASS: TestKeyTableStateCancelIsIdempotent (0.00s)
+=== RUN   TestLaunchMenuSuccessReResolvesAndSpawnsExactlyOnePane
+--- PASS: TestLaunchMenuSuccessReResolvesAndSpawnsExactlyOnePane (0.01s)
+=== RUN   TestLaunchMenuStaleIDPreservesModalAndDoesNotSpawn
+--- PASS: TestLaunchMenuStaleIDPreservesModalAndDoesNotSpawn (0.00s)
+=== RUN   TestLaunchMenuSpawnFailurePreservesFullState
+--- PASS: TestLaunchMenuSpawnFailurePreservesFullState (0.23s)
+=== RUN   TestLineMatchesCanonicalRowText
+--- PASS: TestLineMatchesCanonicalRowText (0.00s)
+=== RUN   TestLineWideGlyph
+--- PASS: TestLineWideGlyph (0.00s)
+=== RUN   TestDetectLinks
+--- PASS: TestDetectLinks (0.00s)
+=== RUN   TestDetectLinksTrimsTrailingPunct
+--- PASS: TestDetectLinksTrimsTrailingPunct (0.00s)
+=== RUN   TestDetectLinksIgnoresBareScheme
+--- PASS: TestDetectLinksIgnoresBareScheme (0.00s)
+=== RUN   TestDetectLinksMultiplePerRow
+--- PASS: TestDetectLinksMultiplePerRow (0.00s)
+=== RUN   TestLinkAt
+--- PASS: TestLinkAt (0.00s)
+=== RUN   TestDetectSnapshotLinksUsesOSC8IdentityAndPrecedence
+--- PASS: TestDetectSnapshotLinksUsesOSC8IdentityAndPrecedence (0.00s)
+=== RUN   TestOSC8ActivationRequiresFreshClickAndSafeScheme
+--- PASS: TestOSC8ActivationRequiresFreshClickAndSafeScheme (0.00s)
+=== RUN   TestOSC8ActivationRejectsStaleRegion
+--- PASS: TestOSC8ActivationRejectsStaleRegion (0.00s)
+=== RUN   TestOSC8ActivationRejectsSameURIIdentitySwapAfterPress
+--- PASS: TestOSC8ActivationRejectsSameURIIdentitySwapAfterPress (0.00s)
+=== RUN   TestInactiveModalAdapterIsNoOp
+--- PASS: TestInactiveModalAdapterIsNoOp (0.00s)
+=== RUN   TestActiveModalAdapterConsumesEveryInputPath
+--- PASS: TestActiveModalAdapterConsumesEveryInputPath (0.00s)
+=== RUN   TestModalAdapterRequestsRedrawOnlyOnMutation
+--- PASS: TestModalAdapterRequestsRedrawOnlyOnMutation (0.00s)
+=== RUN   TestNormalizePointerButtonAndWheel
+--- PASS: TestNormalizePointerButtonAndWheel (0.00s)
+=== RUN   TestMouseBindingMatchIsExact
+--- PASS: TestMouseBindingMatchIsExact (0.00s)
+=== RUN   TestClickCountIsBoundedAndResets
+--- PASS: TestClickCountIsBoundedAndResets (0.00s)
+=== RUN   TestCapturedDragAndReleaseKeepPressOwnership
+--- PASS: TestCapturedDragAndReleaseKeepPressOwnership (0.01s)
+=== RUN   TestMouseModsFromGLFW
+--- PASS: TestMouseModsFromGLFW (0.00s)
+=== RUN   TestFrontendRetainsOnlyNarrowMuxCapabilities
+--- PASS: TestFrontendRetainsOnlyNarrowMuxCapabilities (0.00s)
+=== RUN   TestProjectionCloneCannotRetainOwnerProcessCapabilityOrOwnerClosures
+--- PASS: TestProjectionCloneCannotRetainOwnerProcessCapabilityOrOwnerClosures (0.00s)
+=== RUN   TestProductionWindowAttestationPinsLoopThreadWindowAndContextWithoutAppClosure
+--- PASS: TestProductionWindowAttestationPinsLoopThreadWindowAndContextWithoutAppClosure (0.00s)
+=== RUN   TestNativeCapabilityControllerOrdersInitialIMEAccessibilityAndAdoption
+--- PASS: TestNativeCapabilityControllerOrdersInitialIMEAccessibilityAndAdoption (0.00s)
+=== RUN   TestNativeCapabilityControllerReturnsInitialRollbackResults
+=== RUN   TestNativeCapabilityControllerReturnsInitialRollbackResults/accessibility
+=== RUN   TestNativeCapabilityControllerReturnsInitialRollbackResults/adoption
+--- PASS: TestNativeCapabilityControllerReturnsInitialRollbackResults (0.00s)
+    --- PASS: TestNativeCapabilityControllerReturnsInitialRollbackResults/accessibility (0.00s)
+    --- PASS: TestNativeCapabilityControllerReturnsInitialRollbackResults/adoption (0.00s)
+=== RUN   TestNativeCapabilityControllerOrdersChildActivationBindAndReadiness
+--- PASS: TestNativeCapabilityControllerOrdersChildActivationBindAndReadiness (0.00s)
+=== RUN   TestNativeCapabilityControllerReturnsChildRollbackResultsBeforeReadiness
+=== RUN   TestNativeCapabilityControllerReturnsChildRollbackResultsBeforeReadiness/activation
+=== RUN   TestNativeCapabilityControllerReturnsChildRollbackResultsBeforeReadiness/binding
+--- PASS: TestNativeCapabilityControllerReturnsChildRollbackResultsBeforeReadiness (0.00s)
+    --- PASS: TestNativeCapabilityControllerReturnsChildRollbackResultsBeforeReadiness/activation (0.00s)
+    --- PASS: TestNativeCapabilityControllerReturnsChildRollbackResultsBeforeReadiness/binding (0.00s)
+=== RUN   TestNativeCapabilityControllerSuccessfulRoutesDoNotAllocate
+--- PASS: TestNativeCapabilityControllerSuccessfulRoutesDoNotAllocate (0.00s)
+=== RUN   TestNativeCapabilityControllerKeepsInitialAndChildAdaptersDistinct
+--- PASS: TestNativeCapabilityControllerKeepsInitialAndChildAdaptersDistinct (0.00s)
+=== RUN   TestNativeCapabilityControllerPortsAndFieldsAreExhaustiveNarrowAndDetached
+--- PASS: TestNativeCapabilityControllerPortsAndFieldsAreExhaustiveNarrowAndDetached (0.00s)
+=== RUN   TestConfiguredPaletteReprojectsLogicalCellsWithoutReparse
+--- PASS: TestConfiguredPaletteReprojectsLogicalCellsWithoutReparse (0.00s)
+=== RUN   TestConfiguredPaletteUsesConfiguredLogicalDefaults
+--- PASS: TestConfiguredPaletteUsesConfiguredLogicalDefaults (0.00s)
+=== RUN   TestConfiguredSparseIndexedOverridesPreserveFallbacks
+--- PASS: TestConfiguredSparseIndexedOverridesPreserveFallbacks (0.00s)
+=== RUN   TestPaneOSCOverridesLayerAboveReloadedConfiguredPalette
+--- PASS: TestPaneOSCOverridesLayerAboveReloadedConfiguredPalette (0.00s)
+=== RUN   TestPaneOSCBackgroundPreservesConfiguredAlpha
+--- PASS: TestPaneOSCBackgroundPreservesConfiguredAlpha (0.00s)
+=== RUN   TestPerPaneZoomStateIsIndependent
+--- PASS: TestPerPaneZoomStateIsIndependent (0.00s)
+=== RUN   TestZoomResetTargetsConfiguredBaseForFocusedPane
+--- PASS: TestZoomResetTargetsConfiguredBaseForFocusedPane (0.00s)
+=== RUN   TestPendingZoomRemainsAttachedAfterFocusChange
+--- PASS: TestPendingZoomRemainsAttachedAfterFocusChange (0.00s)
+=== RUN   TestPaneGridMetricsAndFramebufferPointUseTargetPaneCells
+--- PASS: TestPaneGridMetricsAndFramebufferPointUseTargetPaneCells (0.00s)
+=== RUN   TestInheritPaneFontStateCopiesOnlyLiveProjection
+--- PASS: TestInheritPaneFontStateCopiesOnlyLiveProjection (0.00s)
+=== RUN   TestNextWakeUsesEarliestPaneZoomDeadline
+--- PASS: TestNextWakeUsesEarliestPaneZoomDeadline (0.00s)
+=== RUN   TestApplyPanePTYResizeTargetsOnlyRequestedPane
+--- PASS: TestApplyPanePTYResizeTargetsOnlyRequestedPane (0.00s)
+=== RUN   TestPaneHostFontSizeStaysBoundToOriginPane
+--- PASS: TestPaneHostFontSizeStaysBoundToOriginPane (0.01s)
+=== RUN   TestSplitInheritsFontAfterCommittedResizeError
+--- PASS: TestSplitInheritsFontAfterCommittedResizeError (0.00s)
+=== RUN   TestPendingZoomResizeFailureUsesBoundedRetries
+--- PASS: TestPendingZoomResizeFailureUsesBoundedRetries (0.00s)
+=== RUN   TestPhase10PowerShellFixtureRoutesMetadataThroughTrustedActions
+--- PASS: TestPhase10PowerShellFixtureRoutesMetadataThroughTrustedActions (0.00s)
+=== RUN   TestPhase10MaliciousPTYOutputCannotReachExternalEffects
+--- PASS: TestPhase10MaliciousPTYOutputCannotReachExternalEffects (0.00s)
+=== RUN   TestPhase13DisabledFrameIsAllocationAndMutationFree
+--- PASS: TestPhase13DisabledFrameIsAllocationAndMutationFree (0.00s)
+=== RUN   TestPhase13DisabledFrameAddsNoRedrawOrIdleCadence
+--- PASS: TestPhase13DisabledFrameAddsNoRedrawOrIdleCadence (0.00s)
+=== RUN   TestPreeditPresentationKeepsClustersAndMapsCaretAndTarget
+--- PASS: TestPreeditPresentationKeepsClustersAndMapsCaretAndTarget (0.00s)
+=== RUN   TestPreeditPresentationClipsOnlyAtClusterBoundaries
+--- PASS: TestPreeditPresentationClipsOnlyAtClusterBoundaries (0.00s)
+=== RUN   TestPreeditPresentationAcceptsRTLAndBoundsVisualWork
+--- PASS: TestPreeditPresentationAcceptsRTLAndBoundsVisualWork (0.00s)
+=== RUN   TestPreeditPresentationRejectsInactiveEmptyAndZeroGeometry
+--- PASS: TestPreeditPresentationRejectsInactiveEmptyAndZeroGeometry (0.00s)
+=== RUN   TestCompositionPresentationNotifiesOnlyOnVisibleStateMutation
+--- PASS: TestCompositionPresentationNotifiesOnlyOnVisibleStateMutation (0.00s)
+=== RUN   TestAppPreeditMutationRequestsOneOnDemandFrame
+--- PASS: TestAppPreeditMutationRequestsOneOnDemandFrame (0.00s)
+=== RUN   TestPreeditMixedDirectionTargetKeepsDisjointVisualSpans
+--- PASS: TestPreeditMixedDirectionTargetKeepsDisjointVisualSpans (0.00s)
+=== RUN   TestPreeditTrailingCaretStaysInsideClip
+--- PASS: TestPreeditTrailingCaretStaysInsideClip (0.00s)
+=== RUN   TestPreeditRedrawMarksOnlyOwningProjection
+--- PASS: TestPreeditRedrawMarksOnlyOwningProjection (0.00s)
+=== RUN   TestPresentationInterval
+--- PASS: TestPresentationInterval (0.00s)
+=== RUN   TestPresentationGatePreservesDeadlineDeterministically
+--- PASS: TestPresentationGatePreservesDeadlineDeterministically (0.00s)
+=== RUN   TestPresentationGateUsesLiveRateAgainstLastPresentation
+--- PASS: TestPresentationGateUsesLiveRateAgainstLastPresentation (0.00s)
+=== RUN   TestPresentationGateRejectedAdmissionRetainsRedrawDemand
+--- PASS: TestPresentationGateRejectedAdmissionRetainsRedrawDemand (0.00s)
+=== RUN   TestPresentationGateAdmissionHasNoAllocations
+--- PASS: TestPresentationGateAdmissionHasNoAllocations (0.00s)
+=== RUN   TestChildGlobalActionRoutesControllerWithExactOriginIdentity
+--- PASS: TestChildGlobalActionRoutesControllerWithExactOriginIdentity (0.00s)
+=== RUN   TestControllerMintsChildWindowCapabilityOnlyAfterDetachedNativeAttestation
+--- PASS: TestControllerMintsChildWindowCapabilityOnlyAfterDetachedNativeAttestation (0.00s)
+=== RUN   TestOnlyPrimaryClosesProjectionsThenProcessServices
+--- PASS: TestOnlyPrimaryClosesProjectionsThenProcessServices (0.00s)
+=== RUN   TestChildAppFieldGraphCannotReachHostOrProcessServiceStorage
+--- PASS: TestChildAppFieldGraphCannotReachHostOrProcessServiceStorage (0.00s)
+=== RUN   TestProjectionAccessibilityCaptureIsVisibleOnlyAndRedacted
+--- PASS: TestProjectionAccessibilityCaptureIsVisibleOnlyAndRedacted (0.00s)
+=== RUN   TestProjectionAccessibilityFactoryDormantTransferAndOrder
+--- PASS: TestProjectionAccessibilityFactoryDormantTransferAndOrder (0.00s)
+=== RUN   TestProjectionAccessibilityFactoryFailureClosesPartial
+--- PASS: TestProjectionAccessibilityFactoryFailureClosesPartial (0.00s)
+=== RUN   TestProjectionAccessibilityDisabledAndUnsupportedAreNonFatal
+--- PASS: TestProjectionAccessibilityDisabledAndUnsupportedAreNonFatal (0.00s)
+=== RUN   TestProjectionAccessibilitySuppressesRepaintOnlyMuxEvents
+--- PASS: TestProjectionAccessibilitySuppressesRepaintOnlyMuxEvents (0.00s)
+=== RUN   TestProjectionAccessibilityRefreshFailureDisconnectsProvider
+--- PASS: TestProjectionAccessibilityRefreshFailureDisconnectsProvider (0.00s)
+=== RUN   TestQuickSelectCopiesExactTextAndClosesAfterLabel
+--- PASS: TestQuickSelectCopiesExactTextAndClosesAfterLabel (0.00s)
+=== RUN   TestQuickSelectOpenRejectsUnsafeSchemeAndPreservesModal
+--- PASS: TestQuickSelectOpenRejectsUnsafeSchemeAndPreservesModal (0.00s)
+=== RUN   TestQuickSelectOpenUsesValidatedHTTPAdapter
+--- PASS: TestQuickSelectOpenUsesValidatedHTTPAdapter (0.00s)
+=== RUN   TestQuickSelectStaleResizeNeverActs
+--- PASS: TestQuickSelectStaleResizeNeverActs (0.00s)
+=== RUN   TestQuickSelectProgrammaticAcceptCannotOpen
+--- PASS: TestQuickSelectProgrammaticAcceptCannotOpen (0.00s)
+=== RUN   TestQuickSelectLauncherErrorIsRedacted
+--- PASS: TestQuickSelectLauncherErrorIsRedacted (0.00s)
+=== RUN   TestQuickSelectEnterRepeatCannotGrantActivation
+--- PASS: TestQuickSelectEnterRepeatCannotGrantActivation (0.00s)
+=== RUN   TestLayeredConfigReloadRunsCPUGenerationOffMainAndTransfersAtomically
+--- PASS: TestLayeredConfigReloadRunsCPUGenerationOffMainAndTransfersAtomically (0.01s)
+=== RUN   TestStaleConfigReloadCPUGenerationCannotActivate
+--- PASS: TestStaleConfigReloadCPUGenerationCannotActivate (0.00s)
+=== RUN   TestFailedBackgroundImageJoinsRetryWatchSetWithoutChangingActiveConfig
+2026/08/12 18:26:02 config reload failed: background layer 1: image 1 path: canonicalization failed
+--- PASS: TestFailedBackgroundImageJoinsRetryWatchSetWithoutChangingActiveConfig (0.03s)
+=== RUN   TestBackgroundGPUPreparationFailureRollsBackWholeReload
+2026/08/12 18:26:02 config reload failed: prepare background surface: injected GPU failure
+--- PASS: TestBackgroundGPUPreparationFailureRollsBackWholeReload (0.02s)
+=== RUN   TestSuccessfulBackgroundImageBecomesActiveWatchDependency
+--- PASS: TestSuccessfulBackgroundImageBecomesActiveWatchDependency (0.02s)
+=== RUN   TestImageDigestChangeBeforeActivationDiscardsPreparedGeneration
+2026/08/12 18:26:02 config reload failed: config sources changed while preparing reload; queued a newer generation
+--- PASS: TestImageDigestChangeBeforeActivationDiscardsPreparedGeneration (0.01s)
+=== RUN   TestShutdownRacingBackgroundWorkerDiscardsGenerationAndClosesPool
+--- PASS: TestShutdownRacingBackgroundWorkerDiscardsGenerationAndClosesPool (0.01s)
+=== RUN   TestApplyPendingConfigReloadRetainsPendingAtWorkerCap
+--- PASS: TestApplyPendingConfigReloadRetainsPendingAtWorkerCap (0.00s)
+=== RUN   TestApplyPendingConfigReloadDrainsResultsBeforeCapAndReportsMissingSource
+2026/08/12 18:26:02 config reload failed: no config source is active
+--- PASS: TestApplyPendingConfigReloadDrainsResultsBeforeCapAndReportsMissingSource (0.00s)
+=== RUN   TestReloadControllerRequestRequiresActiveSourceAndMarksAppPending
+=== RUN   TestReloadControllerRequestRequiresActiveSourceAndMarksAppPending/missing_source
+=== RUN   TestReloadControllerRequestRequiresActiveSourceAndMarksAppPending/active_source
+--- PASS: TestReloadControllerRequestRequiresActiveSourceAndMarksAppPending (0.00s)
+    --- PASS: TestReloadControllerRequestRequiresActiveSourceAndMarksAppPending/missing_source (0.00s)
+    --- PASS: TestReloadControllerRequestRequiresActiveSourceAndMarksAppPending/active_source (0.00s)
+=== RUN   TestReloadControllerPollMarksOnlyStableWatchChangePending
+--- PASS: TestReloadControllerPollMarksOnlyStableWatchChangePending (0.00s)
+=== RUN   TestReloadControllerApplyDrainsBeforeEveryShortCircuit
+=== RUN   TestReloadControllerApplyDrainsBeforeEveryShortCircuit/inactive
+=== RUN   TestReloadControllerApplyDrainsBeforeEveryShortCircuit/worker_cap_retains_App_pending_state
+=== RUN   TestReloadControllerApplyDrainsBeforeEveryShortCircuit/drain_can_lower_cap_before_dispatch
+--- PASS: TestReloadControllerApplyDrainsBeforeEveryShortCircuit (0.00s)
+    --- PASS: TestReloadControllerApplyDrainsBeforeEveryShortCircuit/inactive (0.00s)
+    --- PASS: TestReloadControllerApplyDrainsBeforeEveryShortCircuit/worker_cap_retains_App_pending_state (0.00s)
+    --- PASS: TestReloadControllerApplyDrainsBeforeEveryShortCircuit/drain_can_lower_cap_before_dispatch (0.00s)
+=== RUN   TestReloadControllerApplyConsumesBeforeMissingSourceReportOrStart
+=== RUN   TestReloadControllerApplyConsumesBeforeMissingSourceReportOrStart/missing_source
+=== RUN   TestReloadControllerApplyConsumesBeforeMissingSourceReportOrStart/active_source
+--- PASS: TestReloadControllerApplyConsumesBeforeMissingSourceReportOrStart (0.00s)
+    --- PASS: TestReloadControllerApplyConsumesBeforeMissingSourceReportOrStart/missing_source (0.00s)
+    --- PASS: TestReloadControllerApplyConsumesBeforeMissingSourceReportOrStart/active_source (0.00s)
+=== RUN   TestReloadControllerApplyPathsDoNotAllocate
+=== RUN   TestReloadControllerApplyPathsDoNotAllocate/inactive
+=== RUN   TestReloadControllerApplyPathsDoNotAllocate/worker_cap
+=== RUN   TestReloadControllerApplyPathsDoNotAllocate/dispatch
+--- PASS: TestReloadControllerApplyPathsDoNotAllocate (0.00s)
+    --- PASS: TestReloadControllerApplyPathsDoNotAllocate/inactive (0.00s)
+    --- PASS: TestReloadControllerApplyPathsDoNotAllocate/worker_cap (0.00s)
+    --- PASS: TestReloadControllerApplyPathsDoNotAllocate/dispatch (0.00s)
+=== RUN   TestAppReloadEntryPointsForwardThroughLazyController
+--- PASS: TestAppReloadEntryPointsForwardThroughLazyController (0.00s)
+=== RUN   TestAppMissingReloadSourceAdapterCapturesFailureTime
+2026/08/12 18:26:02 config reload failed: no config source is active
+--- PASS: TestAppMissingReloadSourceAdapterCapturesFailureTime (0.00s)
+=== RUN   TestReloadControllerPortsStayNarrowAndOwnNoPendingPreparedRuntimeConfigOrGPUState
+--- PASS: TestReloadControllerPortsStayNarrowAndOwnNoPendingPreparedRuntimeConfigOrGPUState (0.00s)
+=== RUN   TestConfigWatchDebouncesSelectedSource
+--- PASS: TestConfigWatchDebouncesSelectedSource (0.01s)
+=== RUN   TestConfigWatchDebouncesGraphChangesAndDeletion
+--- PASS: TestConfigWatchDebouncesGraphChangesAndDeletion (0.01s)
+=== RUN   TestConfigWatchCoalescesUntilWholeGraphIsStable
+--- PASS: TestConfigWatchCoalescesUntilWholeGraphIsStable (0.01s)
+=== RUN   TestPrepareRasterContextsIncludesEveryPaneSize
+--- PASS: TestPrepareRasterContextsIncludesEveryPaneSize (0.00s)
+=== RUN   TestLiveConfigPreparationDoesNotMutateAndAbortClosesResources
+--- PASS: TestLiveConfigPreparationDoesNotMutateAndAbortClosesResources (0.00s)
+=== RUN   TestLiveConfigCommitTransfersPreparedResources
+--- PASS: TestLiveConfigCommitTransfersPreparedResources (0.00s)
+=== RUN   TestConfigWatchDetectsSameMetadataContentChange
+--- PASS: TestConfigWatchDetectsSameMetadataContentChange (0.00s)
+=== RUN   TestReloadFailurePreservesConfigAndRuntime
+--- PASS: TestReloadFailurePreservesConfigAndRuntime (0.01s)
+=== RUN   TestReloadKeepsFontFeaturesPendingRestart
+2026/08/12 18:26:02 config reloaded; pending scoped changes: font.features (restart)
+--- PASS: TestReloadKeepsFontFeaturesPendingRestart (0.01s)
+=== RUN   TestReloadCommitsLiveFieldsAndRetainsScopedPendingChanges
+2026/08/12 18:26:02 config reloaded; pending scoped changes: font.family (restart), shell.program (new_pane)
+--- PASS: TestReloadCommitsLiveFieldsAndRetainsScopedPendingChanges (0.02s)
+=== RUN   TestRuntimeLiveSetterPreservesUnrelatedDesiredPendingChanges
+--- PASS: TestRuntimeLiveSetterPreservesUnrelatedDesiredPendingChanges (0.00s)
+=== RUN   TestRuntimeScopeSurvivesReloadRejectsInvalidCandidateAndClears
+--- PASS: TestRuntimeScopeSurvivesReloadRejectsInvalidCandidateAndClears (0.01s)
+=== RUN   TestNewPaneUsesDesiredShellWithoutChangingEffectiveWindowConfig
+--- PASS: TestNewPaneUsesDesiredShellWithoutChangingEffectiveWindowConfig (0.00s)
+=== RUN   TestReloadActivatesExplicitV2BundleAtomically
+--- PASS: TestReloadActivatesExplicitV2BundleAtomically (0.03s)
+=== RUN   TestReloadSelectedIncludedColorSchemeChangesAtomicallyAndInvalidEditPreservesState
+--- PASS: TestReloadSelectedIncludedColorSchemeChangesAtomicallyAndInvalidEditPreservesState (0.02s)
+=== RUN   TestReloadV2PublicationFailurePreservesActiveState
+    reload_test.go:632: tl not installed
+--- SKIP: TestReloadV2PublicationFailurePreservesActiveState (0.00s)
+=== RUN   TestReloadV2ToV1PreparationFailureRestoresTealArtifacts
+    reload_test.go:677: tl not installed
+--- SKIP: TestReloadV2ToV1PreparationFailureRestoresTealArtifacts (0.00s)
+=== RUN   TestReloadQueuesNewGenerationWhenActiveIncludeChangesDuringEvaluation
+--- PASS: TestReloadQueuesNewGenerationWhenActiveIncludeChangesDuringEvaluation (0.02s)
+=== RUN   TestReloadQueuesNewlyIntroducedIncludeChangedDuringItsEvaluation
+--- PASS: TestReloadQueuesNewlyIntroducedIncludeChangedDuringItsEvaluation (0.01s)
+=== RUN   TestWatchHashesDetectModuleMutationDuringRequire
+--- PASS: TestWatchHashesDetectModuleMutationDuringRequire (0.01s)
+=== RUN   TestWatchHashesDetectSymlinkRetargetWithIdenticalContent
+--- PASS: TestWatchHashesDetectSymlinkRetargetWithIdenticalContent (0.01s)
+=== RUN   TestWatchHashesKeepEveryDeclarativeSymlinkAlias
+--- PASS: TestWatchHashesKeepEveryDeclarativeSymlinkAlias (0.01s)
+=== RUN   TestWatchHashesKeepDependencySymlinkPath
+--- PASS: TestWatchHashesKeepDependencySymlinkPath (0.01s)
+=== RUN   TestRequestConfigReloadIsDeferred
+--- PASS: TestRequestConfigReloadIsDeferred (0.00s)
+=== RUN   TestReloadRetainsStartupSelectionAndCLIOverrides
+--- PASS: TestReloadRetainsStartupSelectionAndCLIOverrides (0.01s)
+=== RUN   TestReloadV1ToV2RetainsAmbientSelectionSnapshot
+--- PASS: TestReloadV1ToV2RetainsAmbientSelectionSnapshot (0.01s)
+=== RUN   TestConfigWatchFailurePathsReplaceAndSuccessClears
+--- PASS: TestConfigWatchFailurePathsReplaceAndSuccessClears (0.00s)
+=== RUN   TestReloadFailureNoticeRateLimitDoesNotOwnRetryState
+2026/08/12 18:26:03 config reload failed: same failure
+2026/08/12 18:26:03 config reload failed: same failure
+2026/08/12 18:26:03 config reload failed: different failure
+2026/08/12 18:26:03 config reload failed: same failure
+--- PASS: TestReloadFailureNoticeRateLimitDoesNotOwnRetryState (0.00s)
+=== RUN   TestMissingIncludeCreationRecoversWithoutPrimaryEdit
+--- PASS: TestMissingIncludeCreationRecoversWithoutPrimaryEdit (0.02s)
+=== RUN   TestSameFailureSetChangeDuringAttemptRequeuesOnce
+--- PASS: TestSameFailureSetChangeDuringAttemptRequeuesOnce (0.01s)
+=== RUN   TestKnownDefect_L1_02_ChildReloadRequestDoesNotQueueOwner
+--- PASS: TestKnownDefect_L1_02_ChildReloadRequestDoesNotQueueOwner (0.00s)
+=== RUN   TestRenderControllerOnDemandReadyDrawOrder
+--- PASS: TestRenderControllerOnDemandReadyDrawOrder (0.00s)
+=== RUN   TestRenderControllerOnDemandRejectionStopsAfterReadiness
+--- PASS: TestRenderControllerOnDemandRejectionStopsAfterReadiness (0.00s)
+=== RUN   TestRenderControllerContinuousThrottlesWithoutReadinessCheck
+--- PASS: TestRenderControllerContinuousThrottlesWithoutReadinessCheck (0.00s)
+=== RUN   TestRenderControllerFinishesDrawOnPanicWithoutEndingFrame
+--- PASS: TestRenderControllerFinishesDrawOnPanicWithoutEndingFrame (0.00s)
+=== RUN   TestRenderControllerRejectedPathDoesNotAllocate
+--- PASS: TestRenderControllerRejectedPathDoesNotAllocate (0.00s)
+=== RUN   TestAppRenderReloadControllersAreEagerAndProjectionLocal
+--- PASS: TestAppRenderReloadControllersAreEagerAndProjectionLocal (0.00s)
+=== RUN   TestAppRenderReloadControllersAreLazyAndIdempotent
+--- PASS: TestAppRenderReloadControllersAreLazyAndIdempotent (0.00s)
+=== RUN   TestRenderControllerPortsStayNarrowAndFieldsStayDetached
+--- PASS: TestRenderControllerPortsStayNarrowAndFieldsStayDetached (0.00s)
+=== RUN   TestBackgroundReplacementAndOverlayBlendUseDistinctRendererOperations
+--- PASS: TestBackgroundReplacementAndOverlayBlendUseDistinctRendererOperations (0.00s)
+=== RUN   TestSolidBackgroundSurfaceUsesEffectiveAlphaAndReplacement
+--- PASS: TestSolidBackgroundSurfaceUsesEffectiveAlphaAndReplacement (0.00s)
+=== RUN   TestApplyOpacityMultipliesAlphaOnce
+--- PASS: TestApplyOpacityMultipliesAlphaOnce (0.00s)
+=== RUN   TestComposeSolidPanePreservesLegacyPixelsThenAppliesMultiplier
+--- PASS: TestComposeSolidPanePreservesLegacyPixelsThenAppliesMultiplier (0.00s)
+=== RUN   TestLayeredBackgroundOSC11PrecedenceAndResetPolicy
+--- PASS: TestLayeredBackgroundOSC11PrecedenceAndResetPolicy (0.00s)
+=== RUN   TestDetectLigatureRunAlphabet
+--- PASS: TestDetectLigatureRunAlphabet (0.00s)
+=== RUN   TestDetectLigatureRunAttrEqualityInverse
+--- PASS: TestDetectLigatureRunAttrEqualityInverse (0.00s)
+=== RUN   TestDetectLigatureRunCursorSplit
+--- PASS: TestDetectLigatureRunCursorSplit (0.00s)
+=== RUN   TestDetectLigatureRunLengthBounds
+--- PASS: TestDetectLigatureRunLengthBounds (0.00s)
+=== RUN   TestDetectLigatureRunSkipsWideAndCombining
+--- PASS: TestDetectLigatureRunSkipsWideAndCombining (0.00s)
+=== RUN   TestEffectiveDPI
+=== RUN   TestEffectiveDPI/one
+=== RUN   TestEffectiveDPI/one_and_quarter
+=== RUN   TestEffectiveDPI/one_and_half
+=== RUN   TestEffectiveDPI/two
+=== RUN   TestEffectiveDPI/lower_clamp
+=== RUN   TestEffectiveDPI/upper_clamp
+=== RUN   TestEffectiveDPI/asymmetric
+--- PASS: TestEffectiveDPI (0.00s)
+    --- PASS: TestEffectiveDPI/one (0.00s)
+    --- PASS: TestEffectiveDPI/one_and_quarter (0.00s)
+    --- PASS: TestEffectiveDPI/one_and_half (0.00s)
+    --- PASS: TestEffectiveDPI/two (0.00s)
+    --- PASS: TestEffectiveDPI/lower_clamp (0.00s)
+    --- PASS: TestEffectiveDPI/upper_clamp (0.00s)
+    --- PASS: TestEffectiveDPI/asymmetric (0.00s)
+=== RUN   TestScriptHostControllerRepresentsCompletePaneHostSurface
+--- PASS: TestScriptHostControllerRepresentsCompletePaneHostSurface (0.00s)
+=== RUN   TestScriptHostControllerConfigCrossesDetachedInBothDirections
+--- PASS: TestScriptHostControllerConfigCrossesDetachedInBothDirections (0.00s)
+=== RUN   TestScriptHostControllerNoOpRoutesDoNotAllocate
+--- PASS: TestScriptHostControllerNoOpRoutesDoNotAllocate (0.00s)
+=== RUN   TestPaneHostConstructionAndWarmedStableReadsDoNotAllocate
+--- PASS: TestPaneHostConstructionAndWarmedStableReadsDoNotAllocate (0.00s)
+=== RUN   TestPaneHostZeroPaneLiteralPreservesFocusedFontCompatibility
+--- PASS: TestPaneHostZeroPaneLiteralPreservesFocusedFontCompatibility (0.00s)
+=== RUN   TestScriptHostControllerPortsAndFieldsAreExhaustiveNarrowAndDetached
+--- PASS: TestScriptHostControllerPortsAndFieldsAreExhaustiveNarrowAndDetached (0.00s)
+=== RUN   TestScriptLifecycleControllerPinsPaneAndFocusEventRoutes
+--- PASS: TestScriptLifecycleControllerPinsPaneAndFocusEventRoutes (0.00s)
+=== RUN   TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure
+=== RUN   TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure/empty
+=== RUN   TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure/no_runtime
+=== RUN   TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure/unwanted
+=== RUN   TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure/failure
+--- PASS: TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure (0.00s)
+    --- PASS: TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure/empty (0.00s)
+    --- PASS: TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure/no_runtime (0.00s)
+    --- PASS: TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure/unwanted (0.00s)
+    --- PASS: TestScriptLifecycleControllerFiltersOutputAndReportsExactEventFailure/failure (0.00s)
+=== RUN   TestScriptLifecycleControllerNoRuntimeClearsPendingWithoutDispatch
+--- PASS: TestScriptLifecycleControllerNoRuntimeClearsPendingWithoutDispatch (0.00s)
+=== RUN   TestScriptLifecycleControllerDrainsResizeBeforeScrollAndReportsWithoutStopping
+--- PASS: TestScriptLifecycleControllerDrainsResizeBeforeScrollAndReportsWithoutStopping (0.00s)
+=== RUN   TestScriptLifecycleControllerPreservesArrivalsDuringDispatch
+--- PASS: TestScriptLifecycleControllerPreservesArrivalsDuringDispatch (0.00s)
+=== RUN   TestScriptLifecycleControllerPinsTimersThenStatusBeforeOverlayRoutes
+--- PASS: TestScriptLifecycleControllerPinsTimersThenStatusBeforeOverlayRoutes (0.00s)
+=== RUN   TestScriptLifecycleControllerNoRuntimeNoOpRoutesDoNotAllocate
+--- PASS: TestScriptLifecycleControllerNoRuntimeNoOpRoutesDoNotAllocate (0.00s)
+=== RUN   TestAppScriptLifecycleControllersAreProjectionLocalEagerLazyAndIdempotent
+--- PASS: TestAppScriptLifecycleControllersAreProjectionLocalEagerLazyAndIdempotent (0.00s)
+=== RUN   TestScriptLifecycleControllerEphemeralPortsPreserveOrderAndFaultReporting
+--- PASS: TestScriptLifecycleControllerEphemeralPortsPreserveOrderAndFaultReporting (0.00s)
+=== RUN   TestAppScriptLifecycleWarmedNoRuntimeRoutesDoNotAllocate
+--- PASS: TestAppScriptLifecycleWarmedNoRuntimeRoutesDoNotAllocate (0.00s)
+=== RUN   TestScriptLifecycleControllerPortsAndFieldsAreExhaustiveNarrowAndDetached
+--- PASS: TestScriptLifecycleControllerPortsAndFieldsAreExhaustiveNarrowAndDetached (0.00s)
+=== RUN   TestScrollbarGeometryMapsHistoryExtremes
+--- PASS: TestScrollbarGeometryMapsHistoryExtremes (0.00s)
+=== RUN   TestScrollbarGeometryNoHistoryAndHiDPI
+--- PASS: TestScrollbarGeometryNoHistoryAndHiDPI (0.00s)
+=== RUN   TestPaneScrollbarGeometryUsesFocusedPaneVerticalBounds
+--- PASS: TestPaneScrollbarGeometryUsesFocusedPaneVerticalBounds (0.00s)
+=== RUN   TestScrollbarFadeReturnsToIdle
+--- PASS: TestScrollbarFadeReturnsToIdle (0.00s)
+=== RUN   TestScrollbarGestureOwnerPersistsAcrossGutter
+--- PASS: TestScrollbarGestureOwnerPersistsAcrossGutter (0.00s)
+=== RUN   TestScrollbarModesAndGutterPolicy
+--- PASS: TestScrollbarModesAndGutterPolicy (0.00s)
+=== RUN   TestScrollbarAnimationWakeQuantizesAndReturnsIdle
+--- PASS: TestScrollbarAnimationWakeQuantizesAndReturnsIdle (0.00s)
+=== RUN   TestSearchControllerFindsAndMisses
+--- PASS: TestSearchControllerFindsAndMisses (0.00s)
+=== RUN   TestSearchControllerEmptyQueryIsNoOp
+--- PASS: TestSearchControllerEmptyQueryIsNoOp (0.00s)
+=== RUN   TestSearchControllerDrivesPort
+--- PASS: TestSearchControllerDrivesPort (0.00s)
+=== RUN   TestSearchControllerQueryEditing
+--- PASS: TestSearchControllerQueryEditing (0.00s)
+=== RUN   TestSearchActivationAndWholeTextAreStableAndAtomic
+--- PASS: TestSearchActivationAndWholeTextAreStableAndAtomic (0.00s)
+=== RUN   TestSearchActivationExhaustionFailsClosed
+--- PASS: TestSearchActivationExhaustionFailsClosed (0.00s)
+=== RUN   TestLoadConfiguredRestorePlanIsOptInAndUsesConfiguredStore
+--- PASS: TestLoadConfiguredRestorePlanIsOptInAndUsesConfiguredStore (0.05s)
+=== RUN   TestRestoreLoadPolicyTurnsInvalidStateIntoFreshValueFreeFallback
+--- PASS: TestRestoreLoadPolicyTurnsInvalidStateIntoFreshValueFreeFallback (0.00s)
+=== RUN   TestPrepareConfiguredRestoreUsesCurrentTargetsAppearanceAndNoEnvironment
+--- PASS: TestPrepareConfiguredRestoreUsesCurrentTargetsAppearanceAndNoEnvironment (0.00s)
+=== RUN   TestRestoreBlueprintWindowsAndAppearanceProjectionAreDetached
+--- PASS: TestRestoreBlueprintWindowsAndAppearanceProjectionAreDetached (0.00s)
+=== RUN   TestRestoredProjectionAppearanceSurvivesSharedReloadProjection
+--- PASS: TestRestoredProjectionAppearanceSurvivesSharedReloadProjection (0.00s)
+=== RUN   TestResetFailedRestoreFrontendClearsAbandonedAppearance
+--- PASS: TestResetFailedRestoreFrontendClearsAbandonedAppearance (0.00s)
+=== RUN   TestMetricProjectionCoversRuneClusterRunAndColorPaths
+--- PASS: TestMetricProjectionCoversRuneClusterRunAndColorPaths (0.00s)
+=== RUN   TestStyledAtlasSeparatesPositiveAndNegativeKeys
+--- PASS: TestStyledAtlasSeparatesPositiveAndNegativeKeys (0.00s)
+=== RUN   TestStyledAtlasSeparatesInsertionNegatives
+--- PASS: TestStyledAtlasSeparatesInsertionNegatives (0.00s)
+=== RUN   TestStyleDrawEffectsAndLigatureBoundaries
+--- PASS: TestStyleDrawEffectsAndLigatureBoundaries (0.00s)
+=== RUN   TestAtlasUsesContentResolvedFaceKeys
+--- PASS: TestAtlasUsesContentResolvedFaceKeys (0.00s)
+=== RUN   TestAtlasBoundsAndCachesRasterNegatives
+--- PASS: TestAtlasBoundsAndCachesRasterNegatives (0.02s)
+=== RUN   TestTabBarVisibilityPolicy
+--- PASS: TestTabBarVisibilityPolicy (0.00s)
+=== RUN   TestTabBarLayoutKeepsActiveVisibleAndHitsDisjoint
+--- PASS: TestTabBarLayoutKeepsActiveVisibleAndHitsDisjoint (0.00s)
+=== RUN   TestTabBarLayoutIsDeterministicAndDoesNotMutateInput
+--- PASS: TestTabBarLayoutIsDeterministicAndDoesNotMutateInput (0.00s)
+=== RUN   TestClipTabTitlePreservesUnicodeClusters
+--- PASS: TestClipTabTitlePreservesUnicodeClusters (0.00s)
+=== RUN   TestCloseConfirmationRetainsTabAndRejectsRevisionChange
+--- PASS: TestCloseConfirmationRetainsTabAndRejectsRevisionChange (0.00s)
+=== RUN   TestCloseConfirmationAcceptsUnchangedClickedTab
+--- PASS: TestCloseConfirmationAcceptsUnchangedClickedTab (0.00s)
+=== RUN   TestTabSwitcherRetainsStableIDAcrossReorder
+--- PASS: TestTabSwitcherRetainsStableIDAcrossReorder (0.00s)
+=== RUN   TestInactivePaneOutputSetsOneActivityBadgeUntilActivation
+--- PASS: TestInactivePaneOutputSetsOneActivityBadgeUntilActivation (0.00s)
+=== RUN   TestCloseConfirmationInvalidatesEveryTabMutationPath
+=== RUN   TestCloseConfirmationInvalidatesEveryTabMutationPath/rename
+=== RUN   TestCloseConfirmationInvalidatesEveryTabMutationPath/reorder
+=== RUN   TestCloseConfirmationInvalidatesEveryTabMutationPath/pane_membership
+=== RUN   TestCloseConfirmationInvalidatesEveryTabMutationPath/lifecycle
+--- PASS: TestCloseConfirmationInvalidatesEveryTabMutationPath (0.01s)
+    --- PASS: TestCloseConfirmationInvalidatesEveryTabMutationPath/rename (0.00s)
+    --- PASS: TestCloseConfirmationInvalidatesEveryTabMutationPath/reorder (0.00s)
+    --- PASS: TestCloseConfirmationInvalidatesEveryTabMutationPath/pane_membership (0.01s)
+    --- PASS: TestCloseConfirmationInvalidatesEveryTabMutationPath/lifecycle (0.00s)
+=== RUN   TestRollbackInitializedMuxWrongThreadRetainsPublishedCapabilities
+--- PASS: TestRollbackInitializedMuxWrongThreadRetainsPublishedCapabilities (0.00s)
+=== RUN   TestTerminalImageActivationAllProtocolMasks
+=== RUN   TestTerminalImageActivationAllProtocolMasks/mask-0
+=== RUN   TestTerminalImageActivationAllProtocolMasks/mask-1
+=== RUN   TestTerminalImageActivationAllProtocolMasks/mask-2
+=== RUN   TestTerminalImageActivationAllProtocolMasks/mask-3
+=== RUN   TestTerminalImageActivationAllProtocolMasks/mask-4
+=== RUN   TestTerminalImageActivationAllProtocolMasks/mask-5
+=== RUN   TestTerminalImageActivationAllProtocolMasks/mask-6
+=== RUN   TestTerminalImageActivationAllProtocolMasks/mask-7
+--- PASS: TestTerminalImageActivationAllProtocolMasks (0.00s)
+    --- PASS: TestTerminalImageActivationAllProtocolMasks/mask-0 (0.00s)
+    --- PASS: TestTerminalImageActivationAllProtocolMasks/mask-1 (0.00s)
+    --- PASS: TestTerminalImageActivationAllProtocolMasks/mask-2 (0.00s)
+    --- PASS: TestTerminalImageActivationAllProtocolMasks/mask-3 (0.00s)
+    --- PASS: TestTerminalImageActivationAllProtocolMasks/mask-4 (0.00s)
+    --- PASS: TestTerminalImageActivationAllProtocolMasks/mask-5 (0.00s)
+    --- PASS: TestTerminalImageActivationAllProtocolMasks/mask-6 (0.00s)
+    --- PASS: TestTerminalImageActivationAllProtocolMasks/mask-7 (0.00s)
+=== RUN   TestTerminalImageActivationMapsEnabledLimitsIntoOneMux
+--- PASS: TestTerminalImageActivationMapsEnabledLimitsIntoOneMux (0.00s)
+=== RUN   TestTerminalImageActivationRejectsMuxSetupAtomically
+--- PASS: TestTerminalImageActivationRejectsMuxSetupAtomically (0.00s)
+=== RUN   TestTerminalImageActivationFailsClosedWithoutRendererCapability
+=== RUN   TestTerminalImageActivationFailsClosedWithoutRendererCapability/sixel-only
+=== RUN   TestTerminalImageActivationFailsClosedWithoutRendererCapability/iterm-only
+--- PASS: TestTerminalImageActivationFailsClosedWithoutRendererCapability (0.00s)
+    --- PASS: TestTerminalImageActivationFailsClosedWithoutRendererCapability/sixel-only (0.00s)
+    --- PASS: TestTerminalImageActivationFailsClosedWithoutRendererCapability/iterm-only (0.00s)
+=== RUN   TestTerminalImageActivationCreatesInitialChildAndRestoreCaches
+--- PASS: TestTerminalImageActivationCreatesInitialChildAndRestoreCaches (0.00s)
+=== RUN   TestTerminalImageActivationPendingEnableCannotReachChildOrRestoredProjection
+=== RUN   TestTerminalImageActivationPendingEnableCannotReachChildOrRestoredProjection/child
+=== RUN   TestTerminalImageActivationPendingEnableCannotReachChildOrRestoredProjection/restored
+--- PASS: TestTerminalImageActivationPendingEnableCannotReachChildOrRestoredProjection (0.00s)
+    --- PASS: TestTerminalImageActivationPendingEnableCannotReachChildOrRestoredProjection/child (0.00s)
+    --- PASS: TestTerminalImageActivationPendingEnableCannotReachChildOrRestoredProjection/restored (0.00s)
+=== RUN   TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux
+=== RUN   TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux/sixel-only
+=== RUN   TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux/iterm-only
+--- PASS: TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux (0.00s)
+    --- PASS: TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux/sixel-only (0.00s)
+    --- PASS: TestTerminalImageActivationFactoryErrorClosesCandidateAndRollsBackStartupMux/iterm-only (0.00s)
+=== RUN   TestTerminalImageActivationCommitFailureClosesCacheThenMux
+=== RUN   TestTerminalImageActivationCommitFailureClosesCacheThenMux/sixel-only
+=== RUN   TestTerminalImageActivationCommitFailureClosesCacheThenMux/iterm-only
+--- PASS: TestTerminalImageActivationCommitFailureClosesCacheThenMux (0.00s)
+    --- PASS: TestTerminalImageActivationCommitFailureClosesCacheThenMux/sixel-only (0.00s)
+    --- PASS: TestTerminalImageActivationCommitFailureClosesCacheThenMux/iterm-only (0.00s)
+=== RUN   TestTerminalImageActivationConfigDiffRemainsRestartScoped
+--- PASS: TestTerminalImageActivationConfigDiffRemainsRestartScoped (0.00s)
+=== RUN   TestAppendTerminalImageCacheResourceSkipsNilAndClosesOwnedCache
+--- PASS: TestAppendTerminalImageCacheResourceSkipsNilAndClosesOwnedCache (0.00s)
+=== RUN   TestTerminalImageActivationRuntimePrepareAndBindFailuresCloseCacheInCurrentContext
+=== RUN   TestTerminalImageActivationRuntimePrepareAndBindFailuresCloseCacheInCurrentContext/prepare
+=== RUN   TestTerminalImageActivationRuntimePrepareAndBindFailuresCloseCacheInCurrentContext/bind
+--- PASS: TestTerminalImageActivationRuntimePrepareAndBindFailuresCloseCacheInCurrentContext (0.00s)
+    --- PASS: TestTerminalImageActivationRuntimePrepareAndBindFailuresCloseCacheInCurrentContext/prepare (0.00s)
+    --- PASS: TestTerminalImageActivationRuntimePrepareAndBindFailuresCloseCacheInCurrentContext/bind (0.00s)
+=== RUN   TestTerminalImageActivationRuntimeFocusAndClosePreserveContextOwnership
+--- PASS: TestTerminalImageActivationRuntimeFocusAndClosePreserveContextOwnership (0.00s)
+=== RUN   TestTerminalImageActivationRestorePreparationAndBindFailuresCloseEveryCache
+=== RUN   TestTerminalImageActivationRestorePreparationAndBindFailuresCloseEveryCache/prepare
+=== RUN   TestTerminalImageActivationRestorePreparationAndBindFailuresCloseEveryCache/bind
+--- PASS: TestTerminalImageActivationRestorePreparationAndBindFailuresCloseEveryCache (0.00s)
+    --- PASS: TestTerminalImageActivationRestorePreparationAndBindFailuresCloseEveryCache/prepare (0.00s)
+    --- PASS: TestTerminalImageActivationRestorePreparationAndBindFailuresCloseEveryCache/bind (0.00s)
+=== RUN   TestTerminalImageCacheLimitsAreHardAndLowerOnly
+--- PASS: TestTerminalImageCacheLimitsAreHardAndLowerOnly (0.00s)
+=== RUN   TestTerminalImageCacheSelectsLongestOrderedPrefixWithinBothCaps
+=== RUN   TestTerminalImageCacheSelectsLongestOrderedPrefixWithinBothCaps/entry_cap
+=== RUN   TestTerminalImageCacheSelectsLongestOrderedPrefixWithinBothCaps/byte_cap
+--- PASS: TestTerminalImageCacheSelectsLongestOrderedPrefixWithinBothCaps (0.00s)
+    --- PASS: TestTerminalImageCacheSelectsLongestOrderedPrefixWithinBothCaps/entry_cap (0.00s)
+    --- PASS: TestTerminalImageCacheSelectsLongestOrderedPrefixWithinBothCaps/byte_cap (0.00s)
+=== RUN   TestTerminalImageCacheReleasesPriorPinsWithoutUnderflowAndEvictsOnlyUnpinned
+--- PASS: TestTerminalImageCacheReleasesPriorPinsWithoutUnderflowAndEvictsOnlyUnpinned (0.00s)
+=== RUN   TestTerminalImageCacheLRUIsDeterministicAndHitsNeverAcquire
+--- PASS: TestTerminalImageCacheLRUIsDeterministicAndHitsNeverAcquire (0.00s)
+=== RUN   TestTerminalImageCacheRetriesSameGenerationOnFixedScheduleAndThenStops
+--- PASS: TestTerminalImageCacheRetriesSameGenerationOnFixedScheduleAndThenStops (0.00s)
+=== RUN   TestTerminalImageCacheRetrySaturationDoesNotReattemptUnscheduledUploads
+--- PASS: TestTerminalImageCacheRetrySaturationDoesNotReattemptUnscheduledUploads (0.00s)
+=== RUN   TestTerminalImageCacheOlderGenerationCannotResetRetryBudget
+--- PASS: TestTerminalImageCacheOlderGenerationCannotResetRetryBudget (0.00s)
+=== RUN   TestTerminalImageCacheSuccessfulRetryClearsWakeAndBecomesHit
+--- PASS: TestTerminalImageCacheSuccessfulRetryClearsWakeAndBecomesHit (0.00s)
+=== RUN   TestTerminalImageCacheDeadlineIsEarliestPendingVisibleRetryOnly
+--- PASS: TestTerminalImageCacheDeadlineIsEarliestPendingVisibleRetryOnly (0.00s)
+=== RUN   TestTerminalImageCacheStaleGenerationIsOmittedWithoutUploadOrRetry
+--- PASS: TestTerminalImageCacheStaleGenerationIsOmittedWithoutUploadOrRetry (0.00s)
+=== RUN   TestTerminalImageCacheIsProjectionLocalAndModelIndependent
+--- PASS: TestTerminalImageCacheIsProjectionLocalAndModelIndependent (0.00s)
+=== RUN   TestTerminalImageCacheClosesWithCurrentContextBeforeRendererAcrossProjectionLifecycles
+=== RUN   TestTerminalImageCacheClosesWithCurrentContextBeforeRendererAcrossProjectionLifecycles/initial
+=== RUN   TestTerminalImageCacheClosesWithCurrentContextBeforeRendererAcrossProjectionLifecycles/runtime
+=== RUN   TestTerminalImageCacheClosesWithCurrentContextBeforeRendererAcrossProjectionLifecycles/restore
+--- PASS: TestTerminalImageCacheClosesWithCurrentContextBeforeRendererAcrossProjectionLifecycles (0.00s)
+    --- PASS: TestTerminalImageCacheClosesWithCurrentContextBeforeRendererAcrossProjectionLifecycles/initial (0.00s)
+    --- PASS: TestTerminalImageCacheClosesWithCurrentContextBeforeRendererAcrossProjectionLifecycles/runtime (0.00s)
+    --- PASS: TestTerminalImageCacheClosesWithCurrentContextBeforeRendererAcrossProjectionLifecycles/restore (0.00s)
+=== RUN   TestTerminalImageCacheCloseIsIdempotentAndDeterministic
+--- PASS: TestTerminalImageCacheCloseIsIdempotentAndDeterministic (0.00s)
+=== RUN   TestTerminalImagePaneDispatchGoldenPreservesClipAndSemanticLayerOrder
+--- PASS: TestTerminalImagePaneDispatchGoldenPreservesClipAndSemanticLayerOrder (0.00s)
+=== RUN   TestTerminalImageFrameResolvesCropFullSourceOpacityAndDestinationGeometry
+--- PASS: TestTerminalImageFrameResolvesCropFullSourceOpacityAndDestinationGeometry (0.00s)
+=== RUN   TestTerminalImageFrameDrawsOnlyRequestedPane
+--- PASS: TestTerminalImageFrameDrawsOnlyRequestedPane (0.00s)
+=== RUN   TestTerminalImageFrameCollectsDuplicateKeysDeterministically
+--- PASS: TestTerminalImageFrameCollectsDuplicateKeysDeterministically (0.00s)
+=== RUN   TestTerminalImageFrameDeterministicallyOmitsMissingTexture
+--- PASS: TestTerminalImageFrameDeterministicallyOmitsMissingTexture (0.00s)
+=== RUN   TestTerminalImageDamageTracksGenerationPerPaneForBothBackBuffersWithoutRowHashChanges
+--- PASS: TestTerminalImageDamageTracksGenerationPerPaneForBothBackBuffersWithoutRowHashChanges (0.00s)
+=== RUN   TestTerminalImageDamageOnlyAcceptsExactUploadedKeyReferences
+--- PASS: TestTerminalImageDamageOnlyAcceptsExactUploadedKeyReferences (0.00s)
+=== RUN   TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls
+=== RUN   TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/zero_image_identity
+=== RUN   TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/zero_generation
+=== RUN   TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/zero_width
+=== RUN   TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/dimension_above_hard_cap
+=== RUN   TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/non-exact_stride
+=== RUN   TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/short_RGBA
+=== RUN   TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/long_RGBA
+--- PASS: TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls (0.00s)
+    --- PASS: TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/zero_image_identity (0.00s)
+    --- PASS: TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/zero_generation (0.00s)
+    --- PASS: TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/zero_width (0.00s)
+    --- PASS: TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/dimension_above_hard_cap (0.00s)
+    --- PASS: TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/non-exact_stride (0.00s)
+    --- PASS: TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/short_RGBA (0.00s)
+    --- PASS: TestPrepareTerminalImageRejectsMalformedResourceBeforeGLCalls/long_RGBA (0.00s)
+=== RUN   TestPrepareTerminalImageRejectsInvalidKeyBeforeGLCalls
+--- PASS: TestPrepareTerminalImageRejectsInvalidKeyBeforeGLCalls (0.00s)
+=== RUN   TestPrepareTerminalImageCreatesStandaloneTexture
+--- PASS: TestPrepareTerminalImageCreatesStandaloneTexture (0.00s)
+=== RUN   TestPrepareTerminalImageReportsTextureCreationFailure
+--- PASS: TestPrepareTerminalImageReportsTextureCreationFailure (0.00s)
+=== RUN   TestDrawTerminalImageUsesNormalizedUVsAndRestoresRendererState
+--- PASS: TestDrawTerminalImageUsesNormalizedUVsAndRestoresRendererState (0.00s)
+=== RUN   TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls
+=== RUN   TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/zero_destination_width
+=== RUN   TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/non-finite_destination
+=== RUN   TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/negative_source
+=== RUN   TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/source_outside_width
+=== RUN   TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/source_outside_height
+=== RUN   TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/non-finite_source
+=== RUN   TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/negative_opacity
+=== RUN   TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/opacity_above_one
+=== RUN   TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/non-finite_opacity
+--- PASS: TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/zero_destination_width (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/non-finite_destination (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/negative_source (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/source_outside_width (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/source_outside_height (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/non-finite_source (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/negative_opacity (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/opacity_above_one (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidDrawBeforeGLCalls/non-finite_opacity (0.00s)
+=== RUN   TestDrawTerminalImageRejectsInvalidClosedAndForeignTextures
+=== RUN   TestDrawTerminalImageRejectsInvalidClosedAndForeignTextures/nil
+=== RUN   TestDrawTerminalImageRejectsInvalidClosedAndForeignTextures/other_implementation
+=== RUN   TestDrawTerminalImageRejectsInvalidClosedAndForeignTextures/closed
+=== RUN   TestDrawTerminalImageRejectsInvalidClosedAndForeignTextures/foreign_owner
+--- PASS: TestDrawTerminalImageRejectsInvalidClosedAndForeignTextures (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidClosedAndForeignTextures/nil (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidClosedAndForeignTextures/other_implementation (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidClosedAndForeignTextures/closed (0.00s)
+    --- PASS: TestDrawTerminalImageRejectsInvalidClosedAndForeignTextures/foreign_owner (0.00s)
+=== RUN   TestDrawTerminalImageZeroOpacityIsValidatedNoOp
+--- PASS: TestDrawTerminalImageZeroOpacityIsValidatedNoOp (0.00s)
+=== RUN   TestTerminalImageTextureCloseIsIdempotentAndInvalidatesBinding
+--- PASS: TestTerminalImageTextureCloseIsIdempotentAndInvalidatesBinding (0.00s)
+=== RUN   TestNextWake
+=== RUN   TestNextWake/idle_no_blink_no_notice_no_stats_caps_at_maxWake
+=== RUN   TestNextWake/blink_at_phase_boundary_waits_a_full_half-period
+=== RUN   TestNextWake/blink_mid-phase_waits_to_the_next_boundary
+=== RUN   TestNextWake/blink_mid-phase_in_second_half_wraps_the_modulo
+=== RUN   TestNextWake/notice_sooner_than_blink_boundary_wins
+=== RUN   TestNextWake/expired_notice_does_not_shorten_the_wait
+=== RUN   TestNextWake/stats_shown_caps_at_500ms
+=== RUN   TestNextWake/result_clamps_up_to_minWake
+=== RUN   TestNextWake/zero_period_guards_against_divide_and_ignores_blink
+=== RUN   TestNextWake/negative_period_guards_and_ignores_blink
+=== RUN   TestNextWake/blink_inactive_ignores_blink_even_with_valid_period
+=== RUN   TestNextWake/timer_sooner_than_blink_boundary_wins
+=== RUN   TestNextWake/past-due_timer_clamps_to_minWake
+=== RUN   TestNextWake/zero_timer_deadline_leaves_the_wait_unchanged
+=== RUN   TestNextWake/timer_later_than_blink_boundary_does_not_extend_the_wait
+--- PASS: TestNextWake (0.00s)
+    --- PASS: TestNextWake/idle_no_blink_no_notice_no_stats_caps_at_maxWake (0.00s)
+    --- PASS: TestNextWake/blink_at_phase_boundary_waits_a_full_half-period (0.00s)
+    --- PASS: TestNextWake/blink_mid-phase_waits_to_the_next_boundary (0.00s)
+    --- PASS: TestNextWake/blink_mid-phase_in_second_half_wraps_the_modulo (0.00s)
+    --- PASS: TestNextWake/notice_sooner_than_blink_boundary_wins (0.00s)
+    --- PASS: TestNextWake/expired_notice_does_not_shorten_the_wait (0.00s)
+    --- PASS: TestNextWake/stats_shown_caps_at_500ms (0.00s)
+    --- PASS: TestNextWake/result_clamps_up_to_minWake (0.00s)
+    --- PASS: TestNextWake/zero_period_guards_against_divide_and_ignores_blink (0.00s)
+    --- PASS: TestNextWake/negative_period_guards_and_ignores_blink (0.00s)
+    --- PASS: TestNextWake/blink_inactive_ignores_blink_even_with_valid_period (0.00s)
+    --- PASS: TestNextWake/timer_sooner_than_blink_boundary_wins (0.00s)
+    --- PASS: TestNextWake/past-due_timer_clamps_to_minWake (0.00s)
+    --- PASS: TestNextWake/zero_timer_deadline_leaves_the_wait_unchanged (0.00s)
+    --- PASS: TestNextWake/timer_later_than_blink_boundary_does_not_extend_the_wait (0.00s)
+=== RUN   TestWindowControllerNativePathInventoryRequiresExactLoopGuard
+--- PASS: TestWindowControllerNativePathInventoryRequiresExactLoopGuard (0.15s)
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/runtime-create
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/runtime-activate
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/workspace
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/focus
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/poll
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/wait
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/with-current
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/close
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/create
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/restore
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/layout
+=== RUN   TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/activate
+--- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/runtime-create (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/runtime-activate (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/workspace (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/focus (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/poll (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/wait (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/with-current (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/close (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/create (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/restore (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/layout (0.00s)
+    --- PASS: TestWindowControllerNativeMethodValuesRejectWrongThreadBeforeNativeCall/activate (0.00s)
+=== RUN   TestWindowControllerRestorePreparationFailureClosesEveryHiddenCandidate
+=== RUN   TestWindowControllerRestorePreparationFailureClosesEveryHiddenCandidate/0
+=== RUN   TestWindowControllerRestorePreparationFailureClosesEveryHiddenCandidate/1
+=== RUN   TestWindowControllerRestorePreparationFailureClosesEveryHiddenCandidate/2
+--- PASS: TestWindowControllerRestorePreparationFailureClosesEveryHiddenCandidate (0.00s)
+    --- PASS: TestWindowControllerRestorePreparationFailureClosesEveryHiddenCandidate/0 (0.00s)
+    --- PASS: TestWindowControllerRestorePreparationFailureClosesEveryHiddenCandidate/1 (0.00s)
+    --- PASS: TestWindowControllerRestorePreparationFailureClosesEveryHiddenCandidate/2 (0.00s)
+=== RUN   TestWindowControllerRestoreBindFailureRollsBackWholeBatch
+--- PASS: TestWindowControllerRestoreBindFailureRollsBackWholeBatch (0.00s)
+=== RUN   TestWindowControllerRestorePublishIsHiddenAndAbortable
+--- PASS: TestWindowControllerRestorePublishIsHiddenAndAbortable (0.00s)
+=== RUN   TestWindowControllerRestoreActivationCommitsOwnership
+--- PASS: TestWindowControllerRestoreActivationCommitsOwnership (0.00s)
+=== RUN   TestWindowControllerRestoreStartupCoordinatesNativeAndMuxTransactions
+--- PASS: TestWindowControllerRestoreStartupCoordinatesNativeAndMuxTransactions (0.00s)
+=== RUN   TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam
+=== RUN   TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam/prepare
+=== RUN   TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam/ids
+=== RUN   TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam/bind
+=== RUN   TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam/commit
+--- PASS: TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam (0.00s)
+    --- PASS: TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam/prepare (0.00s)
+    --- PASS: TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam/ids (0.00s)
+    --- PASS: TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam/bind (0.00s)
+    --- PASS: TestWindowControllerRestoreStartupFailuresLeaveFreshFallbackSeam/commit (0.00s)
+=== RUN   TestWindowControllerRestoreStartupWithRealMuxPublishesWorkspaceVisibilityAndFocus
+--- PASS: TestWindowControllerRestoreStartupWithRealMuxPublishesWorkspaceVisibilityAndFocus (0.05s)
+=== RUN   TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack
+=== RUN   TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack/success
+=== RUN   TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack/failure
+--- PASS: TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack (0.00s)
+    --- PASS: TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack/success (0.00s)
+    --- PASS: TestWindowControllerRestoreBeforeMuxHookOrdersAndRollsBack/failure (0.00s)
+=== RUN   TestWindowControllerSyncsPendingRestoreAppsAfterRuntimeCommit
+--- PASS: TestWindowControllerSyncsPendingRestoreAppsAfterRuntimeCommit (0.00s)
+=== RUN   TestWindowControllerRequiresExactThreadAndCurrentLoopEpoch
+--- PASS: TestWindowControllerRequiresExactThreadAndCurrentLoopEpoch (0.00s)
+=== RUN   TestWindowControllerSerializesContextEventsFrameAndClose
+--- PASS: TestWindowControllerSerializesContextEventsFrameAndClose (0.00s)
+=== RUN   TestWindowControllerRoutesAddressedEventsAndDamage
+--- PASS: TestWindowControllerRoutesAddressedEventsAndDamage (0.00s)
+=== RUN   TestWindowControllerRejectsLifecycleOutsideLoopAndDuplicates
+--- PASS: TestWindowControllerRejectsLifecycleOutsideLoopAndDuplicates (0.00s)
+=== RUN   TestWindowControllerRetainsEventsUntilProjectionAttaches
+--- PASS: TestWindowControllerRetainsEventsUntilProjectionAttaches (0.00s)
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/model
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/native
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/config
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/callback
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/context
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/renderer
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/atlas
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/font
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/background
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/blur
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/pty
+=== RUN   TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/session
+--- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/model (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/native (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/config (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/callback (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/context (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/renderer (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/atlas (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/font (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/background (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/blur (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/pty (0.00s)
+    --- PASS: TestWindowControllerCandidateFailureRollsBackEveryAcquiredStageBeforePublication/session (0.00s)
+=== RUN   TestWindowControllerCreateFocusCloseLoopsOwnIndependentBundles
+--- PASS: TestWindowControllerCreateFocusCloseLoopsOwnIndependentBundles (0.00s)
+=== RUN   TestWindowControllerRuntimeCreateRollsBackMuxBeforeNativeOnBindFailure
+--- PASS: TestWindowControllerRuntimeCreateRollsBackMuxBeforeNativeOnBindFailure (0.00s)
+=== RUN   TestWindowControllerRuntimeCreatePublishActivateAndCloseOrdering
+--- PASS: TestWindowControllerRuntimeCreatePublishActivateAndCloseOrdering (0.00s)
+=== RUN   TestCloseRuntimeProjectionPreservesNativeOnDetachFailure
+--- PASS: TestCloseRuntimeProjectionPreservesNativeOnDetachFailure (0.00s)
+=== RUN   TestWindowControllerRejectsStaleLifecycleOriginWithoutMutation
+--- PASS: TestWindowControllerRejectsStaleLifecycleOriginWithoutMutation (0.00s)
+=== RUN   TestWindowControllerProjectsWorkspaceVisibilityAndFocus
+--- PASS: TestWindowControllerProjectsWorkspaceVisibilityAndFocus (0.00s)
+=== RUN   TestInactiveWorkspaceCloseDoesNotRefocusActiveProjection
+--- PASS: TestInactiveWorkspaceCloseDoesNotRefocusActiveProjection (0.00s)
+=== RUN   TestWindowGeometryReservesTopTabBarWithScrollbar
+--- PASS: TestWindowGeometryReservesTopTabBarWithScrollbar (0.00s)
+=== RUN   TestWindowGeometryReservesBottomTabBar
+--- PASS: TestWindowGeometryReservesBottomTabBar (0.00s)
+=== RUN   TestWindowGeometryClampsCompressedTabBar
+--- PASS: TestWindowGeometryClampsCompressedTabBar (0.00s)
+=== RUN   TestProjectOuterInsetsRoundsEachSideAtEffectiveScale
+--- PASS: TestProjectOuterInsetsRoundsEachSideAtEffectiveScale (0.00s)
+=== RUN   TestResolveWindowGeometryUsesEverySideAndStableGutter
+--- PASS: TestResolveWindowGeometryUsesEverySideAndStableGutter (0.00s)
+=== RUN   TestResolveWindowGeometryClampsCompressedContent
+--- PASS: TestResolveWindowGeometryClampsCompressedContent (0.00s)
+=== RUN   TestCheckedStartupWindowPlan
+--- PASS: TestCheckedStartupWindowPlan (0.00s)
+=== RUN   TestCheckedStartupWindowPlanRejectsInvalidAndOverflow
+--- PASS: TestCheckedStartupWindowPlanRejectsInvalidAndOverflow (0.00s)
+=== RUN   TestCheckedStartupWindowPlanIncludesTabBarHeight
+--- PASS: TestCheckedStartupWindowPlanIncludesTabBarHeight (0.00s)
+=== RUN   TestIMMDecoderCombinedResultThenPreeditOrderingAndPairing
+--- PASS: TestIMMDecoderCombinedResultThenPreeditOrderingAndPairing (0.00s)
+=== RUN   TestIMMDecoderRejectsMalformedPayloadBeforeMutation
+=== RUN   TestIMMDecoderRejectsMalformedPayloadBeforeMutation/odd_UTF16
+=== RUN   TestIMMDecoderRejectsMalformedPayloadBeforeMutation/short_read
+=== RUN   TestIMMDecoderRejectsMalformedPayloadBeforeMutation/cursor_drift
+=== RUN   TestIMMDecoderRejectsMalformedPayloadBeforeMutation/attribute_drift
+--- PASS: TestIMMDecoderRejectsMalformedPayloadBeforeMutation (0.00s)
+    --- PASS: TestIMMDecoderRejectsMalformedPayloadBeforeMutation/odd_UTF16 (0.00s)
+    --- PASS: TestIMMDecoderRejectsMalformedPayloadBeforeMutation/short_read (0.00s)
+    --- PASS: TestIMMDecoderRejectsMalformedPayloadBeforeMutation/cursor_drift (0.00s)
+    --- PASS: TestIMMDecoderRejectsMalformedPayloadBeforeMutation/attribute_drift (0.00s)
+=== RUN   TestIMMDecoderPanicContainmentAndCandidatePairing
+--- PASS: TestIMMDecoderPanicContainmentAndCandidatePairing (0.00s)
+=== RUN   TestDormantIMMDecoderRoutesOnceAndArmsEcho
+--- PASS: TestDormantIMMDecoderRoutesOnceAndArmsEcho (0.00s)
+=== RUN   TestCompositionFocusLossClearsDormantNativeEcho
+--- PASS: TestCompositionFocusLossClearsDormantNativeEcho (0.00s)
+=== RUN   TestDormantIMMDecoderMalformedSurrogateCancelsWithoutRouting
+--- PASS: TestDormantIMMDecoderMalformedSurrogateCancelsWithoutRouting (0.00s)
+=== RUN   TestIMMDecoderRejectsOversizedLengthBeforeSecondRead
+--- PASS: TestIMMDecoderRejectsOversizedLengthBeforeSecondRead (0.00s)
+=== RUN   TestIMMDecoderContainsCancelCallbackPanic
+--- PASS: TestIMMDecoderContainsCancelCallbackPanic (0.00s)
+=== RUN   TestIMMDecoderCommitFailureCancelsWhileStillOwned
+--- PASS: TestIMMDecoderCommitFailureCancelsWhileStillOwned (0.00s)
+=== RUN   TestIMMDecoderStartPanicCancelsPartiallyStartedOwner
+--- PASS: TestIMMDecoderStartPanicCancelsPartiallyStartedOwner (0.00s)
+=== RUN   TestIMMDecoderValidatesCombinedPayloadBeforeCommit
+--- PASS: TestIMMDecoderValidatesCombinedPayloadBeforeCommit (0.00s)
+=== RUN   TestIMMDecoderRejectsCommitTextMismatchWithoutEcho
+--- PASS: TestIMMDecoderRejectsCommitTextMismatchWithoutEcho (0.00s)
+=== RUN   TestIMMDecoderContextAndNativeFailurePaths
+=== RUN   TestIMMDecoderContextAndNativeFailurePaths/acquire
+=== RUN   TestIMMDecoderContextAndNativeFailurePaths/query
+=== RUN   TestIMMDecoderContextAndNativeFailurePaths/negative_length
+=== RUN   TestIMMDecoderContextAndNativeFailurePaths/read
+=== RUN   TestIMMDecoderContextAndNativeFailurePaths/negative_cursor
+=== RUN   TestIMMDecoderContextAndNativeFailurePaths/release
+=== RUN   TestIMMDecoderContextAndNativeFailurePaths/read_panic
+=== RUN   TestIMMDecoderContextAndNativeFailurePaths/release_panic
+--- PASS: TestIMMDecoderContextAndNativeFailurePaths (0.00s)
+    --- PASS: TestIMMDecoderContextAndNativeFailurePaths/acquire (0.00s)
+    --- PASS: TestIMMDecoderContextAndNativeFailurePaths/query (0.00s)
+    --- PASS: TestIMMDecoderContextAndNativeFailurePaths/negative_length (0.00s)
+    --- PASS: TestIMMDecoderContextAndNativeFailurePaths/read (0.00s)
+    --- PASS: TestIMMDecoderContextAndNativeFailurePaths/negative_cursor (0.00s)
+    --- PASS: TestIMMDecoderContextAndNativeFailurePaths/release (0.00s)
+    --- PASS: TestIMMDecoderContextAndNativeFailurePaths/read_panic (0.00s)
+    --- PASS: TestIMMDecoderContextAndNativeFailurePaths/release_panic (0.00s)
+=== RUN   TestIMMDecoderContainsCandidatePanicAfterReleaseAttempt
+--- PASS: TestIMMDecoderContainsCandidatePanicAfterReleaseAttempt (0.00s)
+=== RUN   TestIMMDecoderValidatesCombinedAttributeSemanticsBeforeCommit
+--- PASS: TestIMMDecoderValidatesCombinedAttributeSemanticsBeforeCommit (0.00s)
+=== RUN   TestDormantUIAProviderInterfaceMatrixAndRefcountBounds
+--- PASS: TestDormantUIAProviderInterfaceMatrixAndRefcountBounds (0.00s)
+=== RUN   TestDormantUIAProviderPropertiesNavigationFocusAndDisconnect
+--- PASS: TestDormantUIAProviderPropertiesNavigationFocusAndDisconnect (0.00s)
+=== RUN   TestDormantUIADispatcherBoundDuplicateStaleAndOwnership
+--- PASS: TestDormantUIADispatcherBoundDuplicateStaleAndOwnership (0.00s)
+=== RUN   TestDormantUIAWndProcHandlerConsumesOnlyRootObject
+--- PASS: TestDormantUIAWndProcHandlerConsumesOnlyRootObject (0.00s)
+=== RUN   TestDormantUIAProviderConcurrentReadsAndDisconnect
+--- PASS: TestDormantUIAProviderConcurrentReadsAndDisconnect (0.00s)
+=== RUN   TestDormantUIAWndProcHostConsumeChainAndPanicContainment
+--- PASS: TestDormantUIAWndProcHostConsumeChainAndPanicContainment (0.00s)
+=== RUN   TestUIAPublicationRejectsRollbackIdentityChangeAndReconnect
+--- PASS: TestUIAPublicationRejectsRollbackIdentityChangeAndReconnect (0.00s)
+=== RUN   TestDormantWndProcHostInstallDispatchRestoreRelease
+--- PASS: TestDormantWndProcHostInstallDispatchRestoreRelease (0.00s)
+=== RUN   TestDormantWndProcHostInstallConflictRollsBack
+--- PASS: TestDormantWndProcHostInstallConflictRollsBack (0.00s)
+=== RUN   TestDormantWndProcHostRetainsCallbackWhenRollbackFails
+--- PASS: TestDormantWndProcHostRetainsCallbackWhenRollbackFails (0.00s)
+=== RUN   TestDormantWndProcHostDoesNotOverwriteLaterSubclass
+--- PASS: TestDormantWndProcHostDoesNotOverwriteLaterSubclass (0.00s)
+=== RUN   TestDormantWndProcHostContainsDecoderChainAndReportPanics
+--- PASS: TestDormantWndProcHostContainsDecoderChainAndReportPanics (0.00s)
+=== RUN   TestCompositionBeforeUnbindContinuesAfterPanicAndAttachesHost
+--- PASS: TestCompositionBeforeUnbindContinuesAfterPanicAndAttachesHost (0.00s)
+=== RUN   TestDormantWndProcHostRetainsOwnershipOnUnexpectedRollbackDisplacement
+--- PASS: TestDormantWndProcHostRetainsOwnershipOnUnexpectedRollbackDisplacement (0.00s)
+=== RUN   TestDormantWndProcHostReentrantReleaseStillChainsCapturedPrior
+--- PASS: TestDormantWndProcHostReentrantReleaseStillChainsCapturedPrior (0.00s)
+=== RUN   TestCompositionCleanupPanicAtEveryStageStillDestroysProjection
+=== RUN   TestCompositionCleanupPanicAtEveryStageStillDestroysProjection/cancel
+=== RUN   TestCompositionCleanupPanicAtEveryStageStillDestroysProjection/deactivate
+=== RUN   TestCompositionCleanupPanicAtEveryStageStillDestroysProjection/restore
+=== RUN   TestCompositionCleanupPanicAtEveryStageStillDestroysProjection/release
+--- PASS: TestCompositionCleanupPanicAtEveryStageStillDestroysProjection (0.00s)
+    --- PASS: TestCompositionCleanupPanicAtEveryStageStillDestroysProjection/cancel (0.00s)
+    --- PASS: TestCompositionCleanupPanicAtEveryStageStillDestroysProjection/deactivate (0.00s)
+    --- PASS: TestCompositionCleanupPanicAtEveryStageStillDestroysProjection/restore (0.00s)
+    --- PASS: TestCompositionCleanupPanicAtEveryStageStillDestroysProjection/release (0.00s)
+=== RUN   TestDormantWndProcHostRestoreFailureCanRetrySafely
+--- PASS: TestDormantWndProcHostRestoreFailureCanRetrySafely (0.00s)
+=== RUN   TestWndProcHostDeterministicHandlersConsumeOnce
+--- PASS: TestWndProcHostDeterministicHandlersConsumeOnce (0.00s)
+=== RUN   TestWndProcHostHandlerBoundAndExhaustion
+--- PASS: TestWndProcHostHandlerBoundAndExhaustion (0.00s)
+=== RUN   TestWndProcHostReentrantUnregisterSkipsPendingHandler
+--- PASS: TestWndProcHostReentrantUnregisterSkipsPendingHandler (0.00s)
+=== RUN   TestWndProcHostContainsIndividualHandlerPanicAndError
+--- PASS: TestWndProcHostContainsIndividualHandlerPanicAndError (0.00s)
+=== RUN   TestWndProcHostRejectsNonComparableHandlerIdentity
+--- PASS: TestWndProcHostRejectsNonComparableHandlerIdentity (0.00s)
+=== RUN   TestWorkspaceActionExecutorCRUDMoveAndStaleTargets
+--- PASS: TestWorkspaceActionExecutorCRUDMoveAndStaleTargets (0.00s)
+=== RUN   TestWorkspaceSwitcherRetainsIdentityAcrossReload
+--- PASS: TestWorkspaceSwitcherRetainsIdentityAcrossReload (0.00s)
+=== RUN   TestWorkspaceSwitcherRejectsRevisionDriftAndPreservesModal
+--- PASS: TestWorkspaceSwitcherRejectsRevisionDriftAndPreservesModal (0.00s)
+=== RUN   TestWorkspaceSwitcherRejectsRemovedIdentity
+--- PASS: TestWorkspaceSwitcherRejectsRemovedIdentity (0.00s)
+=== RUN   TestWorkspaceSwitcherIsCommandPaletteDiscoverable
+--- PASS: TestWorkspaceSwitcherIsCommandPaletteDiscoverable (0.00s)
+PASS
+ok  	cervterm/internal/frontend/glfwgl	2.588s
+=== RUN   TestExplainConfigComposesFiltersProvenanceAndRedaction
+--- PASS: TestExplainConfigComposesFiltersProvenanceAndRedaction (0.01s)
+=== RUN   TestExplainConfigShowsSelectedSchemeProvenanceWithoutCatalogDump
+--- PASS: TestExplainConfigShowsSelectedSchemeProvenanceWithoutCatalogDump (0.01s)
+=== RUN   TestExplainConfigRejectsUnknownAndV1Targets
+--- PASS: TestExplainConfigRejectsUnknownAndV1Targets (0.01s)
+=== RUN   TestLoadConfigDiagnosticDoctorBoundaries
+--- PASS: TestLoadConfigDiagnosticDoctorBoundaries (0.01s)
+=== RUN   TestExplainConfigReportsDescriptorShadowing
+--- PASS: TestExplainConfigReportsDescriptorShadowing (0.01s)
+=== RUN   TestCompositionFlagsPreservePresenceEnvironmentAndOrder
+--- PASS: TestCompositionFlagsPreservePresenceEnvironmentAndOrder (0.00s)
+=== RUN   TestCompositionFlagsAbsentAndMalformedOverrideRedaction
+--- PASS: TestCompositionFlagsAbsentAndMalformedOverrideRedaction (0.00s)
+=== RUN   TestConfigOverrideArgumentIndexesStopAtDoubleDash
+--- PASS: TestConfigOverrideArgumentIndexesStopAtDoubleDash (0.00s)
+=== RUN   TestExplicitCompositionInputsRequireV2Source
+--- PASS: TestExplicitCompositionInputsRequireV2Source (0.00s)
+=== RUN   TestExplainConfigFlagsRequestAndPreserveFieldOrder
+--- PASS: TestExplainConfigFlagsRequestAndPreserveFieldOrder (0.00s)
+=== RUN   TestFrontendStartupFlagsParseSafeFonts
+--- PASS: TestFrontendStartupFlagsParseSafeFonts (0.00s)
+=== RUN   TestDoctorCapabilitiesMatchSupportMatrix
+--- PASS: TestDoctorCapabilitiesMatchSupportMatrix (0.00s)
+=== RUN   TestDoctorCapabilityProjectionIsValueFreeAndNotProbed
+--- PASS: TestDoctorCapabilityProjectionIsValueFreeAndNotProbed (0.00s)
+=== RUN   TestDoctorCapabilityBuildAvailabilityIsStatic
+--- PASS: TestDoctorCapabilityBuildAvailabilityIsStatic (0.00s)
+=== RUN   TestRunDoctorPrintsActionableSections
+--- PASS: TestRunDoctorPrintsActionableSections (0.01s)
+=== RUN   TestRunDoctorReportsExperimentalSixelAndITermConfiguredIntent
+--- PASS: TestRunDoctorReportsExperimentalSixelAndITermConfiguredIntent (0.02s)
+=== RUN   TestRunDoctorReportsSubpixelEngine
+--- PASS: TestRunDoctorReportsSubpixelEngine (0.01s)
+=== RUN   TestRunDoctorReportsComposedV2AndRedactsSensitiveValues
+--- PASS: TestRunDoctorReportsComposedV2AndRedactsSensitiveValues (0.02s)
+=== RUN   TestRunDoctorReturnsFailureForInvalidComposedConfig
+--- PASS: TestRunDoctorReturnsFailureForInvalidComposedConfig (0.01s)
+=== RUN   TestRunDoctorReportsSafeFontsEffectiveFamily
+--- PASS: TestRunDoctorReportsSafeFontsEffectiveFamily (0.02s)
+=== RUN   TestRunDoctorProbesFontDescriptors
+2026/08/12 18:26:03 system font index scan completed in 1ms
+2026/08/12 18:26:03 font feature capability: portable SimpleShaper preserves the fixed grid but does not apply OpenType substitutions
+--- PASS: TestRunDoctorProbesFontDescriptors (0.02s)
+=== RUN   TestRunDoctorProbesFallbackRules
+--- PASS: TestRunDoctorProbesFallbackRules (0.06s)
+=== RUN   TestFontDoctorRedactsResolvedPaths
+--- PASS: TestFontDoctorRedactsResolvedPaths (0.00s)
+=== RUN   TestSyntheticModeFormatting
+--- PASS: TestSyntheticModeFormatting (0.00s)
+=== RUN   TestDoctorReportsConfiguredIMEIntentAndPlatformCapability
+--- PASS: TestDoctorReportsConfiguredIMEIntentAndPlatformCapability (0.02s)
+=== RUN   TestDoctorReportsConfiguredAccessibilityIntentAndPlatformCapability
+--- PASS: TestDoctorReportsConfiguredAccessibilityIntentAndPlatformCapability (0.01s)
+PASS
+ok  	cervterm/cmd/cervterm	2.585s
+glfw exit: 0

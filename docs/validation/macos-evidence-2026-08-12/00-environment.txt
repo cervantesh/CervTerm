@@ -1,0 +1,8 @@
+=== environment ===
+ProductName:		macOS
+ProductVersion:		15.7.7
+BuildVersion:		24G720
+x86_64
+go version go1.26.5 darwin/amd64
+81793cbbe6775fa227941626f263a57c6e03b7ad
+81793cbbe6775fa227941626f263a57c6e03b7ad docs(macOS): fold packaging branch's deferred P2 into the shared log

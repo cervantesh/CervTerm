@@ -1,0 +1,85 @@
+=== headless build ===
+OK
+dist/cervterm-headless: Mach-O 64-bit executable x86_64
+
+=== --doctor ===
+CervTerm doctor
+version: CervTerm 0.1.0-dev (darwin/amd64, go1.26.5)
+platform: darwin/amd64
+executable: /Users/ricardo/Documents/Projects/CervTerm/dist/cervterm-headless
+working-directory: /Users/ricardo/Documents/Projects/CervTerm
+config:
+  safe-fonts: disabled
+  discovered: none (defaults will be used)
+  candidates:
+    - /Users/ricardo/Documents/Projects/CervTerm/dist/cervterm.tl [missing]
+    - /Users/ricardo/Documents/Projects/CervTerm/dist/cervterm.lua [missing]
+    - /Users/ricardo/.config/cervterm/cervterm.tl [missing]
+    - /Users/ricardo/.config/cervterm/cervterm.lua [missing]
+  load: defaults
+  schema: none
+  composition: unavailable (no source)
+  pending: unavailable (no active frontend in diagnostic mode)
+  last-reload-failure: unavailable (no active frontend in diagnostic mode)
+  ime-enabled: false
+  ime-platform-capability: unsupported
+  ime-activation: unavailable (no active frontend in diagnostic mode)
+  accessibility-enabled: false
+  accessibility-scope: visible
+  accessibility-platform-capability: unsupported
+  accessibility-activation: unavailable (no active frontend in diagnostic mode)
+  graphics-kitty-enabled: false
+  graphics-kitty-activation: unavailable (diagnostic mode has no live frontend; configured intent applies after restart)
+  graphics-sixel-enabled: false
+  graphics-sixel-activation: unavailable (diagnostic mode has no live frontend; configured intent applies after restart)
+  graphics-iterm-enabled: false
+  graphics-iterm-activation: unavailable (diagnostic mode has no live frontend; configured intent applies after restart)
+  graphics-kitty-limits: encoded-per-pane=8388608 decoded-per-pane=67108864 images-per-pane=256 placements-per-pane=1024 gpu-bytes-per-context=268435456
+  background-formats: png,jpeg,gif-static
+  background-budget: cpu=134217728 gpu=134217728 encoded-per-image=16777216 encoded-aggregate=33554432
+  background-layers: 0
+  background-surface-capability: runtime-probed (OpenGL frontend supported; headless unavailable)
+  capabilities:
+    appearance.advanced: intent=decorations=system,titlebar=dark build=unavailable-headless activation=not-probed manual=partial claim=supported-subset
+    clipboard.osc52: intent=osc52=off build=built-in activation=not-probed manual=automated claim=supported
+    input.ime_preedit: intent=disabled build=unavailable-headless activation=not-probed manual=partial-skipped-jck claim=none
+    accessibility.windows_uia: intent=disabled build=unavailable-headless activation=not-probed manual=phase15-gui-lifecycle-only-no-at claim=none
+    shell.windows_native_notifications: intent=disabled build=unavailable-headless activation=not-probed manual=unrun claim=none
+    graphics.kitty: intent=disabled build=unavailable-headless activation=not-probed manual=phase15-linux-wslg-accepted-reply-windows-filtered claim=subset_only
+    graphics.sixel_iterm: intent=sixel=false,iterm=false build=unavailable-headless activation=not-probed manual=phase15-windows-iterm-pass-linux-wslg-sixel-pass-conpty-filter-boundary claim=none
+  shell: platform default
+  text-gamma: 1.15
+  text-darken: 0.00
+  font-features: calt=0,clig=0,liga=0
+  font-metrics: line-height=1.00 cell-width=1.00 baseline-offset=0.00 glyph-offset-x=0.00 glyph-offset-y=0.00
+  font-feature-capability: portable-unsupported
+  font-cell-metrics: natural=11x24/19 projected=11x24/19
+  font-style[normal]: unavailable
+  font-style[bold]: unavailable
+  font-style[italic]: unavailable
+  font-style[bold-italic]: unavailable
+  text-raster: go
+  font-contexts: unavailable (no active frontend; limit=64)
+  font-negative-cache: unavailable (no active frontend; limit=8192/context)
+  font-parsed-cache: unavailable (diagnostic probe; limits=128 faces/268435456 bytes)
+  font-family: Go Mono
+  font-resolution: system (paths redacted)
+  font-style-availability: regular=true bold=false italic=false bold-italic=false
+diagnostics:
+  log-file: /Users/ricardo/Library/Caches/cervterm/cervterm.log
+environment:
+  SHELL: /bin/zsh
+  XDG_CONFIG_HOME: /Users/ricardo/.config
+content-scale: unavailable in headless build
+emoji-fonts: no warnings reported by this build
+support: attach this output, the diagnostics log, and screenshots/captures when filing an issue
+
+=== zsh PTY capture ===
+2026/08/12 18:26:56.101248 logging.go:63: CervTerm diagnostics logging enabled (path redacted)
+recording raw PTY output to dist/zsh.vt (80x24); exit the child program or press Ctrl+C to stop
+mac-pty-okcapture exit: 0
+00000000: 6d61 632d 7074 792d 6f6b                 mac-pty-ok
+
+=== GLFW app build ===
+OK
+dist/cervterm: Mach-O 64-bit executable x86_64
