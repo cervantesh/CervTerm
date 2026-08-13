@@ -47,7 +47,7 @@ var artifactHashes = map[string]string{
 	"platform-gates.txt":                   "be8bcaa98762ad0d10d19b22dd82cec845295eb457bd6f54612c4de04adff570",
 	"scope-and-commits.txt":                "a909af46b9ecb5764bbcc22fc7659da72e369ca6cda46aac5cd3dbeb431f7459",
 	"source-manifest-base.txt":             "94a9328d11d8e83fc4132f39b8ba1c985a43c269017befde2359e72107110912",
-	"source-manifest-candidate.txt":        "3225257f40be27a13a9022e253ed4c1b0995bf08679b1ad312e68a6b19e5d268",
+	"source-manifest-candidate.txt":        "b5b3f43ad693144e35415f2d9628138391480b9f803414cfac7ea6474942a095",
 }
 
 var binaryHashes = map[string]string{

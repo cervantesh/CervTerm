@@ -5,7 +5,7 @@ fuzz: elapsed: 3s, execs: 34509 (11499/sec), new interesting: 40 (total: 124)
 fuzz: elapsed: 6s, execs: 75152 (13552/sec), new interesting: 62 (total: 146)
 fuzz: elapsed: 6s, execs: 75152 (0/sec), new interesting: 62 (total: 146)
 --- PASS: FuzzParserAdvanceDoesNotPanic (6.11s)
-=== NAME  
+=== NAME
 PASS
 ok  	cervterm/internal/vt	7.066s
 fuzz exit: 0

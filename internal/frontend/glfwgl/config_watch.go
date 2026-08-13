@@ -37,15 +37,18 @@ type configWatchSnapshot struct {
 }
 
 type configWatchState struct {
-	paths       []string
-	activePaths []string
-	failedPaths []string
-	baseline    map[string]configFileObservation
-	observed    map[string]configFileObservation
-	initialized bool
-	generation  uint64
-	nextPoll    time.Time
-	dirtySince  time.Time
+	paths            []string
+	watchPaths       []string
+	activePaths      []string
+	activeWatchPaths []string
+	failedPaths      []string
+	failedWatchPaths []string
+	baseline         map[string]configFileObservation
+	observed         map[string]configFileObservation
+	initialized      bool
+	generation       uint64
+	nextPoll         time.Time
+	dirtySince       time.Time
 }
 
 func newConfigWatchState(paths ...string) configWatchState {
@@ -71,21 +74,40 @@ func fileSignature(path string) (configFileSignature, bool) {
 	return observation.signature, observation.exists
 }
 
-func normalizeWatchPaths(paths []string) []string {
-	seen := make(map[string]struct{}, len(paths))
-	result := make([]string, 0, len(paths))
+type normalizedWatchPaths struct {
+	byIdentity      map[string][]string
+	representatives []string
+	originals       []string
+}
+
+func normalizeWatchPaths(paths []string) normalizedWatchPaths {
+	result := normalizedWatchPaths{byIdentity: make(map[string][]string, len(paths))}
 	for _, path := range paths {
 		if path == "" {
 			continue
 		}
 		identity := watchPathIdentity(path)
-		if _, ok := seen[identity]; ok {
+		originals := result.byIdentity[identity]
+		duplicate := false
+		for _, original := range originals {
+			if original == path {
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
 			continue
 		}
-		seen[identity] = struct{}{}
-		result = append(result, path)
+		if len(originals) == 0 {
+			result.representatives = append(result.representatives, path)
+		}
+		result.byIdentity[identity] = append(originals, path)
 	}
-	sort.Strings(result)
+	for _, originals := range result.byIdentity {
+		result.originals = append(result.originals, originals...)
+	}
+	sort.Strings(result.originals)
+	sort.Strings(result.representatives)
 	return result
 }
 
@@ -96,20 +118,9 @@ func normalizeWatchPaths(paths []string) []string {
 // remain independently watched for retargeting. Case-folding is Windows-only
 // since other supported platforms have case-sensitive filesystems.
 //
-// Known limitation (pre-existing on Windows, now shared by every platform):
-// collapsing the parent directory is deliberately lossy. Two *distinct*
-// symlinked directories that resolve to the same real directory (/a -> /real
-// and /b -> /real, each containing config.lua) produce one identity, so
-// normalizeWatchPaths keeps only whichever alias it saw first and drops the
-// other. If the dropped alias is later retargeted to a different directory,
-// that retarget is not observed. The guarantee this function does uphold is
-// the final-component one exercised by
-// TestWatchHashesKeepEveryDeclarativeSymlinkAlias: sibling symlink *files*
-// in the same directory stay independently watched. The motivating macOS
-// case (/var, /tmp) is unaffected because those system symlinks never
-// retarget. Fixing this properly means tracking every original path per
-// canonical identity rather than deduplicating to one; that is tracked as a
-// separate improvement rather than folded into the macOS support pass.
+// normalizeWatchPaths groups aliases by this identity while retaining every
+// original path. That lets stable OS aliases share an identity without losing
+// a user-created alias whose parent directory is later retargeted.
 //
 // Also note: EvalSymlinks fails for a parent directory that does not exist
 // yet, in which case no canonicalization happens and aliases stay distinct.
@@ -130,7 +141,7 @@ func watchPathIdentity(path string) string {
 }
 
 func watchExpectations(paths []string) []config.SourceWatchExpectation {
-	normalized := normalizeWatchPaths(paths)
+	normalized := normalizeWatchPaths(paths).originals
 	expectations := make([]config.SourceWatchExpectation, 0, len(normalized))
 	for _, path := range normalized {
 		expectations = append(expectations, config.SourceWatchExpectation{Path: path})
@@ -149,9 +160,12 @@ func observeWatchPaths(paths []string) map[string]configFileObservation {
 func (w *configWatchState) acknowledge(paths []string) { w.acknowledgeSuccess(paths) }
 
 func (w *configWatchState) acknowledgeSuccess(paths []string) {
-	w.activePaths = normalizeWatchPaths(paths)
+	normalized := normalizeWatchPaths(paths)
+	w.activePaths = normalized.representatives
+	w.activeWatchPaths = normalized.originals
 	w.failedPaths = nil
-	w.installPaths(w.activePaths)
+	w.failedWatchPaths = nil
+	w.installPaths(w.activeWatchPaths)
 }
 
 // acknowledgeFailure replaces the latest failure-only set while preserving the
@@ -161,19 +175,22 @@ func (w *configWatchState) acknowledgeFailure(expectations []config.SourceWatchE
 	for _, expectation := range expectations {
 		failed = append(failed, expectation.Path)
 	}
-	failed = normalizeWatchPaths(failed)
-	changed := !reflect.DeepEqual(failed, w.failedPaths)
-	w.failedPaths = failed
-	union := append(append([]string(nil), w.activePaths...), w.failedPaths...)
+	normalized := normalizeWatchPaths(failed)
+	changed := !reflect.DeepEqual(normalized.originals, w.failedWatchPaths)
+	w.failedPaths = normalized.representatives
+	w.failedWatchPaths = normalized.originals
+	union := append(append([]string(nil), w.activeWatchPaths...), w.failedWatchPaths...)
 	w.installPaths(union)
 	return changed
 }
 
 func (w *configWatchState) installPaths(paths []string) {
-	w.paths = normalizeWatchPaths(paths)
-	w.baseline = observeWatchPaths(w.paths)
+	normalized := normalizeWatchPaths(paths)
+	w.paths = normalized.representatives
+	w.watchPaths = normalized.originals
+	w.baseline = observeWatchPaths(w.watchPaths)
 	w.observed = cloneWatchObservations(w.baseline)
-	w.initialized = len(w.paths) > 0
+	w.initialized = len(w.watchPaths) > 0
 	w.generation++
 	w.dirtySince = time.Time{}
 }
@@ -187,7 +204,7 @@ func cloneWatchObservations(source map[string]configFileObservation) map[string]
 }
 
 func (w *configWatchState) snapshot() configWatchSnapshot {
-	return configWatchSnapshot{generation: w.generation, files: observeWatchPaths(w.paths)}
+	return configWatchSnapshot{generation: w.generation, files: observeWatchPaths(w.watchPaths)}
 }
 
 func (w *configWatchState) changedSince(snapshot configWatchSnapshot) bool {
@@ -220,11 +237,11 @@ func mapsKeys(values map[string]configFileObservation) []string {
 // poll reports one debounced change across the complete active source graph.
 // Missing files are observations too, so deletion/rename triggers a reload.
 func (w *configWatchState) poll(now time.Time) bool {
-	if len(w.paths) == 0 || now.Before(w.nextPoll) {
+	if len(w.watchPaths) == 0 || now.Before(w.nextPoll) {
 		return false
 	}
 	w.nextPoll = now.Add(configPollInterval)
-	current := observeWatchPaths(w.paths)
+	current := observeWatchPaths(w.watchPaths)
 	if !w.initialized {
 		w.baseline, w.observed, w.initialized = current, cloneWatchObservations(current), true
 		return false
