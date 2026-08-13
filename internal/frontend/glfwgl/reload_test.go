@@ -914,6 +914,50 @@ func TestWatchHashesKeepEveryDeclarativeSymlinkAlias(t *testing.T) {
 	}
 }
 
+func TestConfigWatchKeepsEveryParentDirectorySymlinkAlias(t *testing.T) {
+	dir := t.TempDir()
+	firstTarget := filepath.Join(dir, "first-target")
+	secondTarget := filepath.Join(dir, "second-target")
+	if err := os.Mkdir(firstTarget, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(secondTarget, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const body = `return {config_version=2}`
+	writeReloadConfig(t, filepath.Join(firstTarget, "config.lua"), body)
+	writeReloadConfig(t, filepath.Join(secondTarget, "config.lua"), body)
+
+	firstAlias := filepath.Join(dir, "first-alias")
+	secondAlias := filepath.Join(dir, "second-alias")
+	if err := os.Symlink(firstTarget, firstAlias); err != nil {
+		t.Skipf("directory symlink unavailable: %v", err)
+	}
+	if err := os.Symlink(firstTarget, secondAlias); err != nil {
+		t.Fatal(err)
+	}
+	firstPath := filepath.Join(firstAlias, "config.lua")
+	secondPath := filepath.Join(secondAlias, "config.lua")
+	watch := newConfigWatchState(firstPath, secondPath)
+	if len(watch.paths) != 1 || len(watch.watchPaths) != 2 {
+		t.Fatalf("parent-directory alias groups logical=%#v watched=%#v", watch.paths, watch.watchPaths)
+	}
+
+	if err := os.Remove(secondAlias); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secondTarget, secondAlias); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 8, 12, 18, 0, 0, 0, time.UTC)
+	if watch.poll(base) {
+		t.Fatal("retarget fired before debounce")
+	}
+	if !watch.poll(base.Add(300 * time.Millisecond)) {
+		t.Fatal("retargeted parent-directory alias with identical bytes was not detected")
+	}
+}
+
 func TestWatchHashesKeepDependencySymlinkPath(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "first-module.lua")
@@ -1062,11 +1106,11 @@ func TestConfigWatchFailurePathsReplaceAndSuccessClears(t *testing.T) {
 	if !watch.acknowledgeFailure([]config.SourceWatchExpectation{{Path: failedA}}) {
 		t.Fatal("first failure set was not reported as changed")
 	}
-	if got, want := watch.paths, normalizeWatchPaths([]string{active, failedA}); !reflect.DeepEqual(got, want) {
+	if got, want := watch.paths, normalizeWatchPaths([]string{active, failedA}).representatives; !reflect.DeepEqual(got, want) {
 		t.Fatalf("active plus failed paths = %v, want %v", got, want)
 	}
 	watch.acknowledgeFailure([]config.SourceWatchExpectation{{Path: failedB}})
-	if got, want := watch.paths, normalizeWatchPaths([]string{active, failedB}); !reflect.DeepEqual(got, want) {
+	if got, want := watch.paths, normalizeWatchPaths([]string{active, failedB}).representatives; !reflect.DeepEqual(got, want) {
 		t.Fatalf("latest failure did not replace prior set: %v, want %v", got, want)
 	}
 	watch.acknowledgeSuccess([]string{active})
