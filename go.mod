@@ -1,6 +1,6 @@
 module cervterm
 
-go 1.25.8
+go 1.26.0
 
 require (
 	github.com/ActiveState/termtest/conpty v0.5.0
@@ -10,10 +10,8 @@ require (
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20250301202403-da16c1255728
 	github.com/yuin/gopher-lua v1.1.2
 	golang.org/x/image v0.44.0
-	golang.org/x/text v0.40.0
+	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
+	golang.org/x/text v0.42.0
 )
 
-require (
-	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
-	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect
-)
+require github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
