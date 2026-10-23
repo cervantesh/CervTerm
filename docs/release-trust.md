@@ -8,6 +8,7 @@ For each tagged beta release, the release workflow publishes:
 
 - Windows portable zip.
 - Linux headless zip.
+- macOS Apple Silicon `.app` zip with ad-hoc signing (not Developer ID signed or notarized).
 - `SHA256SUMS.txt`.
 - GitHub build provenance attestations for the zip files and checksum file.
 
@@ -40,13 +41,14 @@ Expected properties:
 - The workflow is `.github/workflows/release.yml`.
 - The tag matches the release tag.
 
-## Unsigned beta binaries
+## Beta code-signing status
 
-Current Windows beta zips are **not Authenticode signed**. This is intentional for the free beta path until a code-signing certificate and signing policy are available.
+Current Windows beta zips are **not Authenticode signed**. The macOS bundle is ad-hoc signed but **not Developer ID signed or notarized**. This is intentional for the free beta path until code-signing certificates and policies are available.
 
 Implications:
 
 - Windows SmartScreen may warn.
+- macOS Gatekeeper may block a quarantined download until the user explicitly allows it.
 - Antivirus reputation may be limited.
 - Users should verify checksums and provenance before running.
 
@@ -56,9 +58,8 @@ Planned improvements:
 
 1. Authenticode signing once certificate logistics are decided.
 2. SBOM generation for release artifacts.
-3. Dependency vulnerability scanning in CI.
-4. Final winget package submission for the portable zip path.
-5. MSI/WiX promotion only after install/update/config policy is settled.
+3. Final winget package submission for the portable zip path.
+4. MSI/WiX promotion only after install/update/config policy is settled.
 
 ## Maintainer release checklist
 

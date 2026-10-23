@@ -18,6 +18,15 @@ For checksum, attestation, and unsigned beta details, see [`release-trust.md`](r
 
 The Linux artifact is currently headless and intended for non-GUI verification surfaces such as build info, default config generation, and VT capture workflows.
 
+### macOS Apple Silicon app zip
+
+1. Download `cervterm-<tag>-macos-arm64.zip` and `SHA256SUMS.txt` from the GitHub release.
+2. Verify the zip hash against `SHA256SUMS.txt`.
+3. Extract `CervTerm.app` and move it to `/Applications` or another user-writable location.
+4. Inspect the bundle before explicitly allowing it through macOS Privacy & Security if Gatekeeper blocks the quarantined download.
+
+The bundle is ad-hoc signed, not Developer ID signed or notarized. Intel Macs are not supported by the published package, and macOS GUI behavior remains experimental.
+
 ## First run diagnostics
 
 Before filing an issue, run:

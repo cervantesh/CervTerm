@@ -56,7 +56,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Environment
@@ -84,6 +84,18 @@ jobs:
           grep -q 'mac-pty-ok' dist/zsh.vt
       - name: Build GLFW app binary
         run: go build -tags glfw -o dist/cervterm ./cmd/cervterm
+      - name: Package macOS app bundle
+        run: go run ./scripts/package-macos.go -version v0.0.0-ci -outdir dist
+      - name: Verify macOS app bundle and archive
+        run: |
+          archive="dist/cervterm-v0.0.0-ci-macos-$(go env GOARCH).zip"
+          codesign --verify --deep --strict dist/CervTerm.app
+          unzip -t "$archive"
+          verify_dir="$RUNNER_TEMP/cervterm-macos-verify"
+          rm -rf "$verify_dir"
+          ditto -x -k "$archive" "$verify_dir"
+          test -x "$verify_dir/CervTerm.app/Contents/MacOS/cervterm"
+          codesign --verify --deep --strict "$verify_dir/CervTerm.app"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -91,6 +103,7 @@ jobs:
           path: |
             dist/cervterm
             dist/cervterm-headless
+            dist/cervterm-v0.0.0-ci-macos-*.zip
             dist/zsh.vt
 
   linux-headless:
