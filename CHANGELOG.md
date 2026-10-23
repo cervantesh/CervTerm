@@ -6,6 +6,14 @@ The format is based on Keep a Changelog, and this project uses an experimental p
 
 ## [Unreleased]
 
+## [v0.11.0-beta.1] - 2026-10-23
+
+### Changed
+
+- Updated the release toolchain to Go 1.26.6, upgraded the maintained Go modules, and standardized GitHub Actions on `actions/setup-go@v7`.
+- Made the macOS Apple Silicon app bundle a required tagged-release artifact and marked beta tags as GitHub prereleases.
+- Paused active feature development after this checkpoint while retaining critical and security maintenance.
+
 ### Added
 
 - Bounded pane-local OSC 9/777 notification request metadata and addressed mux events, without native side effects.

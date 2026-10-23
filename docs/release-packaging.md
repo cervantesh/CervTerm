@@ -4,6 +4,7 @@
 
 - Windows GLFW beta zip: built by CI as `cervterm-windows-zip` with a `goversioninfo`-generated embedded Windows resource, `cervterm.exe`, generated `cervterm.lua`, README, CHANGELOG, docs, and packaging metadata/assets.
 - Linux headless beta zip: built by CI as `cervterm-linux-headless-zip` with the headless binary, generated `cervterm.lua`, README, CHANGELOG, and docs to keep Unix PTY compilation covered before a Linux GUI frontend is packaged.
+- macOS Apple Silicon beta zip: built by CI as `cervterm-macos` with an ad-hoc-signed `CervTerm.app`, icon, metadata, README, CHANGELOG, support notes, license, and docs. It is not Developer ID signed or notarized.
 
 ## Windows metadata scaffolding
 
@@ -25,7 +26,7 @@ The repository carries packaging metadata under `packaging/windows/` and source 
    # or: go generate ./cmd/cervterm
    ```
 
-2. Publish tagged releases with `.github/workflows/release.yml` by pushing a `v*` tag; the workflow builds Windows and Linux headless zips and uploads them to the GitHub release.
+2. Publish tagged releases with `.github/workflows/release.yml` by pushing a `v*` tag; the workflow builds Windows, Linux headless, and macOS Apple Silicon zips and uploads them to the GitHub release.
 3. Publish a portable winget package after a release is published by filling in the templates under `packaging/winget/` with the tag version and Windows zip SHA256.
 4. Promote the WiX v4 template under `packaging/wix/` into CI when per-machine/per-user policy, config installation behavior, PATH/shortcut choices, and MSI signing policy are finalized.
 5. Configure Authenticode signing secrets when a code-signing certificate exists. The release workflow already calls `scripts/sign-windows-exe.go` before zipping when `WINDOWS_CODESIGN_PFX_BASE64` and `WINDOWS_CODESIGN_PASSWORD` are configured; otherwise it skips signing and still publishes SHA256 checksums plus GitHub build provenance attestations.
@@ -74,7 +75,7 @@ The workflow decodes the PFX into the runner temp directory, runs `signtool sign
 
 `go run ./scripts/package-macos.go -version <tag> -outdir dist` builds the GLFW binary, assembles `dist/CervTerm.app` (`Contents/MacOS/cervterm`, `Contents/Resources/{AppIcon.icns,README.md,CHANGELOG.md,SUPPORT.md,LICENSE,docs/}`), and zips it to `dist/cervterm-<tag>-macos-<arch>.zip`. This was built and launched successfully on real macOS 15.7.7/x86_64 hardware; see [`docs/manual-verification.md`](manual-verification.md) for the recorded evidence.
 
-**Signing status: ad-hoc only, verified partially.** By default the script ad-hoc signs the bundle (`codesign --sign -`, no certificate required) after stripping extended attributes with `xattr -cr` — macOS (Sequoia and later) stamps a `com.apple.provenance` xattr on written files that `codesign` otherwise rejects as "resource fork, Finder information, or similar detritus." On the machine used for this validation pass, `com.apple.provenance` could not be cleared even directly (`xattr -d` reports success but the attribute persists — consistent with a managed/MDM or endpoint-security layer enforcing it), so ad-hoc signing could not be verified end-to-end there; pass `-adhoc-sign=false` to skip signing if you hit the same block. This is expected to work cleanly on an unmanaged Mac or a stock GitHub-hosted `macos-latest` runner, but that has not been confirmed. `.github/workflows/release.yml`'s `macos` job runs this script on every tagged release with `continue-on-error: true` specifically because signing is unverified there; a first-run failure won't block the Windows/Linux release artifacts.
+**Signing status: ad-hoc only.** By default the script ad-hoc signs the bundle (`codesign --sign -`, no certificate required) after stripping extended attributes with `xattr -cr` — macOS (Sequoia and later) stamps a `com.apple.provenance` xattr on written files that `codesign` otherwise rejects as "resource fork, Finder information, or similar detritus." The tagged release workflow requires this packaging job to succeed before publishing. Ad-hoc signing is not Developer ID signing or notarization, so downloaded bundles can still trigger Gatekeeper; pass `-adhoc-sign=false` only for local diagnosis.
 
 **Architecture: arm64 only, filename-tagged.** GitHub-hosted `macos-latest` runners are Apple Silicon (arm64), not Intel, and this script does not cross-compile — it builds whatever `runtime.GOARCH` the host is. The release zip is named `cervterm-<version>-macos-<GOARCH>.zip` (e.g. `-macos-arm64.zip` from CI, `-macos-amd64.zip` if built locally on Intel like the machine used for this validation pass) specifically so an Intel user can't silently download an incompatible arm64 build. Intel coverage and a universal (arm64+amd64) binary are not attempted in this pass — see the proposal issue for stronger evidence and a real distribution decision.
 

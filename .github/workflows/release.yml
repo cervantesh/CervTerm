@@ -89,20 +89,11 @@ jobs:
 
   macos:
     runs-on: macos-latest
-    # Bundle assembly (unsigned) was verified end-to-end on real macOS.
-    # Ad-hoc signing (codesign --sign -, on by default in package-macos.go)
-    # was NOT verified end-to-end anywhere: the machine used to develop this
-    # job has an MDM/endpoint-security policy that blocks codesign in a way
-    # not expected on a GitHub-hosted runner, so signing was never actually
-    # exercised successfully. continue-on-error so a first-run signing
-    # surprise here doesn't block the Windows/Linux release artifacts; see
-    # the "macOS app bundle" section of docs/release-packaging.md.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Resolve release version
@@ -111,6 +102,16 @@ jobs:
         run: go run ./scripts/check-maturity-gates.go
       - name: Build macOS app bundle
         run: go run ./scripts/package-macos.go -version "$RELEASE_VERSION" -outdir dist
+      - name: Verify macOS app bundle and archive
+        run: |
+          archive="dist/cervterm-$RELEASE_VERSION-macos-$(go env GOARCH).zip"
+          codesign --verify --deep --strict dist/CervTerm.app
+          unzip -t "$archive"
+          verify_dir="$RUNNER_TEMP/cervterm-macos-verify"
+          rm -rf "$verify_dir"
+          ditto -x -k "$archive" "$verify_dir"
+          test -x "$verify_dir/CervTerm.app/Contents/MacOS/cervterm"
+          codesign --verify --deep --strict "$verify_dir/CervTerm.app"
       - uses: actions/upload-artifact@v7
         with:
           name: cervterm-macos
@@ -122,14 +123,7 @@ jobs:
       - windows
       - linux-headless
       - macos
-    # macos has continue-on-error: true (see that job), which makes GitHub
-    # Actions report its result as 'success' to this needs context even on
-    # an underlying failure -- so listing it in needs never blocks publish on
-    # its own. The explicit if below only requires windows/linux-headless.
-    # If macos failed and produced no artifact, the download step below
-    # simply matches fewer files -- the release still publishes with
-    # whatever platforms succeeded.
-    if: ${{ !cancelled() && needs.windows.result == 'success' && needs.linux-headless.result == 'success' }}
+    if: ${{ !cancelled() && needs.windows.result == 'success' && needs.linux-headless.result == 'success' && needs.macos.result == 'success' }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -148,6 +142,8 @@ jobs:
             dist/SHA256SUMS.txt
       - uses: softprops/action-gh-release@v3
         with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
           files: |
             dist/*.zip
             dist/SHA256SUMS.txt

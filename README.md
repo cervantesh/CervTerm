@@ -1,7 +1,9 @@
 # CervTerm
 
+> **Project status (October 2026):** active feature development is paused after the `v0.11.0-beta.1` checkpoint. The repository remains available for evaluation and critical/security fixes, but this beta is not a promise of ongoing support.
+
 [![CI](https://github.com/cervantesh/CervTerm/actions/workflows/ci.yml/badge.svg)](https://github.com/cervantesh/CervTerm/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/cervantesh/CervTerm?include_prereleases)](https://github.com/cervantesh/CervTerm/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/cervantesh/CervTerm?include_prereleases)](https://github.com/cervantesh/CervTerm/releases)
 [![License](https://img.shields.io/github/license/cervantesh/CervTerm)](LICENSE)
 
 CervTerm is an experimental, Windows-first GPU terminal emulator written in Go. It combines a native in-process multiplexer, Lua/Teal configuration, rich font and appearance controls, retained command UX, and a bounded terminal core behind one GLFW/OpenGL frontend.
@@ -41,13 +43,13 @@ Label visible links and configured matches while preserving pane, viewport, and 
 | --- | --- |
 | Windows amd64 | Qualified beta GUI using GLFW/OpenGL and ConPTY. Release zip available. |
 | Linux amd64 | Headless release artifact. A narrow source-built WSLg/X11 GUI integration pass exists, but broad desktop support is not claimed. |
-| macOS | Headless compile evidence only; no packaged or qualified GUI. |
+| macOS Apple Silicon | Experimental ad-hoc-signed `.app` beta package. CI and limited real-hardware launch evidence exist; Developer ID signing, notarization, and broad GUI qualification remain unavailable. |
 
 See the machine-readable [support matrix](docs/parity-support-matrix.json) and [Phase 15 platform qualification](docs/validation/phase-15-platform-qualification.md) for exact evidence and exclusions.
 
 ## Install a Windows beta
 
-1. Download `cervterm-<tag>-windows.zip` and `SHA256SUMS.txt` from the [latest release](https://github.com/cervantesh/CervTerm/releases/latest).
+1. Download `cervterm-<tag>-windows.zip` and `SHA256SUMS.txt` from the [releases page](https://github.com/cervantesh/CervTerm/releases). Beta checkpoints are prereleases and do not replace GitHub's `/releases/latest` target.
 2. Verify the archive:
 
    ```powershell
@@ -73,6 +75,14 @@ See the machine-readable [support matrix](docs/parity-support-matrix.json) and [
    ```
 
 Beta binaries are currently unsigned. Releases include SHA256 checksums and GitHub provenance attestations; winget files are templates rather than a published package, and MSI/WiX publishing is deferred. Read [release trust](docs/release-trust.md) before distribution.
+
+## Install a macOS Apple Silicon beta
+
+1. Download `cervterm-<tag>-macos-arm64.zip` and `SHA256SUMS.txt` from the [releases page](https://github.com/cervantesh/CervTerm/releases) and verify the checksum.
+2. Extract `CervTerm.app` and move it to `/Applications` or another user-writable location.
+3. The bundle is ad-hoc signed but not Developer ID signed or notarized. Gatekeeper may block a quarantined download; inspect it before explicitly allowing it in macOS Privacy & Security settings.
+
+Intel Macs are not supported by the published package. The macOS GUI remains experimental and does not carry the broader Windows qualification claim.
 
 ## Configuration v2
 
@@ -200,7 +210,7 @@ Operational rollback is independent: disable the affected protocol and restart. 
 ## Known limitations and non-goals
 
 - GLFW/OpenGL is the only GUI renderer; selectable rendering backends are excluded.
-- Windows is the only packaged and qualified GUI platform.
+- Windows is the only broadly qualified GUI platform; macOS Apple Silicon has an experimental packaged GUI beta.
 - No SSH/WSL domains, tmux integration, or live detach/reattach.
 - Layout persistence restores fresh processes rather than live sessions.
 - Native blur is capability-dependent and degrades when unsupported or incompatible.
@@ -209,7 +219,7 @@ Operational rollback is independent: disable the affected protocol and restart. 
 
 ## Build and test
 
-Requirements: use the exact Go version declared by `go.mod` (currently Go 1.25.8). Windows GLFW builds require a working C toolchain. Source-built Linux GUI work additionally requires the distribution equivalents of the GLFW, OpenGL, and X11 development headers. Run maturity gates only from a clean, full-history checkout.
+Requirements: use the exact Go version declared by `go.mod` (currently Go 1.26.6). Windows GLFW builds require a working C toolchain. Source-built Linux GUI work additionally requires the distribution equivalents of the GLFW, OpenGL, and X11 development headers. Run maturity gates only from a clean, full-history checkout.
 
 ```sh
 go test ./...
